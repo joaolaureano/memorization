@@ -2381,3 +2381,106 @@ docs(001): plan, checklist and tasks for criar-cartao
   primeira passagem; dois falsos positivos investigados linha a linha.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-030
+
+> **SPEC KIT** — Comando: `nenhum` (auditoria de qualidade das specs) |
+> Invocação: `nenhuma` | Integração: `claude` | Artefatos: `SESSION.md`
+
+- **Data/hora**: 2026-09-21 00:05 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: auditoria pré-implementação
+- **Feature / Task**: features `002` a `006`
+- **Tipo**: Débito conhecido registrado — lacuna transversal sistemática
+- **Skills aplicadas**: `domain-modeling`
+- **Artefatos envolvidos**: `SESSION.md`
+- **Comandos**: auditoria por script sobre as seis specs, verificando
+  completude estrutural e cobertura dos requisitos transversais
+
+### Commit anterior
+
+O commit descrito em EVT-029 foi criado com o hash `5150162af8450bd16fa337783dcd7dee3fb29d22`.
+
+### Pergunta do Product Owner (sanitizada)
+
+```text
+Antes de fazer, todos os specs foram bem-definidos ?
+```
+
+### Resposta verificada: não
+
+Apenas a feature `001-criar-cartao` está bem definida. As outras cinco foram
+escritas em passagem única durante a decomposição de EVT-027 e **não passaram
+por `clarify`, `checklist` nem `analyze`**.
+
+Completude **estrutural**: as seis têm requisitos, critérios, cenários,
+invariantes, casos-limite, funcionalidades adiadas e premissas. Nenhuma seção
+ausente.
+
+Completude **substantiva**, por tema transversal:
+
+| Feature | teclado/foco/semântica | falha ao gravar | idioma | responsividade | estado vazio |
+|---|---|---|---|---|---|
+| 001 | sim | sim | sim | sim | sim |
+| 002 | **ausente** | **ausente** | **ausente** | **ausente** | **ausente** |
+| 003 | **ausente** | **ausente** | **ausente** | **ausente** | **ausente** |
+| 004 | sim | não se aplica | **ausente** | **ausente** | não se aplica |
+| 005 | **ausente** | **ausente** | **ausente** | **ausente** | **ausente** |
+| 006 | **ausente** | **ausente** | **ausente** | **ausente** | **ausente** |
+
+Na feature `004` a falha de gravação e o estado vazio **não se aplicam**: a
+Sessão nunca persiste (FR-038), portanto não há gravação que possa falhar.
+
+### Causa, declarada sem atenuação
+
+Ao decompor em EVT-027, o Arquiteto alocou os requisitos transversais — FR-042,
+FR-043, FR-044, FR-045, FR-046 — **apenas à feature onde os encontrou primeiro**,
+a `001`, e escreveu nas outras cinco uma linha de premissa: *"As premissas de
+`001-criar-cartao` valem integralmente."*
+
+**Premissa não é requisito.** Não gera teste, não entra em matriz de
+rastreabilidade e não bloqueia conclusão de tarefa. É exatamente o defeito que o
+`clarify` da feature `001` identificou em EVT-029, e o Arquiteto o corrigiu
+**somente naquela feature**, sem reconhecer que a causa era sistemática. A
+omissão é do Arquiteto e deveria ter sido percebida no momento da decomposição.
+
+**Consequência concreta se não fosse corrigido**: criar Baralho, vincular Cartão,
+renomear e excluir seriam entregues sem nenhuma verificação de teclado, sem
+tratamento de falha de gravação e sem responsividade. A seção *Critérios de
+Qualidade* da constituição obriga tudo isso, mas obrigação normativa sem
+requisito na spec desaparece na verificação.
+
+### Débito conhecido — a fechar no `clarify` de cada feature
+
+Registrado nominalmente para que a lacuna não dependa de ser redescoberta:
+
+| Feature | Requisitos a acrescentar no seu `clarify` |
+|---|---|
+| `002-criar-baralho` | teclado e foco no formulário e na lista; falha de gravação; idioma da interface; responsividade; estado vazio da lista de Baralhos |
+| `003-vincular-cartao-baralho` | teclado e foco na ação de vincular e desvincular; falha de gravação; idioma; responsividade; estado vazio quando não há Cartão ou Baralho a vincular |
+| `004-sessao-de-estudo` | idioma da interface; responsividade das telas da Sessão. Falha de gravação e estado vazio **não se aplicam** |
+| `005-editar-cartao-e-baralho` | teclado e foco nos formulários de edição; falha de gravação ao salvar; idioma; responsividade |
+| `006-excluir-cartao-e-baralho` | teclado e foco no diálogo de confirmação, com anúncio por leitor de tela; falha de gravação ao excluir; idioma; responsividade |
+
+### Decisão do Product Owner
+
+Apresentadas três saídas, o Product Owner escolheu **registrar como débito e
+seguir com a feature 001**, que está limpa. Corrigir as cinco agora seria
+trabalho adiantado sobre features que ainda não serão executadas — o mesmo
+desvio apontado em EVT-019 e em EVT-026.
+
+### Estado da feature 001
+
+17 requisitos, 6 critérios, 11 cenários, checklist 17 de 17 avaliado item a item,
+`analyze` limpo na primeira passagem, 14 tarefas com matriz completa. Portões
+dos Princípios I e X **abertos**. Pronta para execução mediante autorização
+explícita.
+
+- **Decisão/Resultado**: Débito nomeado e registrado. Feature `001` confirmada
+  como a única bem definida. Nenhuma spec alterada neste evento.
+- **Verificações**: Auditoria por script sobre as seis specs, cobrindo estrutura
+  e cinco temas transversais.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
