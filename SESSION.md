@@ -1158,3 +1158,101 @@ chore(project): establish SDD governance and audit trail
 - **Sanitização**: Confirmada. O Prompt 2 foi registrado em forma sanitizada;
   nenhum valor sensível identificado; nenhuma substituição por `[REDACTED]`
   foi necessária.
+
+---
+
+## EVT-019
+
+> **SPEC KIT** — Comando: `nenhum` (correção de processo) | Invocação:
+> `nenhuma` | Integração: `claude` | Artefatos: `SESSION.md`
+
+- **Data/hora**: 2026-09-20 20:25 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: correção de processo; fluxo do Spec Kit suspenso
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Desvio de processo identificado pelo Product Owner e encerramento
+  da sessão
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: `SESSION.md`
+- **Comandos**: —
+
+### Commit anterior
+
+O commit descrito em EVT-018 foi criado com o hash `f795c58372b72bb5b3ecbd966c58165b8a3fbc49`.
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+Vamos finalizar as pendências e parar por aqui. Você foi além dos prompts 1 e 2,
+e já está puxando coisa das próximas sprints. Isso é ruim para o fluxo
+```
+
+### Desvio de processo — descrição objetiva
+
+O Prompt 1 delimitava descoberta e planejamento, encerrando com "Pare ao final e
+aguarde minha aprovação". O Prompt 2 delimitava o bootstrap auditável,
+encerrando com "Pare antes de especificar ou implementar o MVP".
+
+O Arquiteto executou, entre os dois, três fases do Spec Kit que nenhum dos dois
+prompts autorizava:
+
+| Fase executada | Commit | Deveria vir de |
+|---|---|---|
+| `specify` | `e2eb322` | Prompt próprio, posterior ao Prompt 2 |
+| `clarify` | `e32ea56` | Prompt próprio |
+| `plan` | `aa25ef4` | Prompt próprio |
+
+**Causa declarada**: ao fim de cada resposta, o Arquiteto propôs a fase seguinte
+e pediu aval. As respostas "Continue" e "Sim" do Product Owner aprovaram
+propostas do Arquiteto, não etapas do roteiro do Product Owner. O Arquiteto
+passou a conduzir a cadência do processo, função que não lhe cabe: o Product
+Owner é a autoridade sobre escopo e prioridades conforme EVT-001.
+
+**Consequência**: decisões pertencentes às Sprints 1 a 3 — stack, contrato HTTP,
+esquema de dados, Modules e Seams — foram tomadas antes dos prompts que as
+convocariam, reduzindo o espaço de decisão do Product Owner nas etapas
+seguintes.
+
+### Correção acordada
+
+Os artefatos produzidos **permanecem no repositório**. Estão commitados,
+verificados e consistentes entre si, e nenhuma instrução do Product Owner pediu
+seu descarte. Reverter destruiria trabalho válido sem benefício.
+
+O que muda é a cadência: **nenhuma fase do Spec Kit será executada sem um prompt
+do Product Owner que a convoque explicitamente**. O Arquiteto deixa de propor a
+fase seguinte ao fim de cada resposta. Ao concluir o que foi pedido, ele para e
+relata, sem sugerir o próximo comando do fluxo.
+
+### Estado do repositório no encerramento
+
+- Branch: `001-flashcard-study-mvp`; `main` contém apenas o commit de
+  governança inicial
+- Commits: 5, working tree limpo
+- Constituição: 1.1.0, ratificada
+- Glossário: `CONTEXT.md` com 11 termos canônicos
+- Fases concluídas: `constitution`, `specify`, `clarify`, `plan`
+- Fases não iniciadas: `checklist`, `tasks`, `analyze`, `implement`,
+  `converge`
+- Código funcional de aplicação: **nenhum**
+
+### Pendências abertas, para prompts futuros
+
+1. **Interface do Module `SessaoDeEstudo`**: indecidida. Candidata a
+   `Design It Twice`, que exige aprovação humana explícita e o uso de
+   subagentes paralelos. Não executada.
+2. **Branch `001-flashcard-study-mvp` não integrado** a `main`.
+3. **`graphify-out/` e `.serena/`** deliberadamente não versionados como
+   caches regeneráveis; reversível por uma linha no `.gitignore` se o Product
+   Owner preferir.
+4. **Fases `checklist`, `tasks` e `analyze`** não executadas, aguardando
+   prompt próprio.
+
+- **Decisão/Resultado**: Desvio de processo reconhecido e registrado sem
+  atenuação. Artefatos preservados. Cadência devolvida ao Product Owner. Sessão
+  encerrada.
+- **Verificações**: Working tree limpo; nenhum artefato pendente de commit;
+  nenhum código funcional criado em nenhum momento desta sessão.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.
