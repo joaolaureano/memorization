@@ -50,7 +50,8 @@ custo antecipado por ela (Princípio VII).
 
 **Scale/Scope**: ~50 Cartões, ~10 Baralhos, um usuário, uma Sessão por vez.
 Cinco telas: lista de Cartões, edição de Cartão, lista de Baralhos, edição de
-Baralho, Sessão de estudo.
+Baralho, Sessão de estudo. A spec aprovada tem 53 requisitos funcionais e 16
+critérios de sucesso.
 
 ## Constitution Check
 
@@ -104,6 +105,44 @@ nenhum diff é aceito sem inspeção.
 deliberadas estão listadas em `research.md` — sem ORM, sem camada de repositório,
 sem gerenciador de estado global, sem paginação, sem índices além das chaves,
 sem migrações versionadas.
+
+### Princípio VIII — Segredos Fora do Repositório
+
+**PASS por vacuidade, verificada.** Não há autenticação, serviço externo nem
+provedor de nuvem neste MVP, portanto não existe credencial a proteger. Não há
+arquivo de segredo, e `.gitignore` já bloqueia `.env`, `*.pem`, `*.key` e
+`credentials.json` caso isso mude. As duas variáveis de configuração — caminho
+do arquivo SQLite e porta — não são sensíveis.
+
+### Princípio IX — Rastreabilidade Requisito–Teste
+
+**PASS condicionado.** Este plano estabelece que a Interface é a superfície de
+teste e que cada invariante tem requisito identificado. A matriz explícita
+requisito ↔ teste é produzida em `tasks`, e é lá que o princípio será
+efetivamente verificável. Registrado como obrigação pendente daquela etapa, não
+como item satisfeito aqui.
+
+### Princípio X — Portões de Qualidade
+
+**PASS até aqui.** O checklist de qualidade da spec está em 16 de 16, com o
+histórico da reprovação registrada. `analyze` ainda não foi executado, e
+`implement` permanece bloqueado até que o seja sem inconsistência CRITICAL.
+
+### Princípio XI — Delegação Obrigatória de Código
+
+**PASS.** Nenhuma linha de código de aplicação foi escrita neste plano. Todo
+código sob `backend/`, `frontend/` e `e2e/` será criado por subagentes DeepSeek,
+com o Arquiteto especificando, delegando, revisando o diff e verificando. Este
+plano é artefato do Spec Kit e, pela fronteira do próprio Princípio XI, é do
+Arquiteto.
+
+### Processos removidos do projeto
+
+A constituição 2.0.0 declara **ADRs** e **Design It Twice** inaplicáveis a este
+projeto. Nenhuma ADR foi criada, e a Interface do Module `SessaoDeEstudo` foi
+desenhada no fluxo normal, sob os Princípios IV e V, sem propostas alternativas
+comparadas. O Prompt 4 do Product Owner solicitava ambos os processos; o
+conflito foi levantado e resolvido pelo Product Owner a favor da constituição.
 
 ### Re-avaliação após Phase 1
 
@@ -184,17 +223,243 @@ nenhuma — ela só desabilita ações e exibe o que o Module respondeu. FR-023 
 satisfeito por construção: a validação autoritativa está no Acervo, no servidor,
 e a interface não é a guardiã de nada.
 
-### Interface do Module SessaoDeEstudo
+## Interfaces dos Modules
 
-A forma final desta Interface não é fixada neste plano, mas **não é mais uma
-pendência bloqueante**: por decisão do Product Owner, o processo `Design It
-Twice` foi removido do projeto e a constituição 2.0.0 o declara inaplicável.
+Cada Interface é descrita pelo que um caller precisa saber para usá-la
+corretamente: assinatura, invariantes, ordenação, modos de erro e
+características relevantes. Conforme o Princípio IV, "Interface" aqui é mais que
+a superfície de tipos.
 
-A Interface será desenhada pelo Arquiteto no fluxo normal, sob os Princípios IV
-e V, quando a tarefa correspondente for elaborada. Este plano já fixa o que a
-constrange: responsabilidades do Module, dependência *in-process* pela
-classificação de `DEEPENING.md`, ausência de qualquer Seam de persistência, e a
-Aleatoriedade como única dependência injetada.
+### Interface do Module `Acervo`
+
+Onze operações de domínio. Nenhuma expõe linha de tabela, transação, conexão ou
+SQL.
+
+```
+criarCartao(frente, verso)                -> Cartao
+editarCartao(id, frente?, verso?)         -> Cartao
+excluirCartao(id)                         -> void
+listarCartoes()                           -> Cartao[] com seus Baralhos
+criarBaralho(nome)                        -> Baralho
+renomearBaralho(id, nome)                 -> Baralho
+excluirBaralho(id)                        -> void
+listarBaralhos()                          -> Baralho[] com elegibilidade
+obterBaralho(id)                          -> Baralho com seus Cartoes
+vincular(cartaoId, baralhoId)             -> void
+desvincular(cartaoId, baralhoId)          -> void
+obterCartoesParaEstudo(baralhoId)         -> Cartao[]
+```
+
+**Invariantes garantidas pela Interface**, que o caller nunca precisa reproduzir:
+Frente e Verso não vazios e com no máximo 1000 caracteres, descartados espaços
+nas extremidades (FR-002, FR-051, FR-052); nome de Baralho não vazio e com no
+máximo 100 caracteres, sem unicidade (FR-011, FR-012, FR-052); unicidade do par
+(Cartão, Baralho) (FR-020); exclusão que remove Vínculos e **nunca** a entidade
+do outro lado (FR-008, FR-017); elegibilidade derivada por contagem e nunca
+persistida (FR-024).
+
+**Ordenação**: `vincular` exige que ambas as entidades existam. `excluirCartao` e
+`excluirBaralho` são idempotentes do ponto de vista do estado final, mas
+reportam `nao_encontrado` quando o alvo não existe, para que a interface não
+confirme ao usuário uma exclusão que não ocorreu. Nenhuma outra operação tem
+pré-condição de ordem.
+
+**Modos de erro**, exaustivos: `frente_vazia`, `verso_vazio`, `nome_vazio`,
+`frente_muito_longa`, `verso_muito_longo`, `nome_muito_longo`,
+`vinculo_duplicado`, `baralho_nao_elegivel`, `nao_encontrado`. Cada um carrega
+mensagem em português destinada ao usuário (FR-046). O Acervo **não lança
+exceção genérica** para regra de domínio: a falha de regra é resultado previsto,
+não excepcional.
+
+**Características**: toda operação de escrita é atômica. `excluirBaralho`
+remove Vínculos e Baralho na mesma transação, de modo que nenhum estado
+intermediário é observável. Todas as operações são síncronas.
+
+### Interface do Module `SessaoDeEstudo`
+
+Desenhada aqui, sob os Princípios IV e V. Quatro pontos de entrada.
+
+```
+iniciar(cartoes, quantidadeSolicitada, aleatoriedade) -> Sessao
+revelar(sessao)                                       -> Sessao
+responder(sessao, resultado)                          -> Sessao
+estado(sessao)                                        -> EstadoDaSessao
+```
+
+`EstadoDaSessao` é o que a interface precisa para desenhar a tela inteira:
+posição do Item corrente, total de Itens, Frente, Verso quando revelado, se a
+Revelação já ocorreu, e o Resumo quando a Sessão termina.
+
+**Por que esta forma**: `iniciar` esconde randomização, limitação ao disponível e
+captura das cópias de Frente e Verso — três regras que, expostas, o caller teria
+de orquestrar. `revelar` e `responder` são as duas únicas transições possíveis, e
+recusar uma transição inválida é decisão do Module, não da tela. `estado` evita
+que a interface leia campos internos: ela recebe exatamente o que exibe, o que
+mantém a Locality das regras dentro do Module.
+
+**Invariantes**: quantidade de Itens = `min(solicitada, cartões)` e nunca menor
+que 1 (FR-028, FR-029); ordem definida em `iniciar` e imutável (FR-030); nenhum
+Cartão origina dois Itens (FR-031); Verso ausente de `estado` antes da Revelação
+(FR-032); Resumo ausente até o último Resultado (FR-037).
+
+**Ordenação, que é a essência deste Module**: `revelar` antes de `responder`,
+sempre. `responder` sem Revelação prévia é recusado (FR-034). `responder` duas
+vezes no mesmo Item é recusado (FR-035). A Sessão avança sozinha ao Item
+seguinte após `responder`, e nenhuma operação retrocede.
+
+**Modos de erro**: `quantidade_invalida`, `baralho_sem_cartoes`,
+`revelacao_ausente`, `resultado_ja_registrado`, `sessao_concluida`.
+
+**Características**: sem I/O, sem relógio, sem estado global. Dada a mesma
+entrada e a mesma Aleatoriedade, produz a mesma Sessão — é o que torna a
+invariante de ordem verificável. Não serializa e não se persiste (FR-038).
+
+### Interface do Module `Aleatoriedade`
+
+```
+embaralhar<T>(itens: T[]) -> T[]
+```
+
+Um ponto de entrada. **Invariante**: a saída é uma permutação da entrada, mesmo
+comprimento, mesmos elementos, nenhum perdido ou duplicado — propriedade que o
+teste verifica diretamente. Nenhum modo de erro. `AleatoriedadeDeterministica`
+acrescenta ao seu construtor uma semente; a Interface não muda.
+
+### Interface do Module `ClienteDoAcervo`
+
+Espelha as operações do `Acervo` e acrescenta o que a rede introduz.
+
+**Invariantes**: nenhuma resposta que não seja de sucesso é apresentada como
+operação concluída (FR-044). **Modos de erro**: os códigos do Acervo, mais
+`indisponivel` para falha de transporte. **Características**: toda operação é
+assíncrona e pode falhar por indisponibilidade — a diferença essencial em
+relação ao `Acervo`, e a razão de esta Seam existir.
+
+## Avaliação dos Modules
+
+As seis perguntas do Princípio IV, aplicadas a cada Module central.
+
+### `Acervo`
+
+- **Interface menor que a complexidade que esconde?** Sim. Doze operações de
+  domínio escondem esquema, transações, cascatas, validação de regra e derivação
+  de elegibilidade.
+- **Leverage real?** Sim. O Adapter HTTP tem doze rotas finas; sem o Module,
+  cada rota reimplementaria validação e semântica de exclusão.
+- **Locality?** Sim. As invariantes de conteúdo vivem em um lugar só.
+- **Teste de exclusão?** Apagá-lo faria as regras reaparecerem em doze rotas.
+  Ganha o sustento.
+- **Testes permanecem na Interface?** Sim, com SQLite em memória, asseverando
+  resultado observável e nunca inspecionando tabelas.
+- **Seam especulativa?** Não. A Seam de persistência é interna e foi
+  explicitamente rejeitada como porta.
+
+### `SessaoDeEstudo`
+
+- **Interface menor?** Sim, e por larga margem: quatro pontos de entrada
+  escondem randomização, limitação, máquina de estados de três estágios por Item
+  e agregação do Resumo.
+- **Leverage real?** Sim. A interface gráfica fica sem nenhuma regra: ela
+  desenha `EstadoDaSessao` e chama duas transições.
+- **Locality?** Sim. Toda regra de sessão vive aqui; a tela não replica nenhuma.
+- **Teste de exclusão?** Apagá-lo espalharia a máquina de estados pelos
+  componentes de tela, onde ficaria intestável sem navegador.
+- **Testes permanecem na Interface?** Sim. Dependência *in-process*, Aleatoriedade
+  determinística injetada, asserções sobre `estado`.
+- **Seam especulativa?** O Adapter de apresentação foi avaliado e rejeitado: uma
+  única Implementation consumidora.
+
+### `Aleatoriedade`
+
+- **Interface menor?** Sim — um ponto de entrada.
+- **Leverage e Locality?** Modestos, e assumidamente. Este Module existe pela
+  **Seam**, não pela Depth.
+- **Teste de exclusão?** Apagá-lo tornaria a invariante de ordem imutável
+  intestável. É a justificativa da sua existência.
+- **Seam especulativa?** Não: dois Adapters justificados, produção e teste.
+
+### `ClienteDoAcervo`
+
+- **Interface menor?** Modestamente. Ele traduz, não decide.
+- **Leverage real?** Sim, pela Seam: permite testar a interface gráfica inteira
+  sem servidor.
+- **Teste de exclusão?** Apagá-lo espalharia tratamento de falha de transporte
+  por cada tela.
+- **Seam especulativa?** Não: dois Adapters, HTTP e em memória, pela categoria
+  *remote but owned* de `DEEPENING.md`.
+
+## Acessibilidade e Responsividade
+
+Requisitos FR-041, FR-042, FR-048, FR-049 e critérios SC-007 e SC-013. São
+critérios de aceitação pela seção Critérios de Qualidade da constituição, não
+refinamento posterior.
+
+- **Teclado**: cada ação da Sessão tem tecla dedicada — revelar, acertou, errou.
+  Nenhuma depende de ponteiro. Ordem de tabulação segue a ordem visual.
+- **Foco**: indicador visível que não depende de cor, com contorno e contraste.
+  Ao avançar de Item, o foco é movido programaticamente para o novo conteúdo,
+  para que o teclado não se perca.
+- **Semântica**: controles com rótulo textual acessível; mudanças de estado —
+  Verso revelado, Resultado registrado, Sessão concluída, operação falhada —
+  anunciadas por região ativa, e não apenas pintadas na tela.
+- **Responsividade**: layout de coluna única com gutter mínimo, sem rolagem
+  horizontal. O Cartão durante a Sessão é o elemento crítico: o limite de 1000
+  caracteres (FR-052) existe justamente para que ele caiba na tela pequena.
+
+A verificação automatizada dessas garantias fica em `e2e/`, único lugar onde
+navegador real existe.
+
+## Validação, Erros e Configuração
+
+**Duas camadas de validação, com fronteira explícita.** Forma na borda: corpo
+que não é JSON, campo ausente, tipo errado — recusados pelo Adapter HTTP antes
+de alcançar o Acervo. Regra de domínio dentro do Acervo: vazio, limite de
+tamanho, duplicidade, elegibilidade. A distinção importa porque regra de domínio
+precisa de mensagem útil ao usuário, e forma inválida não.
+
+**FR-023 satisfeito por construção**: o Acervo é a autoridade e valida
+independentemente do que a interface permita. Desabilitar um botão é
+conveniência, nunca garantia.
+
+**Configuração**: duas variáveis, com padrão utilizável sem configurar nada —
+caminho do arquivo SQLite e porta do servidor. A interface recebe o endereço da
+API em tempo de build. Não há arquivo de segredo, porque não há segredo: sem
+autenticação e sem serviço externo, não existe credencial a proteger
+(Princípio VIII permanece válido por vacuidade, e `.gitignore` já bloqueia
+`.env` caso isso mude).
+
+**Segurança**: a superfície é mínima e deliberadamente assim. Sem autenticação,
+condicional à execução local declarada nas Assumptions da spec. Consultas
+parametrizadas, nunca concatenação de SQL. A API aceita conexões apenas de
+`localhost`. **Expor esta aplicação em rede pública exigiria reabrir a decisão
+de não haver usuários**, e o plano não contém nada que prepare essa exposição,
+conforme o Princípio VII.
+
+**Observabilidade mínima**: log de erro no console do servidor, com código de
+erro e rota, sem conteúdo de Cartão. Nada além disso. Um app local de usuário
+único não tem operador para observar, e logging estruturado seria infraestrutura
+sem consumidor.
+
+**Migrações**: ausentes por ora, com gatilho explícito. O esquema é criado na
+primeira execução com `CREATE TABLE IF NOT EXISTS`. A primeira alteração de
+esquema após existir base instalada é o momento em que migração versionada passa
+a ser necessária — e não antes.
+
+## Riscos, Alternativas e Custo de Reversão
+
+| Decisão | Risco | Alternativa rejeitada | Custo de reversão |
+|---|---|---|---|
+| Frontend e API separados | Duas execuções para desenvolver; CORS; mais peças que o MVP exige | Aplicação única full-stack, recomendada pelo Arquiteto e **não** escolhida pelo Product Owner | Baixo: unificar é mais fácil que separar |
+| SQLite local | Migração futura para Postgres, se a hospedagem remota ocorrer | Postgres local via Docker | Médio: esquema portável, mas driver e transações mudam |
+| Sem porta de repositório | Se um segundo mecanismo de armazenamento aparecer, extrair a porta custa refatoração | Repositório desde já | Médio, e deliberadamente aceito: pagar agora seria indireção sem variação |
+| Sessão só no cliente | Nenhuma métrica jamais será coletável sem redesenho | Sessão no servidor | Alto, e é decisão de produto do Product Owner, não técnica |
+| Sem migrações versionadas | A primeira mudança de esquema com base instalada exigirá trabalho não planejado | Migrações desde o início | Baixo: introduzir no momento do gatilho |
+| Limites de 1000 e 100 caracteres | Conteúdo legítimo mais longo é recusado | Sem limite | Baixo: afrouxar é trivial; apertar depois quebraria dados |
+
+**AWS e deploy permanecem fora de escopo.** Nada neste plano é arquitetura
+especulativa para nuvem: não há fila, cache distribuído, microserviço,
+containerização nem abstração de provedor. A reversibilidade preservada é a que
+vem de graça — esquema SQL portável e domínio isolado de transporte.
 
 ## Project Structure
 

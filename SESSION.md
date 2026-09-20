@@ -1677,3 +1677,138 @@ docs(spec): complete functional specification for flashcard MVP
   aprovação explícita do Product Owner. Os artefatos permanecem no working tree.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-024
+
+> **SPEC KIT** — Comando: `plan` (ampliação, sem reexecução) | Invocação:
+> edição direta dos artefatos, com `speckit-plan` e `setup-plan.sh` já
+> executados em EVT-017 | Integração: `claude` | Artefatos:
+> `specs/001-flashcard-study-mvp/plan.md`,
+> `specs/001-flashcard-study-mvp/quickstart.md`
+
+- **Data/hora**: 2026-09-20 21:45 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `plan`
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Prompt 4 — plano técnico; resolução de dois conflitos
+- **Skills aplicadas**: `codebase-design` (SKILL.md e DEEPENING.md)
+- **Artefatos envolvidos**: `plan.md` (238 → 522 linhas), `quickstart.md`
+  (110 → 128 linhas), `SESSION.md`
+- **Comandos**: nenhum script do Spec Kit executado; `setup-plan.sh` já
+  produziu `plan.md` em EVT-017 e reexecutá-lo sobrescreveria o artefato
+
+### Commit anterior
+
+O commit descrito em EVT-023 foi criado com o hash `1e6a3449a440942e242e34ab6e8ae980a80bfadb`, contendo a
+especificação funcional aprovada pelo Product Owner.
+
+### Prompt 4 do Product Owner (sanitizado)
+
+```text
+A especificação funcional e os esclarecimentos estão aprovados. Produza o plano
+técnico por meio da etapa plan do Spec Kit. Não implemente a aplicação e não
+delegue implementação a workers.
+
+Preparação: ler a constituição, a spec aprovada, os esclarecimentos, CONTEXT.md,
+SESSION.md e codebase-design/SKILL.md integralmente; ler DEEPENING.md ao
+classificar dependências ou desenhar Seams; ler DESIGN-IT-TWICE.md e aplicar seu
+processo somente às Interfaces centrais que atendam ao critério da skill;
+registrar o prompt, as skills aplicadas e as decisões em SESSION.md com
+sanitização prévia.
+
+O plano deve justificar: stack de frontend e backend; estratégia de persistência;
+execução local e configuração por ambiente; estrutura do projeto; Modules
+centrais e responsabilidades; Interface de cada Module relevante, incluindo
+invariantes, ordenação, erros e características; posicionamento das Seams;
+Adapters realmente necessários; classificação das dependências; estratégia de
+testes na Interface; validação de entradas e tratamento de erros;
+acessibilidade e responsividade; observabilidade mínima; migrações ou
+versionamento do armazenamento; segurança e configuração; experiência de
+desenvolvimento e comandos de verificação; riscos, alternativas rejeitadas e
+custos de reversão.
+
+Para cada Module central, avaliar: a Interface é menor que a complexidade que
+esconde; oferece Leverage real; as regras mantêm boa Locality; o teste de
+exclusão faria a complexidade reaparecer; os testes permanecem na Interface;
+alguma Seam existe por especulação.
+
+Não criar abstrações para tecnologias futuras não aprovadas. Não introduzir
+microservices, filas, cache distribuído ou infraestrutura de nuvem sem
+necessidade demonstrável. AWS e deploy permanecem fora de escopo; o plano pode
+preservar reversibilidade razoável sem arquitetura especulativa.
+
+Design It Twice com no mínimo três propostas se alguma Interface o justificar.
+Criar ADR somente se os três critérios de Domain Modeling forem satisfeitos.
+
+Apresentar resumo da arquitetura, mapa dos Modules e Interfaces, Seams e
+Adapters justificados, estratégia de testes, decisões difíceis de reverter, ADRs,
+alternativas consideradas, riscos e questões que exigem decisão humana,
+resultado de Design It Twice e proposta de commits. Parar e aguardar aprovação.
+Não executar tasks nem implementar código.
+```
+
+O bloco `{INSERIR_DECISOES_TECNICAS_JA_APROVADAS_OU_ESCREVER_NENHUMA}` veio
+novamente **não substituído**. As decisões técnicas efetivas do Product Owner
+estão registradas em EVT-017: TypeScript em toda a stack, frontend e API
+separados, SQLite em arquivo local.
+
+### Conflito 1 — Design It Twice e ADRs
+
+O Prompt 4 solicita ambos os processos, que o Product Owner **removeu** em
+EVT-021 e que a constituição 2.0.0 declara inaplicáveis. O conflito foi
+levantado ao Product Owner em vez de resolvido silenciosamente.
+
+**Decisão do Product Owner**: prevalece a constituição. Ambos seguem removidos.
+Nenhum subagente paralelo de desenho foi criado, nenhuma ADR foi produzida, e a
+Interface do Module `SessaoDeEstudo` foi desenhada pelo Arquiteto no fluxo
+normal, sob os Princípios IV e V.
+
+**Consequência registrada**: a Interface de maior Depth do sistema foi decidida
+sem propostas alternativas comparadas, conforme já advertido em EVT-021.
+
+### Conflito 2 — plan.md desatualizado
+
+`plan.md` fora produzido contra 46 requisitos; a spec aprovada tem 53.
+**Decisão do Product Owner**: ampliar o artefato existente em vez de refazê-lo,
+o que preservou o desenho de Modules e Seams, ainda válido.
+
+### Ampliação do plano
+
+| Exigência do Prompt 4 | Situação anterior | Tratamento |
+|---|---|---|
+| Interface de cada Module com invariantes, ordenação, erros | Ausente | Seção nova, quatro Interfaces especificadas |
+| Avaliação das seis perguntas por Module | Ausente | Seção nova, quatro Modules avaliados |
+| Acessibilidade e responsividade | Ausente | Seção nova, cobrindo FR-041, FR-042, FR-048, FR-049 |
+| Validação, erros, configuração, segurança, observabilidade | Disperso | Seção nova e consolidada |
+| Riscos, alternativas, custo de reversão | Só alternativas, em research.md | Seção nova com tabela de seis decisões |
+| Constitution Check dos Princípios VIII a XI | Inexistentes à época | Acrescentados |
+| Cobertura dos 7 requisitos novos | Ausente | Interfaces, acessibilidade e quickstart |
+
+### Interface do Module SessaoDeEstudo — desenho adotado
+
+Quatro pontos de entrada: `iniciar`, `revelar`, `responder`, `estado`.
+`iniciar` esconde randomização, limitação ao disponível e captura das cópias de
+Frente e Verso. `estado` devolve à tela exatamente o que ela exibe, de modo que
+a interface gráfica não leia campos internos nem replique regra — o que preserva
+a Locality. Cinco modos de erro nomeados. Sem I/O, sem relógio, sem estado
+global: dada a mesma entrada e a mesma Aleatoriedade, produz a mesma Sessão, que
+é o que torna a invariante de ordem verificável.
+
+### Rastreabilidade — obrigação transferida a `tasks`
+
+O Princípio IX foi avaliado como **PASS condicionado**, não como satisfeito. A
+matriz explícita requisito ↔ teste é produzida em `tasks`; registrado como
+obrigação pendente daquela etapa em vez de declarado cumprido aqui.
+
+- **Decisão/Resultado**: Plano técnico completo contra a lista do Prompt 4.
+  Nenhuma ADR criada, nenhum Design It Twice executado, por decisão do Product
+  Owner. Nenhuma questão exige decisão humana adicional.
+- **Verificações**: Constitution Check re-executado nos onze princípios.
+  Complexity Tracking permanece vazio. Nenhuma abstração para tecnologia futura:
+  sem fila, cache distribuído, microserviço, containerização ou abstração de
+  provedor. Nenhuma linha de código de aplicação escrita.
+- **Commit**: **não realizado.** O Prompt 4 manda parar e aguardar aprovação.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

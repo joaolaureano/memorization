@@ -97,6 +97,24 @@ Prepare um Cartão vinculado a dois Baralhos.
    não a exibe como concluída, e o texto digitado permanece na tela para nova
    tentativa. → FR-044, FR-045, SC-012
 
+### Limites de tamanho, acessibilidade e perda acidental
+
+1. Colar na Frente um texto acima de 1000 caracteres. Recusado, com o limite e o
+   tamanho atual informados, e o conteúdo preservado. → FR-052, SC-016
+2. Digitar aproximando-se do limite. O aviso aparece **durante** a digitação, não
+   só ao salvar. → FR-053
+3. Criar um cartão com a Frente contendo apenas espaços. Recusado como vazio.
+   → FR-051
+4. Durante uma Sessão de 10 itens, conferir que a posição e o total estão
+   visíveis a qualquer momento. → FR-047, SC-015
+5. Avançar de item pelo teclado: o foco vai para o novo conteúdo e permanece
+   visível sem depender de cor. → FR-048, SC-013
+6. Com leitor de tela, conferir que revelar o verso, registrar o resultado e
+   concluir a sessão são anunciados. → FR-049
+7. Editar um cartão, alterar a Frente e tentar sair sem salvar. Confirmação é
+   pedida; ao recusar, a edição segue aberta com o conteúdo intacto.
+   → FR-050, SC-014
+
 ### Escala
 
 Com 50 Cartões e 10 Baralhos, as listas permanecem navegáveis e um item
