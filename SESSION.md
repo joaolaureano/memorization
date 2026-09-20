@@ -2912,3 +2912,74 @@ decisão é registrada e acatada; a `001` passa a ser o gabarito estrutural.
   conferida; blocos recolhidos balanceados.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-035
+
+> **SPEC KIT** — Comando: `clarify`, `plan`, `checklist`, `tasks`,
+> `analyze` | Invocação: `check-prerequisites.sh --json` e análise por
+> script | Integração: `claude` | Artefatos: sete em
+> `specs/002-criar-baralho/`
+
+- **Data/hora**: 2026-09-21 02:05 -03
+- **Ator**: ARCHITECT
+- **Fase**: fluxo completo da feature `002`
+- **Feature / Task**: `002-criar-baralho` / T101–T112
+- **Tipo**: Alinhamento da segunda feature ao gabarito da `001`
+- **Skills aplicadas**: `domain-modeling`, `codebase-design`
+
+### Commit anterior
+
+O commit descrito em EVT-034 foi criado com o hash `40e80b9c56fe3ea168ca51a379b12060d9c172f8`.
+
+### Débito de EVT-030 fechado nesta feature
+
+A spec trazia apenas a linha *"as premissas de 001 valem integralmente"* e
+nenhum requisito transversal. Fechado com **FR-042, FR-044, FR-045, FR-046**
+reutilizados e **FR-057 a FR-061** específicos, todos com cenário de aceitação.
+
+**Regra de numeração estabelecida e registrada na própria spec**: requisito
+transversal de enunciado genérico é **reutilizado** com o mesmo identificador
+nas features onde é observável; requisito cujo enunciado nomeia a entidade
+recebe identificador próprio. Isso evita duplicar a mesma regra sob nomes
+diferentes, e evita a duplicação acidental que o `analyze` procura.
+
+### Decisão técnica nova — migração de esquema
+
+O `research.md` da feature `001` havia declarado o gatilho: *"A feature 002
+acrescentará a tabela baralho — esse é o momento em que migração versionada
+passa a ser necessária, por haver base instalada."*
+
+**O gatilho chegou.** Quem usou a `001` tem arquivo SQLite com Cartões reais.
+Adotada a forma mínima: tabela `versao_do_esquema`, migrações ordenadas
+aplicadas em transação, sem framework e sem dependência nova.
+
+**T102 é a tarefa de maior risco da feature**, e o artefato diz isso
+explicitamente: ela toca base instalada com dados reais, e seu teste exige
+migrar uma base da `001` **com Cartões dentro** e provar que nenhum se perdeu.
+
+### Decisão de contrato — antecipar forma sem antecipar comportamento
+
+`GET /baralhos` já devolve `quantidadeDeCartoes` e `elegivel`, que nesta
+feature são invariavelmente `0` e `false` por não existir Vínculo. A forma
+antecipa a variação que a feature `003` trará, de modo que a `003` **não
+precise alterar este contrato**. Não é abstração especulativa: é o formato
+final de um campo cujo valor ainda não varia.
+
+### `analyze` — um achado real, corrigido
+
+| Passagem | Achado | Correção |
+|---|---|---|
+| 1ª | **FR-023, FR-024 e FR-040 apareciam na matriz de rastreabilidade mas não eram declarados na spec** | Declarados como transversais reutilizados, com o cenário 4 estendido para cobrir a validação autoritativa |
+| 1ª | `deck` sinalizado em `spec.md` e `plan.md` | **Falsos positivos** verificados linha a linha: "Subdecks" nomeia funcionalidade adiada, e a linha do plano **declara** o termo proibido |
+| 2ª | Nenhum achado | — |
+
+Estado final: 18 requisitos, 5 critérios, 10 cenários, 12 tarefas rastreáveis,
+checklist 21 de 21, `AVAILABLE_DOCS` com os quatro artefatos.
+
+- **Decisão/Resultado**: Feature `002` alinhada ao gabarito. Portões abertos.
+- **Verificações**: `analyze` em duas passagens; `check-prerequisites`
+  populado; contagem de caixas de seleção conferida.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
