@@ -1352,3 +1352,107 @@ identificados.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado em
   `.serena/project.yml` nem nos demais arquivos; nenhuma substituição por
   `[REDACTED]` foi necessária.
+
+---
+
+## EVT-021
+
+> **SPEC KIT** — Comando: `constitution` (emenda) | Invocação: edição direta
+> do artefato `.specify/memory/constitution.md` | Integração: `claude` |
+> Artefatos: `.specify/memory/constitution.md`,
+> `specs/001-flashcard-study-mvp/plan.md`, `SESSION.md`
+
+- **Data/hora**: 2026-09-20 20:55 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `constitution` (emenda); fluxo do Spec Kit permanece suspenso
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Remoção de dois processos da metodologia e definição do artefato de
+  sprint
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: constituição (2.0.0), `plan.md` (seção
+  atualizada), `SESSION.md`
+- **Comandos**: `git grep -ln` para localizar as menções nos artefatos
+  versionados; `ls docs/adr`
+
+### Commit anterior
+
+O commit descrito em EVT-020 foi criado com o hash `b75d70114ac1528da4ab41216ee3f0c87b56da03`.
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+Pode remover completamente Design It Twice e ADR. A sprint seria a consolidação
+de Session MD
+```
+
+### Decisão — Remoção de ADRs
+
+O projeto deixa de utilizar ADRs. Decisões arquiteturais e de domínio, com seu
+contexto, alternativas rejeitadas e consequências, passam a ser registradas
+exclusivamente em SESSION.md, que se torna a fonte única do histórico decisório.
+`docs/adr/` não será criado — e nunca chegou a existir, conforme verificado.
+O documento ADR-FORMAT.md da skill domain-modeling é declarado inaplicável.
+
+**Efeito sobre a dívida registrada em EVT-019**: as três decisões que
+satisfaziam os critérios de ADR — relação N:N com exclusão não-cascateante,
+sessão de estudo nunca persistida, e rejeição do repositório de persistência
+como Seam — permanecem documentadas em SESSION.md, respectivamente em EVT-005,
+EVT-003 e EVT-017, e nos artefatos `data-model.md` e `plan.md`. A dívida
+deixa de existir por o instrumento ter sido eliminado, não por ter sido paga.
+
+### Decisão — Remoção do Design It Twice
+
+O processo é removido do projeto. Interfaces centrais passam a ser desenhadas
+pelo Arquiteto no fluxo normal de `plan` e `tasks`, sob os Princípios IV e
+V. O documento DESIGN-IT-TWICE.md da skill codebase-design é declarado
+inaplicável.
+
+**Consequência registrada sem atenuação**: a Interface do Module
+`SessaoDeEstudo` — o Module de maior Depth do sistema, cuja forma a Sprint 3
+inteira consome — passa a ser decidida pelo Arquiteto sozinho, sem propostas
+alternativas comparadas nem aprovação humana prévia do desenho. O risco de errar
+a forma dessa Interface deixa de ser mitigado pelo processo e passa a depender
+apenas da revisão do Product Owner sobre o resultado.
+
+A seção correspondente de `plan.md` foi atualizada: a Interface **deixa de ser
+pendência bloqueante** e volta ao fluxo normal. As restrições que o plano já
+fixava permanecem — responsabilidades do Module, dependência *in-process*,
+ausência de Seam de persistência, Aleatoriedade como única dependência injetada.
+
+### Decisão — Artefato de sprint
+
+A sprint não terá artefato próprio do Spec Kit. **A consolidação em SESSION.md
+cumpre esse papel.** A divisão em Sprints 0 a 4, proposta na descoberta, deixa
+de ser pendência de formalização: ela vive no registro de auditoria, junto com o
+restante do histórico decisório, coerente com a decisão de tornar SESSION.md a
+fonte única.
+
+### Emenda constitucional
+
+Versão **1.1.0 → 2.0.0**. Incremento **MAJOR** por ser remoção de regra de
+governança, conforme a política de versionamento do próprio comando
+`constitution`: remoções ou redefinições incompatíveis de governança exigem
+MAJOR. Nenhum dos dez princípios foi alterado; a mudança recai sobre a seção
+"Skills Obrigatórias", onde a regra dos três critérios de ADR foi substituída
+pela declaração de não utilização de ADRs e de Design It Twice. A cláusula sobre
+CONTEXT-MAP.md foi preservada.
+
+**Arquivos das skills não foram removidos do disco.** DESIGN-IT-TWICE.md e
+ADR-FORMAT.md continuam em `.agents/skills/`, porque são arquivos vendorizados
+de terceiro, referenciados pelos respectivos SKILL.md e verificados por hash em
+`skills-lock.json`. Removê-los quebraria a integridade do lock e as referências
+internas das skills. A constituição os declara **inaplicáveis**, que é o efeito
+pretendido sem efeito colateral. A remoção física permanece disponível como ação
+separada, se o Product Owner a solicitar.
+
+- **Decisão/Resultado**: ADRs e Design It Twice removidos da metodologia.
+  Constituição em 2.0.0. `plan.md` sem pendência bloqueante. Artefato de
+  sprint definido como a consolidação em SESSION.md. As pendências 1, 3 e 4 de
+  EVT-019 e da lista apresentada ao Product Owner estão encerradas.
+- **Verificações**: Menções localizadas por `git grep` nos três artefatos
+  versionados e tratadas — constituição e `plan.md` emendados, SESSION.md
+  preservado por ser append-only. `docs/adr/` inexistente, nada a remover.
+  Working tree conferido.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

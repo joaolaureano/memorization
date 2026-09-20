@@ -184,13 +184,17 @@ nenhuma — ela só desabilita ações e exibe o que o Module respondeu. FR-023 
 satisfeito por construção: a validação autoritativa está no Acervo, no servidor,
 e a interface não é a guardiã de nada.
 
-### Pendência declarada
+### Interface do Module SessaoDeEstudo
 
-A **Interface do Module SessaoDeEstudo não é decidida neste plano**. Ela é
-candidata a `Design It Twice` por ser central, difícil de reverter e de impacto
-amplo, e o processo exige aprovação humana explícita, ainda não concedida. Este
-plano fixa as responsabilidades, a categoria de dependência e a Seam da
-Aleatoriedade; a forma da Interface fica em aberto e bloqueia a Sprint 3.
+A forma final desta Interface não é fixada neste plano, mas **não é mais uma
+pendência bloqueante**: por decisão do Product Owner, o processo `Design It
+Twice` foi removido do projeto e a constituição 2.0.0 o declara inaplicável.
+
+A Interface será desenhada pelo Arquiteto no fluxo normal, sob os Princípios IV
+e V, quando a tarefa correspondente for elaborada. Este plano já fixa o que a
+constrange: responsabilidades do Module, dependência *in-process* pela
+classificação de `DEEPENING.md`, ausência de qualquer Seam de persistência, e a
+Aleatoriedade como única dependência injetada.
 
 ## Project Structure
 

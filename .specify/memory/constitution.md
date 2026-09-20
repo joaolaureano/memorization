@@ -100,10 +100,19 @@ aplicada, por que se aplicava e quais decisões ou artefatos ela influenciou.
   posicionamento de Seams, decomposição em Modules, definição de Adapters,
   estratégia de testes e revisão estrutural.
 
-Uma ADR é proposta somente quando a decisão é simultaneamente difícil de
-reverter, surpreendente sem seu contexto histórico e resultado de um trade-off
-real. Faltando qualquer um dos três, não se cria ADR. CONTEXT-MAP.md só é
-considerado se surgirem múltiplos bounded contexts reais.
+Este projeto **não utiliza ADRs**. Decisões arquiteturais e de domínio, com seu
+contexto, suas alternativas rejeitadas e suas consequências, são registradas em
+SESSION.md, que é a fonte única do histórico decisório. Não se cria `docs/adr/`,
+e o documento ADR-FORMAT.md da skill domain-modeling é inaplicável a este
+projeto.
+
+Este projeto **não utiliza o processo Design It Twice**. Interfaces centrais são
+desenhadas pelo Arquiteto no fluxo normal de `plan` e `tasks`, sob os Princípios
+IV e V, e o documento DESIGN-IT-TWICE.md da skill codebase-design é inaplicável.
+A exigência de ler os documentos referenciados por uma skill não alcança
+documentos declarados inaplicáveis aqui.
+
+CONTEXT-MAP.md só é considerado se surgirem múltiplos bounded contexts reais.
 
 ## Critérios de Qualidade
 
@@ -150,4 +159,4 @@ explícita do Product Owner, registro em SESSION.md e nota de versão abaixo.
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 1.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
+**Version**: 2.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
