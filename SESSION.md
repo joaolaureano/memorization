@@ -1812,3 +1812,124 @@ obrigação pendente daquela etapa em vez de declarado cumprido aqui.
 - **Commit**: **não realizado.** O Prompt 4 manda parar e aguardar aprovação.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-025
+
+> **SPEC KIT** — Comando: `checklist`, `tasks` e `analyze` | Invocação:
+> script `.specify/scripts/bash/setup-tasks.sh --json` e as skills
+> `speckit-checklist`, `speckit-tasks`, `speckit-analyze` | Integração:
+> `claude` | Artefatos: `checklists/dominio.md`, `tasks.md`, `spec.md`
+
+- **Data/hora**: 2026-09-20 22:10 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `checklist` → `tasks` → `analyze`
+- **Feature / Task**: `001-flashcard-study-mvp` / T001–T026
+- **Tipo**: Prompt 5 — transformação da spec e do plano em trabalho executável
+- **Skills aplicadas**: `domain-modeling`, `codebase-design`
+- **Artefatos envolvidos**: `checklists/dominio.md` (criado), `tasks.md`
+  (criado), `spec.md` (seção nova), `SESSION.md`
+- **Comandos**:
+  - `bash .specify/scripts/bash/setup-tasks.sh --json`
+  - três passagens de `analyze` por script, comparando `spec.md`,
+    `plan.md` e `tasks.md`
+
+### Commit anterior
+
+O commit descrito em EVT-024 foi criado com o hash `961b88aa4ab9739de5ccba9fcbe77e6839eaf55b`, contendo o plano
+técnico aprovado.
+
+### Prompt 5 do Product Owner (sanitizado)
+
+```text
+O plano técnico está aprovado. Transforme a especificação e o plano em trabalho
+executável, sem implementar código.
+
+Processo: ler todos os artefatos ativos da feature, a constituição, CONTEXT.md,
+as ADRs aplicáveis e SESSION.md; ler as duas skills locais; registrar o prompt e
+as decisões em SESSION.md; incorporar ao plano os ajustes aprovados; executar
+checklist avaliando realmente cada critério; executar tasks produzindo tarefas
+pequenas, ordenadas, rastreáveis e verificáveis; executar analyze; corrigir cada
+inconsistência no artefato que a origina e reexecutar analyze até não haver
+inconsistências críticas.
+
+Cada tarefa deve informar ou permitir determinar: ID estável, objetivo
+observável, requisito e critério relacionados, dependências, Module e Interface
+afetados, arquivos esperados, skill aplicável, testes exigidos, condição
+objetiva de conclusão e possibilidade segura de execução paralela.
+
+Não decompor em tarefas horizontais grandes; preferir incrementos verticais sem
+forçar verticalidade quando houver fundação técnica que seja dependência real.
+
+Tasks não estarão prontas se usarem terminologia incompatível com CONTEXT.md,
+alterarem regras sem rastreabilidade, dependerem de Interface não decidida,
+introduzirem Seam ou Adapter sem justificativa, não tiverem verificação
+observável, misturarem responsabilidades ou exigirem que o worker decida produto
+ou arquitetura.
+
+Depois da análise limpa: revisar diff e sanitização, atualizar SESSION.md, fazer
+os commits documentais e registrar os hashes no próximo evento. Apresentar
+resultado do checklist, resultado final de analyze, lista de tasks e
+dependências, commits criados e risco residual. Parar antes da implementação.
+```
+
+O bloco `{INSERIR_DECISOES_E_AJUSTES_APROVADOS}` veio **não substituído** pela
+terceira vez consecutiva. Nenhum ajuste foi incorporado ao plano, por não haver
+ajuste declarado. As ADRs mencionadas no processo não existem: foram removidas
+em EVT-021.
+
+### `checklist` — dois itens reprovados e corrigidos
+
+Criado `checklists/dominio.md` com 22 itens em cinco categorias, focado nas
+áreas de maior risco desta feature. A avaliação foi real, e **dois itens
+reprovaram**:
+
+- **CHK012** — Requisitos negativos e estruturais não declaravam meio de
+  verificação. FR-009, FR-018, FR-022, FR-036, FR-038 e FR-044 afirmam o que o
+  sistema **não** faz, e um cenário Given/When/Then não os alcança.
+  **Corrigido no artefato que o origina**: a spec ganhou a seção *Verificação
+  dos Requisitos Negativos*, com o meio concreto de verificação de cada um.
+- **CHK010** — Não existia matriz requisito ↔ teste, exigida pelo Princípio IX.
+  **Corrigido** pela criação de `tasks.md` com a matriz.
+
+Resultado final: **22 de 22**.
+
+### `tasks` — 26 tarefas em cinco fases
+
+Fase 1 fundação (T001–T004), Fase 2 História 1 (T005–T011), Fase 3 História 2
+(T012–T018), Fase 4 História 3 (T019–T022), Fase 5 transversal (T023–T026).
+
+A Fase 1 é a única horizontal, e o artefato justifica por quê: é dependência
+técnica real, com cada item verificável isoladamente. As demais são incrementos
+verticais demonstráveis.
+
+### `analyze` — três passagens, duas inconsistências corrigidas
+
+| Passagem | Achado | Correção |
+|---|---|---|
+| 1ª | 35 requisitos apareciam na matriz em **notação abreviada** (`FR-001, 002, 003`), ilegível por máquina e ambígua para o worker | Todas as referências expandidas para identificador completo |
+| 1ª | Quatro termos de `_Avoid_` sinalizados: `deck`, `flashcard`, `score`, `flip` | **Falsos positivos**, verificados linha a linha: "subdecks" nomeia funcionalidade **adiada**; as linhas do plano **declaram** os sinônimos como proibidos; "Flashcards" no título é a categoria do produto. Nenhuma correção necessária |
+| 2ª | **FR-050** constava da tarefa T022 mas estava **ausente da matriz** | Linha acrescentada. Foi exatamente o tipo de furo que a matriz existe para revelar |
+| 3ª | Nenhum achado | — |
+
+Verificações da passagem final, todas limpas: nenhum requisito fora da matriz,
+nenhum critério fora da matriz, nenhum requisito fantasma, nenhuma tarefa sem
+requisito rastreado, nenhuma tarefa sem teste declarado, as quatro Interfaces do
+plano presentes, **nenhuma Seam nova introduzida** pelas tarefas, e zero
+marcadores `NEEDS CLARIFICATION` nos três artefatos.
+
+### Mensagem de commit proposta
+
+```text
+docs(tasks): break MVP into 26 traceable tasks with quality checklist
+```
+
+- **Decisão/Resultado**: 26 tarefas rastreáveis, análise limpa, checklist 22/22.
+  Nenhum bloqueio exige decisão humana.
+- **Verificações**: Três passagens de `analyze` por script sobre os três
+  artefatos; duas inconsistências corrigidas no artefato de origem; a terceira
+  passagem não encontrou achado.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

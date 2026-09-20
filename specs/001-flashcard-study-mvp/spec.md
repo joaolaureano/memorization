@@ -361,6 +361,21 @@ existindo.
 - **FR-053**: O sistema MUST comunicar o limite ao usuário **durante** a
   digitação, e não apenas ao tentar salvar.
 
+### Verificação dos Requisitos Negativos
+
+Alguns requisitos afirmam o que o sistema **não** faz. Um cenário
+Given/When/Then não os alcança naturalmente, e por isso cada um declara aqui seu
+meio de verificação, para que nenhum deles seja aceito por inspeção informal.
+
+| Requisito | Afirmação | Como é verificado |
+|---|---|---|
+| FR-009 | Cartão não tem propriedade além de Frente e Verso | Teste que envia propriedade extra na criação e exige que ela seja ignorada ou recusada, e que não retorne nas leituras |
+| FR-018 | Baralho não tem propriedade além de nome | Idem, para Baralho |
+| FR-022 | Não há limite superior de Vínculos por Cartão nem por Baralho | Teste que cria um Cartão vinculado a 20 Baralhos e um Baralho com 60 Cartões, ambos aceitos |
+| FR-036 | O sistema não avalia a recordação do usuário | Ausência verificada por inspeção da Interface do Module `SessaoDeEstudo`: ela não aceita resposta digitada, logo não há o que comparar. Teste que confirma que `responder` só admite os valores `acertou` e `errou` |
+| FR-038 | Sessão, Itens, Resultados e Resumo não são persistidos | Teste que conclui uma Sessão e verifica que nenhuma consulta de leitura do Acervo devolve vestígio dela; e inspeção do contrato, que não possui rota de Sessão |
+| FR-044 | Operação não persistida não aparece como concluída | Teste com armazenamento indisponível, verificando que a interface reporta falha |
+
 ### Key Entities
 
 - **Cartão**: unidade de conteúdo a memorizar, composta de Frente e Verso.
