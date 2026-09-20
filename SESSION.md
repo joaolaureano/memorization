@@ -2484,3 +2484,253 @@ explícita.
   e cinco temas transversais.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-031
+
+> **SPEC KIT** — Comando: `implement` (sprint da feature 001) | Invocação:
+> delegação a subagente DeepSeek pelo MCP `delegate`, conforme o Princípio XI |
+> Integração: `claude` | Artefatos: `SESSION.md`; código sob `backend/` a ser
+> produzido pelo worker
+
+- **Data/hora**: 2026-09-21 00:20 -03
+- **Ator**: USER → ARCHITECT → WORKER
+- **Fase**: `implement`
+- **Feature / Task**: `001-criar-cartao` / **T001**
+- **Tipo**: Autorização da sprint, baseline e primeira delegação
+- **Skills aplicadas**: `codebase-design` (estrutura por Module, não por camada)
+- **Comandos de baseline**: `node --version`, `npm --version`, inventário de
+  suítes, `git status --short`
+
+### Commit anterior
+
+O commit descrito em EVT-030 foi criado com o hash `f7b996a3895bbf9b216994e9871eeb237f28b77c`.
+
+### Autorização do Product Owner (sanitizada)
+
+O Prompt 8 solicitava `converge`. O Arquiteto **recusou executá-lo**: o passo 3
+do próprio prompt condiciona `converge` a `implement` já executado, e
+`implement` nunca havia sido executado — nenhum arquivo de código existia e
+zero das 14 tarefas estavam concluídas. Rodar `converge` compararia artefatos
+contra código inexistente, produzindo ruído em vez de informação.
+
+Apresentadas três saídas, o Product Owner **autorizou a execução da sprint da
+feature `001-criar-cartao`**, tarefas T001 a T014.
+
+### Baseline antes de qualquer alteração
+
+| Item | Estado |
+|---|---|
+| Node.js | v26.7.0, satisfaz o requisito de Node 22+ do plano |
+| npm | 11.19.0 |
+| Suítes de verificação existentes | **nenhuma** — registrado como ausência, não como falha |
+| Código de aplicação | nenhum |
+
+Não há baseline falhando. Nenhuma falha futura poderá ser atribuída a estado
+prévio.
+
+### Prompt do worker — T001 (sanitizado, íntegro)
+
+Enviado ao subagente DeepSeek. Reproduzido na íntegra; nenhum valor sensível
+existia a redigir.
+
+```text
+## Tarefa T001 — Esqueleto do projeto backend
+
+Feature: 001-criar-cartao. Requisitos rastreados: nenhum diretamente; T001 é
+fundação técnica que habilita T004 em diante.
+
+Objetivo observável: o projeto backend executa e responde a um comando de
+verificação. npm test roda a suíte (vazia, passando) e npm run dev sobe o
+servidor.
+
+Critérios de aceitação:
+1. cd backend && npm install && npm test termina com sucesso, com zero testes.
+2. npm run dev inicia um servidor Fastify que responde a GET /health com 200.
+3. npm run lint e npm run build existem e passam.
+4. TypeScript em modo estrito.
+
+Contexto técnico fixado pelo plano aprovado (não reabrir): TypeScript 5.x sobre
+Node.js 22+ (ambiente tem v26), ESM; Fastify para HTTP; Vitest para testes;
+better-sqlite3 e Zod como dependências para tarefas seguintes, sem uso agora;
+dois deployables separados, este é apenas o backend.
+
+Termos de domínio envolvidos: nenhum nesta tarefa. Nas tarefas seguintes valerão
+Cartao, Frente, Verso. É PROIBIDO usar card, flashcard, deck em nome de arquivo,
+módulo, tipo, função, tabela, coluna ou rota.
+
+Module / Interface / Seam: nenhum nesta tarefa. A estrutura de diretórios deve
+ser por Module, NÃO por camada: criar src/acervo/ e src/http/. É PROIBIDO criar
+src/models/, src/services/, src/controllers/ ou src/repositories/.
+
+Arquivos permitidos: exclusivamente dentro de backend/. Criar package.json,
+tsconfig.json, vitest.config.ts, eslint.config.js, src/http/servidor.ts,
+src/index.ts e .gitignore se necessário.
+
+Arquivos proibidos: qualquer coisa fora de backend/. Não tocar em frontend/,
+e2e/, specs/, SESSION.md, CONTEXT.md, .specify/, .agents/, .gitignore da raiz.
+
+Restrições de arquitetura e segurança: nenhuma lógica de domínio nesta tarefa,
+GET /health é apenas prova de vida; sem autenticação, a aplicação é local; o
+servidor deve escutar apenas em 127.0.0.1, nunca em 0.0.0.0; porta configurável
+por variável de ambiente com padrão utilizável sem configurar nada; nenhum
+segredo, token, chave ou credencial em qualquer arquivo; não adicionar ORM,
+framework de injeção de dependência, Docker, CI ou dependência não listada.
+
+Testes a criar: um teste em backend/tests/servidor.test.ts que sobe o servidor e
+assevera que GET /health responde 200, e que passa.
+
+Comandos de verificação: npm install, npm test, npm run lint, npm run build.
+
+Formato de saída obrigatório: blocos ===FILE: caminho=== com o conteúdo integral,
+seguidos de um bloco de relatório com arquivos criados, decisões técnicas dentro
+do escopo, riscos e ambiguidades.
+
+NÃO FAÇA COMMIT. Você não tem permissão de Git.
+
+PARE E REPORTE, sem improvisar, se encontrar conflito com o glossário de
+domínio, decisão arquitetural ausente, necessidade de segredo, ou qualquer
+mudança fora do escopo.
+```
+
+### Restrições embutidas no prompt, e por quê
+
+- **Estrutura por Module, não por camada**, com proibição explícita de
+  `models/`, `services/`, `controllers/` e `repositories/`: decorre do Princípio
+  IV e da decisão de estrutura do `plan.md`. Um worker deixado à própria
+  convenção produziria camadas.
+- **Proibição dos sinônimos `card`, `flashcard`, `deck`** já nesta tarefa, antes
+  de existir domínio: impede que a convenção errada se instale no esqueleto que
+  as cinco features seguintes herdam.
+- **Escuta restrita a `127.0.0.1`**: a ausência de autenticação é condicional à
+  execução local, conforme as Assumptions da spec. Escutar em `0.0.0.0` anularia
+  essa condição sem que ninguém percebesse.
+- **Lista fechada de dependências**: o Princípio VII proíbe abstração
+  antecipada. Sem a proibição explícita, um worker acrescentaria ORM ou
+  container por hábito.
+- **Proibição de commit**: exigida pelo contrato de workers de EVT-001 e pelo
+  Princípio VI.
+
+- **Decisão/Resultado**: T001 delegada. Resultado, inspeção do diff, verificações
+  e decisão de aceitação serão registrados no evento seguinte.
+- **Verificações**: baseline estabelecida antes da delegação.
+- **Commit**: nenhum. O worker não commita, e o Arquiteto só commita após
+  inspeção e verificação.
+- **Sanitização**: Confirmada. O prompt foi revisado antes do registro; nenhum
+  valor sensível presente, nenhuma substituição por `[REDACTED]` necessária.
+
+---
+
+## EVT-032
+
+> **SPEC KIT** — Comando: `implement` | Invocação: subagente DeepSeek pelo MCP
+> `delegate` | Integração: `claude` | Artefatos: `backend/` (7 arquivos),
+> `specs/001-criar-cartao/plan.md`
+
+- **Data/hora**: 2026-09-21 00:45 -03
+- **Ator**: WORKER → ARCHITECT
+- **Fase**: `implement`
+- **Feature / Task**: `001-criar-cartao` / **T001 — concluída**
+- **Tipo**: Resultado do worker, correções do Arquiteto e verificação
+- **Skills aplicadas**: `codebase-design`
+- **Comandos**: `npm install`, `npm test`, `npm run build`,
+  `npm run lint`, `node src/index.ts`, `curl`, `lsof`, varredura de
+  segredos e de termos proibidos
+
+### Commit anterior
+
+O commit descrito em EVT-030 foi criado com o hash `f7b996a3895bbf9b216994e9871eeb237f28b77c`. O EVT-031 foi
+registrado sem commit próprio.
+
+### Falha do worker e diagnóstico
+
+A primeira delegação, em `deepseek-v4-pro`, **falhou**: a tarefa excedeu a
+janela de execução e foi abortada.
+
+**Diagnóstico antes de reenviar**, conforme o processo. Uma sonda mínima ao
+mesmo provedor respondeu em menos de um segundo, descartando indisponibilidade.
+A causa observada foi a duração: prompt longo com geração de sete arquivos no
+modelo de raciocínio.
+
+**Prompt corretivo, limitado à causa**: mesma tarefa e mesmas restrições
+normativas, em `deepseek-v4-flash` e com instruções compactadas. T001 é código
+de infraestrutura mecânico e não requer o modelo de raciocínio. O prompt **não
+foi repetido sem alteração**.
+
+### Resultado do worker
+
+Sete arquivos entregues no formato pedido, com relatório. O worker **reportou
+três riscos por conta própria**, sem escondê-los, e declarou duas ambiguidades
+em vez de improvisar — comportamento correto segundo o contrato de workers.
+
+### Correções do Arquiteto sobre a entrega
+
+Quatro, todas sobre pontos que o próprio worker sinalizou ou que a verificação
+revelou:
+
+1. **`rootDir` e emissão**: o worker alertou que `rootDir: "."` produziria
+   `dist/src/` e arrastaria os testes para o build. Substituído por
+   `noEmit: true`, e `npm run build` passa a ser **verificação de tipos**.
+   O Node 26 executa TypeScript diretamente; nenhum artefato de build é
+   necessário, e os testes passam a ser checados também.
+2. **Tipo da porta**: `process.env.PORTA ?? 3001` resulta em
+   `string | number`, incompatível com `FastifyListenOptions.port`. Envolvido
+   em `Number()`.
+3. **Extensão de import**: o worker alertou que `--experimental-strip-types`
+   era o ponto mais frágil. A verificação confirmou falha real — o runtime
+   **não** reescreve `.js` para `.ts` em import relativo, diferentemente do
+   Vitest, e `node src/index.ts` quebrava com `ERR_MODULE_NOT_FOUND`.
+   Corrigido com extensão `.ts` nos imports e
+   `allowImportingTsExtensions`, **sem adicionar dependência**.
+4. **Driver de banco**: ver abaixo.
+
+### Decisão de plano — troca do driver SQLite
+
+`better-sqlite3` **não compila** neste ambiente: sem prebuild para Node 26, o
+`node-gyp` falha. Bloqueio real, não contornável por configuração.
+
+`node:sqlite`, embutido no runtime, foi **verificado em execução** antes de
+decidir: restrição `CHECK` aplicada corretamente, API síncrona, `PRAGMA`
+aceito, leitura correta. Substitui o driver **eliminando uma dependência e o
+build nativo**, o que reforça o Princípio VII.
+
+A decisão do Product Owner permanece intacta — SQLite local, em arquivo, sem
+Docker. O que mudou foi o driver, detalhe de `plan` e portanto do Arquiteto.
+`plan.md` foi atualizado com a revisão e sua justificativa.
+
+### Verificações executadas
+
+| Verificação | Resultado |
+|---|---|
+| `npm test` | 1 arquivo, 1 teste, **passou** |
+| `npm run build` (tsc --noEmit) | exit 0 |
+| `npm run lint` (eslint) | exit 0 |
+| `GET /health` | **200**, corpo `{"status":"ok"}` |
+| Escuta | `127.0.0.1:3001` apenas |
+| **Acesso pelo IP da rede local** | **recusado** — verificado por `curl` a partir de `192.168.0.102` |
+| Segredos nos arquivos versionados | nenhum. `package-lock.json` foi sinalizado e inspecionado: as três ocorrências são o pacote `js-tokens`. Falso positivo |
+| Termos `_Avoid_` no código | nenhum |
+| Camadas proibidas | nenhuma. `src/` contém `acervo/` e `http/` |
+| Escopo | nada fora de `backend/` |
+
+A restrição de segurança mais importante desta tarefa — a ausência de
+autenticação ser condicional à execução local — foi **comprovada por teste
+externo**, não afirmada.
+
+### Mudança de domínio
+
+Nenhuma. T001 não introduz termo de domínio, e o glossário não foi tocado.
+
+### Mensagem de commit proposta
+
+```text
+feat(backend): scaffold backend project with health endpoint
+```
+
+- **Decisão/Resultado**: **T001 concluída e aceita.** Sete arquivos, quatro
+  correções do Arquiteto, todas as verificações verdes.
+- **Verificações**: as onze acima.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Um sinal investigado e descartado como falso
+  positivo; nenhuma substituição por `[REDACTED]` necessária.

@@ -19,8 +19,16 @@ recorte da feature, e nada neste plano antecipa as demais.
 
 **Language/Version**: TypeScript 5.x sobre Node.js 22 LTS, nos dois lados
 
-**Primary Dependencies**: Fastify (servidor HTTP), better-sqlite3 (driver SQLite
-síncrono), Zod (validação de forma na borda), React 19 + Vite (interface)
+**Primary Dependencies**: Fastify (servidor HTTP), **`node:sqlite`** — o módulo
+SQLite embutido no runtime, síncrono e sem build nativo —, Zod (validação de
+forma na borda), React 19 + Vite (interface)
+
+> **Decisão revista em T001.** O plano previa `better-sqlite3`. Ele **não
+> compila** no Node 26 deste ambiente: não há prebuild e o `node-gyp` falha.
+> `node:sqlite` foi verificado em execução — restrições `CHECK` aplicadas, API
+> síncrona, `PRAGMA` aceito — e substitui o driver **eliminando uma dependência
+> e o build nativo**, o que reforça o Princípio VII. A decisão do Product Owner
+> permanece intacta: SQLite local, em arquivo, sem Docker.
 
 **Storage**: SQLite em arquivo local, sem Docker e sem servidor de banco
 
@@ -240,7 +248,11 @@ teclado e foco. `e2e/` reservado ao que só o navegador prova: persistência ent
 execuções (SC-003) e responsividade.
 
 Comandos de verificação: `npm test` em `backend/` e em `frontend/`,
-`npm run test:e2e` na raiz.
+`npm run test:e2e` na raiz. No backend, `npm run build` é **verificação de
+tipos** (`tsc --noEmit`), não empacotamento: o Node 26 executa TypeScript
+diretamente, e nenhum artefato de build é necessário. Os imports relativos usam
+extensão `.ts`, porque o runtime — diferentemente do Vitest — não reescreve
+`.js` para `.ts`.
 
 ## Project Structure
 
