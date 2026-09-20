@@ -1022,3 +1022,139 @@ pedido. A pendência bloqueia a Sprint 3.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado nos cinco
   artefatos; nenhuma substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-018
+
+> **SPEC KIT** — Comando: `constitution` (emenda) | Invocação: skill
+> `speckit-constitution` + script
+> `.specify/scripts/bash/resolve-template.sh constitution-template --json` |
+> Integração: `claude` | Artefatos: `.specify/memory/constitution.md`,
+> `.gitignore`
+
+- **Data/hora**: 2026-09-20 20:05 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `constitution` (emenda) — governança
+- **Feature / Task**: — (governança do repositório, não da feature)
+- **Tipo**: Recebimento do Prompt 2 fora de ordem, análise de lacunas e emenda
+- **Skills aplicadas**: `domain-modeling` e `codebase-design` já lidas
+  integralmente em EVT-002; nenhuma releitura necessária, nenhuma decisão de
+  domínio ou de estrutura alterada por este evento
+- **Artefatos envolvidos**: `.specify/memory/constitution.md` (emendado para
+  1.1.0), `.gitignore` (revisado)
+- **Comandos**:
+  - `git log --oneline`, `git branch -a`, `git status --short`,
+    `git ls-files`
+  - `specify check`
+  - `bash .specify/scripts/bash/check-prerequisites.sh --json --paths-only`
+  - `bash .specify/scripts/bash/resolve-template.sh constitution-template --json`
+  - varredura de segredos por `grep` sobre arquivos versionados e sobre os
+    arquivos a versionar
+  - busca por código funcional de aplicação por `find`
+
+### Commit anterior
+
+O commit descrito em EVT-017 foi criado com o hash `aa25ef4899d1da1f549ac073dea1ede1910cab66`.
+
+### Prompt 2 do Product Owner (sanitizado, resumido nas suas determinações)
+
+Prompt de bootstrap auditável, recebido **após** o bootstrap já ter ocorrido.
+Determina: leitura integral das duas skills; inspeção de repositório, Git e
+instalação do Spec Kit; preservação do preexistente; não reinicializar
+instalação saudável; usar a integração do Spec Kit destinada ao Arquiteto, sem
+integração própria para o Aider, que é executor de tarefas; criar SESSION.md
+registrando Prompt 1, respostas do Product Owner, o próprio Prompt 2, decisões,
+inspeções, skills e premissas abertas; executar `constitution` estabelecendo
+treze itens mínimos; criar CONTEXT.md apenas se os termos estiverem resolvidos;
+configurar ou revisar `.gitignore`; verificar ausência de segredos e de código
+funcional; e commitar com mensagem no padrão
+`chore(project): establish SDD governance and audit trail`.
+
+O bloco de decisões do Product Owner veio com o marcador de preenchimento
+`{INSERIR_DECISOES_APROVADAS_E_RESPOSTAS}` **não substituído**. As decisões
+efetivas estão registradas em EVT-003 a EVT-009 e consolidadas em EVT-010, e
+foram usadas como fonte.
+
+### Tratamento do prompt fora de ordem
+
+O Prompt 2 chegou depois de `constitution`, `CONTEXT.md`, `SESSION.md`,
+`specify`, `clarify` e `plan` já terem sido executados e commitados em
+quatro commits. Reexecutar o bootstrap sobrescreveria uma instalação saudável, o
+que o próprio prompt proíbe. O prompt foi, portanto, tratado como **análise de
+lacunas**: apenas o que ele exige e ainda não existia foi produzido.
+
+### Inspeções realizadas e resultados
+
+| Inspeção | Resultado |
+|---|---|
+| Git inicializado | Sim; 4 commits; branches `main` e `001-flashcard-study-mvp` |
+| Instalação do Spec Kit | Saudável; CLI 1.0.9.dev0; scripts resolvem; pré-requisitos OK |
+| Integração do Arquiteto | `claude`; nenhuma integração para o Aider, conforme determinado |
+| Código funcional de aplicação | **Nenhum**; nenhum arquivo `.ts`, `.tsx`, `.js`, `.jsx` ou `.py` no repositório |
+| Segredos em arquivos versionados | **Nenhum**. O `grep` sinalizou `SESSION.md` nas linhas 132, 577 e 644, verificadas uma a uma: são o **texto da política de sanitização**, que cita as categorias proibidas, e não valores. Falso positivo confirmado |
+| Segredos nos arquivos a versionar | Nenhum padrão encontrado em `.agents/`, `.specify/`, `skills-lock.json` |
+
+### Lacunas encontradas e fechadas
+
+1. **Prompt 2 não registrado** → este evento.
+2. **Proibição geral de segredos em arquivos versionados** → Princípio VIII. O
+   Princípio II cobria apenas SESSION.md.
+3. **Acessibilidade, segurança, manutenibilidade e documentação como critérios
+   de qualidade** → nova seção "Critérios de Qualidade", como critérios de
+   aceitação e não refinamentos opcionais.
+4. **Rastreabilidade requisito–teste** → Princípio IX. Antes aparecia apenas de
+   forma parcial na política de Git.
+5. **Bloqueio de `implement` por `analyze` CRITICAL ou checklist reprovado**
+   → Princípio X, tornando binário o que o Princípio I dizia de forma implícita.
+6. **`.gitignore` insuficiente e não versionado** → revisado e versionado. A
+   regra preexistente `.aider*` foi **preservada**, com comentário explicando
+   por que existe. Acrescentadas regras para sistema operacional, ambiente e
+   credenciais, dependências e build, banco local (`*.sqlite`, artefato de
+   execução previsto pelo `plan`), cobertura e relatórios de teste, caches de
+   ferramentas de agente e logs.
+
+### Emenda constitucional
+
+Versão **1.0.0 → 1.1.0**. Emenda **aditiva**: nenhum princípio foi removido,
+renomeado ou redefinido, e nenhum texto preexistente foi reescrito. Acrescidos
+os Princípios VIII, IX e X e a seção "Critérios de Qualidade". As seções
+existentes — sete princípios originais, "Skills Obrigatórias", "Fluxo de
+Trabalho e Git" e "Governance" — foram preservadas integralmente. O template
+`constitution-template` foi resolvido pelo script do Spec Kit e sua estrutura
+de cabeçalhos conferida contra o documento em uso.
+
+Conforme a cláusula de Governance, a emenda decorre de determinação explícita do
+Product Owner e fica registrada aqui.
+
+### Arquivos que passam a ser versionados
+
+`.gitignore`, `.agents/` (as três skills locais, normativas pela
+constituição e até agora ausentes do histórico), `.specify/` (scripts,
+templates, integrações e workflows do Spec Kit, exceto o que o próprio
+`.specify/.gitignore` exclui como estado local) e `skills-lock.json`.
+
+Permanecem **não versionados** por decisão registrada no `.gitignore`:
+`.DS_Store`, `.serena/`, `graphify-out/` e `.aider*` — todos caches ou
+artefatos regeneráveis.
+
+### Mensagem de commit proposta
+
+```text
+chore(project): establish SDD governance and audit trail
+```
+
+- **Decisão/Resultado**: Prompt 2 satisfeito por análise de lacunas, sem
+  reinicializar nada. Constituição emendada para 1.1.0 cobrindo os treze itens
+  mínimos exigidos. `.gitignore` revisado preservando a regra existente. As
+  skills locais entram no histórico, fechando a lacuna de uma constituição que
+  referenciava arquivos ausentes do repositório.
+- **Verificações**: Nenhum código funcional de aplicação criado ou existente.
+  Nenhum segredo em arquivo versionado; o único sinal foi falso positivo
+  verificado linha a linha. Spec Kit saudável. Nenhum placeholder de template
+  remanescente na constituição — a única ocorrência entre colchetes é
+  `[REDACTED]`, conteúdo intencional do Princípio II.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. O Prompt 2 foi registrado em forma sanitizada;
+  nenhum valor sensível identificado; nenhuma substituição por `[REDACTED]`
+  foi necessária.

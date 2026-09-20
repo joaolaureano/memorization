@@ -1,0 +1,47 @@
+# Aider — histórico de chat e configuração local do executor de tarefas.
+# Regra preexistente, preservada: .aider.model.settings.yml carrega
+# identificadores de workspace que não pertencem ao repositório.
+.aider*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Ambiente e credenciais — nunca versionar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# Dependências e saídas de build
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Banco de dados local — artefato de execução, não do repositório
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Testes e cobertura
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+.playwright/
+
+# Caches de ferramentas de agente — regeneráveis, fora do repositório
+.serena/
+graphify-out/
+.aider.tags.cache.v4/
+
+# Logs
+*.log
+npm-debug.log*

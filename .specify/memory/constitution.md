@@ -56,6 +56,36 @@ configuração, Seam, tratamento de erro impossível nem compatibilidade retroat
 sem requisito. Premissas não validadas são marcadas `premissa a validar` e nunca
 assumidas silenciosamente.
 
+### VIII. Segredos Fora do Repositório (NÃO NEGOCIÁVEL)
+
+Nenhum segredo entra em arquivo versionado, em nenhuma circunstância e sob
+nenhuma justificativa de conveniência: senha, token, chave de API ou privada,
+cookie, credencial, string de conexão, cabeçalho de autorização e valor de
+arquivo de ambiente estão igualmente proibidos. `.gitignore` é mantido
+ativamente para tornar o acidente improvável, e arquivos que aparentem ser
+credenciais não são commitados mesmo quando solicitados. A revisão que precede
+todo commit inclui a verificação explícita de que nenhum valor sensível está
+sendo introduzido. Esta regra vale para todo o repositório; a sanitização de
+SESSION.md exigida pelo Princípio II é um caso particular dela, não seu limite.
+
+### IX. Rastreabilidade Requisito–Teste
+
+Todo requisito funcional é rastreável a pelo menos um teste que o exercita, e
+todo teste é rastreável ao requisito que o justifica. Um requisito sem teste é
+requisito não verificado e bloqueia a conclusão da tarefa que o contém; um teste
+sem requisito é escopo não solicitado e é removido ou justificado contra o
+Princípio VII. A rastreabilidade é declarada no artefato de tasks e conferida na
+revisão do diff, não inferida da leitura do código.
+
+### X. Portões de Qualidade
+
+A existência de inconsistência classificada como CRITICAL em `analyze`, ou de
+qualquer item reprovado em checklist, bloqueia `implement` até ser resolvida.
+Não se prossegue "enquanto isso", não se abre exceção por urgência e não se
+registra a pendência como dívida para depois. O portão é binário: enquanto a
+análise estiver inconsistente ou o checklist reprovado, a implementação não
+começa.
+
 ## Skills Obrigatórias
 
 As skills locais em `.agents/skills/` integram a metodologia e não substituem os
@@ -74,6 +104,23 @@ Uma ADR é proposta somente quando a decisão é simultaneamente difícil de
 reverter, surpreendente sem seu contexto histórico e resultado de um trade-off
 real. Faltando qualquer um dos três, não se cria ADR. CONTEXT-MAP.md só é
 considerado se surgirem múltiplos bounded contexts reais.
+
+## Critérios de Qualidade
+
+Acessibilidade, segurança, manutenibilidade e documentação são critérios de
+aceitação de qualquer entrega, não refinamentos opcionais a realizar depois. Uma
+tarefa que os ignore está incompleta, ainda que sua funcionalidade demonstre
+funcionar.
+
+- **Acessibilidade**: toda ação que o produto ofereça é executável por teclado,
+  e nenhum estado relevante é comunicado apenas por cor, posição ou ícone.
+- **Segurança**: entrada externa é validada de forma autoritativa fora da camada
+  de apresentação; nenhuma decisão de integridade repousa sobre o cliente.
+- **Manutenibilidade**: a entrega respeita os Princípios IV e V — Interface
+  pequena, comportamento escondido na Implementation, teste atravessando a mesma
+  Seam que o caller.
+- **Documentação**: a documentação que descreve o comportamento alterado é
+  atualizada no mesmo incremento lógico, nunca em commit posterior.
 
 ## Fluxo de Trabalho e Git
 
@@ -103,4 +150,4 @@ explícita do Product Owner, registro em SESSION.md e nota de versão abaixo.
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
+**Version**: 1.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
