@@ -10,6 +10,23 @@ escrita.
 
 Atores: `USER` (Product Owner), `ARCHITECT`, `WORKER`.
 
+## Destaque obrigatório do GitHub Spec Kit
+
+O GitHub Spec Kit é imprescindível a este projeto. A partir de EVT-014, **todo
+evento** deve abrir com o banner abaixo, imediatamente após o identificador,
+declarando de forma destacada se e como o Spec Kit foi usado:
+
+> **SPEC KIT** — Comando: `<comando ou "nenhum">` | Invocação:
+> `<skill/script/CLI>` | Integração: `<claude>` | Artefatos: `<arquivos>`
+
+Quando um evento não envolver o Spec Kit, o banner deve dizê-lo explicitamente
+em vez de ser omitido. A ausência do banner é, ela própria, uma falha de
+auditoria.
+
+Regra de invocação: os comandos do Spec Kit são executados por suas skills
+`speckit-*` e, quando existir script equivalente em `.specify/scripts/bash/`,
+por esse script — nunca replicando sua lógica à mão.
+
 ---
 
 ## EVT-001
@@ -559,3 +576,248 @@ disponível; sem repetição espaçada.
 - **Sanitização**: Confirmada. Os três arquivos foram inspecionados antes da
   escrita; nenhum segredo, credencial, token, string de conexão ou dado pessoal
   foi identificado, e nenhuma substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-013
+
+- **Data/hora**: 2026-09-20 18:45 -03
+- **Ator**: ARCHITECT
+- **Fase**: `specify`
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Execução de `specify` e validação de qualidade
+- **Skills aplicadas**: `domain-modeling`
+- **Artefatos envolvidos** (escrita):
+  - `specs/001-flashcard-study-mvp/spec.md` (criado, 360 linhas)
+  - `specs/001-flashcard-study-mvp/checklists/requirements.md` (criado)
+  - `.specify/feature.json` (criado)
+- **Comandos**:
+  - verificação de `.specify/extensions.yml` → arquivo inexistente, nenhum hook
+    registrado, nenhum hook executado
+  - leitura de `.specify/init-options.json` → `feature_numbering: sequential`
+  - leitura de `.specify/templates/spec-template.md`
+  - `mkdir -p specs/001-flashcard-study-mvp/checklists`
+  - `git rev-parse HEAD`
+
+### Commit anterior
+
+O commit descrito em EVT-012 foi criado com o hash
+`9a36406b563ed5a29b7c65860d47d9f31f6fcf13`, contendo `SESSION.md`,
+`CONTEXT.md` e `.specify/memory/constitution.md`. Nenhum outro arquivo foi
+incluído; `.agents/`, `.github/`, `.gitignore`, `graphify-out/`,
+`skills-lock.json`, `.serena/` e `.DS_Store` permanecem não rastreados.
+
+### Por que a skill se aplicava
+
+`domain-modeling` cobre a especificação. A spec foi redigida usando
+exclusivamente os termos canônicos de `CONTEXT.md`, e nenhum termo das listas
+`_Avoid_` foi introduzido.
+
+### Decisões e artefatos influenciados
+
+- As 16 invariantes consolidadas na descoberta foram traduzidas em requisitos
+  funcionais verificáveis: FR-020 (unicidade do Vínculo), FR-024
+  (elegibilidade), FR-029 (limitação ao disponível), FR-031 (sem repetição na
+  sessão), FR-034 e FR-035 (ordem revelação → resultado, resultado imutável),
+  FR-037 (resumo completo e somatório coerente), FR-038 e FR-039 (sessão nunca
+  persistida).
+- Os cenários-limite levantados na descoberta viraram a seção Edge Cases,
+  incluindo o caso de cartão sem nenhum baralho, que só existe por causa da
+  decisão B3.
+- Nenhum marcador `[NEEDS CLARIFICATION]` foi necessário, por todas as questões
+  bloqueantes terem sido resolvidas em EVT-003 a EVT-009.
+
+- **Decisão/Resultado**: Especificação criada com 3 histórias de usuário
+  priorizadas (P1, P1, P2), 43 requisitos funcionais, 10 entidades de domínio,
+  10 critérios de sucesso mensuráveis e tecnologicamente neutros, 11
+  cenários-limite e 10 premissas declaradas. Dois requisitos negativos
+  explícitos registram exclusões de escopo como regra verificável: FR-009
+  (cartão sem propriedades além de frente e verso) e FR-018 (baralho sem
+  propriedades além de nome).
+- **Verificações**: Checklist de qualidade executado em uma iteração, 16 de 16
+  itens aprovados, nenhuma falha e nenhum marcador de clarificação pendente.
+  Confirmado que a spec não contém linguagem, framework, banco de dados,
+  protocolo ou ferramenta.
+- **Commit**: pendente de aprovação do Product Owner; artefatos deste evento
+  permanecem não commitados.
+- **Sanitização**: Confirmada. Os três arquivos foram inspecionados antes da
+  escrita; nenhum segredo, credencial, token, string de conexão ou dado pessoal
+  foi identificado, e nenhuma substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-014
+
+> **SPEC KIT** — Comando: `nenhum` (evento de governança de auditoria) |
+> Invocação: `nenhuma` | Integração: `claude` (trocada de `copilot` neste
+> evento) | Artefatos: `SESSION.md`
+
+- **Data/hora**: 2026-09-20 19:05 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `specify` (concluída) — governança de auditoria
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Verificação do uso do Spec Kit, troca de integração e emenda do
+  formato de auditoria
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: `SESSION.md` (preâmbulo emendado)
+- **Comandos**:
+  - `which specify` / `specify --version` → `specify 1.0.9.dev0` instalado
+  - `bash .specify/scripts/bash/resolve-template.sh spec-template` → conteúdo
+    idêntico a `.specify/templates/spec-template.md`
+  - `bash .specify/scripts/bash/create-new-feature.sh --dry-run --json
+    --short-name flashcard-study-mvp` → `002-flashcard-study-mvp`, valor 002
+    apenas porque `001-` já existe
+  - `bash .specify/scripts/bash/check-prerequisites.sh --json` → resolveu
+    `specs/001-flashcard-study-mvp`; único erro `plan.md not found`, esperado
+  - `specify check`
+  - leitura de `.specify/integration.json` e `.specify/init-options.json`
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+Você está fazendo uso de ferramentas do Github Spec Kit? Isso é crucial. Ele é
+imprescindível.
+```
+
+```text
+OK, o que você deve fazer, em Session.MD, é deixar claro que foi usado, de modo
+destacado em cada interação que tivermos. Isso é crucial para a construção de
+nosso projeto. Spec Kit já foi trocado para Claude Code agora
+```
+
+### Verificação declarada pelo Arquiteto
+
+Em EVT-013 o comando `specify` foi executado por meio da skill
+`speckit-specify`, cujas instruções governaram numeração sequencial, layout
+`specs/NNN-<short-name>/`, uso de `spec-template.md`, conteúdo do checklist de
+qualidade, limite de marcadores de clarificação e escrita de
+`.specify/feature.json`. Os arquivos, porém, foram escritos manualmente em vez
+de invocar `create-new-feature.sh`. A equivalência foi verificada a posteriori
+pelos comandos acima e confirmada nos quatro pontos: template idêntico,
+numeração idêntica, formato relativo de `feature.json` idêntico, e artefatos
+resolvidos corretamente por `check-prerequisites.sh`.
+
+Registra-se a lacuna sem atenuá-la: a verificação foi necessária porque a
+lógica do script foi replicada à mão. A regra de invocação adicionada ao
+preâmbulo existe para que isso não se repita.
+
+### Troca de integração
+
+`.specify/integration.json` e `.specify/init-options.json` passaram de
+`copilot` para `claude`. Os artefatos do Copilot em `.github/` foram removidos.
+As dez skills `speckit-*` estão disponíveis em `.claude/skills/`. A troca foi
+realizada pelo Product Owner fora desta sessão e apenas verificada aqui.
+
+### Emenda do formato de auditoria
+
+Por determinação do Product Owner, todo evento a partir de EVT-014 abre com um
+banner **SPEC KIT** destacado, declarando comando, invocação, integração e
+artefatos, inclusive quando o Spec Kit não for usado. A emenda foi aplicada ao
+preâmbulo do arquivo, que não é um evento. Nenhum evento anterior foi
+reescrito, em observância ao Princípio II da constituição: a narrativa de
+EVT-001 a EVT-013 permanece exatamente como foi registrada, e o status
+retroativo de cada um é declarado abaixo como conteúdo novo.
+
+### Status retroativo do Spec Kit, EVT-001 a EVT-013
+
+| Evento | Comando Spec Kit | Invocação | Integração |
+|---|---|---|---|
+| EVT-001 | nenhum — prompt de abertura | — | copilot |
+| EVT-002 | nenhum — descoberta, leitura de skills locais | — | copilot |
+| EVT-003 | nenhum — resposta do Product Owner | — | copilot |
+| EVT-004 | nenhum — análise de domínio | — | copilot |
+| EVT-005 | nenhum — resposta do Product Owner | — | copilot |
+| EVT-006 | nenhum — análise de domínio | — | copilot |
+| EVT-007 | nenhum — resposta do Product Owner | — | copilot |
+| EVT-008 | nenhum — análise de domínio | — | copilot |
+| EVT-009 | nenhum — resposta do Product Owner | — | copilot |
+| EVT-010 | nenhum — consolidação e pedido de autorização | — | copilot |
+| EVT-011 | nenhum — autorização do Product Owner | — | copilot |
+| EVT-012 | `constitution` — artefato escrito em `.specify/memory/constitution.md` | escrita direta do artefato | copilot |
+| EVT-013 | `specify` | skill `speckit-specify`, arquivos escritos à mão | copilot |
+
+- **Decisão/Resultado**: Uso do Spec Kit verificado e documentado. Integração
+  em `claude`. Formato de auditoria emendado com banner obrigatório. Regra de
+  invocação estabelecida: usar as skills `speckit-*` e, havendo script
+  equivalente em `.specify/scripts/bash/`, usar o script em vez de replicar sua
+  lógica.
+- **Verificações**: Quatro verificações de equivalência executadas e aprovadas.
+  Troca de integração confirmada nos dois arquivos de estado. Nenhum evento
+  anterior foi modificado.
+- **Commit**: pendente de aprovação do Product Owner.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-015
+
+> **SPEC KIT** — Comando: `nenhum` (integração de artefatos já produzidos) |
+> Invocação: `nenhuma` | Integração: `claude` | Artefatos:
+> `specs/001-flashcard-study-mvp/spec.md`,
+> `specs/001-flashcard-study-mvp/checklists/requirements.md`, `SESSION.md`
+
+- **Data/hora**: 2026-09-20 19:12 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `specify` → integração
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Criação do branch de feature e commit da especificação
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**:
+  - `specs/001-flashcard-study-mvp/spec.md`
+  - `specs/001-flashcard-study-mvp/checklists/requirements.md`
+  - `SESSION.md`
+- **Comandos**:
+  - `git checkout -b 001-flashcard-study-mvp`
+  - `git add` dos três arquivos, nomeadamente
+  - `git commit`
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+Continue
+```
+
+Interpretado como aval para as duas pendências declaradas ao fim de EVT-014:
+commitar os artefatos de `specify` e criar o branch de feature.
+
+### Convenção de branch
+
+O branch `001-flashcard-study-mvp` adota o nome que
+`create-new-feature.sh` produziria para esta feature, mantendo a correspondência
+com o diretório `specs/001-flashcard-study-mvp`. O commit de governança
+`9a36406b563ed5a29b7c65860d47d9f31f6fcf13` permanece em `main`; o trabalho da
+feature passa a ocorrer no branch.
+
+### Mensagem de commit proposta
+
+```text
+docs(spec): define flashcard MVP requirements
+
+Especificação da feature 001-flashcard-study-mvp, produzida pelo comando
+specify do Spec Kit.
+
+- 3 histórias de usuário priorizadas (P1, P1, P2), cada uma testável de
+  forma independente
+- 43 requisitos funcionais, incluindo FR-009 e FR-018 como requisitos
+  negativos que travam o escopo de propriedades de Cartão e Baralho
+- 10 entidades de domínio alinhadas ao glossário canônico de CONTEXT.md
+- 10 critérios de sucesso mensuráveis e tecnologicamente neutros
+- 11 cenários-limite e 10 premissas declaradas
+- checklist de qualidade: 16 de 16 itens aprovados, nenhum marcador
+  [NEEDS CLARIFICATION] remanescente
+
+SESSION.md: eventos EVT-013 a EVT-015, incluindo a emenda que torna
+obrigatório o banner de destaque do Spec Kit em cada evento.
+```
+
+- **Decisão/Resultado**: Branch de feature criado e artefatos de `specify`
+  integrados. Nenhum arquivo fora do escopo da feature foi incluído:
+  `.agents/`, `.gitignore`, `graphify-out/`, `skills-lock.json`,
+  `.serena/` e `.DS_Store` permanecem não rastreados, pendentes de decisão do
+  Product Owner.
+- **Verificações**: `check-prerequisites.sh --json` já havia confirmado, em
+  EVT-014, que os artefatos são resolvidos corretamente pelo Spec Kit.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado nos arquivos
+  incluídos; nenhuma substituição por `[REDACTED]` foi necessária.
