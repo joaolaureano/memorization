@@ -14,9 +14,23 @@ condição objetiva de conclusão e paralelismo seguro.
 
 `[P]` = paralelizável: arquivos disjuntos, sem dependência mútua.
 
+O estado de cada tarefa é a **caixa de seleção**: `- [ ]` pendente, `- [X]`
+concluída. É esse marcador que o comando `implement` do Spec Kit lê e atualiza.
+Os metadados exigidos pelo processo ficam na tabela recolhida de cada fase.
+
+</details>
+
 ---
 
 ## Fase 1 — Fundação
+
+- [X] T001 [P] Projeto backend executa e responde a um comando de verificação
+- [ ] T002 [P] Projeto frontend executa e responde a um comando de verificação
+- [ ] T003 [P] Harness e2e abre navegador real
+- [ ] T004 Tabela `cartao` criada na primeira execução, com as restrições de conteúdo
+
+<details><summary>Metadados das tarefas desta fase</summary>
+
 
 Dependência técnica real desta feature, não tarefa horizontal: cada item é
 verificável isoladamente.
@@ -28,9 +42,21 @@ verificável isoladamente.
 | T003 | [P] | Harness e2e abre navegador real | — | — | — | `e2e/` | — | Um teste trivial de navegação passa | `npm run test:e2e` passa |
 | T004 | | Tabela `cartao` criada na primeira execução, com as restrições de conteúdo | FR-002, FR-051, FR-052 | T001 | `Acervo` (Seam interna) | `backend/src/acervo/esquema.ts` | `codebase-design` | Abrir base em memória e verificar que `CHECK` recusa Frente vazia, só de espaços e com 1001 caracteres | As três recusas comprovadas por teste |
 
+</details>
+
 ---
 
 ## Fase 2 — Criar e listar Cartão
+
+- [ ] T005 `Acervo` cria Cartão pela sua Interface, recusando conteúdo inválido
+- [ ] T006 `Acervo` lista Cartões, inclusive dois com a mesma Frente
+- [ ] T007 Rotas `POST /cartoes` e `GET /cartoes` respondem conforme o contrato
+- [ ] T008 `ClienteDoAcervo` funciona com dois Adapters
+- [ ] T009 Telas de lista e criação, com estado vazio e aviso de limite
+- [ ] T010 Falha de gravação é reportada e o conteúdo digitado é preservado
+
+<details><summary>Metadados das tarefas desta fase</summary>
+
 
 | ID | P | Objetivo observável | Requisitos | Depende | Module / Interface | Áreas | Skill | Testes | Concluída quando |
 |---|---|---|---|---|---|---|---|---|---|
@@ -41,9 +67,19 @@ verificável isoladamente.
 | T009 | | Telas de lista e criação, com estado vazio e aviso de limite | FR-003, FR-043, FR-046, FR-053 | T008 | `ClienteDoAcervo` | `frontend/src/ui/` | — | Lista vazia orienta a primeira ação; aviso de limite aparece durante a digitação; criação válida aparece na lista | Nenhuma regra de domínio replicada na tela |
 | T010 | | Falha de gravação é reportada e o conteúdo digitado é preservado | FR-044, FR-045 | T009 | `ClienteDoAcervo` | `frontend/src/` | — | Com a API indisponível, a criação não aparece concluída e o texto permanece | Nenhuma perda de conteúdo |
 
+</details>
+
 ---
 
 ## Fase 3 — Acessibilidade, responsividade e validação final
+
+- [ ] T011 Criar Cartão e navegar a lista apenas por teclado, com foco visível
+- [ ] T012 Erros e estado vazio perceptíveis por leitor de tela
+- [ ] T013 [P] As telas são utilizáveis em largura de telefone
+- [ ] T014 Os Cartões sobrevivem a fechar e reabrir a aplicação
+
+<details><summary>Metadados das tarefas desta fase</summary>
+
 
 | ID | P | Objetivo observável | Requisitos | Depende | Module / Interface | Áreas | Skill | Testes | Concluída quando |
 |---|---|---|---|---|---|---|---|---|---|

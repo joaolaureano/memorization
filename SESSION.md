@@ -2825,3 +2825,90 @@ refeita em vez de aceita como sucesso.
 - **Verificações**: as acima, mais três rodadas de teste de mutação.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-034
+
+> **SPEC KIT** — Comando: `plan` (Phase 0 e Phase 1 faltantes) e `tasks`
+> (formato) | Invocação: `check-prerequisites.sh --json` para verificação |
+> Integração: `claude` | Artefatos: `specs/001-criar-cartao/research.md`,
+> `data-model.md`, `contracts/api-cartoes.md`, `quickstart.md`,
+> `tasks.md`
+
+- **Data/hora**: 2026-09-21 01:40 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: correção de conformidade com o fluxo do Spec Kit
+- **Feature / Task**: `001-criar-cartao`
+- **Tipo**: Dois desvios estruturais do Arquiteto, encontrados e corrigidos
+- **Skills aplicadas**: —
+- **Comandos**: `check-prerequisites.sh --json`, inspeção do
+  `tasks-template.md` e da skill `speckit-implement`
+
+### Commit anterior
+
+O commit descrito em EVT-033 foi criado com o hash `0aab074683a47ca95a86da73d250426826c905ae`.
+
+### Pergunta do Product Owner (sanitizada)
+
+```text
+Sim, mas antes, revise se o fluxo esperado pelo Github Spec Kit está pronto para ele
+```
+
+### Resposta verificada: não estava
+
+**Desvio 1 — `tasks.md` sem caixas de seleção.** As 14 tarefas foram escritas
+como tabelas, com **zero** marcadores `- [ ]`. A skill `speckit-implement`
+exige literalmente *"For completed tasks, make sure to mark the task off as
+[X] in the tasks file"* e lista como critério de conclusão *"All tasks in
+tasks.md completed and marked [X]"*. Consequência concreta: **T001 estava
+concluída e não havia onde registrar isso**, e o critério de conclusão do
+comando era inverificável. O Prompt 7 mandava não marcar tarefa como concluída
+sem evidência — pressupondo que marcar fosse possível.
+
+**Desvio 2 — artefatos de Phase 0 e Phase 1 ausentes.**
+`check-prerequisites.sh --json` devolvia `AVAILABLE_DOCS: []`. A skill
+`speckit-plan` manda gerar `research.md` na Phase 0 e `data-model.md`,
+`contracts/` e `quickstart.md` na Phase 1; a skill `speckit-tasks` os
+consome explicitamente. O Arquiteto consolidou todo o conteúdo dentro de
+`plan.md`: a informação existia, nos arquivos errados. Com a lista vazia,
+todo comando seguinte rodaria cego.
+
+**Causa**: regressão introduzida na decomposição de EVT-027. A feature
+guarda-chuva **possuía** os quatro artefatos; ao escopar o plano para a
+`001`, o Arquiteto não os recriou.
+
+### Correções aplicadas
+
+| Correção | Verificação |
+|---|---|
+| `research.md` criado, com as decisões da feature, incluindo o piso de Node revisto e a troca de driver | — |
+| `data-model.md` criado, com a tabela `cartao` e o gatilho de migração da feature `002` | — |
+| `contracts/api-cartoes.md` criado, com duas rotas e quatro códigos de erro | — |
+| `quickstart.md` criado, incluindo roteiro de verificação da garantia de loopback | — |
+| `tasks.md` convertido para caixas de seleção, com os metadados preservados em blocos recolhidos | 13 pendentes + 1 concluída = 14 |
+| **T001 marcada como `[X]`** | — |
+| `.DS_Store` removido do diretório da feature | — |
+
+`check-prerequisites.sh --json` passou a devolver
+`["research.md","data-model.md","contracts/","quickstart.md"]`.
+
+### Determinação do Product Owner sobre as demais features
+
+```text
+OK, agora revise o fluxo para todos os outros Specs. Você sugeriu não fazer
+isso, mas sou contrário a essa ideia. Itere até termos 100% alinhado, e então os
+Workers Deepseek podem atuar de modo livre
+```
+
+O Arquiteto havia recomendado, em EVT-030, adiar a correção das features
+`002` a `006` para o `clarify` de cada uma. **O Product Owner decidiu em
+contrário**: as seis devem estar alinhadas antes de os workers atuarem. A
+decisão é registrada e acatada; a `001` passa a ser o gabarito estrutural.
+
+- **Decisão/Resultado**: Fluxo do Spec Kit conforme para a feature `001`.
+  Iniciado o alinhamento das features `002` a `006`.
+- **Verificações**: `AVAILABLE_DOCS` populado; contagem de caixas de seleção
+  conferida; blocos recolhidos balanceados.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
