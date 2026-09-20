@@ -931,3 +931,94 @@ Checklist de qualidade revalidado: 16/16 itens mantidos aprovados.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-017
+
+> **SPEC KIT** — Comando: `plan` | Invocação: skill `speckit-plan` + script
+> `.specify/scripts/bash/setup-plan.sh --json` | Integração: `claude` |
+> Artefatos: `plan.md`, `research.md`, `data-model.md`,
+> `contracts/api-acervo.md`, `quickstart.md`
+
+- **Data/hora**: 2026-09-20 19:45 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `plan`
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Decisão de stack pelo Product Owner e execução de `plan`
+- **Skills aplicadas**: `codebase-design`, `domain-modeling`
+- **Artefatos envolvidos** (escrita): os cinco listados no banner
+- **Comandos**:
+  - `bash .specify/scripts/bash/setup-plan.sh --json` → `plan.md` copiado do
+    template resolvido
+  - verificação de `.specify/extensions.yml` → inexistente, nenhum hook
+
+### Commit anterior
+
+O commit descrito em EVT-016 foi criado com o hash `e32ea56d6ca1cfb102637c30a33e5da51d2b78c5`.
+
+### Decisões de stack do Product Owner
+
+Apresentadas como três escolhas, por serem difíceis de reverter e portanto de
+autoridade do Product Owner conforme o contrato de EVT-001:
+
+1. **Linguagem**: TypeScript em toda a stack.
+2. **Forma**: frontend e API separados, dois deployables independentes.
+3. **Armazenamento**: SQLite em arquivo local, sem Docker.
+
+Registra-se que a opção recomendada pelo Arquiteto para a forma era aplicação
+única full-stack; o Product Owner escolheu frontend e API separados, e o plano
+foi elaborado sobre a escolha dele.
+
+### Por que as skills se aplicavam
+
+`codebase-design` cobre planejamento arquitetural, desenho de Interfaces,
+posicionamento de Seams, decomposição em Modules, definição de Adapters e
+estratégia de testes. `domain-modeling` cobre a correspondência entre o modelo
+de dados e o glossário canônico.
+
+### Decisões e artefatos influenciados
+
+- **Quatro Modules** definidos: `Acervo` no servidor; `SessaoDeEstudo`,
+  `Aleatoriedade` e `ClienteDoAcervo` no cliente.
+- **Duas Seams criadas**, cada uma com dois Adapters justificados: Aleatoriedade
+  (real e determinística, sem a qual a invariante de ordem imutável é
+  intestável) e ClienteDoAcervo (HTTP e em memória, categoria *remote but owned*
+  de `DEEPENING.md`).
+- **Duas Seams rejeitadas** pela regra "uma Implementation indica Seam
+  hipotética": o repositório de persistência, por SQLite ser dependência
+  *local-substitutable* cujo stand-in é o próprio SQLite em memória — mesmo
+  driver, configurações diferentes, portanto um Adapter só; e o Adapter de
+  apresentação da Sessão, por haver uma única interface consumidora.
+- **Estrutura por Module, não por camada**: não existem diretórios `models/`,
+  `services/` ou `controllers/`.
+- **O contrato HTTP não possui rota de Sessão**, tornando FR-038 visível na
+  superfície da API.
+- **A semântica não-cascateante virou propriedade do esquema**: nenhuma chave
+  estrangeira liga `cartao` a `baralho`, e a cascata alcança apenas
+  `vinculo`. FR-008 e FR-017 deixam de depender de disciplina do programador.
+- **A unicidade do Vínculo virou chave primária composta**, satisfazendo FR-020
+  no esquema.
+- **Elegibilidade não é campo persistido**, é derivada por contagem (FR-024).
+- Nove omissões deliberadas registradas em `research.md` sob o Princípio VII,
+  entre elas ORM, camada de repositório, gerenciador de estado global,
+  paginação e migrações versionadas.
+
+### Pendência declarada e bloqueante
+
+A **Interface do Module `SessaoDeEstudo` não foi decidida**. É candidata a
+`Design It Twice` por ser central, difícil de reverter e de impacto amplo. O
+processo exige aprovação humana explícita, ainda não concedida, e envolve
+subagentes paralelos — que as instruções globais do usuário só permitem mediante
+pedido. A pendência bloqueia a Sprint 3.
+
+- **Decisão/Resultado**: Cinco artefatos de design criados. Constitution Check
+  aprovado nos sete princípios antes de Phase 0 e re-avaliado após Phase 1 sem
+  alteração. Complexity Tracking vazio: nenhuma violação a justificar.
+- **Verificações**: Nenhum marcador `NEEDS CLARIFICATION` remanescente.
+  Vocabulário de `codebase-design` usado literalmente, sem substituição por
+  component, service, API ou boundary. Nomes de tabela e coluna conferidos
+  contra `CONTEXT.md`, sem sinônimos de `_Avoid_`.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado nos cinco
+  artefatos; nenhuma substituição por `[REDACTED]` foi necessária.
