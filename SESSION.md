@@ -1933,3 +1933,227 @@ docs(tasks): break MVP into 26 traceable tasks with quality checklist
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-026
+
+> **SPEC KIT** — Comando: `nenhum` (planejamento de sprint sobre artefatos
+> existentes) | Invocação: `nenhuma` | Integração: `claude` | Artefatos:
+> `SESSION.md`
+
+- **Data/hora**: 2026-09-20 22:35 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: planejamento de sprint; `implement` não iniciado
+- **Feature / Task**: `001-flashcard-study-mvp` / T001–T011
+- **Tipo**: Prompt 6 — proposta da próxima sprint
+- **Skills aplicadas**: `codebase-design`, `domain-modeling`
+- **Artefatos envolvidos**: `SESSION.md`
+- **Comandos**: nenhum
+
+### Commit anterior
+
+O commit descrito em EVT-025 foi criado com o hash `c13da45a9611b531e8cbc98234c9bd23d2c45038`.
+
+### Prompt 6 do Product Owner (sanitizado)
+
+```text
+Com base exclusivamente na constituição aprovada, no glossário de domínio, nas
+ADRs aplicáveis e nos artefatos atuais do Spec Kit, proponha a próxima sprint.
+Não implemente nada e não invoque workers ainda.
+
+A sprint deverá formar um incremento demonstrável e conter: objetivo; valor
+entregue; requisitos e critérios cobertos; tasks incluídas e dependências; tasks
+adiadas; ordem de execução; pontos de integração; Modules e Interfaces afetados;
+skills aplicáveis por tarefa; estratégia de testes e comandos de verificação;
+riscos e pontos de revisão humana; oportunidades seguras de paralelismo;
+prompts exatos e sanitizados para cada worker via Aider; arquivos que cada
+worker poderá alterar; plano de commits; demonstração esperada; definição
+objetiva de concluído.
+
+Cada prompt de worker deverá conter task ID e requisitos, objetivo e
+comportamento observável, critérios de aceitação, artefatos a ler, skills
+obrigatórias, termos de domínio, Module, Interface e Seam afetados, arquivos
+permitidos e proibidos, restrições de arquitetura e segurança, testes a criar,
+comandos de verificação, formato do relatório, instrução explícita para não
+commitar e instrução para parar diante de conflito de domínio, decisão
+arquitetural ausente, segredo ou mudança fora de escopo. Nenhum prompt poderá
+delegar decisões de produto ou arquitetura ao worker.
+
+Execução serial por padrão; paralelismo apenas sem compartilhamento de arquivos,
+estado mutável ou decisões pendentes. Registrar prompt e proposta em SESSION.md.
+Parar e solicitar aprovação explícita para executar a sprint.
+```
+
+O identificador `{INSERIR_IDENTIFICADOR_OU_ESCREVER_PROXIMA_SPRINT_ELEGIVEL}`
+veio **não substituído** pela quarta vez consecutiva. As ADRs mencionadas no
+prompt não existem: foram removidas em EVT-021.
+
+### Conflito resolvido — executor dos workers
+
+O Prompt 6 pede prompts "para cada worker **via Aider**". O **Princípio XI**,
+não negociável e ratificado em EVT-022, determina subagentes DeepSeek e registra
+que o papel de worker migrou do Aider. O conflito foi levantado ao Product
+Owner em vez de resolvido silenciosamente.
+
+**Decisão do Product Owner**: prevalece a constituição. Os prompts de worker
+serão escritos para subagentes DeepSeek.
+
+### Interrupção — crítica estrutural do Product Owner
+
+Durante a elaboração da proposta, o Product Owner interrompeu com a seguinte
+observação, registrada literalmente:
+
+```text
+Uma coisa que não ficou boa. Não sei se por minha conta ou por você. Voce criou
+apenas 1 spec. Não é assim que Github Spec Kit deveria funcionar. Cada Spec é
+uma funcionalidade. Voce criou tudo num mesmo guarda-chuva
+```
+
+**Avaliação do Arquiteto, sem atenuação**: a crítica procede em substância. A
+feature `001-flashcard-study-mvp` cobre o MVP inteiro — Cartões, Baralhos,
+Vínculos, Sessão de estudo e curadoria — em 53 requisitos, 3 histórias e 26
+tarefas. É um guarda-chuva, e a responsabilidade é do Arquiteto: foi ele quem
+alimentou `specify` com o MVP completo, em EVT-013, durante o desvio de processo
+registrado em EVT-019, e nunca propôs decomposição em features.
+
+Ressalva técnica registrada para não superestimar o erro: o
+`spec-template.md` do Spec Kit prevê **múltiplas histórias priorizadas por
+spec**, exigindo apenas que cada uma seja independentemente testável. Uma spec
+com mais de uma história não é, por si, violação. O problema é de **granulação**:
+uma única spec para o MVP inteiro está no extremo grosso da escala e anula a
+entrega incremental que a ferramenta existe para viabilizar.
+
+**Proposta da sprint suspensa.** A forma da sprint depende da decomposição em
+features, e propor sprint sobre uma estrutura que o Product Owner considera
+errada seria construir sobre fundação em disputa. Nenhuma proposta foi escrita.
+
+- **Decisão/Resultado**: Prompt 6 registrado. Conflito de executor resolvido a
+  favor da constituição. Proposta de sprint **não produzida**, por dependência
+  de decisão estrutural pendente do Product Owner.
+- **Verificações**: Nenhum artefato do Spec Kit foi alterado neste evento.
+- **Commit**: pendente.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-027
+
+> **SPEC KIT** — Comando: `specify` (seis features novas) | Invocação: script
+> `.specify/scripts/bash/create-new-feature.sh --json --number --short-name`,
+> seis execuções | Integração: `claude` | Artefatos: seis `spec.md` novos;
+> `specs/001-flashcard-study-mvp/` removido
+
+- **Data/hora**: 2026-09-20 23:05 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `specify` — reestruturação em features
+- **Feature / Task**: features `001` a `006`
+- **Tipo**: Decomposição do guarda-chuva em seis features do Spec Kit
+- **Skills aplicadas**: `domain-modeling`
+- **Artefatos envolvidos**: seis `spec.md` criados; a feature
+  `001-flashcard-study-mvp` inteira removida do working tree
+- **Comandos**:
+  - `git rm -r specs/001-flashcard-study-mvp`
+  - seis execuções de `create-new-feature.sh`
+  - renumeração dos diretórios e reescrita de `.specify/feature.json`
+  - verificação de cobertura por script, comparando com a spec antiga recuperada
+    de `git show HEAD:...`
+
+### Commit anterior
+
+O commit descrito em EVT-026 não chegou a existir: aquele evento foi registrado
+mas não commitado, por a proposta de sprint ter sido suspensa. O último commit é
+`c13da45a9611b531e8cbc98234c9bd23d2c45038`, de EVT-025.
+
+### Decisão do Product Owner
+
+Questionado sobre a granularidade, o Product Owner respondeu:
+
+```text
+Isso pede mais granularidade. 1 - Criar Cartao. 2 - Criar Baralho 3 - Linkar os 2
+4 - Sessão de estudo. Isso é apenas uma sugestão, mas poderia ser mais quebrado
+ainda.
+```
+
+E aprovou **redistribuir e remover a 001**.
+
+O Arquiteto estendeu a sugestão para cobrir os 53 requisitos — todo requisito
+precisa de casa — e o Product Owner confirmou a decomposição em **seis
+features**.
+
+### Decomposição adotada
+
+| Feature | Escopo | Requisitos |
+|---|---|---|
+| `001-criar-cartao` | Criar e listar Cartão; carrega a fundação de projeto e persistência | FR-001–004, 009, 040, 042–046, 051–053 |
+| `002-criar-baralho` | Criar e listar Baralho | FR-010–014, 018 |
+| `003-vincular-cartao-baralho` | Vincular, desvincular, elegibilidade derivada | FR-019–024, 026 |
+| `004-sessao-de-estudo` | Sessão completa, com acessibilidade e progresso | FR-025, 027–039, 041, 047–049 |
+| `005-editar-cartao-e-baralho` | Edição, aviso de propagação, alterações não salvas | FR-005, 006, 015, 050 |
+| `006-excluir-cartao-e-baralho` | Exclusão com confirmação, não-cascateante | FR-007, 008, 016, 017 |
+
+Ordem: 001 → 002 → 003 → 004. As features 005 e 006 podem vir após a 003.
+
+### Onde o Arquiteto parou de quebrar, e por quê
+
+A Sessão **não** foi dividida em iniciar, percorrer e resumir: nenhuma das três
+se demonstra sozinha de forma útil, e as invariantes de ordenação — revelar
+antes de responder, Resultado imutável — atravessam as três. Separá-las
+espalharia uma máquina de estados por três specs, destruindo a Locality que o
+Princípio IV protege.
+
+Os requisitos transversais — persistência, falha de gravação, teclado, foco,
+semântica, responsividade, limites, idioma — foram **distribuídos** para a
+feature onde são observáveis, em vez de concentrados numa feature
+"acessibilidade". Uma feature transversal seria a mesma doença do guarda-chuva
+em escala menor.
+
+### Verificação de cobertura
+
+Script comparando as seis specs novas com a spec antiga recuperada do histórico
+Git:
+
+- **53 de 53 requisitos funcionais** preservados; nenhum perdido, nenhum
+  inventado, **nenhum requisito em mais de uma feature**.
+- **16 de 16 critérios de sucesso** preservados. A primeira passagem detectou
+  **SC-011 perdido**, e ele foi redistribuído para as features `001` e `002`,
+  onde as listas existem.
+- Três critérios aparecem em mais de uma feature — SC-003, SC-006 e SC-016 — por
+  serem transversais e observáveis em mais de um contexto. Repetição
+  deliberada, não duplicação acidental.
+
+### Artefatos perdidos do working tree e seu destino
+
+A remoção da `001-flashcard-study-mvp` levou consigo `plan.md`,
+`research.md`, `data-model.md`, `contracts/api-acervo.md`,
+`quickstart.md`, `tasks.md` e os dois checklists. Todos permanecem
+recuperáveis no histórico Git, nos commits `1e6a344`, `961b88a` e
+`c13da45`.
+
+O desenho arquitetural — quatro Modules, duas Seams reais, duas rejeitadas,
+Interfaces especificadas — **não foi descartado**: será reaproveitado no
+`plan` de cada feature, escopado ao que aquela feature precisa, em vez de
+ressuscitado como um segundo guarda-chuva.
+
+### Consequência registrada
+
+`plan`, `tasks`, `checklist` e `analyze` **não existem para nenhuma das
+seis features**. Cada uma percorrerá o fluxo do Spec Kit quando for assumida, que
+é exatamente o funcionamento que a crítica do Product Owner restaura.
+
+### Mensagem de commit proposta
+
+```text
+refactor(specs): split umbrella MVP spec into six features
+```
+
+- **Decisão/Resultado**: Guarda-chuva desfeito. Seis features com spec própria,
+  dependências declaradas e escopo demonstrável. Cobertura verificada por
+  script.
+- **Verificações**: 53/53 requisitos e 16/16 critérios cobertos; um critério
+  perdido foi detectado e corrigido antes do commit; nenhuma feature contém
+  decisão técnica.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.
