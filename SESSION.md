@@ -1527,3 +1527,153 @@ operar apenas em `main`, conforme a Decisão 3 de EVT-020.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-023
+
+> **SPEC KIT** — Comando: `specify` e `clarify` (verificação e
+> complementação, sem reexecução) | Invocação: edição direta dos artefatos, com
+> `speckit-specify` e `speckit-clarify` já executados em EVT-013 e EVT-016 |
+> Integração: `claude` | Artefatos:
+> `specs/001-flashcard-study-mvp/spec.md`,
+> `specs/001-flashcard-study-mvp/checklists/requirements.md`
+
+- **Data/hora**: 2026-09-20 21:20 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `specify` / `clarify`
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Prompt 3 — especificação funcional do MVP
+- **Skills aplicadas**: `domain-modeling`
+- **Artefatos envolvidos**: `spec.md` (ampliado), `checklists/requirements.md`
+  (revalidado), `SESSION.md`
+- **Comandos**: `git grep` e buscas por termo para auditar a cobertura da spec
+  contra a lista do Prompt 3
+
+### Commit anterior
+
+O commit descrito em EVT-022 foi criado com o hash `6c534e710b4e320e6b2b3d2daf81bd94bf3aa667`.
+
+### Prompt 3 do Product Owner (sanitizado)
+
+```text
+O bootstrap e a constituição estão aprovados. Agora produza a especificação
+funcional do MVP de flashcards. Não escolha stack, banco de dados, framework,
+protocolo, estrutura de pastas ou arquitetura nesta etapa. Não implemente código.
+
+Processo obrigatório: ler a constituição, SESSION.md, CONTEXT.md e a skill
+domain-modeling completa; registrar este prompt sanitizado em SESSION.md
+associado à feature do MVP; executar specify descrevendo o que será construído e
+por quê; executar clarify para eliminar ambiguidades relevantes; atualizar
+CONTEXT.md imediatamente quando um termo canônico for resolvido, sem detalhes
+técnicos; e parar com perguntas objetivas se houver decisão de produto
+bloqueante.
+
+A especificação deve conter requisitos identificáveis, histórias priorizadas e
+cenários de aceitação verificáveis para o escopo aprovado, cobrindo: CRUD de
+baralhos; CRUD de cartões; elegibilidade de baralho; limites da quantidade
+escolhida; seleção randomizada sem repetição; exibição inicial somente da
+frente; impossibilidade de registrar resultado antes da revelação; registro de
+acertou ou errou; progresso durante a sessão; conclusão e resumo; baralho vazio;
+exclusão de baralho com cartões; valores vazios, limites de tamanho e conteúdo
+inválido; persistência; navegação por teclado, foco visível e semântica
+acessível; telas pequenas; estados vazios, erros recuperáveis e prevenção de
+perda acidental de dados.
+
+Separar claramente escopo do MVP, funcionalidades adiadas, premissas,
+invariantes de domínio e critérios de sucesso mensuráveis e independentes de
+tecnologia. Não tratar repetição espaçada como incluída se apenas randomização
+tiver sido aprovada.
+
+Executar a verificação de qualidade dos requisitos prevista pelo Spec Kit, sem
+marcar itens como aprovados apenas porque foram escritos.
+
+Ao final, apresentar caminho da spec, requisitos e histórias principais,
+decisões incorporadas ao glossário, ambiguidades restantes, itens adiados,
+resultado da avaliação de qualidade e proposta de mensagem de commit. Atualizar
+SESSION.md, mas não commitar a especificação sem aprovação explícita do Product
+Owner. Não avançar para plan.
+```
+
+### Tratamento — verificação e complementação, não reexecução
+
+`specify` e `clarify` já haviam sido executados em EVT-013 e EVT-016, sob o
+desvio de processo registrado em EVT-019. Reexecutar `specify` copiaria o
+template sobre `spec.md` e destruiria as cinquenta e uma frases de requisito e
+as quatro clarificações já integradas. O Prompt 3 foi, portanto, cumprido por
+auditoria de cobertura contra sua própria lista, seguida de complementação.
+
+### Lacunas encontradas na spec existente
+
+Sete itens da lista do Prompt 3 não tinham cobertura alguma:
+
+| Lacuna | Fechada por |
+|---|---|
+| Progresso durante a sessão | FR-047, SC-015 |
+| Foco visível | FR-048, SC-013 |
+| Semântica acessível | FR-049 |
+| Prevenção de perda acidental de dados | FR-050, SC-014 |
+| Conteúdo inválido (só espaços) | FR-051 |
+| Limites de tamanho | FR-052, FR-053, SC-016 |
+| Seções separadas de invariantes e de adiadas | Duas seções novas |
+
+### Decisão de produto do Product Owner
+
+Única questão bloqueante levantada: limites de tamanho. Resposta: **limite
+generoso — Frente e Verso até 1000 caracteres, nome do Baralho até 100.**
+Justificativa registrada: um Cartão precisa caber na tela para ser estudado, e o
+limite impede colagem acidental de documento inteiro, sem restringir conteúdo
+legítimo. Integrada como quinta clarificação da sessão.
+
+### CONTEXT.md — nenhuma alteração, justificada
+
+Nenhum termo canônico novo foi resolvido nesta etapa. Os acréscimos são
+restrições sobre termos já definidos — limite de caracteres da Frente, do Verso
+e do nome — e regras de comportamento. Pelo `CONTEXT-FORMAT.md`, o glossário
+define **o que um termo é**, não as regras que o governam, e não deve ser tratado
+como spec. Acrescentar limites de caractere ao glossário o transformaria em
+repositório de regra. `CONTEXT.md` permanece com seus onze termos.
+
+### Verificação de qualidade — item reprovado e corrigido
+
+A revalidação foi feita item a item contra a spec ampliada, e **um item
+reprovou** na primeira passagem:
+
+- **"All acceptance scenarios are defined"**: os requisitos FR-047 a FR-053
+  haviam sido escritos sem nenhum cenário de aceitação correspondente. O item
+  foi reprovado, e não aprovado por terem sido escritos. Corrigido com sete
+  cenários novos distribuídos entre as três histórias. Passa na segunda
+  passagem.
+- **"All functional requirements have clear acceptance criteria"** reprovava pela
+  mesma causa e passou pela mesma correção.
+
+Duas ressalvas registradas, ainda assim aprovadas: FR-023 e FR-049 mencionam
+"camada de apresentação" e "leitor de tela", que descrevem garantia observável e
+categoria de tecnologia assistiva, não escolha de stack; e FR-049 é o requisito
+menos diretamente mensurável, verificável por asserção sobre nome, papel e
+estado acessíveis.
+
+### Estado final da spec
+
+53 requisitos funcionais, 16 critérios de sucesso, 37 cenários de aceitação em 3
+histórias priorizadas, 16 invariantes de domínio, 14 casos-limite, 5
+clarificações, 12 funcionalidades adiadas. Nenhum marcador
+`[NEEDS CLARIFICATION]`. Nenhuma menção a linguagem, framework, banco,
+protocolo ou estrutura de pastas.
+
+### Mensagem de commit proposta
+
+```text
+docs(spec): complete functional specification for flashcard MVP
+```
+
+- **Decisão/Resultado**: Especificação funcional completa contra a lista de
+  cobertura do Prompt 3. Nenhuma ambiguidade bloqueante remanescente.
+- **Verificações**: Checklist de qualidade reavaliado item a item, com um item
+  reprovado, corrigido e reaprovado; 16 de 16 ao final. Ausência de decisão
+  técnica conferida por busca. Repetição espaçada explicitamente declarada como
+  adiada e distinta de randomização.
+- **Commit**: **não realizado.** O Prompt 3 proíbe commitar a especificação sem
+  aprovação explícita do Product Owner. Os artefatos permanecem no working tree.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

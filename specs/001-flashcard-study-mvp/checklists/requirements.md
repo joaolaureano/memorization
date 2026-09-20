@@ -31,6 +31,31 @@
 
 ## Notes
 
+### Revalidação de 2026-09-20 (Prompt 3)
+
+Reavaliação item a item contra a spec ampliada, e não confirmação do estado
+anterior. Um item **reprovou** na primeira passagem e exigiu correção:
+
+- **"All acceptance scenarios are defined"** reprovou. Os requisitos FR-047 a
+  FR-053 — progresso da sessão, foco visível, semântica acessível, alterações
+  não salvas, conteúdo só de espaços e limites de tamanho — haviam sido escritos
+  sem cenário de aceitação correspondente em nenhuma das três histórias.
+  Corrigido com sete cenários novos, distribuídos entre as três histórias.
+  O item passa na segunda passagem.
+- **"All functional requirements have clear acceptance criteria"** reprovava pela
+  mesma causa e passa pela mesma correção.
+
+Itens verificados com ressalva registrada, ainda assim aprovados:
+
+- **"No implementation details"**: FR-023 menciona "camada de apresentação" e
+  FR-049 menciona "leitor de tela". Ambos descrevem garantia observável para o
+  usuário e categoria de tecnologia assistiva, não escolha de stack. Mantidos.
+- **"Requirements are testable"**: FR-049 é o requisito menos diretamente
+  mensurável do conjunto. É verificável por asserção sobre nome, papel e estado
+  acessíveis dos controles, e assim permanece testável.
+
+### Validação original de 2026-09-20 (specify)
+
 - Validação executada em uma iteração; nenhum item falhou.
 - Nenhum marcador `[NEEDS CLARIFICATION]` foi necessário: as nove questões
   bloqueantes (B1–B9) e os treze itens de premissa (P1–P13) foram resolvidos com

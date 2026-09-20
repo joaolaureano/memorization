@@ -16,6 +16,7 @@
 - Q: Quantos cartões e baralhos a aplicação precisa exibir confortavelmente numa lista antes que a falta de paginação ou busca comece a atrapalhar? → A: Até ~50 cartões e ~10 baralhos (uso experimental, bem pequeno).
 - Q: O que o usuário deve ver se uma operação de gravar, editar ou excluir falhar? → A: A operação é reportada como falha, a tela não finge sucesso, e o conteúdo informado é preservado para nova tentativa.
 - Q: Em que idioma a interface deve falar com o usuário? → A: Português, usando os termos canônicos do CONTEXT.md.
+- Q: Frente, Verso e nome do Baralho devem ter limite de tamanho? → A: Sim, limite generoso — Frente e Verso até 1000 caracteres, nome do Baralho até 100.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -61,6 +62,11 @@ seus dois cartões.
 8. **Given** cartões, baralhos e vínculos foram criados, **When** o usuário fecha
    e reabre a aplicação, **Then** todos os cartões, baralhos e vínculos continuam
    existindo exatamente como estavam.
+9. **Given** o usuário está criando um cartão, **When** cola na Frente um texto
+   com mais de 1000 caracteres, **Then** a aplicação recusa, informa o limite e o
+   tamanho atual, e o conteúdo permanece na tela para correção.
+10. **Given** o usuário está digitando a Frente, **When** se aproxima do limite,
+    **Then** a aplicação comunica o limite antes da tentativa de salvar.
 
 ---
 
@@ -113,6 +119,15 @@ acertos e erros.
 12. **Given** uma sessão em andamento, **When** o usuário a interrompe por
     qualquer motivo, **Then** nenhum resumo é produzido, nada é registrado, e ao
     voltar o usuário pode iniciar uma sessão nova.
+13. **Given** uma sessão de 10 itens com 3 já respondidos, **When** o usuário
+    observa a tela, **Then** ele identifica sua posição e o total sem precisar
+    contar.
+14. **Given** o usuário registrou o resultado de um item, **When** o item
+    seguinte é apresentado, **Then** o foco do teclado é movido para o novo
+    conteúdo e permanece visível sem depender de cor.
+15. **Given** um item com o verso revelado, **When** o resultado é registrado,
+    **Then** a mudança de estado é perceptível por leitor de tela, e não apenas
+    visualmente.
 
 ---
 
@@ -162,6 +177,12 @@ existindo.
    nenhum baralho vinculado.
 10. **Given** uma solicitação de exclusão, **When** o usuário recusa a
     confirmação, **Then** nada é excluído.
+11. **Given** uma edição de cartão com alterações não salvas, **When** o usuário
+    tenta sair da tela, **Then** é pedida confirmação explícita antes de
+    descartar as alterações.
+12. **Given** o pedido de confirmação por alterações não salvas, **When** o
+    usuário recusa, **Then** a edição permanece aberta com o conteúdo digitado
+    intacto.
 
 ---
 
@@ -193,6 +214,14 @@ existindo.
   identificador.
 - **Acervo vazio**: com nenhum cartão e nenhum baralho, as listas comunicam o
   estado vazio e orientam a primeira ação.
+- **Edição abandonada com alterações**: sair da edição de um Cartão ou Baralho
+  sem salvar exige confirmação; recusada a confirmação, a edição permanece
+  aberta com o conteúdo digitado intacto.
+- **Conteúdo só de espaços**: uma Frente contendo apenas espaços é recusada como
+  vazia, e não aceita como conteúdo válido.
+- **Conteúdo excedendo o limite**: texto colado acima do limite é recusado com
+  indicação do limite e do tamanho atual, e o conteúdo digitado permanece
+  disponível para correção.
 - **Falha de persistência**: se o armazenamento estiver indisponível no momento
   de criar, editar, excluir ou vincular, a operação é reportada como falha, a
   interface não a exibe como concluída, e o conteúdo informado permanece
@@ -312,6 +341,25 @@ existindo.
   empregando os termos canônicos de `CONTEXT.md` — Cartão, Frente, Verso,
   Baralho, Vínculo, Sessão de estudo, Resumo da sessão — e MUST NOT empregar os
   sinônimos listados como `_Avoid_` naquele glossário.
+- **FR-047**: Durante uma Sessão de estudo, o sistema MUST informar
+  continuamente a posição do Item corrente e o total de Itens da Sessão, de modo
+  que o usuário saiba quanto falta antes de chegar ao Resumo.
+- **FR-048**: O sistema MUST manter o foco do teclado sempre visível, com
+  indicação que não dependa apenas de cor, e MUST mover o foco para o conteúdo
+  recém-apresentado ao avançar de Item.
+- **FR-049**: Os controles do sistema MUST possuir rótulo textual acessível, e
+  mudanças de estado relevantes — Verso revelado, Resultado registrado, Sessão
+  concluída, operação falhada — MUST ser perceptíveis por leitor de tela e não
+  apenas visualmente.
+- **FR-050**: Ao sair de uma edição de Cartão ou de Baralho com alterações não
+  salvas, o sistema MUST pedir confirmação explícita antes de descartá-las.
+- **FR-051**: O sistema MUST tratar conteúdo composto apenas de espaços como
+  vazio, tanto na Frente e no Verso quanto no nome do Baralho.
+- **FR-052**: O sistema MUST recusar Frente ou Verso com mais de 1000
+  caracteres, e nome de Baralho com mais de 100 caracteres, informando o limite
+  e o tamanho atual.
+- **FR-053**: O sistema MUST comunicar o limite ao usuário **durante** a
+  digitação, e não apenas ao tentar salvar.
 
 ### Key Entities
 
@@ -366,6 +414,67 @@ existindo.
 - **SC-012**: Em cem por cento das falhas de gravação simuladas, nenhuma operação
   aparece como concluída na interface e nenhum conteúdo informado pelo usuário é
   perdido.
+- **SC-013**: Em qualquer ponto da aplicação alcançável por teclado, o elemento
+  focado é identificável sem depender de percepção de cor.
+- **SC-014**: Nenhuma alteração digitada e não salva é descartada sem
+  confirmação explícita do usuário, em cem por cento das tentativas de sair da
+  edição.
+- **SC-015**: Durante uma Sessão, o usuário sabe a qualquer momento quantos
+  Itens já respondeu e quantos faltam, sem precisar contar.
+- **SC-016**: Nenhum Cartão gravado excede 1000 caracteres na Frente ou no
+  Verso, e nenhum Baralho excede 100 caracteres no nome, em cem por cento das
+  tentativas, inclusive quando a requisição não parte da interface.
+
+## Invariantes de Domínio
+
+Regras que valem sempre, independentemente de tela, fluxo ou ordem das ações.
+Cada uma é verificável e tem requisito correspondente.
+
+1. Um Cartão tem Frente e Verso não vazios, cada um com no máximo 1000
+   caracteres.
+2. Um Baralho tem nome não vazio, de no máximo 100 caracteres, que não precisa
+   ser único.
+3. Um Cartão existe por si e está vinculado a zero ou mais Baralhos.
+4. O par (Cartão, Baralho) é único: um Cartão se vincula a um mesmo Baralho no
+   máximo uma vez.
+5. Um Baralho é elegível se e somente se tem ao menos um Cartão vinculado.
+6. Uma Sessão só pode ser iniciada a partir de um Baralho elegível.
+7. A quantidade de Itens de uma Sessão é `min(quantidade solicitada, Cartões
+   vinculados)` e nunca menor que 1.
+8. Nenhum Cartão origina mais de um Item na mesma Sessão.
+9. A ordem dos Itens é definida no início da Sessão e não muda durante ela.
+10. O Verso de um Item só é exibido após Revelação por ação explícita.
+11. Um Resultado do item só pode ser registrado após a Revelação daquele Item.
+12. Um Item admite no máximo um Resultado, imutável após registrado.
+13. O Resumo só existe quando todos os Itens têm Resultado, e nele
+    `acertos + erros = itens estudados`.
+14. Excluir um Baralho remove seus Vínculos e preserva os Cartões.
+15. Excluir um Cartão remove seus Vínculos e preserva os Baralhos, que podem
+    deixar de ser elegíveis.
+16. Uma Sessão nunca é persistida; qualquer interrupção a descarta sem deixar
+    registro.
+
+## Funcionalidades Adiadas
+
+Explicitamente fora do MVP. Não são omissões: são decisões de não construir
+agora, cada uma reversível em incremento futuro sem invalidar o que existe.
+
+- **Repetição espaçada** e qualquer agendamento de revisão. A randomização
+  aprovada **não é** repetição espaçada e não deve ser confundida com ela: a
+  primeira é ordem uniformemente aleatória sem memória; a segunda exige
+  histórico de desempenho, que o MVP não acumula.
+- Histórico, estatísticas ou métricas acumuladas de Sessões.
+- Múltiplos usuários, contas, autenticação ou compartilhamento.
+- Imagens, áudio, Markdown ou qualquer formatação de conteúdo.
+- Importação e exportação de acervo.
+- Tags, busca, filtro, paginação e subdecks.
+- Qualquer propriedade de Cartão além de Frente e Verso, ou de Baralho além de
+  nome.
+- Correção automática de respostas ou comparação de texto digitado.
+- Retomada de Sessão interrompida.
+- Desfazer exclusão.
+- Internacionalização e troca de idioma.
+- Hospedagem remota.
 
 ## Assumptions
 
@@ -379,6 +488,10 @@ existindo.
 - Não há histórico, estatística ou métrica acumulada de sessões. O Resumo da
   sessão é calculado no encerramento e descartado junto com a sessão.
 - Não existe limite de cartões por baralho nem de baralhos por cartão.
+- Frente e Verso admitem até 1000 caracteres e o nome do Baralho até 100. Os
+  limites existem para que um Cartão caiba na tela durante a Sessão e para
+  impedir colagem acidental de documento inteiro, não para restringir conteúdo
+  legítimo.
 - O acervo esperado no MVP é de ordem de 50 Cartões e 10 Baralhos. A exclusão de
   busca, filtro e paginação se sustenta nessa escala e precisaria ser reavaliada
   em acervos significativamente maiores.
