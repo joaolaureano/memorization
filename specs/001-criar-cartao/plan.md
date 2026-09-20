@@ -223,6 +223,15 @@ conexões apenas de `localhost`. Expor a aplicação em rede pública exigiria
 reabrir a decisão de não haver usuários, e nada neste plano prepara essa
 exposição.
 
+A restrição ao loopback **não é convenção, é invariante imposta em runtime**.
+Após o `listen`, `assegurarEscutaLocal` confere o endereço efetivamente
+vinculado por `server.address()`; se for diferente de `127.0.0.1`, lança
+`EscutaInseguraError`, fecha o servidor e **aborta a inicialização**. Servir
+silenciosamente para a rede deixa de ser um estado alcançável. A guarda foi
+verificada por teste de mutação: com ela, um literal `"0.0.0.0"` no ponto de
+chamada derruba o processo; sem ela, o mesmo literal expõe a API ao IP da rede
+local com resposta 200.
+
 **Observabilidade mínima**: log de erro no console do servidor, com código de
 erro e rota, **sem conteúdo de Cartão**. Nada além disso.
 

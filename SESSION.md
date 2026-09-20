@@ -2734,3 +2734,94 @@ feat(backend): scaffold backend project with health endpoint
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Um sinal investigado e descartado como falso
   positivo; nenhuma substituição por `[REDACTED]` necessária.
+
+---
+
+## EVT-033
+
+> **SPEC KIT** — Comando: `implement` (revisão e correção de T001) |
+> Invocação: quatro delegações a subagentes DeepSeek pelo MCP `delegate` |
+> Integração: `claude` | Artefatos: `backend/`,
+> `specs/001-criar-cartao/plan.md`
+
+- **Data/hora**: 2026-09-21 01:15 -03
+- **Ator**: USER → ARCHITECT → WORKER
+- **Fase**: `implement`
+- **Feature / Task**: `001-criar-cartao` / T001 — revisão
+- **Tipo**: Revisão do esqueleto, correção de quatro defeitos e imposição de
+  invariante de segurança
+- **Skills aplicadas**: `codebase-design`
+- **Comandos**: `npm test`, `npm run build`, `npm run lint`,
+  `npm run dev`, `node src/index.ts`, `curl`, `lsof`, e três rodadas de
+  **teste de mutação**
+
+### Commit anterior
+
+O commit descrito em EVT-032 foi criado com o hash `c63508bf82320ad679de34a71b7fc423634d397f`.
+
+### Determinação do Product Owner (sanitizada)
+
+```text
+Revise antes. Sempre corrija 100% de bugs antes de ir adiante
+```
+
+Registrada como **política permanente**: nenhuma tarefa avança com defeito
+conhecido em aberto.
+
+### Violação do Princípio XI declarada pelo Arquiteto
+
+As quatro correções aplicadas em EVT-032 — `noEmit`, `Number()`, extensão
+`.ts` e troca de driver — foram **escritas diretamente pelo Arquiteto**. O
+Princípio XI determina que código assim *"não é aceito e é refeito pela via
+delegada"*. A violação é declarada aqui, e o precedente foi corrigido: todas as
+correções deste evento passaram por subagentes DeepSeek.
+
+### Defeitos encontrados na revisão
+
+| # | Defeito | Gravidade |
+|---|---|---|
+| D1 | `engines.node` declarava `">=22.5"`, mas executar TypeScript sem flag exige Node 23.6+. No Node 22 LTS — a versão que o plano nomeava — a aplicação não subiria | real |
+| D2 | `@types/node@^22` contra runtime Node 26 | real |
+| D3 | `tsconfig` incluía `eslint.config.js` sem `allowJs`, e o `tsc` o ignorava silenciosamente | menor |
+| D4 | **Nenhum teste de regressão protegia a escuta em loopback** | grave |
+
+Confirmados como não-problemas: `npm run dev` funciona, `node:sqlite` não
+emite aviso experimental neste runtime, o lint cobre os testes.
+
+### D4 — três rodadas até fechar de verdade
+
+O worker fechou D4 com testes sobre a constante e, **por iniciativa própria,
+reportou que aquilo não bastava**: um literal `"0.0.0.0"` escrito no ponto de
+chamada manteria os testes verdes. O teste de mutação confirmou a previsão dele.
+
+| Rodada | Medida | Resultado da mutação |
+|---|---|---|
+| C2 | Teste de bind efetivo, lendo `server.address()` | Mutar a constante falha 5 testes; literal no call-site **ainda passava** |
+| C4 | `iniciarServidor` assume a escuta; `index.ts` fica sem objeto de opções | Fecha por construção, mas o worker declarou o furo residual |
+| C5 | `assegurarEscutaLocal` confere o endereço efetivo e lança `EscutaInseguraError`, fechando o servidor | **Fechado em runtime** |
+
+### Teste de mutação — evidência conclusiva
+
+| Mutação | Resultado |
+|---|---|
+| `HOST_LOCAL` → `"0.0.0.0"` | **5 de 8 testes falham** |
+| Literal `host: "0.0.0.0"` no call-site, **com** a guarda | Processo **morre**, `EscutaInseguraError`, porta fechada |
+| Literal `host: "0.0.0.0"` no call-site, **sem** a guarda | `lsof` mostra `*:3001` e `curl` pelo IP da LAN devolve **HTTP 200** — exposição real comprovada |
+
+A terceira linha é a que justifica o trabalho: o furo não era teórico. A guarda
+é o que o fecha, e isso está demonstrado, não afirmado.
+
+Registra-se também que a primeira tentativa de verificar a mutação 2 produziu
+**resultado inconclusivo** — o comando `timeout` não existe no macOS — e foi
+refeita em vez de aceita como sucesso.
+
+### Verificações finais
+
+`npm test` 8 de 8 em 2 arquivos; `tsc --noEmit` exit 0; `eslint` exit 0.
+
+- **Decisão/Resultado**: Quatro defeitos corrigidos, nenhum conhecido em aberto.
+  A restrição ao loopback deixou de ser convenção e virou invariante imposta em
+  runtime. `plan.md` atualizado com a garantia e a evidência.
+- **Verificações**: as acima, mais três rodadas de teste de mutação.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
