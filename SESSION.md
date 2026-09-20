@@ -821,3 +821,113 @@ obrigatório o banner de destaque do Spec Kit em cada evento.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado nos arquivos
   incluídos; nenhuma substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-016
+
+> **SPEC KIT** — Comando: `clarify` | Invocação: skill `speckit-clarify` +
+> script `.specify/scripts/bash/check-prerequisites.sh --json --paths-only` |
+> Integração: `claude` | Artefatos:
+> `specs/001-flashcard-study-mvp/spec.md`
+
+- **Data/hora**: 2026-09-20 19:25 -03
+- **Ator**: ARCHITECT ↔ USER
+- **Fase**: `clarify`
+- **Feature / Task**: `001-flashcard-study-mvp` / —
+- **Tipo**: Execução de `clarify` com quatro perguntas respondidas
+- **Skills aplicadas**: `domain-modeling`
+- **Artefatos envolvidos**: `specs/001-flashcard-study-mvp/spec.md` (editado),
+  `specs/001-flashcard-study-mvp/checklists/requirements.md` (revalidado, sem
+  alteração)
+- **Comandos**:
+  - `bash .specify/scripts/bash/check-prerequisites.sh --json --paths-only` →
+    branch `001-flashcard-study-mvp`, spec resolvida
+  - verificação de `.specify/extensions.yml` → inexistente, nenhum hook
+
+### Commit anterior
+
+O commit descrito em EVT-015 foi criado com o hash `e2eb3220d5be76bf6c2df855893e3ab9e8293b75`, no branch
+`001-flashcard-study-mvp`, contendo `spec.md`, `checklists/requirements.md`
+e `SESSION.md`.
+
+### Varredura de ambiguidade
+
+Categorias **Clear** na entrada: escopo funcional, modelo de domínio,
+terminologia, fluxo de interação, casos-limite e sinais de conclusão — efeito da
+descoberta registrada em EVT-001 a EVT-011. Lacunas concentradas nos atributos
+não-funcionais, deliberadamente não cobertos pela descoberta.
+
+### Perguntas e respostas do Product Owner
+
+1. **Exposição e privacidade** — "A aplicação vai rodar apenas na máquina do
+   usuário, ou ficar hospedada numa URL que outras pessoas conseguem abrir?"
+   → *"Inicialmente, Local. Futuramente, AWS."*
+2. **Escala do acervo** — "Quantos cartões e baralhos a aplicação precisa exibir
+   confortavelmente antes que a falta de paginação ou busca atrapalhe?"
+   → Opção A: até ~50 Cartões e ~10 Baralhos.
+3. **Falha de persistência** — "O que o usuário deve ver se uma operação de
+   gravar, editar ou excluir falhar?"
+   → Opção A: falha reportada, interface não finge sucesso, conteúdo preservado
+   para nova tentativa.
+4. **Idioma da interface** — "Em que idioma a interface deve falar com o
+   usuário?"
+   → Opção A: português, com os termos canônicos de `CONTEXT.md`.
+
+### Alterações aplicadas à spec
+
+- Seção `## Clarifications` criada com `### Session 2026-09-20` e quatro
+  registros.
+- **FR-044** e **FR-045**: nenhuma operação não persistida pode ser apresentada
+  como concluída; falha reportada com preservação do conteúdo informado.
+- **FR-046**: interface em português com os termos canônicos do glossário, e
+  proibição explícita dos sinônimos listados como `_Avoid_`.
+- **SC-011**: listas navegáveis com 50 Cartões e 10 Baralhos sem busca nem
+  paginação.
+- **SC-012**: nenhuma operação aparece como concluída e nenhum conteúdo é perdido
+  em falhas de gravação.
+- **Edge Cases**: caso de falha de persistência adicionado.
+- **Assumptions**: execução local registrada como condição de segurança da
+  ausência de autenticação; hospedagem remota declarada como direção futura fora
+  de escopo; escala do acervo como justificativa da exclusão de busca e
+  paginação; interface monolíngue.
+
+### Decisão de domínio registrada
+
+A ausência de autenticação deixa de ser premissa isolada e passa a ser
+**condicional à execução local**. A spec declara que expor a aplicação
+publicamente exigiria reabrir a decisão B1, por transformar o acervo único em
+acervo compartilhado e editável por qualquer visitante.
+
+### Mensagem de commit proposta
+
+```text
+docs(spec): clarify deployment, scale, failure and language constraints
+
+Executa o comando clarify do Spec Kit sobre a feature
+001-flashcard-study-mvp. Quatro perguntas respondidas pelo Product Owner,
+todas nas categorias nao-funcionais que a descoberta nao cobria.
+
+- FR-044, FR-045: operacao nao persistida nunca aparece como concluida;
+  falha reportada com preservacao do conteudo informado
+- FR-046: interface em portugues com os termos canonicos de CONTEXT.md
+- SC-011: listas navegaveis com 50 cartoes e 10 baralhos sem busca
+- SC-012: nenhuma perda de conteudo em falha de gravacao
+- Edge Cases: falha de persistencia
+- Assumptions: execucao local como condicao de seguranca da ausencia de
+  autenticacao; hospedagem remota como direcao futura fora de escopo
+
+Checklist de qualidade revalidado: 16/16 itens mantidos aprovados.
+```
+
+- **Decisão/Resultado**: `clarify` concluído com 4 de no máximo 5 perguntas.
+  Nenhuma categoria de alto impacto permanece não resolvida. Spec passa de 43
+  para 46 requisitos funcionais e de 10 para 12 critérios de sucesso.
+- **Verificações**: 4 registros em Clarifications, um por resposta, sem
+  duplicatas. Nenhum marcador `[NEEDS CLARIFICATION]`. Estrutura markdown
+  íntegra, apenas os cabeçalhos permitidos adicionados. Checklist de qualidade
+  revalidado item a item: 16 de 16 mantidos aprovados, nenhuma mudança de
+  estado, arquivo não modificado para evitar diff cosmético.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

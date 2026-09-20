@@ -8,6 +8,15 @@
 
 **Input**: Visão do produto consolidada na fase de descoberta (SESSION.md, EVT-001 a EVT-011). Glossário normativo em CONTEXT.md.
 
+## Clarifications
+
+### Session 2026-09-20
+
+- Q: A aplicação vai rodar apenas na máquina do usuário, ou ficar hospedada numa URL que outras pessoas conseguem abrir? → A: Local no MVP. Hospedagem remota (AWS) é direção futura declarada, fora do escopo desta feature.
+- Q: Quantos cartões e baralhos a aplicação precisa exibir confortavelmente numa lista antes que a falta de paginação ou busca comece a atrapalhar? → A: Até ~50 cartões e ~10 baralhos (uso experimental, bem pequeno).
+- Q: O que o usuário deve ver se uma operação de gravar, editar ou excluir falhar? → A: A operação é reportada como falha, a tela não finge sucesso, e o conteúdo informado é preservado para nova tentativa.
+- Q: Em que idioma a interface deve falar com o usuário? → A: Português, usando os termos canônicos do CONTEXT.md.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar conteúdo e torná-lo estudável (Priority: P1)
@@ -184,6 +193,10 @@ existindo.
   identificador.
 - **Acervo vazio**: com nenhum cartão e nenhum baralho, as listas comunicam o
   estado vazio e orientam a primeira ação.
+- **Falha de persistência**: se o armazenamento estiver indisponível no momento
+  de criar, editar, excluir ou vincular, a operação é reportada como falha, a
+  interface não a exibe como concluída, e o conteúdo informado permanece
+  disponível para nova tentativa.
 
 ## Requirements *(mandatory)*
 
@@ -289,6 +302,16 @@ existindo.
   pequenas.
 - **FR-043**: O sistema MUST comunicar o estado vazio das listas de Cartões e de
   Baralhos, orientando a primeira ação.
+- **FR-044**: O sistema MUST NOT apresentar como concluída qualquer operação de
+  criação, edição, exclusão ou Vínculo que não tenha sido efetivamente
+  persistida.
+- **FR-045**: Quando uma operação falhar por indisponibilidade do armazenamento,
+  o sistema MUST reportar a falha ao usuário e MUST preservar o conteúdo por ele
+  informado, permitindo nova tentativa sem redigitação.
+- **FR-046**: O sistema MUST apresentar toda a sua interface em português,
+  empregando os termos canônicos de `CONTEXT.md` — Cartão, Frente, Verso,
+  Baralho, Vínculo, Sessão de estudo, Resumo da sessão — e MUST NOT empregar os
+  sinônimos listados como `_Avoid_` naquele glossário.
 
 ### Key Entities
 
@@ -337,6 +360,12 @@ existindo.
   a solicitação não parte da interface.
 - **SC-010**: Um usuário que solicita mais cartões do que o baralho possui inicia
   a sessão mesmo assim e sabe, antes do primeiro item, quantos cartões estudará.
+- **SC-011**: Com 50 Cartões e 10 Baralhos no acervo, as listas permanecem
+  navegáveis e o usuário localiza visualmente um item conhecido sem recorrer a
+  busca ou paginação.
+- **SC-012**: Em cem por cento das falhas de gravação simuladas, nenhuma operação
+  aparece como concluída na interface e nenhum conteúdo informado pelo usuário é
+  perdido.
 
 ## Assumptions
 
@@ -350,11 +379,23 @@ existindo.
 - Não há histórico, estatística ou métrica acumulada de sessões. O Resumo da
   sessão é calculado no encerramento e descartado junto com a sessão.
 - Não existe limite de cartões por baralho nem de baralhos por cartão.
+- O acervo esperado no MVP é de ordem de 50 Cartões e 10 Baralhos. A exclusão de
+  busca, filtro e paginação se sustenta nessa escala e precisaria ser reavaliada
+  em acervos significativamente maiores.
 - Criar um cartão e vinculá-lo a um baralho são dois atos distintos; o produto
   não oferece um gesto único que faça ambos.
 - Uma sessão por vez, não retomável. Sair da sessão a encerra.
 - Exclusões não são reversíveis; não há desfazer no MVP.
 - Acessibilidade é assegurada pela navegação por teclado nas ações da sessão;
   auditoria formal de conformidade está fora de escopo.
+- A interface é monolíngue em português. Não há troca de idioma, nem
+  internacionalização, no MVP.
+- A aplicação é executada localmente, na máquina do usuário, e não é exposta em
+  rede pública. A ausência de autenticação é segura sob essa condição, e apenas
+  sob ela.
+- Hospedagem remota é direção futura declarada pelo Product Owner e está fora do
+  escopo desta feature. Expor a aplicação publicamente exigiria reabrir a decisão
+  de não haver usuários e autenticação, por transformar o acervo único em acervo
+  compartilhado e editável por qualquer visitante.
 - Decisões de linguagem, framework, armazenamento, protocolo e ferramenta não
   pertencem a esta especificação e serão tomadas em `plan`.
