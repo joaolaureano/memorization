@@ -1456,3 +1456,74 @@ separada, se o Product Owner a solicitar.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-022
+
+> **SPEC KIT** — Comando: `constitution` (emenda) | Invocação: edição direta
+> do artefato `.specify/memory/constitution.md` | Integração: `claude` |
+> Artefatos: `.specify/memory/constitution.md`, `SESSION.md`
+
+- **Data/hora**: 2026-09-20 21:05 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: `constitution` (emenda); fluxo do Spec Kit permanece suspenso
+- **Feature / Task**: — (governança do repositório)
+- **Tipo**: Formalização da delegação de código e exclusão da branch mergeada
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: constituição (2.1.0), `SESSION.md`
+- **Comandos**:
+  - `git branch --merged main` para confirmar integração antes da exclusão
+  - `git branch -d 001-flashcard-study-mvp`
+
+### Commit anterior
+
+O commit descrito em EVT-021 foi criado com o hash `9621b40a9a4b50487b4ead0a0bd9be263db4c3e8`.
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+Realizar 1. Deletar BRAnch. 2 será feito logo em seguida
+```
+
+Interpretado como: formalizar na constituição a diretriz de delegação de código
+registrada em EVT-020; excluir a branch `001-flashcard-study-mvp`; e manter
+`checklist`, `tasks` e `analyze` para um prompt seguinte.
+
+### Emenda constitucional
+
+Versão **2.0.0 → 2.1.0**. Incremento **MINOR** por acréscimo de princípio, sem
+remoção nem redefinição de regra existente.
+
+**Princípio XI — Delegação Obrigatória de Código**, não negociável. Todo código
+de aplicação é criado por subagentes DeepSeek; o Arquiteto especifica, delega,
+revisa integralmente o diff e verifica, conforme o Princípio VI. Código escrito
+diretamente pelo Arquiteto não é aceito e é refeito pela via delegada.
+
+**Fronteira definida explicitamente**, para que a regra seja aplicável em vez de
+retórica: código de aplicação é todo fonte sob `backend/`, `frontend/` e
+`e2e/`, inclusive testes e configuração desses pacotes. Permanecem com o
+Arquiteto os artefatos do Spec Kit, a documentação, o registro de auditoria e a
+configuração do repositório na raiz — que não são código de aplicação e cuja
+autoria delegada não produziria verificação melhor.
+
+A seção "Fluxo de Trabalho e Git" foi ajustada: o papel de worker, antes
+atribuído genericamente e previsto no Prompt 1 para o Aider, passa a ser
+exercido por subagentes DeepSeek.
+
+### Exclusão da branch
+
+`001-flashcard-study-mvp` foi excluída após confirmação de que estava
+integralmente mergeada em `main`. A exclusão usou `git branch -d`, que recusa
+branches não mergeadas, e não `-D`. Nenhum commit foi perdido: todos os seis
+commits da branch estão no histórico linear de `main`. O repositório passa a
+operar apenas em `main`, conforme a Decisão 3 de EVT-020.
+
+- **Decisão/Resultado**: Diretriz de delegação formalizada como Princípio XI.
+  Branch excluída. Restam apenas as fases `checklist`, `tasks` e `analyze`
+  como pendência, aguardando prompt próprio.
+- **Verificações**: Onze princípios numerados de I a XI, sem lacuna. Integração
+  da branch confirmada antes da exclusão. Working tree conferido.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
+  substituição por `[REDACTED]` foi necessária.

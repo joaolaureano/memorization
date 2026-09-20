@@ -86,6 +86,20 @@ registra a pendência como dívida para depois. O portão é binário: enquanto 
 análise estiver inconsistente ou o checklist reprovado, a implementação não
 começa.
 
+### XI. Delegação Obrigatória de Código (NÃO NEGOCIÁVEL)
+
+Todo código de aplicação é criado por subagentes DeepSeek. O Arquiteto não
+escreve código de aplicação: ele especifica a tarefa, delega, revisa
+integralmente o diff produzido e executa ou confere as verificações, conforme o
+Princípio VI. Código que o Arquiteto tenha escrito diretamente não é aceito e é
+refeito pela via delegada.
+
+Entende-se por código de aplicação todo fonte sob `backend/`, `frontend/` e
+`e2e/`, inclusive testes e arquivos de configuração desses pacotes. Permanecem
+com o Arquiteto os artefatos do Spec Kit, a documentação, o registro de auditoria
+e a configuração do repositório na raiz — que não são código de aplicação e cuja
+autoria delegada não traria verificação melhor.
+
 ## Skills Obrigatórias
 
 As skills locais em `.agents/skills/` integram a metodologia e não substituem os
@@ -147,10 +161,12 @@ explícita do Product Owner. Um commit não contém o próprio hash: o evento
 anterior registra a mensagem proposta, e o próximo evento auditável registra o
 hash do commit anterior.
 
+O papel de worker é exercido por subagentes DeepSeek, conforme o Princípio XI.
 Workers recebem uma única tarefa com critérios de aceitação identificados e os
 arquivos que podem alterar. Não escolhem requisitos, não alteram arquitetura, não
 expandem escopo e não fazem commits. Interrompem e reportam ambiguidade
-arquitetural ou conflito de domínio.
+arquitetural ou conflito de domínio. Nenhuma afirmação de worker é aceita sem
+inspeção do diff, dos testes e dos artefatos correspondentes.
 
 ## Governance
 
@@ -159,4 +175,4 @@ explícita do Product Owner, registro em SESSION.md e nota de versão abaixo.
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 2.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
+**Version**: 2.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
