@@ -5,6 +5,12 @@
 **Status**: Draft
 **Input**: Decomposição da especificação do MVP (SESSION.md, EVT-027). Glossário normativo em `CONTEXT.md`.
 
+## Clarifications
+
+### Session 2026-09-20
+
+- Q: As telas de criar e listar Cartão precisam de requisito próprio de teclado, foco visível e semântica acessível, ou basta o critério transversal da constituição? → A: A feature ganha requisito próprio, com cenário de aceitação. A obrigação constitucional sem requisito na spec não gera teste rastreável.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Registrar o que precisa ser memorizado (Priority: P1)
@@ -42,6 +48,12 @@ que ambos continuam listados com Frente e Verso corretos.
 9. **Given** o armazenamento indisponível, **When** o usuário tenta criar um
    Cartão, **Then** a operação é reportada como falha, não aparece como
    concluída, e o texto digitado permanece para nova tentativa.
+10. **Given** a tela de criação de Cartão, **When** o usuário navega apenas por
+    teclado, **Then** alcança todos os campos e aciona a criação sem recorrer ao
+    ponteiro, com o elemento focado sempre identificável sem depender de cor.
+11. **Given** a criação recusada por Frente vazia, **When** a mensagem de erro é
+    exibida, **Then** ela é perceptível por leitor de tela e o foco vai para o
+    campo que precisa de correção.
 
 ### Edge Cases
 
@@ -84,6 +96,13 @@ que ambos continuam listados com Frente e Verso corretos.
   informando o limite e o tamanho atual.
 - **FR-053**: O sistema MUST comunicar o limite durante a digitação, e não apenas
   ao tentar salvar.
+- **FR-054**: O sistema MUST permitir criar um Cartão e navegar a lista de
+  Cartões inteiramente por teclado, sem recorrer ao ponteiro.
+- **FR-055**: O sistema MUST manter o foco do teclado visível, com indicação que
+  não dependa apenas de cor, e MUST mover o foco para o campo que precisa de
+  correção quando uma operação for recusada.
+- **FR-056**: As mensagens de erro e o estado vazio da lista MUST ser
+  perceptíveis por leitor de tela, e não apenas visualmente.
 
 ### Verificação dos Requisitos Negativos
 
@@ -113,6 +132,9 @@ que ambos continuam listados com Frente e Verso corretos.
   inclusive quando a requisição não parte da interface.
 - **SC-011**: Com 50 Cartões no acervo, a lista permanece navegável e o usuário
   localiza visualmente um Cartão conhecido sem recorrer a busca ou paginação.
+- **SC-017**: A criação de um Cartão pode ser concluída do primeiro campo ao
+  salvamento usando apenas o teclado, e o elemento focado é identificável sem
+  percepção de cor em cem por cento dos passos.
 
 ## Invariantes de Domínio
 
@@ -120,6 +142,8 @@ que ambos continuam listados com Frente e Verso corretos.
    caracteres.
 2. A Frente não é identificador: dois Cartões podem ter a mesma Frente.
 3. Um Cartão existe por si, sem depender de Baralho.
+4. Toda ação oferecida pela feature é executável por teclado, e nenhum estado
+   relevante é comunicado apenas por cor.
 
 ## Funcionalidades Adiadas
 

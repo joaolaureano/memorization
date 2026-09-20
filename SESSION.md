@@ -2157,3 +2157,227 @@ refactor(specs): split umbrella MVP spec into six features
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-028
+
+> **SPEC KIT** — Comando: `nenhum` (verificação de portões; implementação
+> recusada) | Invocação: `nenhuma` | Integração: `claude` | Artefatos:
+> `SESSION.md`
+
+- **Data/hora**: 2026-09-20 23:30 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: verificação de pré-requisitos de `implement`
+- **Feature / Task**: `001-criar-cartao` / —
+- **Tipo**: Prompt 7 — autorização de sprint recusada por portões fechados
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: `SESSION.md`
+- **Comandos**: inventário de artefatos por feature; `git log`,
+  `git status`; busca por código de aplicação
+
+### Commit anterior
+
+O commit descrito em EVT-027 foi criado com o hash `9d326c6d0dabc6a3a15c6d1428c9f7c11d201cb1`.
+
+### Prompt 7 do Product Owner (sanitizado)
+
+```text
+A sprint abaixo está aprovada para execução. Execute somente o escopo aprovado;
+qualquer expansão deverá voltar ao Product Owner.
+
+Antes da primeira implementação: confirmar que constituição, spec, plan,
+checklist, tasks, análise, CONTEXT.md e ADRs aplicáveis estão consistentes;
+confirmar que o checklist não contém gate reprovado; ler as skills aplicáveis;
+registrar o prompt e a autorização em SESSION.md; verificar o estado do Git e
+preservar mudanças não relacionadas; estabelecer baseline executando as
+verificações existentes; se a baseline já estiver falhando, registrar e
+determinar se bloqueia a sprint.
+
+Para cada task: selecionar uma task elegível com dependências concluídas; gerar
+o prompt do worker; sanitizar e registrar integralmente em SESSION.md; enviar ao
+worker via Aider; não permitir commit pelo worker; registrar resumo verificável;
+inspecionar pessoalmente os arquivos e o diff; rejeitar mudanças fora do escopo;
+executar testes e verificações proporcionais ao risco; conferir aderência a
+spec, plano, CONTEXT.md, ADRs e skills; verificar se mudanças de domínio exigem
+retorno à especificação; verificar sanitização; atualizar SESSION.md; commitar
+apenas quando aprovado; registrar o hash no evento seguinte.
+
+Se um worker falhar, diagnosticar a causa antes de reenviar. Não repetir
+indefinidamente o mesmo prompt. Não alterar checklist para parecer aprovado e
+não marcar task como concluída sem evidência.
+
+Ao final da sprint: executar toda a suíte; conferir rastreabilidade entre
+requisitos, tasks, testes e commits; realizar a demonstração; registrar débitos
+e riscos sem escondê-los; atualizar SESSION.md; apresentar entregas, tasks,
+testes, commits, desvios e pendências. Não executar converge. Parar e aguardar
+autorização para a avaliação final.
+```
+
+O bloco `{INSERIR_IDENTIFICADOR_DA_SPRINT_E_EVENTUAIS_AJUSTES_APROVADOS}` veio
+**não substituído pela quinta vez consecutiva**.
+
+### Implementação recusada — portões fechados
+
+O Arquiteto **recusou iniciar a implementação**. A recusa não é discricionária:
+decorre de dois princípios não negociáveis, e cedê-los por conveniência seria a
+violação que eles existem para impedir.
+
+**Estado verificado dos artefatos**, feature a feature:
+
+| Feature | spec | plan | tasks | checklist | analyze |
+|---|---|---|---|---|---|
+| 001 a 006 | presente | **ausente** | **ausente** | **ausente** | **ausente** |
+
+A decomposição de EVT-027 removeu `plan.md`, `tasks.md` e os checklists junto
+com a feature `001-flashcard-study-mvp`, à qual pertenciam. Nenhuma das seis
+features possui plano, tarefas, checklist ou análise.
+
+- **Princípio I** — nenhuma implementação começa antes de spec, clarify, plan,
+  critérios de aceitação, tasks e analyze aprovados. Quatro dos seis estão
+  ausentes.
+- **Princípio X** — `analyze` com CRITICAL ou checklist reprovado bloqueia
+  `implement`. A situação é mais severa do que a prevista: não há analyze nem
+  checklist a avaliar.
+
+**Não existe sprint aprovada.** A proposta do Prompt 6 nunca foi escrita, por ter
+sido suspensa em EVT-026 diante da crítica estrutural do Product Owner. O
+"escopo aprovado" que o Prompt 7 manda executar não tem referente.
+
+**Conflito de executor**, pela segunda vez: o Prompt 7 manda "enviar o prompt ao
+worker via Aider", contra o Princípio XI. Mantido DeepSeek, conforme a decisão
+do Product Owner registrada em EVT-026.
+
+### Estado do repositório na recusa
+
+Nenhum código de aplicação existe: não há `backend/`,
+`frontend/`, `e2e/` nem manifesto de projeto. Baseline de verificações não
+foi estabelecida por não haver suíte a executar — registrado como ausência, não
+como falha.
+
+### Decisão do Product Owner
+
+Apresentadas três saídas, o Product Owner escolheu **executar o fluxo do Spec
+Kit apenas para `001-criar-cartao`** — `clarify`, `plan`, `checklist`,
+`tasks`, `analyze` — parando antes de qualquer código e apresentando a
+proposta de sprint para aprovação.
+
+- **Decisão/Resultado**: Implementação recusada por portões fechados. Nenhuma
+  linha de código escrita. Fluxo da feature 001 autorizado a seguir.
+- **Verificações**: Inventário de artefatos por feature; ausência de código de
+  aplicação confirmada; modificação alheia preservada.
+- **Commit**: pendente.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-029
+
+> **SPEC KIT** — Comando: `clarify`, `plan`, `checklist`, `tasks`,
+> `analyze` | Invocação: script `.specify/scripts/bash/setup-plan.sh --json`
+> e as skills correspondentes | Integração: `claude` | Artefatos:
+> `specs/001-criar-cartao/{spec,plan,tasks}.md`,
+> `specs/001-criar-cartao/checklists/requirements.md`
+
+- **Data/hora**: 2026-09-20 23:50 -03
+- **Ator**: ARCHITECT ↔ USER
+- **Fase**: `clarify` → `plan` → `checklist` → `tasks` → `analyze`
+- **Feature / Task**: `001-criar-cartao` / T001–T014
+- **Tipo**: Fluxo completo da primeira feature, sem implementação
+- **Skills aplicadas**: `domain-modeling`, `codebase-design`
+- **Artefatos envolvidos**: os quatro do banner
+- **Comandos**: `setup-plan.sh --json`; `check-prerequisites.sh`; análise de
+  consistência por script sobre os três artefatos
+
+### Commit anterior
+
+O commit descrito em EVT-027 foi criado com o hash `9d326c6d0dabc6a3a15c6d1428c9f7c11d201cb1`. O EVT-028 foi
+registrado sem commit próprio, por ter sido um evento de recusa sem alteração de
+artefato.
+
+### `clarify` — uma lacuna criada pela própria decomposição
+
+Nenhum marcador `[NEEDS CLARIFICATION]`, e a spec herdou as clarificações já
+resolvidas. Uma lacuna **nova**, porém, foi criada pela decomposição de EVT-027:
+os requisitos de teclado, foco e semântica — FR-041, FR-048 e FR-049 — foram
+atribuídos **integralmente à feature 004**, a Sessão. A feature 001 ficou sem
+requisito de acessibilidade.
+
+A constituição, na seção *Critérios de Qualidade*, afirma acessibilidade como
+critério de aceitação de qualquer entrega. Mas afirmação normativa sem requisito
+na spec **não gera teste**: pelo Princípio IX todo requisito precisa de teste
+rastreável, e não haveria requisito a rastrear. O formulário de criação de
+Cartão — a primeira tela que o usuário encontra — seria entregue sem nenhuma
+verificação de teclado.
+
+**Decisão do Product Owner**: a feature ganha requisito próprio.
+
+Integrados **FR-054** (teclado), **FR-055** (foco visível e foco que vai ao campo
+a corrigir numa recusa), **FR-056** (erros e estado vazio perceptíveis por leitor
+de tela), **SC-017**, dois cenários de aceitação e uma invariante. Os requisitos
+de acessibilidade da Sessão permanecem na feature `004` e **não** foram
+duplicados.
+
+### `plan` — escopo estreito, deliberadamente
+
+Um Module (`Acervo`, com duas operações), uma Seam real (`ClienteDoAcervo`,
+com `ClienteHttp` e `ClienteEmMemoria`), uma Seam rejeitada (repositório de
+persistência, por SQLite ser *local-substitutable*). Contrato com duas rotas.
+**Uma tabela apenas**: `baralho` e `vinculo` pertencem às features `002` e
+`003` e não são criadas aqui.
+
+O desenho foi reaproveitado do plano removido em EVT-027, **escopado** ao que
+esta feature exige, em vez de ressuscitado inteiro.
+
+**Gatilho de migração declarado**: o esquema é criado na primeira execução, sem
+migração versionada. A feature `002` acrescentará a tabela `baralho`, e
+**esse é o momento** em que migração passa a ser necessária, por haver base
+instalada. Registrado para que a decisão não seja tomada por omissão.
+
+### `checklist` — 17 de 17, avaliado item a item
+
+Dois pontos verificados com atenção por serem candidatos naturais a reprovação:
+os requisitos FR-054 a FR-056 **nasceram com cenários e critério**, não repetindo
+o defeito da feature anterior, em que requisitos foram escritos sem cenário; e a
+ausência de requisito pertencente a outra feature foi conferida contra a
+decomposição de EVT-027. Nenhum item reprovado.
+
+### `tasks` — 14 tarefas em três fases
+
+Fase 1 fundação (T001–T004), Fase 2 criar e listar (T005–T010), Fase 3
+acessibilidade, responsividade e validação (T011–T014). Execução **serial por
+padrão**; paralelismo declarado apenas entre T001, T002 e T003, e entre T013 e o
+par T011–T012.
+
+### `analyze` — limpo na primeira passagem
+
+| Verificação | Resultado |
+|---|---|
+| Requisitos ausentes da matriz | nenhum |
+| Critérios ausentes da matriz | nenhum |
+| Requisitos ou critérios fantasma | nenhum |
+| Tarefas sem teste declarado | nenhuma |
+| Marcadores `NEEDS CLARIFICATION` | zero |
+| Requisitos pertencentes a outra feature | nenhum |
+| Tarefas introduzindo Seam nova | nenhuma |
+
+Dois sinais investigados e descartados como **falsos positivos**: `flashcard`
+aparece uma vez no `plan.md`, na linha do Constitution Check que o **declara
+proibido**; e `Baralho` aparece sete vezes na spec, todas em construção
+negativa — "sem precisar escolher um Baralho", "sem depender de Baralho" — que
+definem a **ausência** de dependência, além de uma referência à feature `003`
+na seção de adiadas. Zero menções em `tasks.md`.
+
+### Mensagem de commit proposta
+
+```text
+docs(001): plan, checklist and tasks for criar-cartao
+```
+
+- **Decisão/Resultado**: Fluxo do Spec Kit completo para a feature `001`.
+  Portões dos Princípios I e X agora **abertos** para esta feature. Nenhuma
+  linha de código escrita.
+- **Verificações**: Checklist 17/17 avaliado item a item; `analyze` limpo na
+  primeira passagem; dois falsos positivos investigados linha a linha.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
