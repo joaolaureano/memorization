@@ -37,8 +37,9 @@ test-results/
 playwright-report/
 .playwright/
 
-# Caches de ferramentas de agente — regeneráveis, fora do repositório
-.serena/
+# Caches de ferramentas de agente — regeneráveis, fora do repositório.
+# .serena/ é versionado por decisão do Product Owner: sua própria .gitignore
+# já exclui o cache e o override local, deixando apenas project.yml.
 graphify-out/
 .aider.tags.cache.v4/
 

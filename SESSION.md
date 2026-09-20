@@ -1256,3 +1256,99 @@ relata, sem sugerir o próximo comando do fluxo.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado; nenhuma
   substituição por `[REDACTED]` foi necessária.
+
+---
+
+## EVT-020
+
+> **SPEC KIT** — Comando: `nenhum` (governança de repositório) | Invocação:
+> `nenhuma` | Integração: `claude` | Artefatos: `.gitignore`,
+> `.serena/project.yml`, `SESSION.md`
+
+- **Data/hora**: 2026-09-20 20:40 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: encerramento de pendências; fluxo do Spec Kit permanece suspenso
+- **Feature / Task**: — (governança do repositório)
+- **Tipo**: Três decisões do Product Owner e execução das duas executáveis
+- **Skills aplicadas**: —
+- **Artefatos envolvidos**: `.gitignore` (editado), `.serena/` (versionado),
+  `SESSION.md`
+- **Comandos**:
+  - `find .serena -type f`, `du -sh .serena`, varredura de segredos por
+    `grep` sobre `.serena/`
+  - `git checkout main`
+  - `git merge --ff-only 001-flashcard-study-mvp`
+
+### Commit anterior
+
+O commit descrito em EVT-019 foi criado com o hash `90e171e803caf0498d464e19b9a4c3b7ac58bf50`.
+
+### Prompt do Product Owner (sanitizado)
+
+```text
+1 Tudo que é código deve ser criado por subagentes DeepSeek.
+2 - Não versionar graphify. Versione serena.
+3 Pode finalizar a branch, mergear. Vamos focar em Commit, sem branch adicionais.
+```
+
+### Decisão 1 — Delegação obrigatória de código
+
+**Diretriz permanente**: todo código deve ser criado por subagentes DeepSeek. O
+Arquiteto não escreve código de aplicação; ele especifica, delega, revisa o diff
+produzido e verifica, conforme o Princípio VI.
+
+**Registrada como diretriz, não aplicada à constituição.** Uma emenda
+constitucional exige aprovação explícita do Product Owner conforme a cláusula de
+Governance, e o prompt não a solicitou. A diretriz vale desde já; sua
+incorporação formal à constituição aguarda decisão.
+
+**Ressalva de escopo registrada sem atenuação**: esta decisão responde à
+pendência sobre autorização de subagentes para **criação de código**, mas **não
+resolve** a pendência do `Design It Twice` da Interface do Module
+`SessaoDeEstudo`. Aquele processo produz **propostas de desenho de Interface**,
+não código, e o `DESIGN-IT-TWICE.md` exige aprovação humana explícita para ser
+iniciado. A pendência permanece aberta e não foi presumida resolvida.
+
+### Decisão 2 — Versionamento de caches de ferramentas
+
+`graphify-out/` permanece ignorado. `.serena/` passa a ser versionado.
+
+Inspeção prévia registrada: `.serena/` tem 20 KB e três arquivos, e sua
+própria `.serena/.gitignore` já exclui `/cache` e `/project.local.yml`.
+O versionamento traz, portanto, apenas `project.yml` — que o comentário do
+arquivo local declara explicitamente ser "intended to be versioned" — e a
+própria `.gitignore` da ferramenta. Varredura de segredos executada antes da
+escrita, conforme o Princípio VIII: nenhum padrão encontrado.
+
+### Decisão 3 — Fim do uso de branches de feature
+
+A branch `001-flashcard-study-mvp` foi integrada a `main` por
+`git merge --ff-only`, resultando em avanço rápido sem commit de merge e em
+histórico linear de seis commits. Nenhum `amend`, `rebase`, `squash` ou
+`force push` foi utilizado, conforme a política de Git da constituição.
+
+**Diretriz permanente**: o trabalho passa a ocorrer diretamente em `main`, com
+foco em commits pequenos e coesos. Não serão criadas branches adicionais.
+
+A branch `001-flashcard-study-mvp` **não foi excluída**: exclusão de branch é
+ação destrutiva e não foi explicitamente solicitada. Ela aponta para o mesmo
+commit de `main` e pode ser removida a qualquer momento sem perda.
+
+### Efeito sobre a divisão de trabalho
+
+Com a Decisão 1, os papéis definidos em EVT-001 ficam assim: o Arquiteto
+esclarece requisitos, mantém artefatos e glossário, desenha arquitetura,
+decompõe tarefas, prepara prompts autocontidos, revisa todo diff e verifica; os
+subagentes DeepSeek passam a ocupar o papel de worker antes previsto para o
+Aider, produzindo o código sob tarefa única e critérios de aceitação
+identificados.
+
+- **Decisão/Resultado**: Duas das três decisões executadas integralmente.
+  A primeira registrada como diretriz permanente, com a ressalva de que não
+  resolve a pendência do `Design It Twice`.
+- **Verificações**: `.serena/` inspecionado e varrido antes do versionamento;
+  merge por avanço rápido sem reescrita de histórico; working tree conferido.
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado em
+  `.serena/project.yml` nem nos demais arquivos; nenhuma substituição por
+  `[REDACTED]` foi necessária.
