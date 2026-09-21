@@ -4420,3 +4420,48 @@ Premissas "a confirmar no clarify":
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-082
+
+> **SPEC KIT** — Comando: plan | Invocação: skill `speckit-plan` e
+> `setup-plan.sh --json`; redação por worker `deepseek-flash` em worktree
+> exclusivo | Integração: claude | Artefatos: plan.md, research.md,
+> data-model.md, contracts/adapter-postgresql.md, contracts/scripts-da-nuvem.md,
+> quickstart.md (specs/010-postgresql-na-nuvem)
+
+- **Data/hora**: 2026-09-21 02:34 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 010-postgresql-na-nuvem / plan
+- **Commit anterior**: `b11dd6a` (registra o hash de EVT-081)
+
+### Decisões de arquitetura (Arquiteto)
+
+- **Driver `pg`**: JavaScript puro, com `pg-native` marcado como externo.
+  Pool pequeno (máximo de 4) com tratador de erro, para reconectar depois de
+  uma queda.
+- **Adapter** em `armazenamento/postgresql/`, com as mesmas Ports e a mesma
+  bateria. Violações chegam como SQLSTATE 23505 e 23503, traduzidos dentro do
+  Adapter.
+- **Migrações** no dialeto PostgreSQL, com as mesmas versões. Rodam só pelo
+  comando `migrate:cloud`, em transação, com `pg_advisory_xact_lock`. O
+  `start:cloud` recusa esquema desatualizado. Nome de usuário único via índice
+  em `lower(...)`.
+- **`DB_URL`**: lida só pelas entradas de nuvem. `UrlDeConexaoInvalidaError`
+  nunca exibe o valor. TLS obrigatório com certificado verificado; URLs com
+  `sslmode=disable`, `allow` ou `prefer` são recusadas. Erros do driver são
+  higienizados. `DB_CA_CERT` é opcional, para uma CA privada nos testes.
+- **Operação com o Neon**: a migração deve apontar para o endpoint direto.
+- **Verificação**: PostgreSQL real embarcado nos testes, com CA e certificado
+  gerados por `openssl` a cada execução, TLS de fato verificado, credencial
+  gerada, sem Docker. Se não rodar, a suíte falha alto, nunca é pulada.
+- **Build**: `--banco=postgresql` gera `servidor.mjs` e `migrar.mjs`. Scripts
+  `build:cloud`, `migrate:cloud` e `start:cloud`. O build não precisa de
+  `DB_URL`.
+
+Revisão: nenhum id fantasma; nenhuma URL real nos artefatos (só o formato, com
+marcadores).
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
