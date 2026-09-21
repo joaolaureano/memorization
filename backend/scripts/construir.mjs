@@ -5,20 +5,23 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 /**
- * Construção por armazenamento (FR-101, FR-102, FR-120).
+ * Construção por armazenamento (FR-101, FR-102, FR-117, FR-120).
  *
  * Recebe exatamente `--banco=<valor>` e confere o valor contra a **tabela de
  * entradas de Adapter** abaixo: a lista de valores aceitos é derivada dela, de
  * modo que acrescentar um Adapter é acrescentar uma entrada, e a mensagem passa
- * a listá-lo sem que o texto mude. Nesta feature só existe o armazenamento
- * local; `postgresql` é recusado como não aceito até a
- * `010-postgresql-na-nuvem` acrescentar a sua entrada.
+ * a listá-lo sem que o texto mude. Hoje são duas: `sqlite`, o armazenamento
+ * local, e `postgresql`, o da nuvem, que empacota o servidor **e** o comando de
+ * migração.
+ *
+ * A construção **não** exige `DB_URL`: ela lê código e empacota, e o segredo só
+ * é necessário para executar (FR-114).
  *
  * A validação vem **antes** de qualquer escrita: um valor ausente, em forma
- * diferente de `--banco=<valor>`, desconhecido ou ainda não entregue é
- * recusado com código de saída 1 e **nenhum artefato** produzido (FR-102,
- * SC-040). A recusa nunca repete o valor informado, nem carrega caminho, URL,
- * senha ou cadeia de conexão (FR-108).
+ * diferente de `--banco=<valor>` ou desconhecido é recusado com código de saída
+ * 1 e **nenhum artefato** produzido (FR-102, SC-040). A recusa nunca repete o
+ * valor informado, nem carrega caminho, URL, senha ou cadeia de conexão
+ * (FR-108).
  *
  * Com valor aceito, **apenas a entrada escolhida** entra no grafo do
  * empacotamento: o Adapter do outro armazenamento e a sua dependência ficam
@@ -28,11 +31,27 @@ import { build } from "esbuild";
  */
 
 /**
- * Tabela de entradas de Adapter: cada valor aceito aponta para a raiz de
- * composição que monta aquele armazenamento. Nesta feature há uma só entrada.
+ * Tabela de entradas de Adapter: cada valor aceito aponta para os pacotes que
+ * monta, e cada pacote para a raiz de composição empacotada. O `sqlite` tem uma
+ * entrada — o início local —; o `postgresql` tem duas — o início da nuvem e o
+ * comando de migração —, e nenhuma das entradas de um armazenamento aparece no
+ * pacote do outro (FR-117, FR-120).
  */
 const ENTRADAS = {
-  sqlite: "src/entradas/local.ts",
+  sqlite: {
+    pacotes: [{ entrada: "src/entradas/local.ts", arquivo: "servidor.mjs" }],
+  },
+  postgresql: {
+    pacotes: [
+      { entrada: "src/entradas/nuvem.ts", arquivo: "servidor.mjs" },
+      { entrada: "src/entradas/migrar-nuvem.ts", arquivo: "migrar.mjs" },
+    ],
+    /**
+     * `pg-native` é a dependência **opcional** do `pg` que nunca é usada: o
+     * empacotamento não tenta resolvê-la, e ela não entra no pacote.
+     */
+    externos: ["pg-native"],
+  },
 };
 
 const RAIZ_DO_BACKEND = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -74,23 +93,24 @@ function armazenamentoEscolhido(argumentos) {
 }
 
 /**
- * Empacota a entrada escolhida num único arquivo ESM: plataforma `node`, alvo
- * `node24` e os módulos embutidos do Node externos ao pacote. Uma falha do
+ * Empacota uma entrada num único arquivo ESM: plataforma `node`, alvo `node24` e
+ * os módulos embutidos do Node externos ao pacote, mais os externos do
+ * armazenamento — só o `pg-native` que nunca é usado. Uma falha do
  * empacotamento não deixa artefato parcial.
  */
-async function empacotar(banco) {
+async function empacotarPacote(banco, pacote) {
   const destino = join(DIRETORIO_DE_SAIDA, banco);
-  const arquivo = join(destino, "servidor.mjs");
+  const arquivo = join(destino, pacote.arquivo);
 
   try {
     await build({
-      entryPoints: [join(RAIZ_DO_BACKEND, ENTRADAS[banco])],
+      entryPoints: [join(RAIZ_DO_BACKEND, pacote.entrada)],
       outfile: arquivo,
       bundle: true,
       platform: "node",
       format: "esm",
       target: "node24",
-      external: ["node:*"],
+      external: ["node:*", ...(ENTRADAS[banco].externos ?? [])],
       /**
        * As dependências em CJS pedem os módulos embutidos por `require`; num
        * pacote ESM isso precisa de um `require` de verdade. Nenhum caminho,
@@ -105,12 +125,32 @@ async function empacotar(banco) {
     console.error(FALHA_AO_EMPACOTAR);
     process.exitCode = 1;
 
-    return;
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Empacota **todos** os pacotes do armazenamento escolhido. Uma falha em
+ * qualquer um deles remove o diretório do armazenamento inteiro: nenhum
+ * artefato parcial fica de pé.
+ */
+async function empacotar(banco) {
+  const arquivos = [];
+
+  for (const pacote of ENTRADAS[banco].pacotes) {
+    if (!(await empacotarPacote(banco, pacote))) {
+      return;
+    }
+
+    arquivos.push(
+      relative(RAIZ_DO_BACKEND, join(DIRETORIO_DE_SAIDA, banco, pacote.arquivo)),
+    );
   }
 
   console.log(
-    `Construção concluída para o armazenamento ${banco}: ` +
-      `${relative(RAIZ_DO_BACKEND, arquivo)}.`,
+    `Construção concluída para o armazenamento ${banco}: ${arquivos.join(", ")}.`,
   );
 }
 

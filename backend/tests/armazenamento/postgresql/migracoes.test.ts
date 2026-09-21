@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,8 +20,13 @@ import {
   abrirPiscinaDaBase,
   criarBaseMigrada,
   descartarBasesDeTeste,
+  gravarCertificadoDaAutoridade,
+  type CertificadoDaAutoridade,
 } from "./base-de-teste.ts";
-import { servidorDeTeste } from "./servidor-de-teste.ts";
+import {
+  servidorDeTeste,
+  type FerramentasDoServidor,
+} from "./servidor-de-teste.ts";
 
 /**
  * T903 — o Adapter traz o DDL de PostgreSQL das migrações 1 a 3 e o aplicador
@@ -436,4 +443,245 @@ describe("dependências do driver da nuvem", () => {
       false,
     );
   });
+});
+
+/**
+ * T910 — o comando de migração da nuvem (`migrate:cloud`): lê e valida `DB_URL`,
+ * aplica as migrações pendentes pelo aplicador do Adapter e informa a versão
+ * resultante (FR-116, FR-113, SC-048).
+ *
+ * A entrada real é executada como processo filho, como o comando é executado
+ * numa implantação, e o PostgreSQL é o do apoio de teste, com TLS ligado e CA
+ * privado apontado por `DB_CA_CERT`. O que a prova exige: base nova chega à
+ * versão corrente, repetir o comando não reaplica nada, dois comandos
+ * simultâneos não aplicam a mesma migração duas vezes, e nem a saída nem a
+ * recusa trazem a URL, o host, o usuário ou a senha.
+ */
+describe("o comando de migração da nuvem (T910, SC-048)", () => {
+  const ENTRADA_DE_MIGRACAO = join(
+    RAIZ_DO_BACKEND,
+    "src",
+    "entradas",
+    "migrar-nuvem.ts",
+  );
+
+  /** Senha gerada por execução: só o que **não** pode sair na saída. */
+  const SENHA_GERADA = randomBytes(24).toString("base64url");
+
+  let servidor: FerramentasDoServidor;
+  let certificado: CertificadoDaAutoridade;
+
+  beforeAll(async () => {
+    servidor = await servidorDeTeste();
+    certificado = gravarCertificadoDaAutoridade(servidor);
+  });
+
+  afterAll(() => {
+    certificado.remover();
+  });
+
+  /** O ambiente do comando, com a base informada e o CA temporário. */
+  function ambiente(nomeDaBase: string): NodeJS.ProcessEnv {
+    const herdado = { ...process.env };
+
+    delete herdado.DB_URL;
+    delete herdado.DB_CA_CERT;
+
+    return {
+      ...herdado,
+      DB_CA_CERT: certificado.caminho,
+      DB_URL: servidor.urlDaBase(nomeDaBase),
+    };
+  }
+
+  interface ExecucaoDoComando {
+    codigo: number | null;
+    saida: string;
+  }
+
+  /** Executa o comando de migração e espera o processo sair. */
+  async function executarComando(
+    ambienteDoComando: NodeJS.ProcessEnv,
+  ): Promise<ExecucaoDoComando> {
+    const processo = spawn(process.execPath, [ENTRADA_DE_MIGRACAO], {
+      cwd: RAIZ_DO_BACKEND,
+      env: ambienteDoComando,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const capturado: string[] = [];
+
+    processo.stdout?.setEncoding("utf8");
+    processo.stdout?.on("data", (pedaco: string) => capturado.push(pedaco));
+    processo.stderr?.setEncoding("utf8");
+    processo.stderr?.on("data", (pedaco: string) => capturado.push(pedaco));
+
+    const codigo = await new Promise<number | null>((resolver, recusar) => {
+      const tempoLimite = setTimeout(() => {
+        processo.kill("SIGKILL");
+        recusar(new Error("o comando de migração não encerrou dentro do prazo"));
+      }, 60_000);
+
+      processo.once("exit", (saiu) => {
+        clearTimeout(tempoLimite);
+        resolver(saiu);
+      });
+    });
+
+    return { codigo, saida: capturado.join("") };
+  }
+
+  /** As tabelas da base, ordenadas, como o esquema as deixou. */
+  async function tabelasDaBase(nomeDaBase: string): Promise<string[]> {
+    const linhas = await servidor.consultar<{ nome: string }>(
+      nomeDaBase,
+      `SELECT tablename AS nome FROM pg_tables
+        WHERE schemaname = 'public' ORDER BY tablename;`,
+    );
+
+    return linhas.map((linha) => linha.nome);
+  }
+
+  it("leva a base nova e vazia à versão corrente e informa a versão", async () => {
+    const nomeDaBase = await servidor.criarBase("comando-nova");
+    const { codigo, saida } = await executarComando(ambiente(nomeDaBase));
+
+    expect(codigo).toBe(0);
+    expect(saida).toContain(
+      `o esquema da base está na versão ${versaoCorrenteConhecida()}`,
+    );
+
+    expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "baralho",
+      "cartao",
+      "versao_do_esquema",
+      "vinculo",
+    ]);
+
+    const versoes = await servidor.consultar<{ versao: number }>(
+      nomeDaBase,
+      "SELECT versao FROM versao_do_esquema;",
+    );
+
+    expect(versoes.map((linha) => Number(linha.versao))).toEqual([
+      versaoCorrenteConhecida(),
+    ]);
+  }, 60_000);
+
+  it("repetir o comando não reaplica nada nem reescreve o conteúdo", async () => {
+    const nomeDaBase = await servidor.criarBase("comando-repetido");
+
+    expect((await executarComando(ambiente(nomeDaBase))).codigo).toBe(0);
+
+    await servidor.consultar(
+      nomeDaBase,
+      "INSERT INTO cartao (id, frente, verso) VALUES ($1, $2, $3);",
+      ["c1", "To walk", "Caminhar"],
+    );
+
+    const repeticao = await executarComando(ambiente(nomeDaBase));
+
+    /** Reaplicar o DDL de uma migração já aplicada teria falhado. */
+    expect(repeticao.codigo).toBe(0);
+    expect(repeticao.saida).toContain(
+      `o esquema da base está na versão ${versaoCorrenteConhecida()}`,
+    );
+
+    const gravado = await servidor.consultar<{ id: string }>(
+      nomeDaBase,
+      "SELECT id FROM cartao;",
+    );
+
+    expect(gravado).toEqual([{ id: "c1" }]);
+    expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "baralho",
+      "cartao",
+      "versao_do_esquema",
+      "vinculo",
+    ]);
+  }, 60_000);
+
+  it("dois comandos ao mesmo tempo não aplicam a mesma migração duas vezes", async () => {
+    const nomeDaBase = await servidor.criarBase("comando-simultaneo");
+    const ambienteDoComando = ambiente(nomeDaBase);
+
+    /** Dois deployamentos simultâneos, como a trava consultiva prevê. */
+    const [primeiro, segundo] = await Promise.all([
+      executarComando(ambienteDoComando),
+      executarComando(ambienteDoComando),
+    ]);
+
+    expect([primeiro.codigo, segundo.codigo]).toEqual([0, 0]);
+    expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "baralho",
+      "cartao",
+      "versao_do_esquema",
+      "vinculo",
+    ]);
+
+    const versoes = await servidor.consultar<{ versao: number }>(
+      nomeDaBase,
+      "SELECT versao FROM versao_do_esquema;",
+    );
+
+    /** Uma única linha de versão: nenhuma migração ficou pela metade. */
+    expect(versoes.map((linha) => Number(linha.versao))).toEqual([
+      versaoCorrenteConhecida(),
+    ]);
+  }, 60_000);
+
+  it("nunca imprime a URL, o host, o usuário nem a senha", async () => {
+    const nomeDaBase = await servidor.criarBase("comando-sem-segredo");
+    const { codigo, saida } = await executarComando(ambiente(nomeDaBase));
+
+    expect(codigo).toBe(0);
+    expect(saida).not.toContain(servidor.configuracao.senha);
+    expect(saida).not.toContain(servidor.configuracao.host);
+    expect(saida).not.toContain(`${servidor.configuracao.usuario}:`);
+    expect(saida).not.toContain("postgresql://");
+    expect(saida).not.toMatch(/sslmode|senha|password|secret|token/i);
+  }, 60_000);
+
+  const CASOS_DE_RECUSA: { rotulo: string; url: string | undefined }[] = [
+    { rotulo: "variável ausente", url: undefined },
+    { rotulo: "variável vazia", url: "   " },
+    { rotulo: "valor não analisável", url: "isto-nao-e-uma-url" },
+    {
+      rotulo: "protocolo não aceito",
+      url: `mysql://usuario:${SENHA_GERADA}@exemplo.invalid/base`,
+    },
+    {
+      rotulo: "URL que pede cifra rebaixada",
+      url: `postgresql://usuario:${SENHA_GERADA}@exemplo.invalid/base?sslmode=prefer`,
+    },
+  ];
+
+  it.each(CASOS_DE_RECUSA)(
+    "recusa com o prefixo do comando e sem repetir o valor: $rotulo",
+    async (caso) => {
+      const herdado = { ...process.env };
+
+      delete herdado.DB_URL;
+
+      const ambienteDoComando: NodeJS.ProcessEnv = {
+        ...herdado,
+        DB_CA_CERT: certificado.caminho,
+      };
+
+      if (caso.url !== undefined) {
+        ambienteDoComando.DB_URL = caso.url;
+      }
+
+      const { codigo, saida } = await executarComando(ambienteDoComando);
+
+      expect(codigo).toBe(1);
+      expect(saida).toContain("Migração recusada:");
+      expect(saida).toContain("DB_URL");
+      expect(saida).not.toContain(SENHA_GERADA);
+      expect(saida).not.toContain("exemplo.invalid");
+      expect(saida).not.toMatch(/:\/\//);
+      expect(saida).not.toContain("Migração concluída");
+    },
+    60_000,
+  );
 });

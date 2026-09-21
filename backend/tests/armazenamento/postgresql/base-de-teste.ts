@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { Pool } from "pg";
 
 import {
@@ -159,4 +163,36 @@ export async function criarArmazenamentoDeTeste(): Promise<ArmazenamentoAberto> 
 /** Descarta as bases que esta execução criou e ainda não descartou. */
 export async function descartarBasesDeTeste(): Promise<void> {
   await (await servidorDeTeste()).descartarBases();
+}
+
+/**
+ * O CA do servidor de teste gravado num arquivo PEM temporário — a **porta**
+ * pela qual a entrada da nuvem e o comando de migração confirmam uma autoridade
+ * privada, que é a variável `DB_CA_CERT` (FR-115, SC-047).
+ *
+ * Nada é versionado: o arquivo nasce no diretório temporário desta execução e
+ * `remover()` o apaga. É o único jeito de exercitar `DB_CA_CERT`, porque o apoio
+ * de teste gera o CA em memória, a cada execução.
+ */
+export interface CertificadoDaAutoridade {
+  readonly caminho: string;
+  /** Apaga o diretório temporário do certificado; em dobro não falha. */
+  remover(): void;
+}
+
+/** Grava o CA do servidor informado num PEM temporário e devolve o caminho. */
+export function gravarCertificadoDaAutoridade(
+  servidor: FerramentasDoServidor,
+): CertificadoDaAutoridade {
+  const pasta = mkdtempSync(join(tmpdir(), "autoridade-de-teste-"));
+  const caminho = join(pasta, "autoridade.pem");
+
+  writeFileSync(caminho, servidor.configuracao.certificadoDaAutoridade);
+
+  return {
+    caminho,
+    remover() {
+      rmSync(pasta, { recursive: true, force: true });
+    },
+  };
 }

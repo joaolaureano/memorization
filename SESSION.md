@@ -4628,3 +4628,38 @@ Verificado em `main`: backend 308 (estável em 4 execuções do worker), fronten
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-088
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: entradas de nuvem, conexao.ts, construir.mjs, scripts de nuvem
+
+- **Data/hora**: 2026-09-21 03:42 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 010-postgresql-na-nuvem / T906–T913 — concluídas (feature 010 completa)
+- **Commit anterior**: `c0466b5` (registra o hash do evento anterior)
+
+- **`DB_URL`** é validada nas duas entradas de nuvem. `UrlDeConexaoInvalidaError`
+  nunca exibe o valor. `sslmode` com `disable`, `allow` ou `prefer` é recusado;
+  `require`, `verify-ca` e `verify-full` são aceitos, sempre com verificação
+  completa. `DB_CA_CERT` é opcional.
+- **`start:cloud`** imprime só a linha de armazenamento PostgreSQL, confere a
+  versão do esquema e recusa esquema atrasado sem migrar.
+- **`migrate:cloud`** migra sob trava consultiva; repetir não reaplica nada.
+- Toda falha do driver sai como mensagem genérica mais o SQLSTATE, nunca com
+  URL, host, usuário ou senha.
+- **`construir.mjs`** aceita `postgresql` e gera `servidor.mjs` e `migrar.mjs`
+  sem exigir `DB_URL`.
+- Testes de conteúdo dos pacotes nos dois sentidos. O pacote local, mesmo com
+  `DB_URL` no ambiente, abre zero conexões (conferido em `pg_stat_activity`).
+- Desvios aceitos: a linha de início segue o contrato; há uma mensagem extra
+  para `DB_CA_CERT` ilegível; só código com forma de SQLSTATE é impresso.
+
+Verificado em `main`: backend 346, frontend 240, e2e 13, `typecheck`,
+`build:local`, `build:cloud` e lint verdes. `start:cloud` sem `DB_URL` é
+recusado.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

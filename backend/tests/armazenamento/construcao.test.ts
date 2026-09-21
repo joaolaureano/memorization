@@ -26,16 +26,29 @@ import {
   it,
 } from "vitest";
 
+import {
+  criarBaseMigrada,
+  descartarBasesDeTeste,
+  gravarCertificadoDaAutoridade,
+  type CertificadoDaAutoridade,
+} from "./postgresql/base-de-teste.ts";
+import {
+  servidorDeTeste,
+  type ServidorAutonomo,
+} from "./postgresql/servidor-de-teste.ts";
+
 /**
- * T811 — as recusas da construção, o conteúdo do pacote e a linha de início são
- * comprovados **executando** `scripts/construir.mjs` e lendo o código de saída,
- * a saída capturada e o conteúdo de `dist/`, e não inspecionando o script
- * (FR-102, FR-108, FR-120, SC-040, SC-042).
+ * T811 e T912 — as recusas da construção, o conteúdo de cada pacote e as linhas
+ * de início são comprovados **executando** `scripts/construir.mjs` e lendo o
+ * código de saída, a saída capturada e o conteúdo de `dist/`, e não
+ * inspecionando o script (FR-102, FR-108, FR-117, FR-120, SC-040, SC-042,
+ * SC-050).
  *
- * A prova é do processo real: a recusa não produz artefato algum, o pacote do
- * armazenamento local não carrega o Adapter do outro armazenamento nem o driver
- * dele, e a primeira linha do início nomeia o tipo de armazenamento sem
- * caminho de arquivo, URL, senha ou cadeia de conexão.
+ * A prova é do processo real: a recusa não produz artefato algum, cada pacote
+ * carrega **um** armazenamento — o local não contém `pg` nem o Adapter da
+ * nuvem, os da nuvem não contêm `node:sqlite` nem o Adapter local —, e a
+ * primeira linha de cada início nomeia o tipo de armazenamento sem caminho de
+ * arquivo, URL, senha ou cadeia de conexão.
  */
 
 const RAIZ_DO_BACKEND = resolve(
@@ -47,13 +60,23 @@ const RAIZ_DO_BACKEND = resolve(
 const SCRIPT = join(RAIZ_DO_BACKEND, "scripts", "construir.mjs");
 const DIRETORIO_DE_SAIDA = join(RAIZ_DO_BACKEND, "dist");
 const PACOTE_LOCAL = join(DIRETORIO_DE_SAIDA, "sqlite", "servidor.mjs");
+const PACOTE_DA_NUVEM = join(DIRETORIO_DE_SAIDA, "postgresql", "servidor.mjs");
+const COMANDO_DE_MIGRACAO = join(
+  DIRETORIO_DE_SAIDA,
+  "postgresql",
+  "migrar.mjs",
+);
 
 /** A forma da mensagem de recusa, com os valores aceitos derivados da tabela. */
 const CONSTRUCAO_RECUSADA =
-  "Construção recusada. Informe --banco=<valor>, com um dos valores aceitos: sqlite.";
+  "Construção recusada. Informe --banco=<valor>, com um dos valores aceitos: " +
+  "sqlite, postgresql.";
 
 /** A única linha de início do pacote local. */
 const LINHA_DE_INICIO = "Armazenamento: SQLite (arquivo local)";
+
+/** A única linha de início do pacote da nuvem. */
+const LINHA_DE_INICIO_DA_NUVEM = "Armazenamento: PostgreSQL (nuvem)";
 
 /** Valor fictício, com aparência de credencial: nunca real, nunca repetido. */
 const VALOR_COM_APARENCIA_DE_CREDENCIAL =
@@ -77,9 +100,13 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
     valorInformado: "mysql",
   },
   {
-    rotulo: "valor de armazenamento ainda não entregue",
-    argumentos: ["--banco=postgresql"],
-    valorInformado: "postgresql",
+    rotulo: "valor parecido com um aceito, mas não aceito",
+    argumentos: ["--banco=postgres"],
+  },
+  {
+    rotulo: "valor de armazenamento em outra caixa",
+    argumentos: ["--banco=SQLITE"],
+    valorInformado: "SQLITE",
   },
   {
     rotulo: "valor com aparência de credencial",
@@ -88,10 +115,24 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
   },
 ];
 
-/** Executa o script de construção com os argumentos informados. */
-function construir(argumentos: string[]): SpawnSyncReturns<string> {
+/** O ambiente sem `DB_URL` nem `DB_CA_CERT`: a construção não exige segredo. */
+function ambienteSemSegredo(): NodeJS.ProcessEnv {
+  const ambiente = { ...process.env };
+
+  delete ambiente.DB_URL;
+  delete ambiente.DB_CA_CERT;
+
+  return ambiente;
+}
+
+/** Executa o script de construção com os argumentos e o ambiente informados. */
+function construir(
+  argumentos: string[],
+  ambiente: NodeJS.ProcessEnv = process.env,
+): SpawnSyncReturns<string> {
   return spawnSync(process.execPath, [SCRIPT, ...argumentos], {
     cwd: RAIZ_DO_BACKEND,
+    env: ambiente,
     encoding: "utf8",
     timeout: 120_000,
   });
@@ -174,7 +215,6 @@ describe("recusa da construção", () => {
         expect(saida).not.toContain(caso.valorInformado);
       }
 
-      expect(saida).not.toContain("postgresql");
       expect(existsSync(DIRETORIO_DE_SAIDA)).toBe(false);
     },
   );
@@ -185,18 +225,12 @@ describe("recusa da construção", () => {
 
     expect(resultado.status).toBe(1);
     expect(saida).toContain("sqlite");
-    expect(saida).not.toContain("postgres");
+    expect(saida).toContain("postgresql");
+    expect(saida).not.toContain("postgres://");
+    expect(saida).not.toContain("usuario");
     expect(saida).not.toContain("senha");
     expect(saida).not.toContain("exemplo.invalid");
     expect(saida).not.toContain("://");
-    expect(existsSync(DIRETORIO_DE_SAIDA)).toBe(false);
-  });
-
-  it("recusa também quando o valor nomeia um armazenamento que esta feature não entrega", () => {
-    const resultado = construir(["--banco=postgresql"]);
-
-    expect(resultado.status).toBe(1);
-    expect(saidaDe(resultado)).toContain(CONSTRUCAO_RECUSADA);
     expect(existsSync(DIRETORIO_DE_SAIDA)).toBe(false);
   });
 });
@@ -267,15 +301,17 @@ interface PacoteEmExecucao {
 }
 
 /**
- * Inicia o pacote construído como processo filho, no diretório de trabalho
- * informado — é de lá que sai o caminho padrão do arquivo local — e devolve a
- * primeira linha impressa, a saída capturada e o encerramento.
+ * Inicia um pacote construído como processo filho, no diretório de trabalho e
+ * com o ambiente informados — é do diretório de trabalho que sai o caminho
+ * padrão do arquivo local — e devolve a primeira linha impressa, a saída
+ * capturada e o encerramento.
  */
-function iniciarPacoteLocal(
+function iniciarPacote(
+  arquivo: string,
   diretorio: string,
   ambiente: NodeJS.ProcessEnv,
 ): PacoteEmExecucao {
-  const processo = spawn(process.execPath, [PACOTE_LOCAL], {
+  const processo = spawn(process.execPath, [arquivo], {
     cwd: diretorio,
     env: ambiente,
     stdio: ["ignore", "pipe", "pipe"],
@@ -313,6 +349,14 @@ function iniciarPacoteLocal(
     saida: () => capturado.join(""),
     encerrar: () => encerrar(processo),
   };
+}
+
+/** Inicia o pacote do armazenamento local, o mesmo que `start:local` inicia. */
+function iniciarPacoteLocal(
+  diretorio: string,
+  ambiente: NodeJS.ProcessEnv,
+): PacoteEmExecucao {
+  return iniciarPacote(PACOTE_LOCAL, diretorio, ambiente);
 }
 
 describe("linha de início do pacote local", () => {
@@ -370,4 +414,230 @@ describe("linha de início do pacote local", () => {
       await pacote.encerrar();
     }
   });
+});
+
+/**
+ * T911, T912 e T913 — cada armazenamento tem o **seu** pacote, escolhido na
+ * construção, e cada início usa apenas o armazenamento do seu pacote: o pacote
+ * local não contém `pg` nem o Adapter da nuvem; os da nuvem não contêm
+ * `node:sqlite` nem o Adapter local; o início local nunca abre conexão a
+ * PostgreSQL; e o início da nuvem nunca usa o arquivo local (FR-114, FR-117,
+ * SC-050).
+ *
+ * A exclusividade é **medida**, e não afirmada: os artefatos são construídos e
+ * inspecionados, e os dois inícios são executados contra o PostgreSQL real do
+ * apoio de teste — o da nuvem, para subir de verdade; o local, para subir com o
+ * armazenamento local mesmo com `DB_URL` válida no ambiente e sem que uma única
+ * conexão à base seja aberta.
+ */
+describe("pacotes e inícios de cada armazenamento", () => {
+  const PASTA_TEMPORARIA = mkdtempSync(join(tmpdir(), "pacotes-"));
+
+  let resultadoLocal: SpawnSyncReturns<string>;
+  let resultadoDaNuvem: SpawnSyncReturns<string>;
+  let pacoteLocal: string;
+  let pacoteDaNuvem: string;
+  let comandoDeMigracao: string;
+  let servidor: ServidorAutonomo;
+  let certificado: CertificadoDaAutoridade;
+
+  beforeAll(async () => {
+    rmSync(DIRETORIO_DE_SAIDA, { recursive: true, force: true });
+    resultadoLocal = construir(["--banco=sqlite"], ambienteSemSegredo());
+    resultadoDaNuvem = construir(["--banco=postgresql"], ambienteSemSegredo());
+    pacoteLocal = readFileSync(PACOTE_LOCAL, "utf8");
+    pacoteDaNuvem = readFileSync(PACOTE_DA_NUVEM, "utf8");
+    comandoDeMigracao = readFileSync(COMANDO_DE_MIGRACAO, "utf8");
+    servidor = await servidorDeTeste();
+    certificado = gravarCertificadoDaAutoridade(servidor);
+  }, 120_000);
+
+  afterAll(async () => {
+    certificado?.remover();
+    rmSync(PASTA_TEMPORARIA, { recursive: true, force: true });
+    await descartarBasesDeTeste();
+    await (await servidorDeTeste()).encerrar();
+  });
+
+  it("constrói os pacotes de cada armazenamento sem DB_URL no ambiente", () => {
+    expect(ambienteSemSegredo()).not.toHaveProperty("DB_URL");
+    expect(ambienteSemSegredo()).not.toHaveProperty("DB_CA_CERT");
+
+    expect(resultadoLocal.status).toBe(0);
+    expect(resultadoDaNuvem.status).toBe(0);
+
+    /** A mensagem de conclusão nomeia o armazenamento e os arquivos. */
+    expect(saidaDe(resultadoDaNuvem)).toContain("postgresql");
+    expect(saidaDe(resultadoDaNuvem)).toContain("servidor.mjs");
+    expect(saidaDe(resultadoDaNuvem)).toContain("migrar.mjs");
+
+    expect(readdirSync(join(DIRETORIO_DE_SAIDA, "postgresql")).sort()).toEqual([
+      "migrar.mjs",
+      "servidor.mjs",
+    ]);
+  });
+
+  it("o pacote local não contém pg nem o Adapter do armazenamento da nuvem", () => {
+    expect(pacoteLocal).toContain(LINHA_DE_INICIO);
+    expect(pacoteLocal).not.toMatch(/postgres/i);
+    expect(pacoteLocal).not.toMatch(
+      /["'](?:better-sqlite3|sqlite3|pg|pg-[a-z-]+)["']/,
+    );
+
+    const adapters = [
+      ...new Set(
+        [...pacoteLocal.matchAll(/armazenamento\/([a-z-]+)\//g)].map(
+          (casamento) => casamento[1],
+        ),
+      ),
+    ];
+
+    expect(adapters).toEqual(["sqlite"]);
+  });
+
+  it.each([
+    ["servidor", "servidor.mjs"],
+    ["comando de migração", "migrar.mjs"],
+  ])(
+    "o pacote da nuvem não contém node:sqlite nem o Adapter local: %s",
+    (rotulo, arquivo) => {
+      const pacote =
+        arquivo === "servidor.mjs" ? pacoteDaNuvem : comandoDeMigracao;
+
+      expect(pacote, rotulo).not.toMatch(/node:sqlite|armazenamento\/sqlite/);
+
+      const adapters = [
+        ...new Set(
+          [...pacote.matchAll(/armazenamento\/([a-z-]+)\//g)].map(
+            (casamento) => casamento[1],
+          ),
+        ),
+      ];
+
+      expect(adapters, rotulo).toEqual(["postgresql"]);
+    },
+  );
+
+  it("empacota pg e deixa pg-native fora do pacote, como externo", () => {
+    for (const pacote of [pacoteDaNuvem, comandoDeMigracao]) {
+      /** É a configuração de cifra sempre verificada que entra no pacote. */
+      expect(pacote).toContain("rejectUnauthorized");
+
+      /** Uma única citação: o carregamento preguiçoso que nunca é executado. */
+      expect([...pacote.matchAll(/["']pg-native["']/g)]).toHaveLength(1);
+      expect(pacote).not.toMatch(/from\s*["']pg-native["']/);
+    }
+
+    expect(existsSync(join(RAIZ_DO_BACKEND, "node_modules", "pg-native"))).toBe(
+      false,
+    );
+  });
+
+  it("o comando de migração empacotado leva a base nova à versão corrente", async () => {
+    const nomeDaBase = await servidor.criarBase("comando-empacotado");
+
+    const resultado = spawnSync(process.execPath, [COMANDO_DE_MIGRACAO], {
+      cwd: RAIZ_DO_BACKEND,
+      env: {
+        ...ambienteSemSegredo(),
+        DB_URL: servidor.urlDaBase(nomeDaBase),
+        DB_CA_CERT: certificado.caminho,
+      },
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+
+    expect(resultado.status).toBe(0);
+    expect(saidaDe(resultado)).toContain("Migração concluída");
+
+    const tabelas = await servidor.consultar<{ nome: string }>(
+      nomeDaBase,
+      `SELECT tablename AS nome FROM pg_tables
+        WHERE schemaname = 'public' ORDER BY tablename;`,
+    );
+
+    expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+      "baralho",
+      "cartao",
+      "versao_do_esquema",
+      "vinculo",
+    ]);
+  }, 60_000);
+
+  it("o início da nuvem sobe contra PostgreSQL e não cria o arquivo local", async () => {
+    const nomeDaBase = await criarBaseMigrada("pacote-da-nuvem", servidor);
+    const pasta = mkdtempSync(join(PASTA_TEMPORARIA, "nuvem-"));
+    const porta = await portaLivre();
+
+    const pacote = iniciarPacote(PACOTE_DA_NUVEM, pasta, {
+      ...ambienteSemSegredo(),
+      PORTA: String(porta),
+      DB_URL: servidor.urlDaBase(nomeDaBase),
+      DB_CA_CERT: certificado.caminho,
+    });
+
+    try {
+      expect(await pacote.primeiraLinha).toBe(LINHA_DE_INICIO_DA_NUVEM);
+
+      await aguardarSaude(porta);
+
+      /** O conteúdo gravado contra a base é servido pelo pacote da nuvem. */
+      const resposta = await fetch(`http://127.0.0.1:${porta}/cartoes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ frente: "To walk", verso: "Caminhar" }),
+      });
+
+      expect(resposta.status).toBe(201);
+    } finally {
+      await pacote.encerrar();
+    }
+
+    /** A linha de início é a única saída, e nada dela é segredo. */
+    expect(pacote.saida().trim()).toBe(LINHA_DE_INICIO_DA_NUVEM);
+    expect(pacote.saida()).not.toContain(servidor.configuracao.senha);
+    expect(pacote.saida()).not.toContain("postgresql://");
+
+    /** O armazenamento local não é usado: nenhum arquivo do Adapter local. */
+    expect(existsSync(join(pasta, "memorizacao.sqlite"))).toBe(false);
+  }, 60_000);
+
+  it("o início local usa o armazenamento local mesmo com DB_URL no ambiente", async () => {
+    const nomeDaBase = await criarBaseMigrada("local-nao-usa-pg", servidor);
+    const pasta = mkdtempSync(join(PASTA_TEMPORARIA, "local-"));
+    const porta = await portaLivre();
+    const caminhoDoBanco = join(pasta, "memorizacao.sqlite");
+
+    const pacote = iniciarPacoteLocal(pasta, {
+      ...ambienteSemSegredo(),
+      PORTA: String(porta),
+      CAMINHO_DO_BANCO: caminhoDoBanco,
+      /** Uma URL de conexão válida, que o caminho local **não** usa. */
+      DB_URL: servidor.urlDaBase(nomeDaBase),
+      DB_CA_CERT: certificado.caminho,
+    });
+
+    try {
+      expect(await pacote.primeiraLinha).toBe(LINHA_DE_INICIO);
+
+      await aguardarSaude(porta);
+
+      expect(existsSync(caminhoDoBanco)).toBe(true);
+    } finally {
+      await pacote.encerrar();
+    }
+
+    expect(pacote.saida().trim()).toBe(LINHA_DE_INICIO);
+    expect(pacote.saida()).not.toMatch(/postgres|SQLSTATE/i);
+
+    /** Nenhuma conexão à base foi tentada pelo caminho local. */
+    const conexoes = await servidor.consultar<{ quantidade: string }>(
+      "postgres",
+      `SELECT COUNT(*) AS quantidade FROM pg_stat_activity
+        WHERE datname = $1 AND pid <> pg_backend_pid();`,
+      [nomeDaBase],
+    );
+
+    expect(conexoes.map((linha) => Number(linha.quantidade))).toEqual([0]);
+  }, 60_000);
 });

@@ -60,10 +60,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Configuração e segurança
 
-- [ ] T906 `DB_URL` ausente, vazia ou malformada recusa o início nomeando a variável e sem repetir o valor
-- [ ] T907 [P] A conexão é cifrada com certificado verificado, e uma URL que peça desligar a cifra é recusada
-- [ ] T908 O início informa apenas o tipo de armazenamento, e nenhuma falha reproduz a URL de conexão
-- [ ] T909 O início recusa iniciar com o esquema atrasado e não aplica migração
+- [X] T906 `DB_URL` ausente, vazia ou malformada recusa o início nomeando a variável e sem repetir o valor
+- [X] T907 [P] A conexão é cifrada com certificado verificado, e uma URL que peça desligar a cifra é recusada
+- [X] T908 O início informa apenas o tipo de armazenamento, e nenhuma falha reproduz a URL de conexão
+- [X] T909 O início recusa iniciar com o esquema atrasado e não aplica migração
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -80,10 +80,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 4 — Construção e scripts
 
-- [ ] T910 `migrate:cloud` leva a base à versão corrente e a repetição não reaplica nada
-- [ ] T911 `--banco=postgresql` produz `servidor.mjs` e `migrar.mjs`, e a construção passa sem `DB_URL`
-- [ ] T912 [P] O pacote local não contém `pg`, e os da nuvem não contêm o Adapter local nem `node:sqlite`
-- [ ] T913 O início local nunca toca em PostgreSQL, e o da nuvem nunca usa o armazenamento local
+- [X] T910 `migrate:cloud` leva a base à versão corrente e a repetição não reaplica nada
+- [X] T911 `--banco=postgresql` produz `servidor.mjs` e `migrar.mjs`, e a construção passa sem `DB_URL`
+- [X] T912 [P] O pacote local não contém `pg`, e os da nuvem não contêm o Adapter local nem `node:sqlite`
+- [X] T913 O início local nunca toca em PostgreSQL, e o da nuvem nunca usa o armazenamento local
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

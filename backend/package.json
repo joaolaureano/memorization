@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "build": "node scripts/construir.mjs",
     "build:local": "node scripts/construir.mjs --banco=sqlite",
+    "build:cloud": "node scripts/construir.mjs --banco=postgresql",
     "start:local": "node dist/sqlite/servidor.mjs",
+    "start:cloud": "node dist/postgresql/servidor.mjs",
+    "migrate:cloud": "node dist/postgresql/migrar.mjs",
     "test": "vitest run",
     "lint": "eslint ."
   },
