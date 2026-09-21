@@ -42,6 +42,16 @@ import {
  * bateria compartilhada, em `bateria.test.ts`.
  */
 
+/**
+ * A versão mais recente da lista de migrações do Adapter da nuvem — o que uma
+ * base nova registra depois que todas rodam. Derivada, e não escrita à mão:
+ * acrescentar uma migração não quebra estas asserções.
+ */
+const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
+  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
+  0,
+);
+
 const RAIZ_DO_BACKEND = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -101,7 +111,7 @@ describe("base nova e vazia", () => {
       expect(await lerVersaoDoEsquema(piscina)).toBe(0);
 
       expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
-      expect(versaoCorrenteConhecida()).toBe(4);
+      expect(versaoCorrenteConhecida()).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
       const tabelas = await consultar<{ nome: string }>(
         "SELECT tablename AS nome FROM pg_tables WHERE schemaname = 'public';",
@@ -123,7 +133,9 @@ describe("base nova e vazia", () => {
       );
 
       expect(colunas).toEqual([{ nome: "versao", tipo: "integer" }]);
-      expect(await versaoRegistrada(consultar)).toEqual([4]);
+      expect(await versaoRegistrada(consultar)).toEqual([
+        ULTIMA_VERSAO_DO_ESQUEMA,
+      ]);
     });
   });
 
@@ -313,7 +325,7 @@ describe("base já migrada", () => {
       );
 
       /** A lista inteira percorrida, nada pendente, uma única linha intacta. */
-      expect(linhas.rows).toEqual([{ versao: 4 }]);
+      expect(linhas.rows).toEqual([{ versao: ULTIMA_VERSAO_DO_ESQUEMA }]);
     } finally {
       await piscina.end();
     }
@@ -358,7 +370,7 @@ describe("dois aplicadores ao mesmo tempo", () => {
         "SELECT versao FROM versao_do_esquema;",
       );
 
-      expect(linhas.rows).toEqual([{ versao: 4 }]);
+      expect(linhas.rows).toEqual([{ versao: ULTIMA_VERSAO_DO_ESQUEMA }]);
     } finally {
       await primeira.end();
       await segunda.end();
@@ -388,7 +400,9 @@ describe("falha no meio da migração — sem estado parcial", () => {
       );
 
       expect(parciais).toEqual([]);
-      expect(await versaoRegistrada(consultar)).toEqual([4]);
+      expect(await versaoRegistrada(consultar)).toEqual([
+        ULTIMA_VERSAO_DO_ESQUEMA,
+      ]);
 
       const tabelas = await consultar<{ nome: string }>(
         `SELECT tablename AS nome FROM pg_tables

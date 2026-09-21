@@ -38,6 +38,16 @@ function versaoAtual(banco: DatabaseSync): number {
   return linha === undefined ? 0 : Number(linha.versao);
 }
 
+/**
+ * A versão mais recente da lista de migrações — o que uma base nova registra
+ * depois que todas rodam. Derivada, e não escrita à mão: acrescentar uma
+ * migração não quebra estas asserções.
+ */
+const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
+  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
+  0,
+);
+
 /** Diz se a tabela existe, consultando o catálogo do SQLite. */
 function existeTabela(banco: DatabaseSync, nome: string): boolean {
   return (
@@ -59,7 +69,7 @@ function comBanco(corpo: (banco: DatabaseSync) => void): void {
 }
 
 describe("base nova — todas as migrações, em ordem", () => {
-  it("cria cartao, baralho, vinculo e usuario e registra a versão 4, com controle de versão de um único inteiro", () => {
+  it("cria cartao, baralho, vinculo e usuario e registra a última versão da lista, com controle de versão de um único inteiro", () => {
     const banco = abrirBanco(":memory:");
 
     try {
@@ -67,7 +77,7 @@ describe("base nova — todas as migrações, em ordem", () => {
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
       expect(existeTabela(banco, "usuario")).toBe(true);
-      expect(versaoAtual(banco)).toBe(4);
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
       const colunas = banco
         .prepare("PRAGMA table_info(versao_do_esquema)")
@@ -134,7 +144,7 @@ describe("base já migrada — migração não reaplica", () => {
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
 
@@ -185,7 +195,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
     const banco = abrirBanco(":memory:");
 
     try {
-      expect(versaoAtual(banco)).toBe(4);
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
@@ -193,7 +203,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
-      expect(versaoAtual(banco)).toBe(4);
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
     } finally {
       banco.close();
     }
@@ -238,7 +248,7 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
       expect(existeTabela(banco, "usuario")).toBe(true);
-      expect(versaoAtual(banco)).toBe(4);
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
       const lido = banco
         .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")
@@ -312,7 +322,7 @@ describe("arquivo criado antes desta feature — mesma versão, mesmos dados", (
       const reaberto = new DatabaseSync(caminho);
 
       try {
-        expect(versaoAtual(reaberto)).toBe(4);
+        expect(versaoAtual(reaberto)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(reaberto, "cartao")).toBe(true);
         expect(existeTabela(reaberto, "baralho")).toBe(true);
         expect(existeTabela(reaberto, "vinculo")).toBe(true);

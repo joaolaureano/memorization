@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import type { ClienteDoAcervo } from "../acervo-cliente/cliente";
 import { useRota } from "./navegacao";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
+import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
 import { PaginaDoBaralho } from "./PaginaDoBaralho";
@@ -10,11 +11,12 @@ import { PaginaDoBaralho } from "./PaginaDoBaralho";
 /**
  * Casca da aplicação e navegação principal.
  *
- * A navegação é por hash (`#/cartoes` e `#/baralhos`), sem dependência de
- * roteador. O link da rota corrente recebe `aria-current="page"`, e o `<main>`
- * renderiza a tela correspondente. Numa mudança de rota, o foco é movido para
- * o título da tela — o destino que usuários de teclado e leitor de tela
- * esperam depois de ativar um link de navegação.
+ * A navegação é por hash (`#/cartoes`, `#/baralhos` e `#/criar-conta`), sem
+ * dependência de roteador. O link da rota corrente recebe
+ * `aria-current="page"`, e o `<main>` renderiza a tela correspondente. Numa
+ * mudança de rota, o foco é movido para o título da tela — o destino que
+ * usuários de teclado e leitor de tela esperam depois de ativar um link de
+ * navegação.
  */
 
 interface PropriedadesDaAplicacao {
@@ -66,6 +68,12 @@ export function Aplicacao({ cliente }: PropriedadesDaAplicacao) {
         >
           Baralhos
         </a>
+        <a
+          href="#/criar-conta"
+          aria-current={rota.nome === "cadastro" ? "page" : undefined}
+        >
+          Criar conta
+        </a>
       </nav>
 
       <main className="aplicacao" ref={principal}>
@@ -75,6 +83,8 @@ export function Aplicacao({ cliente }: PropriedadesDaAplicacao) {
           <PaginaDoBaralho cliente={cliente} id={rota.id} />
         ) : rota.nome === "estudo" ? (
           <PaginaDeEstudo cliente={cliente} id={rota.id} />
+        ) : rota.nome === "cadastro" ? (
+          <PaginaDeCadastro cliente={cliente} />
         ) : (
           <PaginaDeCartoes cliente={cliente} />
         )}

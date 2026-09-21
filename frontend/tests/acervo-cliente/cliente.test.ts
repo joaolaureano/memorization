@@ -4,6 +4,7 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
 } from "../../src/acervo-cliente/cliente";
 import type {
@@ -14,18 +15,21 @@ import type {
 import { ClienteEmMemoria } from "../../src/acervo-cliente/cliente-em-memoria";
 import { ClienteHttp } from "../../src/acervo-cliente/cliente-http";
 import {
+  NOME_DE_USUARIO_EXISTENTE,
   validarFrente,
   validarNomeDeBaralho,
+  validarNomeDeUsuario,
+  validarSenha,
   validarVerso,
 } from "../../src/acervo-cliente/validacao";
 
 /**
- * T008, T106, T208, T403 e T503 — bateria dos contratos de Cartões, de
- * Baralhos, de Vínculos, de edição e de exclusão contra os dois Adapters da
- * Seam `ClienteDoAcervo`.
+ * T008, T106, T208, T403, T503 e T607 — bateria dos contratos de Cartões, de
+ * Baralhos, de Vínculos, de edição, de exclusão e de Usuários contra os dois
+ * Adapters da Seam `ClienteDoAcervo`.
  *
- * A **mesma** bateria — criação, listagem, Vínculos, edição, exclusão, os
- * modos de recusa de domínio com mensagem exata em português e a
+ * A **mesma** bateria — criação, listagem, Vínculos, edição, exclusão,
+ * Cadastro, os modos de recusa de domínio com mensagem exata em português e a
  * indisponibilidade — roda contra `ClienteHttp` e `ClienteEmMemoria`, e
  * produz resultados idênticos. Nenhuma resposta que não seja de sucesso
  * aparece como operação concluída (FR-044).
@@ -34,6 +38,8 @@ import {
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 const NOME_VALIDO = "Inglês";
+const NOME_DE_USUARIO_VALIDO = "Ana.Silva";
+const SENHA_VALIDA = "senha-de-prova";
 const ENDERECO_DA_API = "http://127.0.0.1:3001";
 
 afterEach(() => {
@@ -67,16 +73,18 @@ function criarAmbienteEmMemoria(): AmbienteDeCliente {
 
 /**
  * Servidor de contrato simulado para o `ClienteHttp`: uma `fetch` falsa que
- * implementa as rotas de Cartões, de Baralhos, de Vínculos, de edição e de
- * exclusão exatamente como a API. A indisponibilidade é simulada fazendo a
- * `fetch` lançar, como numa falha de rede real.
+ * implementa as rotas de Cartões, de Baralhos, de Vínculos, de edição, de
+ * exclusão e de Usuários exatamente como a API. A indisponibilidade é
+ * simulada fazendo a `fetch` lançar, como numa falha de rede real.
  */
 function criarAmbienteHttp(): AmbienteDeCliente {
   const cartoesNoServidor: Cartao[] = [];
   const baralhosNoServidor: Baralho[] = [];
   const vinculosNoServidor: { cartaoId: string; baralhoId: string }[] = [];
+  const usuariosNoServidor: { id: string; nomeDeUsuario: string }[] = [];
   let sequencia = 0;
   let sequenciaDeBaralhos = 0;
+  let sequenciaDeUsuarios = 0;
   let indisponivel = false;
 
   function baralhosDoCartao(cartaoId: string): Baralho[] {
@@ -155,6 +163,45 @@ function criarAmbienteHttp(): AmbienteDeCliente {
           baralhos: baralhosDoCartao(cartao.id),
         })),
       );
+    }
+
+    if (caminho === "/usuarios" && metodo === "POST") {
+      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+
+      // Espaços ao redor são descartados antes da validação (FR-073).
+      const nomeDeUsuario = (corpo.nomeDeUsuario as string).trim();
+      const falha =
+        validarNomeDeUsuario(nomeDeUsuario) ??
+        validarSenha(corpo.senha as string);
+
+      if (falha !== null) {
+        return respostaDeTeste(400, {
+          erro: falha.erro,
+          mensagem: falha.mensagem,
+        });
+      }
+
+      // A unicidade não distingue maiúsculas de minúsculas (FR-074, SC-025).
+      const jaExiste = usuariosNoServidor.some(
+        (usuario) =>
+          usuario.nomeDeUsuario.toLowerCase() === nomeDeUsuario.toLowerCase(),
+      );
+
+      if (jaExiste) {
+        return respostaDeTeste(409, { ...NOME_DE_USUARIO_EXISTENTE });
+      }
+
+      const usuario = {
+        id: `u${++sequenciaDeUsuarios}`,
+        nomeDeUsuario,
+      };
+
+      usuariosNoServidor.push(usuario);
+
+      // A resposta traz uma propriedade a mais de propósito: nenhum retorno
+      // de Cadastro entrega `sal`, `hash` nem Senha, e o Adapter descarta o
+      // que não seja campo canônico (FR-076, FR-078).
+      return respostaDeTeste(201, { ...usuario, hash: "nunca-atravessa" });
     }
 
     if (caminho === "/baralhos" && metodo === "POST") {
@@ -1538,6 +1585,265 @@ function executarBateriaDeExclusao(
   });
 }
 
+/**
+ * Bateria compartilhada de Cadastro (T607; specs/007-criar-usuario/contracts/api-usuarios.md).
+ *
+ * Os quatro modos de erro do contrato — `nome_de_usuario_invalido`,
+ * `senha_invalida`, `nome_de_usuario_existente` e `indisponivel` — são
+ * distinguidos, e as mensagens do contrato são conferidas exatamente, para que
+ * os dois Adapters sejam comprovados idênticos na superfície observável.
+ * Nenhum retorno traz a Senha, e propriedade a mais na resposta não atravessa
+ * a Interface (FR-076, FR-078).
+ */
+
+interface CasoDeNomeDeUsuarioInvalido {
+  descricao: string;
+  nomeDeUsuario: string;
+  trechoDaMensagem: RegExp;
+}
+
+/** As recusas de Nome de usuário que o contrato prevê, com a regra violada. */
+const CASOS_DE_NOME_DE_USUARIO_INVALIDO: CasoDeNomeDeUsuarioInvalido[] = [
+  {
+    descricao: "2 caracteres",
+    nomeDeUsuario: "ab",
+    trechoDaMensagem: /pelo menos 3 caracteres/,
+  },
+  {
+    descricao: "51 caracteres",
+    nomeDeUsuario: "a".repeat(51),
+    trechoDaMensagem: /no máximo 50 caracteres/,
+  },
+  {
+    descricao: "acento no nome",
+    nomeDeUsuario: "josé",
+    trechoDaMensagem: /apenas letras de A a Z/,
+  },
+  {
+    descricao: "espaço no meio do nome",
+    nomeDeUsuario: "ana silva",
+    trechoDaMensagem: /apenas letras de A a Z/,
+  },
+];
+
+/** As duas recusas de tamanho de Senha, uma abaixo e outra acima do intervalo. */
+const CASOS_DE_SENHA_INVALIDA: { descricao: string; senha: string }[] = [
+  { descricao: "7 caracteres", senha: "1234567" },
+  { descricao: "129 caracteres", senha: "s".repeat(129) },
+];
+
+/**
+ * As formas do mesmo Nome de usuário já cadastrado: caixa trocada e espaços ao
+ * redor, que são descartados antes da comparação (FR-074, SC-025).
+ */
+const CASOS_DE_NOME_DE_USUARIO_DUPLICADO = [
+  "ana.silva",
+  "ANA.SILVA",
+  "  ana.silva  ",
+];
+
+function executarBateriaDeCadastro(
+  nomeDoAdapter: string,
+  criarAmbiente: () => AmbienteDeCliente,
+): void {
+  describe(`${nomeDoAdapter} — bateria do contrato de Cadastro`, () => {
+    it("cadastra um Usuário válido e devolve apenas id e Nome de usuário (FR-071)", async () => {
+      const { cliente } = criarAmbiente();
+
+      const resultado = await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      });
+
+      expect(resultado).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        },
+      });
+
+      // Nenhuma propriedade além das canônicas: `sal`, `hash`, `parametros` e
+      // Senha não existem no retorno (FR-076, FR-078).
+      if (resultado.ok) {
+        expect(Object.keys(resultado.usuario).sort()).toEqual([
+          "id",
+          "nomeDeUsuario",
+        ]);
+      }
+    });
+
+    it("descarta os espaços ao redor do Nome de usuário (FR-073)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: `   ${NOME_DE_USUARIO_VALIDO}   `,
+          senha: SENHA_VALIDA,
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        },
+      });
+    });
+
+    it("aceita Nome de usuário com exatamente 3 e 50 caracteres (FR-073)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.criarUsuario({ nomeDeUsuario: "ana", senha: SENHA_VALIDA }),
+      ).toEqual({
+        ok: true,
+        usuario: { id: expect.any(String), nomeDeUsuario: "ana" },
+      });
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: "a".repeat(50),
+          senha: SENHA_VALIDA,
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: { id: expect.any(String), nomeDeUsuario: "a".repeat(50) },
+      });
+    });
+
+    it.each(CASOS_DE_NOME_DE_USUARIO_INVALIDO)(
+      "recusa Nome de usuário inválido — $descricao (FR-073)",
+      async (caso) => {
+        const { cliente } = criarAmbiente();
+
+        const resultado = await cliente.criarUsuario({
+          nomeDeUsuario: caso.nomeDeUsuario,
+          senha: SENHA_VALIDA,
+        });
+
+        expect(resultado.ok).toBe(false);
+
+        if (!resultado.ok) {
+          expect(resultado.erro).toBe("nome_de_usuario_invalido");
+          expect(resultado.mensagem).toMatch(caso.trechoDaMensagem);
+          expect(Object.keys(resultado).sort()).toEqual([
+            "erro",
+            "mensagem",
+            "ok",
+          ]);
+        }
+      },
+    );
+
+    it("aceita Senha de 8 e de 128 caracteres e preserva espaços (FR-075, FR-085)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: "ana",
+          senha: "12345678",
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: { id: expect.any(String), nomeDeUsuario: "ana" },
+      });
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: "bruno",
+          senha: "  senha  ",
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: { id: expect.any(String), nomeDeUsuario: "bruno" },
+      });
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: "carla",
+          senha: "s".repeat(128),
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: { id: expect.any(String), nomeDeUsuario: "carla" },
+      });
+    });
+
+    it.each(CASOS_DE_SENHA_INVALIDA)(
+      "recusa Senha inválida — $descricao (FR-075)",
+      async (caso) => {
+        const { cliente } = criarAmbiente();
+
+        const resultado = await cliente.criarUsuario({
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+          senha: caso.senha,
+        });
+
+        expect(resultado.ok).toBe(false);
+
+        if (!resultado.ok) {
+          expect(resultado.erro).toBe("senha_invalida");
+          expect(resultado.mensagem).toMatch(/entre 8 e 128 caracteres/);
+          // A mensagem informa o intervalo e nunca repete a Senha recebida.
+          expect(resultado.mensagem).not.toContain(caso.senha);
+        }
+      },
+    );
+
+    it.each(CASOS_DE_NOME_DE_USUARIO_DUPLICADO)(
+      "recusa %s depois de Ana.Silva, sem distinguir maiúsculas (FR-074, SC-025)",
+      async (nomeDuplicado) => {
+        const { cliente } = criarAmbiente();
+
+        await cliente.criarUsuario({
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+          senha: SENHA_VALIDA,
+        });
+
+        expect(
+          await cliente.criarUsuario({
+            nomeDeUsuario: nomeDuplicado,
+            senha: SENHA_VALIDA,
+          }),
+        ).toEqual({
+          ok: false,
+          erro: "nome_de_usuario_existente",
+          mensagem: "Este nome de usuário já existe. Escolha outro.",
+        });
+      },
+    );
+
+    it("com o transporte indisponível, o Cadastro não é concluído nem gravado (FR-044, FR-045)", async () => {
+      const { cliente, indisponibilizar, restaurar } = criarAmbiente();
+      indisponibilizar();
+
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+          senha: SENHA_VALIDA,
+        }),
+      ).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+      });
+
+      restaurar();
+
+      // A recusa não deixou rastro: o mesmo Nome de usuário é aceito depois.
+      expect(
+        await cliente.criarUsuario({
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+          senha: SENHA_VALIDA,
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        },
+      });
+    });
+  });
+}
+
 executarBateriaDoContrato("ClienteHttp", criarAmbienteHttp);
 executarBateriaDoContrato("ClienteEmMemoria", criarAmbienteEmMemoria);
 
@@ -1552,6 +1858,9 @@ executarBateriaDeEdicao("ClienteEmMemoria", criarAmbienteEmMemoria);
 
 executarBateriaDeExclusao("ClienteHttp", criarAmbienteHttp);
 executarBateriaDeExclusao("ClienteEmMemoria", criarAmbienteEmMemoria);
+
+executarBateriaDeCadastro("ClienteHttp", criarAmbienteHttp);
+executarBateriaDeCadastro("ClienteEmMemoria", criarAmbienteEmMemoria);
 
 describe("resultados idênticos entre os dois Adapters", () => {
   it("a mesma sequência de operações de Cartão produz o mesmo resultado observável", async () => {
@@ -1585,6 +1894,13 @@ describe("resultados idênticos entre os dois Adapters", () => {
   it("a mesma sequência de exclusão produz o mesmo resultado observável", async () => {
     const noHttp = await cenarioDeExclusao(criarAmbienteHttp());
     const emMemoria = await cenarioDeExclusao(criarAmbienteEmMemoria());
+
+    expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
+  });
+
+  it("a mesma sequência de Cadastro produz o mesmo resultado observável", async () => {
+    const noHttp = await cenarioDeCadastro(criarAmbienteHttp());
+    const emMemoria = await cenarioDeCadastro(criarAmbienteEmMemoria());
 
     expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
   });
@@ -1878,6 +2194,79 @@ async function cenarioDeExclusao(ambiente: AmbienteDeCliente) {
 }
 
 /**
+ * Sequência de Cadastro que atravessa sucesso, os quatro modos de recusa e a
+ * indisponibilidade. Os ids são opacos, então a igualdade entre Adapters é
+ * comparada com ids ocultos — todo o resto precisa ser idêntico, inclusive as
+ * mensagens em português.
+ */
+async function cenarioDeCadastro(ambiente: AmbienteDeCliente) {
+  const { cliente, indisponibilizar, restaurar } = ambiente;
+
+  const criado = await cliente.criarUsuario({
+    nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+    senha: SENHA_VALIDA,
+  });
+  const comEspacos = await cliente.criarUsuario({
+    nomeDeUsuario: `  ${NOME_DE_USUARIO_VALIDO}  `,
+    senha: SENHA_VALIDA,
+  });
+  const semDistincaoDeCaixa = await cliente.criarUsuario({
+    nomeDeUsuario: "ana.silva",
+    senha: SENHA_VALIDA,
+  });
+  const nomeCurto = await cliente.criarUsuario({
+    nomeDeUsuario: "ab",
+    senha: SENHA_VALIDA,
+  });
+  const nomeComAcento = await cliente.criarUsuario({
+    nomeDeUsuario: "josé",
+    senha: SENHA_VALIDA,
+  });
+  const nomeLongo = await cliente.criarUsuario({
+    nomeDeUsuario: "a".repeat(51),
+    senha: SENHA_VALIDA,
+  });
+  const senhaCurta = await cliente.criarUsuario({
+    nomeDeUsuario: "bruno",
+    senha: "1234567",
+  });
+  const senhaLonga = await cliente.criarUsuario({
+    nomeDeUsuario: "carla",
+    senha: "s".repeat(129),
+  });
+  const outroUsuario = await cliente.criarUsuario({
+    nomeDeUsuario: "bruno",
+    senha: "  senha  ",
+  });
+
+  indisponibilizar();
+  const cadastroIndisponivel = await cliente.criarUsuario({
+    nomeDeUsuario: "diego",
+    senha: SENHA_VALIDA,
+  });
+
+  restaurar();
+  const cadastroAposRestaurar = await cliente.criarUsuario({
+    nomeDeUsuario: "diego",
+    senha: SENHA_VALIDA,
+  });
+
+  return {
+    criado,
+    comEspacos,
+    semDistincaoDeCaixa,
+    nomeCurto,
+    nomeComAcento,
+    nomeLongo,
+    senhaCurta,
+    senhaLonga,
+    outroUsuario,
+    cadastroIndisponivel,
+    cadastroAposRestaurar,
+  };
+}
+
+/**
  * Substitui todo `id` por "<id>" em profundidade: identificadores são opacos
  * e não fazem parte da igualdade entre os resultados dos dois Adapters.
  */
@@ -2107,6 +2496,116 @@ describe("ClienteHttp — resposta fora do contrato de Vínculos, edição e exc
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+    });
+  });
+});
+
+describe("ClienteHttp — resposta fora do contrato de Usuários nunca aparece como sucesso (FR-044)", () => {
+  it("trata status 500 como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(500, "erro interno"),
+    );
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    });
+  });
+
+  it("trata 400 com corpo que não é JSON como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () => ({
+      status: 400,
+      json: async () => {
+        throw new Error("corpo ilegível");
+      },
+    }));
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    });
+  });
+
+  it("trata 400 com o código da duplicata como indisponivel: ele pertence ao 409", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(400, { ...NOME_DE_USUARIO_EXISTENTE }),
+    );
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    });
+  });
+
+  it("trata 409 com código fora do contrato como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(409, {
+        erro: "corpo_invalido",
+        mensagem: "O corpo da requisição não é válido.",
+      }),
+    );
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    });
+  });
+
+  it("trata 201 com corpo sem Nome de usuário como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(201, { id: "u1" }),
+    );
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    });
+  });
+
+  it("trata falha de rede como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () => {
+      throw new Error("conexão recusada");
+    });
+
+    expect(
+      await cliente.criarUsuario({
+        nomeDeUsuario: NOME_DE_USUARIO_VALIDO,
+        senha: SENHA_VALIDA,
+      }),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
     });
   });
 });

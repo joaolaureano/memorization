@@ -57,10 +57,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Cliente e tela
 
-- [ ] T607 `criarUsuario` existe nos dois Adapters, distinguindo recusa de indisponibilidade
-- [ ] T608 Tela "Criar conta" em `#/criar-conta`, alcançável pela navegação principal, com confirmação explícita
-- [ ] T609 Confirmação divergente não é enviada e os limites são comunicados durante a digitação
-- [ ] T610 Falha de gravação é reportada, com o conteúdo digitado preservado
+- [X] T607 `criarUsuario` existe nos dois Adapters, distinguindo recusa de indisponibilidade
+- [X] T608 Tela "Criar conta" em `#/criar-conta`, alcançável pela navegação principal, com confirmação explícita
+- [X] T609 Confirmação divergente não é enviada e os limites são comunicados durante a digitação
+- [X] T610 Falha de gravação é reportada, com o conteúdo digitado preservado
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -77,10 +77,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 4 — Acessibilidade, responsividade e validação
 
-- [ ] T611 Cadastro concluído só por teclado, com foco sempre identificável e movido na recusa
-- [ ] T612 Recusas e confirmação do Cadastro perceptíveis por leitor de tela
-- [ ] T613 [P] Tela utilizável em largura de telefone
-- [ ] T614 e2e cobre Cadastro em navegador real, persistência e ausência de cookie e de dado do navegador
+- [X] T611 Cadastro concluído só por teclado, com foco sempre identificável e movido na recusa
+- [X] T612 Recusas e confirmação do Cadastro perceptíveis por leitor de tela
+- [X] T613 [P] Tela utilizável em largura de telefone
+- [X] T614 e2e cobre Cadastro em navegador real, persistência e ausência de cookie e de dado do navegador
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

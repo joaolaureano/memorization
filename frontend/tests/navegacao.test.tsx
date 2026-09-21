@@ -54,6 +54,11 @@ describe("interpretarRota", () => {
       id: "b1",
     });
   });
+
+  it("reconhece a rota da tela Criar conta", () => {
+    expect(interpretarRota("#/criar-conta")).toEqual({ nome: "cadastro" });
+    expect(interpretarRota("#/criar-conta/")).toEqual({ nome: "cadastro" });
+  });
 });
 
 describe("Aplicacao — navegação", () => {
@@ -68,11 +73,16 @@ describe("Aplicacao — navegação", () => {
     const linkDeBaralhos = within(navegacao).getByRole("link", {
       name: "Baralhos",
     });
+    const linkDeCadastro = within(navegacao).getByRole("link", {
+      name: "Criar conta",
+    });
 
     expect(linkDeCartoes).toHaveAttribute("href", "#/cartoes");
     expect(linkDeBaralhos).toHaveAttribute("href", "#/baralhos");
+    expect(linkDeCadastro).toHaveAttribute("href", "#/criar-conta");
     expect(linkDeCartoes).toHaveAttribute("aria-current", "page");
     expect(linkDeBaralhos).not.toHaveAttribute("aria-current");
+    expect(linkDeCadastro).not.toHaveAttribute("aria-current");
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Cartões" }),
@@ -80,6 +90,55 @@ describe("Aplicacao — navegação", () => {
     expect(
       screen.queryByRole("heading", { level: 1, name: "Baralhos" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("oferece o acesso à tela Criar conta em todas as rotas (FR-084)", async () => {
+    render(<Aplicacao cliente={new ClienteEmMemoria()} />);
+
+    const navegacao = screen.getByRole("navigation", { name: "Principal" });
+
+    for (const hash of [
+      "#/cartoes",
+      "#/baralhos",
+      "#/criar-conta",
+      "#/baralhos/inexistente",
+    ]) {
+      navegarPara(hash);
+
+      expect(
+        within(navegacao).getByRole("link", { name: "Criar conta" }),
+      ).toHaveAttribute("href", "#/criar-conta");
+    }
+  });
+
+  it("abre a tela Criar conta pela navegação, marca o link corrente e move o foco para o título (FR-084)", async () => {
+    render(<Aplicacao cliente={new ClienteEmMemoria()} />);
+    await screen.findByRole("heading", { level: 1, name: "Cartões" });
+
+    navegarPara("#/criar-conta");
+
+    const titulo = await screen.findByRole("heading", {
+      level: 1,
+      name: "Criar conta",
+    });
+
+    expect(titulo).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Criar conta" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Cartões" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(screen.getByRole("link", { name: "Baralhos" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(document.activeElement).toBe(titulo);
+
+    // Os três campos do Cadastro são os da tela alcançada pelo link.
+    expect(screen.getByLabelText("Nome de usuário")).toBeInTheDocument();
+    expect(screen.getByLabelText("Senha")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmação da Senha")).toBeInTheDocument();
   });
 
   it("muda de rota pelo hash, marca o link corrente e move o foco para o título", async () => {

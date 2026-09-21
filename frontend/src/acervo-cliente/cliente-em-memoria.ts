@@ -2,6 +2,7 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
 } from "./cliente";
 import type {
@@ -11,8 +12,10 @@ import type {
   ClienteDoAcervo,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeUsuario,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
+  ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeExclusaoDeBaralho,
@@ -22,17 +25,25 @@ import type {
   ResultadoDeObterBaralho,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeVinculacao,
+  Usuario,
 } from "./cliente";
-import { validarFrente, validarNomeDeBaralho, validarVerso } from "./validacao";
+import {
+  NOME_DE_USUARIO_EXISTENTE,
+  validarFrente,
+  validarNomeDeBaralho,
+  validarNomeDeUsuario,
+  validarSenha,
+  validarVerso,
+} from "./validacao";
 
 /**
- * Adapter em memória do `ClienteDoAcervo` (T008, T106, T208, T403, T503).
+ * Adapter em memória do `ClienteDoAcervo` (T008, T106, T208, T403, T503, T607).
  *
  * Stand-in da API inteira para teste: com ele, a interface gráfica é testável
  * sem servidor (plan.md). Reproduz os contratos de Cartões, de Baralhos, de
- * Vínculos, de edição e de exclusão — os modos de recusa de domínio com as
- * mesmas mensagens da API — para que a bateria compartilhada produza
- * resultados idênticos aos do `ClienteHttp`.
+ * Vínculos, de edição, de exclusão e de Usuários — os modos de recusa de
+ * domínio com as mesmas mensagens da API — para que a bateria compartilhada
+ * produza resultados idênticos aos do `ClienteHttp`.
  *
  * A indisponibilidade do transporte, que no `ClienteHttp` nasce da rede, aqui
  * é simulada por `simularIndisponibilidade()`; enquanto simulada, nenhuma
@@ -42,8 +53,15 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   private readonly cartoes: Cartao[] = [];
   private readonly baralhos: Baralho[] = [];
   private readonly vinculos: { cartaoId: string; baralhoId: string }[] = [];
+  /**
+   * Os Usuários cadastrados, na forma da Interface: `id` e `nomeDeUsuario`.
+   * Nenhum campo capaz de guardar a Senha existe aqui — nem no stand-in
+   * (FR-076, FR-078).
+   */
+  private readonly usuarios: Usuario[] = [];
   private sequencia = 0;
   private sequenciaDeBaralhos = 0;
+  private sequenciaDeUsuarios = 0;
   private indisponivel = false;
 
   async criarCartao(
@@ -382,6 +400,47 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     this.removerVinculosDoBaralho(id);
 
     return { ok: true };
+  }
+
+  async criarUsuario(
+    dados: DadosDeUsuario,
+  ): Promise<ResultadoDeCriacaoDeUsuario> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+      };
+    }
+
+    // Espaços ao redor são descartados **antes** da validação, como na API
+    // (FR-073); os da Senha são preservados (FR-075).
+    const nomeDeUsuario = dados.nomeDeUsuario.trim();
+    const falha =
+      validarNomeDeUsuario(nomeDeUsuario) ?? validarSenha(dados.senha);
+
+    if (falha !== null) {
+      return { ok: false, ...falha };
+    }
+
+    // A unicidade não distingue maiúsculas de minúsculas (FR-074, SC-025).
+    const chave = nomeDeUsuario.toLowerCase();
+    const jaExiste = this.usuarios.some(
+      (usuario) => usuario.nomeDeUsuario.toLowerCase() === chave,
+    );
+
+    if (jaExiste) {
+      return { ok: false, ...NOME_DE_USUARIO_EXISTENTE };
+    }
+
+    const usuario: Usuario = {
+      id: `u${++this.sequenciaDeUsuarios}`,
+      nomeDeUsuario,
+    };
+
+    this.usuarios.push(usuario);
+
+    return { ok: true, usuario };
   }
 
   /**

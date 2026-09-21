@@ -22,7 +22,8 @@ export type Rota =
   | { nome: "cartoes" }
   | { nome: "baralhos" }
   | { nome: "baralho"; id: string }
-  | { nome: "estudo"; id: string };
+  | { nome: "estudo"; id: string }
+  | { nome: "cadastro" };
 
 /**
  * Interpreta o hash corrente como uma `Rota`.
@@ -48,6 +49,12 @@ export function interpretarRota(hash: string): Rota {
 
   if (segmentos.length === 1 && segmentos[0] === "baralhos") {
     return { nome: "baralhos" };
+  }
+
+  // A tela "Criar conta" (FR-084): a rota é `#/criar-conta`, e não
+  // `#/usuarios`, porque o caminho nomeia a ação que a interface oferece.
+  if (segmentos.length === 1 && segmentos[0] === "criar-conta") {
+    return { nome: "cadastro" };
   }
 
   if (segmentos.length === 2 && segmentos[0] === "baralhos") {

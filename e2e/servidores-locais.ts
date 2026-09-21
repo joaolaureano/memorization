@@ -483,11 +483,37 @@ export function lerVersaoDoEsquema(caminhoDoBanco: string): number {
   }
 }
 
+/**
+ * Cadastra um Usuário direto na API real e devolve o status, o corpo e os
+ * cabeçalhos da resposta.
+ *
+ * Diferente dos demais auxiliares, este **não** exige sucesso: a prova de
+ * persistência precisa do `409` para conferir que o Nome de usuário já
+ * existia antes, e a prova de FR-078 e FR-079 precisa inspecionar a resposta —
+ * nenhuma credencial reutilizável, nenhum `Set-Cookie` e nenhuma Senha no
+ * corpo.
+ */
+export async function cadastrarUsuarioPelaApi(
+  enderecoDaApi: string,
+  usuario: { nomeDeUsuario: string; senha: string },
+): Promise<{ status: number; corpo: unknown; cabecalhos: Headers }> {
+  const resposta = await fetch(`${enderecoDaApi}/usuarios`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(usuario),
+  });
+
+  return {
+    status: resposta.status,
+    corpo: await resposta.json(),
+    cabecalhos: resposta.headers,
+  };
+}
+
 /** Pasta temporária exclusiva para o arquivo SQLite do teste (os.tmpdir). */
 export async function criarPastaTemporaria(prefixo: string): Promise<string> {
   return await mkdtemp(join(tmpdir(), prefixo));
 }
-
 /** Remove a pasta temporária e o arquivo SQLite ao fim do teste. */
 export async function removerPastaTemporaria(pasta: string): Promise<void> {
   await rm(pasta, { recursive: true, force: true });

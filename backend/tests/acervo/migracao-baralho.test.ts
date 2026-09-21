@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { criarAcervo, type Cartao } from "../../src/acervo/acervo.ts";
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { abrirBanco } from "../../src/armazenamento/sqlite/esquema.ts";
+import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
 
 /**
  * T102 — migração 2 cria a tabela `baralho` preservando os Cartões
@@ -34,6 +35,16 @@ function versaoAtual(banco: DatabaseSync): number {
 
   return linha === undefined ? 0 : Number(linha.versao);
 }
+
+/**
+ * A versão mais recente da lista de migrações — o que uma base nova registra
+ * depois que todas rodam. Derivada, e não escrita à mão: acrescentar uma
+ * migração não quebra estas asserções.
+ */
+const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
+  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
+  0,
+);
 
 /** Diz se a tabela existe, consultando o catálogo do SQLite. */
 function existeTabela(banco: DatabaseSync, nome: string): boolean {
@@ -117,7 +128,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       let banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
       } finally {
@@ -129,7 +140,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
         expect(
@@ -159,7 +170,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
         const lido = banco
           .prepare("SELECT id, nome FROM baralho WHERE id = ?")

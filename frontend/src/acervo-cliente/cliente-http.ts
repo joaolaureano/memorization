@@ -2,6 +2,7 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
 } from "./cliente";
 import type {
@@ -13,8 +14,10 @@ import type {
   ClienteDoAcervo,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeUsuario,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
+  ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeExclusaoDeBaralho,
@@ -24,16 +27,21 @@ import type {
   ResultadoDeObterBaralho,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeVinculacao,
+  Usuario,
 } from "./cliente";
 import { ehCodigoDeErroDeBaralho, ehCodigoDeErroDeCartao } from "./validacao";
-import type { CodigoDeErroDeBaralho, CodigoDeErroDeCartao } from "./validacao";
+import type {
+  CodigoDeErroDeBaralho,
+  CodigoDeErroDeCadastro,
+  CodigoDeErroDeCartao,
+} from "./validacao";
 
 /**
- * Adapter HTTP do `ClienteDoAcervo` (T008, T106, T208, T403, T503).
+ * Adapter HTTP do `ClienteDoAcervo` (T008, T106, T208, T403, T503, T607).
  *
  * Transporta as operações até a API conforme os contratos de Cartões, de
- * Baralhos, de Vínculos, de edição e de exclusão. O endereço da API é
- * recebido na construção — em tempo de build na aplicação (plan.md).
+ * Baralhos, de Vínculos, de edição, de exclusão e de Usuários. O endereço da
+ * API é recebido na construção — em tempo de build na aplicação (plan.md).
  *
  * Invariante do Adapter: nenhuma resposta que não seja de sucesso aparece
  * como operação concluída (FR-044). Sucesso é, exatamente, o status e o corpo
@@ -381,6 +389,51 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  async criarUsuario(
+    dados: DadosDeUsuario,
+  ): Promise<ResultadoDeCriacaoDeUsuario> {
+    try {
+      const resposta = await fetch(`${this.endereco}/usuarios`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nomeDeUsuario: dados.nomeDeUsuario,
+          senha: dados.senha,
+        }),
+      });
+
+      if (resposta.status === 201) {
+        const usuario = lerUsuario(await resposta.json());
+
+        if (usuario !== null) {
+          return { ok: true, usuario };
+        }
+
+        return this.falhaDeIndisponibilidadeDeUsuarios();
+      }
+
+      if (resposta.status === 400) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaDeRegraDeCadastro(corpo)) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      if (resposta.status === 409) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "nome_de_usuario_existente")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDeUsuarios();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeUsuarios();
+    }
+  }
+
   /**
    * Traduz a recusa uniforme do contrato de Cartões (`{ erro, mensagem }`) no
    * modo de erro correspondente. Um código que não seja regra de Cartão — por
@@ -451,6 +504,40 @@ export class ClienteHttp implements ClienteDoAcervo {
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
     };
   }
+
+  private falhaDeIndisponibilidadeDeUsuarios(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    };
+  }
+}
+
+/**
+ * Reconhece o corpo de recusa de **regra** de Cadastro: os dois códigos que o
+ * status 400 do contrato publica. O código da duplicata pertence ao status 409
+ * e, aqui, é resposta fora do contrato e vira `indisponivel`, como
+ * `corpo_invalido`.
+ */
+function ehCorpoDeRecusaDeRegraDeCadastro(
+  corpo: unknown,
+): corpo is { erro: CodigoDeErroDeCadastro; mensagem: string } {
+  if (typeof corpo !== "object" || corpo === null) {
+    return false;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  const ehCodigoDeRegra =
+    campos.erro === "nome_de_usuario_invalido" ||
+    campos.erro === "senha_invalida";
+
+  return ehCodigoDeRegra && typeof campos.mensagem === "string";
 }
 
 /**
@@ -531,6 +618,29 @@ function lerCartao(corpo: unknown): Cartao | null {
     id: campos.id,
     frente: campos.frente,
     verso: campos.verso,
+  };
+}
+
+function lerUsuario(corpo: unknown): Usuario | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.id !== "string" ||
+    typeof campos.nomeDeUsuario !== "string"
+  ) {
+    return null;
+  }
+
+  // Só os campos canônicos atravessam a Interface: qualquer propriedade a mais
+  // que a resposta traga — `sal`, `hash`, `parametros` ou a própria Senha — é
+  // descartada aqui e não alcança o caller (FR-076, FR-078).
+  return {
+    id: campos.id,
+    nomeDeUsuario: campos.nomeDeUsuario,
   };
 }
 

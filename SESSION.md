@@ -4699,3 +4699,35 @@ recusada.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-090
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: criarUsuario nos Adapters, PaginaDeCadastro, testes de acessibilidade, e2e
+
+- **Data/hora**: 2026-09-21 04:21 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 007-criar-usuario / T607–T614 — concluídas (feature 007 completa)
+- **Commit anterior**: `d20ddbb` (registra o hash do evento anterior)
+
+- `criarUsuario` nos dois Adapters, com bateria compartilhada.
+- `PaginaDeCadastro` em `#/criar-conta`, com o link "Criar conta" na navegação.
+- Confirmação divergente nunca é enviada, e o foco vai para a Confirmação.
+- Limites comunicados durante a digitação; Senhas apagadas do estado depois do
+  sucesso; nada gravado no navegador.
+- Testes de teclado, leitor de tela e telefone.
+- E2E contra a API real: sem `Set-Cookie`, persistência e ausência de
+  cookie e de armazenamento no navegador.
+- Débito do EVT anterior quitado: os testes de backend passaram a derivar a
+  versão do esquema da lista de migrações.
+- Instabilidade encontrada e corrigida pelo worker: o cliente do Vite recarrega
+  a página sozinho quando o servidor volta. O teste agora recarrega de forma
+  explícita.
+
+Verificado em `main`: backend 439, frontend 306, e2e 15 (duas vezes),
+`typecheck`, `build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

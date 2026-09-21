@@ -1,5 +1,6 @@
 import type {
   CodigoDeErroDeBaralho,
+  CodigoDeErroDeCadastro,
   CodigoDeErroDeCartao,
   CodigoDeErroDeNaoEncontrado,
   CodigoDeErroDeVinculo,
@@ -8,7 +9,8 @@ import type {
 /**
  * Seam `ClienteDoAcervo` (T008; specs/001-criar-cartao/plan.md; T106;
  * specs/003-vincular-cartao-baralho/plan.md; specs/005-editar-cartao-e-baralho/plan.md;
- * specs/006-excluir-cartao-e-baralho/plan.md).
+ * specs/006-excluir-cartao-e-baralho/plan.md;
+ * specs/007-criar-usuario/plan.md).
  *
  * Espelha as operações da Interface do Module `Acervo` e acrescenta o que a
  * rede introduz. As operações são **assíncronas e sujeitas a
@@ -18,8 +20,8 @@ import type {
  *
  * Invariantes garantidas pela Interface, que o caller nunca reproduz:
  * nenhuma resposta que não seja de sucesso é apresentada como operação
- * concluída (FR-044). Modos de erro: os do `Acervo`, mais `indisponivel`
- * para falha de transporte.
+ * concluída (FR-044). Modos de erro: os do `Acervo` e os do `Identidade`, mais
+ * `indisponivel` para falha de transporte.
  */
 
 /**
@@ -89,6 +91,14 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS =
  */
 export const MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS =
   "Não foi possível acessar os Vínculos. Tente novamente.";
+
+/**
+ * Mensagem em português destinada ao usuário quando o transporte até as rotas
+ * de Usuário falha (FR-046). Mantida separada das demais para que cada
+ * operação anuncie a entidade que falhou.
+ */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS =
+  "Não foi possível acessar os Usuários. Tente novamente.";
 
 /**
  * Resultado de `criarCartao`. Falha é resultado previsto, e não exceção: o
@@ -269,6 +279,45 @@ export type ResultadoDeExclusaoDeBaralho =
     };
 
 /**
+ * O Usuário desta feature: id opaco e Nome de usuário, e nada além (FR-071).
+ *
+ * É a forma de **Interface**, e não de banco: `sal`, `hash`, `parametros` e a
+ * Senha não existem aqui. Nenhuma leitura os devolve, em nenhum retorno
+ * (FR-076, FR-078).
+ */
+export interface Usuario {
+  id: string;
+  nomeDeUsuario: string;
+}
+
+/**
+ * O que `criarUsuario` recebe: Nome de usuário e Senha (FR-071).
+ *
+ * A Confirmação da Senha **não** faz parte deste contrato: FR-072 é verificado
+ * na tela, antes do envio, e a API não recebe esse campo.
+ *
+ * O objeto pode carregar propriedades além dessas duas: elas são ignoradas,
+ * porque a Interface lê apenas os campos canônicos.
+ */
+export interface DadosDeUsuario {
+  nomeDeUsuario: string;
+  senha: string;
+}
+
+/**
+ * Resultado de `criarUsuario`. Falha é resultado previsto, e não exceção: o
+ * caller distingue `ok` e, na recusa, recebe o código estável e a mensagem em
+ * português — os códigos de Cadastro, ou `indisponivel`.
+ */
+export type ResultadoDeCriacaoDeUsuario =
+  | { ok: true; usuario: Usuario }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeCadastro | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
  *
  * As operações assíncronas escondem o transporte até a API e a forma dos
@@ -356,4 +405,14 @@ export interface ClienteDoAcervo {
    * preservando todos os Cartões (FR-017).
    */
   excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
+
+  /**
+   * Cadastra um Usuário com Nome de usuário e Senha (FR-071). Espaços ao redor
+   * do Nome de usuário são descartados antes da validação, e os da Senha são
+   * preservados (FR-073, FR-075). Um Nome de usuário já cadastrado é recusado
+   * como `nome_de_usuario_existente`, sem distinguir maiúsculas de minúsculas
+   * (FR-074). O sucesso traz apenas `id` e `nomeDeUsuario`: a Senha nunca
+   * aparece em nenhum retorno (FR-076, FR-078).
+   */
+  criarUsuario(dados: DadosDeUsuario): Promise<ResultadoDeCriacaoDeUsuario>;
 }

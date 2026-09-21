@@ -12,6 +12,16 @@ import {
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
 
 /**
+ * A versão mais recente da lista de migrações — o que uma base nova registra
+ * depois que todas rodam. Derivada, e não escrita à mão: acrescentar uma
+ * migração não quebra estas asserções.
+ */
+const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
+  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
+  0,
+);
+
+/**
  * T201 e T202 — a migração 3 cria a tabela `vinculo` com chave primária
  * composta e cascata nas duas chaves estrangeiras, preservando Cartões e
  * Baralhos existentes; e a cascata é comprovada nos dois sentidos, sem
@@ -81,7 +91,7 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "cartao")).toBe(true);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
@@ -108,7 +118,7 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(4);
+        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "vinculo")).toBe(true);
         expect(
           banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,

@@ -48,7 +48,8 @@ body {
 }
 
 .formulario-de-cartao,
-.formulario-de-baralho {
+.formulario-de-baralho,
+.formulario-de-cadastro {
   display: grid;
   gap: 1rem;
 }
@@ -141,7 +142,8 @@ body {
 }
 
 .anuncio-de-vinculo,
-.anuncio-de-acao {
+.anuncio-de-acao,
+.confirmacao-do-cadastro {
   color: #155724;
 }
 
