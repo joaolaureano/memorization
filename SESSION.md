@@ -4126,3 +4126,56 @@ Checklist: 21 de 21.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-074
+
+> **SPEC KIT** — Comando: plan | Invocação: skill `speckit-plan` e
+> `setup-plan.sh --json`; redação por worker `deepseek-flash` em worktree
+> exclusivo | Integração: claude | Artefatos: plan.md, research.md,
+> data-model.md, contracts/api-entrar.md, contracts/alteracao-contratos-001-006.md,
+> quickstart.md (specs/008-entrar)
+
+- **Data/hora**: 2026-09-21 02:09 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 008-entrar / plan
+- **Commit anterior**: `1e4b06a` (registra o hash de EVT-073)
+
+### Decisões de arquitetura (Arquiteto)
+
+- **`Identidade.autenticar`**: repete a derivação com os mesmos sal e
+  parâmetros e compara com `timingSafeEqual`. Para Nome de usuário inexistente,
+  executa a derivação contra um sal e um hash descartáveis, gerados uma vez, e
+  devolve a mesma mensagem. Assim a recusa não revela a existência do nome
+  (FR-088).
+- **Credencial**: cabeçalho `Authorization: Basic` em toda requisição. Ficam
+  isentos `POST /usuarios`, `GET /health` e `OPTIONS`. Um hook `onRequest`
+  responde 401 uniforme antes da rota. O 401 **não** traz `WWW-Authenticate`,
+  para evitar o diálogo nativo e o cache de credencial do navegador. Não há cache
+  de credencial verificada, porque seria uma sessão de fato. Custo: um scrypt por
+  requisição, aceito para uso local.
+- **Entrar**: `POST /entrar` responde 200 com o Usuário ou 401.
+- **Acervo por usuário**: `criarAcervo(banco, usuarioId)` por requisição.
+  Entidade de outro dono responde `404 nao_encontrado`, e o Vínculo só é aceito
+  dentro do mesmo dono.
+- **Migração 5**: recria `cartao`, `baralho` e `vinculo` com
+  `usuario_id NOT NULL` e `ON DELETE CASCADE`, descartando o acervo sem dono
+  (FR-099). Recriar é necessário, porque o SQLite recusa acrescentar coluna
+  `NOT NULL` sem padrão.
+- **Frontend**: a Credencial fica só no estado de `Aplicacao`. Resposta 401
+  vira `nao_autenticado`. Nova tela `PaginaDeEntrada` em `#/entrar`. A
+  navegação principal e o botão Sair só aparecem depois de Entrar, e o link
+  "Criar conta" vai para a tela Entrar.
+
+### Revisão do rascunho do worker
+
+- O SQL da migração 5 repetia de cabeça os `CHECK`s de conteúdo. Nota
+  acrescentada: eles devem ser copiados literalmente das migrações 1 e 2.
+- O volume ficou acima do sugerido (738 linhas), justificado pelo segundo
+  contrato e pela migração.
+- Nenhum id fantasma.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. O quickstart usa só marcadores nos comandos
+  `curl`, nunca uma credencial.
