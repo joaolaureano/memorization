@@ -26,7 +26,7 @@ Os metadados exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 - [X] T001 [P] Projeto backend executa e responde a um comando de verificação
 - [X] T002 [P] Projeto frontend executa e responde a um comando de verificação
-- [ ] T003 [P] Harness e2e abre navegador real
+- [X] T003 [P] Harness e2e abre navegador real
 - [X] T004 Tabela `cartao` criada na primeira execução, com as restrições de conteúdo
 
 <details><summary>Metadados das tarefas desta fase</summary>
@@ -48,7 +48,7 @@ verificável isoladamente.
 
 ## Fase 2 — Criar e listar Cartão
 
-- [ ] T005 `Acervo` cria Cartão pela sua Interface, recusando conteúdo inválido
+- [X] T005 `Acervo` cria Cartão pela sua Interface, recusando conteúdo inválido
 - [ ] T006 `Acervo` lista Cartões, inclusive dois com a mesma Frente
 - [ ] T007 Rotas `POST /cartoes` e `GET /cartoes` respondem conforme o contrato
 - [ ] T008 `ClienteDoAcervo` funciona com dois Adapters

@@ -278,6 +278,25 @@ P10 - Correto, vamos incrementar aos poucos.
 
 ---
 
+## EVT-039
+
+> **SPEC KIT** — Comando: implement | Invocação: workers DeepSeek em worktrees
+> isolados | Integração: claude | Artefatos: e2e/ e Acervo
+
+- **Data/hora**: 2026-09-20 21:54 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T003 e T005 — concluídas
+
+T003 foi executada em worktree próprio, abriu Chromium real contra servidor
+loopback e passou. T005 foi executada em outro worktree, passou 26 testes do
+backend, build e lint. O Arquiteto revisou os diffs e integrou-os mecanicamente.
+As caixas de tarefa foram atualizadas. Nenhum worker fez commit.
+
+- **Commit**: pendente.
+- **Sanitização**: Confirmada.
+
+---
+
 ## EVT-004
 
 - **Data/hora**: 2026-09-20 18:15 -03
