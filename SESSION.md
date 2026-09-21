@@ -3734,3 +3734,44 @@ verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-064
+
+> **SPEC KIT** — Comando: nenhum (encerramento) | Invocação: nenhuma | Integração: claude | Artefatos: SESSION.md, pendencias.md
+
+- **Data/hora**: 2026-09-21 01:35 -03
+- **Ator**: ARCHITECT
+- **Feature / Task**: encerramento da implementação das seis features
+- **Commit anterior**: `9e88a9d`
+
+### Hashes pendentes
+
+- EVT-063 (converge) foi commitado em `5789c90`.
+- `pendencias.md` foi atualizado para "produto concluído" em `3746bf1`, e o
+  total de tarefas foi corrigido de 83 para 63 em `9e88a9d`.
+
+### Correção de auditoria sem reescrita
+
+O banner do EVT-063 diz "Comando: implement". O comando executado foi
+**converge**, como o corpo do evento declara. O evento não é reescrito.
+
+### Verificações finais
+
+Teste manual da API real (porta 3901, SQLite temporário, removido ao fim):
+criar Cartão e Baralho, vincular (201), vínculo duplicado (409), elegibilidade
+e contagem derivadas, `baralhos` em `GET /cartoes`, preflight de CORS para DELETE
+(204, métodos GET, POST, PUT, DELETE, OPTIONS) e exclusão de Baralho (204) com
+o Cartão preservado. O build do frontend passou.
+
+### Limpeza
+
+Os doze worktrees desta sessão foram removidos. Os worktrees de T003–T104,
+anteriores a esta sessão, continuam registrados (`pendencias.md`, seção 5).
+O grafo do graphify foi atualizado depois das mudanças de código.
+`backend/src/hello-world.ts` foi preservado e deixado fora dos commits.
+
+- **Commit**: o deste evento; o próximo evento registra o hash.
+- **Sanitização**: Confirmada. A chave da API DeepSeek só foi usada por variável
+  de ambiente e nunca foi escrita.
