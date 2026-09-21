@@ -1,6 +1,6 @@
 # Pendências
 
-Estado verificado em **2026-09-21**, commit `3abda83`.
+Estado verificado em **2026-09-20**, commit `231d833`.
 
 Este arquivo lista o que falta. É um inventário de trabalho, não um registro de
 decisões — o histórico decisório vive em `SESSION.md`, que a constituição 2.0.0
@@ -11,7 +11,8 @@ define como fonte única.
 ## 1. Features sem fluxo do Spec Kit
 
 Cada feature precisa de **sete artefatos**, no padrão estabelecido pela
-`001-criar-cartao`. Duas estão completas; quatro têm apenas a spec.
+`001-criar-cartao`. O fluxo do Spec Kit está completo nas seis features;
+as pendências abaixo são de implementação.
 
 | Feature | spec | plan | research | data-model | contracts | quickstart | tasks | checklists |
 |---|---|---|---|---|---|---|---|---|
@@ -53,25 +54,25 @@ entidade recebe identificador próprio.
 
 ## 3. Implementação
 
-Nenhuma feature está implementada além da fundação do backend.
+O fluxo de implementação já foi iniciado e está integrado até o ponto abaixo.
 
 | Feature | Tarefas | Concluídas |
 |---|---|---|
-| `001-criar-cartao` | 14 | **1** — T001, esqueleto do backend |
-| `002-criar-baralho` | 12 | 0 |
+| `001-criar-cartao` | 14 | **14** — concluída |
+| `002-criar-baralho` | 12 | **4** — T101–T104 concluídas; T105 é a próxima |
 | `003-vincular-cartao-baralho` | 14 | 0 |
 | `004-sessao-de-estudo` | 8 | 0 |
 | `005-editar-cartao-e-baralho` | 7 | 0 |
 | `006-excluir-cartao-e-baralho` | 8 | 0 |
 
-**Existe**: `backend/` com projeto, `GET /health`, guarda de loopback imposta em
-runtime, 8 testes verdes.
+**Existe**: backend com migrações versionadas, tabelas `cartao` e `baralho`,
+rotas HTTP de cartões e baralhos, frontend React, testes de contrato, testes
+E2E de responsividade, acessibilidade e persistência. A suíte do backend está
+com 78 testes verdes; build e lint também estão verdes.
 
-**Não existe**: `frontend/`, `e2e/`, nenhuma tabela, nenhuma rota de domínio,
-nenhuma tela.
-
-Próximas tarefas elegíveis da `001`, em ordem: T002 (esqueleto do frontend),
-T003 (harness e2e), T004 (tabela `cartao`).
+**Próxima pendência imediata**: T105 (rotas HTTP de criação e listagem de
+baralhos com contrato completo). O trabalho foi delegado em worktree próprio,
+mas ainda não foi revisado nem integrado; portanto continua pendente.
 
 ---
 
@@ -82,7 +83,7 @@ T003 (harness e2e), T004 (tabela `cartao`).
 | D-1 | Testes do backend não são verificados por tipo no `build` quando ficam fora do `include` — hoje estão dentro, mas a decisão é frágil e depende de manter `tests` no `tsconfig` | `backend/tsconfig.json` | baixa |
 | D-2 | `portaConfigurada` não valida entrada: `PORTA=""` vira `0` e `PORTA="abc"` vira `NaN`, que o Fastify rejeita com erro obscuro | `backend/src/http/servidor.ts` | baixa |
 | D-3 | `@types/node@^24` contra runtime Node 26: APIs introduzidas no 25 e 26 não aparecem no typecheck | `backend/package.json` | baixa |
-| D-4 | A migração de esquema da feature `002` ainda não existe. Até ela existir, acrescentar tabela depende de `CREATE TABLE IF NOT EXISTS`, que falha na primeira alteração que não seja adicionar tabela | `002/research.md` | **média** |
+| D-4 | As próximas migrações ainda precisarão manter a compatibilidade com o esquema versionado já entregue em `002` | `backend/src` | média |
 
 Os débitos D-2 e D-3 foram reportados pelo próprio worker DeepSeek durante a
 implementação de T001 e estão registrados em `SESSION.md`, EVT-032 e EVT-033.
@@ -114,3 +115,13 @@ Para não confundir o que falta com o que existe:
   `check-prerequisites` populado e tarefas rastreáveis por caixa de seleção.
 - Backend com a garantia de loopback **imposta em runtime** e comprovada por
   teste de mutação.
+- Feature `001-criar-cartao` entregue integralmente e feature
+  `002-criar-baralho` implementada até T104, com validações automatizadas
+  registradas em `SESSION.md` (EVT-042 a EVT-052).
+
+## 7. Encerramento desta sessão
+
+Nenhuma alteração de código foi feita nesta atualização. Permanece
+deliberadamente fora do escopo o arquivo não rastreado `backend/src/hello-world.ts`.
+As features `003`–`006` e T105 em diante continuam sendo o backlog de
+implementação.
