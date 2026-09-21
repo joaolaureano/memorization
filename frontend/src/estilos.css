@@ -92,3 +92,14 @@ body {
 .rotulo {
   font-weight: 600;
 }
+
+/*
+ * FR-055: o foco do teclado permanece visível em todos os controles
+ * interativos. A indicação é um contorno geométrico — espessura, estilo e
+ * afastamento — e não depende apenas de cor: o elemento focado continua
+ * identificável mesmo sem distinguir tonalidades.
+ */
+:focus-visible {
+  outline: 3px solid #1a5fb4;
+  outline-offset: 2px;
+}

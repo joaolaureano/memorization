@@ -3250,3 +3250,27 @@ mudança de CSS porque a tela já satisfez a prova real. T013 foi aceita [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-046
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: teclado e foco
+
+- **Data/hora**: 2026-09-20 22:56 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T011 — concluída
+
+O worker implementou a direção de foco a partir dos códigos estáveis devolvidos
+por `ClienteDoAcervo`, sem revalidar conteúdo na tela. As recusas de Frente e
+Verso focam o campo correto; a indisponibilidade mantém o foco no acionador.
+Controles nativos preservam a ordem visual de teclado e `:focus-visible` usa
+contorno sólido com espessura e afastamento, não apenas cor.
+
+A bateria cobre o percurso Frente → Verso → Criar Cartão, os quatro erros de
+domínio e o indicador geométrico. Worker e Arquiteto repetiram 51 testes,
+build e lint do frontend, todos verdes. T011 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

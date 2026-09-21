@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type { Cartao, ClienteDoAcervo } from "../acervo-cliente/cliente";
-import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../acervo-cliente/validacao";
+import {
+  LIMITE_DE_CARACTERES_DE_CARTAO,
+  ehCodigoDeErroDeCartao,
+  type CodigoDeErroDeCartao,
+} from "../acervo-cliente/validacao";
 
 /**
  * Tela de Cartões (T009; specs/001-criar-cartao/tasks.md).
@@ -22,6 +26,13 @@ import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../acervo-cliente/validacao";
  * criação bem-sucedida reconcilia a lista com o acervo pela Interface — sem
  * isso, o Cartão efetivamente persistido ficaria escondido atrás da falha de
  * listagem, e a tela não retrataria a operação concluída.
+ *
+ * T011 (FR-054, FR-055, SC-017): Frente, Verso e o botão de criação são
+ * controles nativos, alcançáveis e acionáveis por teclado, na mesma ordem da
+ * disposição visual; o indicador de foco fica a cargo de `estilos.css`. Numa
+ * recusa de regra de Cartão, o foco vai ao campo que precisa de correção — a
+ * direção vem **somente** do código de erro devolvido pela Interface
+ * (`CAMPO_PARA_CORRECAO`), nunca de validação replicada na tela.
  */
 
 /**
@@ -30,6 +41,24 @@ import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../acervo-cliente/validacao";
  * recusa de conteúdo acima do limite permanece exclusiva do `ClienteDoAcervo`.
  */
 const FOLGA_PARA_AVISO_DE_LIMITE = 100;
+
+/**
+ * Campo a corrigir para cada recusa de regra de Cartão (FR-055).
+ *
+ * A tela não reproduz nenhuma regra de domínio: qual campo precisa de correção
+ * é decidido exclusivamente pelo código estável devolvido pela Interface
+ * `ClienteDoAcervo`, e este mapa apenas o traduz em direção de foco.
+ * `indisponivel` fica de fora de propósito — quando o transporte falha,
+ * nenhum campo precisa de correção e o foco permanece onde estava.
+ */
+const CAMPO_PARA_CORRECAO: Readonly<
+  Record<CodigoDeErroDeCartao, "frente" | "verso">
+> = {
+  frente_vazia: "frente",
+  frente_muito_longa: "frente",
+  verso_vazio: "verso",
+  verso_muito_longo: "verso",
+};
 
 interface PropriedadesDaPaginaDeCartoes {
   cliente: ClienteDoAcervo;
@@ -46,6 +75,9 @@ export function PaginaDeCartoes({
   const [verso, setVerso] = useState("");
   const [submetendo, setSubmetendo] = useState(false);
   const [falhaDeCriacao, setFalhaDeCriacao] = useState<string | null>(null);
+
+  const campoDeFrente = useRef<HTMLTextAreaElement>(null);
+  const campoDeVerso = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -86,6 +118,16 @@ export function PaginaDeCartoes({
       }
     } else {
       setFalhaDeCriacao(resultado.mensagem);
+
+      // FR-055: numa recusa, o foco vai ao campo que precisa de correção. A
+      // direção vem só do código devolvido pela Interface — a tela não decide
+      // qual conteúdo é inválido, apenas para onde mover o foco.
+      if (ehCodigoDeErroDeCartao(resultado.erro)) {
+        const campo = CAMPO_PARA_CORRECAO[resultado.erro];
+        const alvo = campo === "frente" ? campoDeFrente : campoDeVerso;
+
+        alvo.current?.focus();
+      }
     }
 
     setSubmetendo(false);
@@ -120,6 +162,7 @@ export function PaginaDeCartoes({
             <label htmlFor="campo-frente">Frente</label>
             <textarea
               id="campo-frente"
+              ref={campoDeFrente}
               value={frente}
               onChange={(evento) => setFrente(evento.target.value)}
               aria-describedby={
@@ -142,6 +185,7 @@ export function PaginaDeCartoes({
             <label htmlFor="campo-verso">Verso</label>
             <textarea
               id="campo-verso"
+              ref={campoDeVerso}
               value={verso}
               onChange={(evento) => setVerso(evento.target.value)}
               aria-describedby={
