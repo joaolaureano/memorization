@@ -20,7 +20,7 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Migração de esquema
 
-- [ ] T101 Infraestrutura de migração versionada, aplicada em transação
+- [X] T101 Infraestrutura de migração versionada, aplicada em transação
 - [ ] T102 Migração 2 cria a tabela `baralho` preservando os Cartões existentes
 
 <details><summary>Metadados das tarefas desta fase</summary>

@@ -3324,3 +3324,27 @@ Passaram independentemente 59 testes, build e lint. T012 foi aceita [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-049
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: migrações SQLite
+
+- **Data/hora**: 2026-09-20 23:24 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T101 — concluída
+
+Foi introduzido o aplicador versionado interno ao `Acervo`: sequência ordenada,
+controle em `versao_do_esquema`, transação individual e elevação da versão na
+mesma transação. A migração 1 adota bases legadas da feature 001 por
+`CREATE TABLE IF NOT EXISTS`, preservando Cartões existentes e mantendo
+`foreign_keys` ativo por conexão.
+
+Os testes comprovam base nova, não reaplicação, adoção de base legada e rollback
+sem estado parcial quando uma migração falha. Worker e Arquiteto repetiram 58
+testes backend, build e lint, todos verdes. T101 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
