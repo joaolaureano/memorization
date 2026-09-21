@@ -43,10 +43,34 @@ CREATE TABLE IF NOT EXISTS cartao (
 `;
 
 /**
+ * A migração 2 cria a tabela `baralho` — a única entidade durável nova da
+ * feature `002`. Não tem `IF NOT EXISTS`: como a versão 2 é registrada na
+ * mesma transação que cria a tabela, a migração nunca roda duas vezes, e o
+ * `CREATE TABLE` simples falharia ruidosamente se uma base corrompida já
+ * tivesse a tabela sem a versão.
+ *
+ * A `CHECK` duplica FR-011 e o limite de 100 de propósito: a validação
+ * primária viverá no `Acervo`, com mensagem útil ao usuário; aqui fica a rede
+ * de segurança contra erro de programação. `trim` descarta espaços nas
+ * extremidades, de modo que nome só de espaços conta como vazio; `length`
+ * conta caracteres, e o limite de 100 é inclusivo. A ausência de `UNIQUE`
+ * sobre `nome` é o que torna dois Baralhos de mesmo nome legítimos (FR-012):
+ * o nome é rótulo, não identificador — e a ausência de qualquer outra coluna
+ * é o que garante que Baralho não tem propriedade além de nome (FR-018).
+ */
+const ESQUEMA_BARALHO = `
+CREATE TABLE baralho (
+  id   TEXT PRIMARY KEY,
+  nome TEXT NOT NULL CHECK (length(trim(nome)) > 0 AND length(nome) <= 100)
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
  */
 export const MIGRACOES: readonly Migracao[] = [
   { versao: 1, sql: ESQUEMA_CARTAO },
+  { versao: 2, sql: ESQUEMA_BARALHO },
 ];

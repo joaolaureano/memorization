@@ -3348,3 +3348,26 @@ testes backend, build e lint, todos verdes. T101 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-050
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: migração de Baralho
+
+- **Data/hora**: 2026-09-20 23:30 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T102 — concluída
+
+A migração 2 cria somente `baralho`, com `id` e `nome`, CHECK de conteúdo e
+limite inclusivo de 100 caracteres, sem unicidade, elegibilidade ou Vínculo.
+Uma base legada da feature 001 com três Cartões reais foi migrada até a versão
+2 e reaberta, preservando integralmente o conteúdo e sem reaplicar a migração.
+
+A bateria cobre forma do esquema, três recusas, limite inclusivo e nomes
+repetidos. Worker e Arquiteto repetiram 67 testes backend, build e lint, todos
+verdes. T102 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
