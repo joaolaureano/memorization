@@ -140,8 +140,65 @@ body {
   font: inherit;
 }
 
-.anuncio-de-vinculo {
+.anuncio-de-vinculo,
+.anuncio-de-acao {
   color: #155724;
+}
+
+.acoes-do-cartao,
+.acoes-do-baralho,
+.acoes-de-edicao,
+.acoes-do-dialogo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.acoes-de-edicao button,
+.acoes-do-dialogo button,
+.acoes-do-cartao button,
+.acoes-do-baralho button {
+  padding: 0.4rem 1rem;
+  font: inherit;
+}
+
+.botao-de-confirmacao {
+  font-weight: 600;
+}
+
+.formulario-de-edicao-de-cartao,
+.formulario-de-renomeacao {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.alcance-da-edicao {
+  margin: 0;
+  color: #444444;
+}
+
+dialog {
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 1px solid #b9b9b9;
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+dialog::backdrop {
+  background-color: rgb(0 0 0 / 45%);
+}
+
+.titulo-do-dialogo {
+  margin: 0 0 0.75rem;
+}
+
+.descricao-do-dialogo p {
+  margin: 0.25rem 0;
 }
 
 .lista-de-baralhos {

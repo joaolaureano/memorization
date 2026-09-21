@@ -3668,3 +3668,38 @@ em `main`: backend 164, frontend 222, e2e 9, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-062
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: edição e exclusão na UI, diálogo de confirmação, e2e com API real
+
+- **Data/hora**: 2026-09-21 01:23 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 005/T404–T407 e 006/T504–T508 — concluídas (features 005 e 006 completas)
+- **Commit anterior**: `a46eb44`
+
+Edição inline de Cartão com alcance declarado, renomear e excluir Baralho no
+detalhe, confirmação de descarte, diálogo nativo `<dialog>` que declara as
+consequências (Vínculos removidos, a outra entidade preservada), Escape cancela,
+foco devolvido ao controle de origem. Falha preserva conteúdo ou entidade.
+
+### Defeitos encontrados na revisão
+
+1. As E2E de edição e exclusão usavam uma API falsa interceptada no navegador;
+   rotas PUT/DELETE reais, cascata SQLite e preflight CORS nunca eram exercidos
+   (Princípio VI). Rejeitado; um worker de reparo reescreveu os fluxos contra
+   API e frontend reais, mantendo interceptação apenas para simular
+   indisponibilidade.
+2. A integração conflitou com a UI de Sessão em `servidores-locais.ts` (helpers
+   homônimos) e `PaginaDoBaralho.tsx`. Um worker de merge unificou os helpers e
+   preservou o link de estudo e as ações de edição/exclusão; trocou também o foco
+   pós-Vínculo para `useLayoutEffect`, estabilizando um teste de foco.
+
+Arquiteto repetiu em `main` três vezes: backend 164, frontend 236, e2e 13,
+build e lint verdes, sem instabilidade.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

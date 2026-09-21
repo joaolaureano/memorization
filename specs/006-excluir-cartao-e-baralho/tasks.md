@@ -16,11 +16,11 @@
 
 ## Fase 2 — Confirmação e qualidade
 
-- [ ] T504 Diálogos declaram consequências e cancelamento não altera estado
-- [ ] T505 Diálogo é operável por teclado e anunciado por leitor de tela
-- [ ] T506 Falha preserva entidade exibida
-- [ ] T507 [P] Telas em português são utilizáveis em telefone
-- [ ] T508 e2e cobre exclusão, cancelamento e elegibilidade derivada
+- [X] T504 Diálogos declaram consequências e cancelamento não altera estado
+- [X] T505 Diálogo é operável por teclado e anunciado por leitor de tela
+- [X] T506 Falha preserva entidade exibida
+- [X] T507 [P] Telas em português são utilizáveis em telefone
+- [X] T508 e2e cobre exclusão, cancelamento e elegibilidade derivada
 
 | ID | Requisitos | Depende | Testes |
 |---|---|---|---|

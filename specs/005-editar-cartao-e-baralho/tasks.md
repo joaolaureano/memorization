@@ -16,10 +16,10 @@
 
 ## Fase 2 — Telas e qualidade
 
-- [ ] T404 Formulários mostram alcance, salvam e confirmam descarte
-- [ ] T405 Falha preserva conteúdo e foco/teclado tornam edição acessível
-- [ ] T406 [P] Telas em português são utilizáveis em telefone
-- [ ] T407 e2e cobre propagação, descarte e falha
+- [X] T404 Formulários mostram alcance, salvam e confirmam descarte
+- [X] T405 Falha preserva conteúdo e foco/teclado tornam edição acessível
+- [X] T406 [P] Telas em português são utilizáveis em telefone
+- [X] T407 e2e cobre propagação, descarte e falha
 
 | ID | Requisitos | Depende | Testes |
 |---|---|---|---|

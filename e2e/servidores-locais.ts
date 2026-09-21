@@ -146,6 +146,31 @@ export async function aguardarProntidao(
 }
 
 /**
+ * Aguarda a API responder `{ status: "ok" }` no `/health`. É a mesma
+ * prontidão usada pelas provas reais de persistência e, agora, também pelas
+ * provas de edição e exclusão: a API é real e precisa estar de pé antes de o
+ * navegador começar a conversar com ela.
+ */
+export async function aguardarApiPronta(
+  api: ProcessoIniciado,
+  enderecoDaApi: string,
+): Promise<void> {
+  await aguardarProntidao(
+    api,
+    `${enderecoDaApi}/health`,
+    async (resposta) => {
+      if (!resposta.ok) {
+        return false;
+      }
+
+      const corpo = (await resposta.json()) as { status?: unknown };
+
+      return corpo.status === "ok";
+    },
+  );
+}
+
+/**
  * Inicia a API real sobre `caminhoDoBanco` — o mesmo `src/index.ts` da
  * aplicação, sem `--watch`: o processo é filho do teste e o teste controla
  * seu ciclo de vida inteiro.
@@ -326,12 +351,12 @@ export async function listarBaralhosPelaApi(
  */
 export async function criarCartaoPelaApi(
   enderecoDaApi: string,
-  dados: { frente: string; verso: string },
+  cartao: { frente: string; verso: string },
 ): Promise<{ id: string; frente: string; verso: string }> {
   const resposta = await fetch(`${enderecoDaApi}/cartoes`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(dados),
+    body: JSON.stringify(cartao),
   });
 
   if (resposta.status !== 201) {
@@ -347,17 +372,17 @@ export async function criarCartaoPelaApi(
 
 /**
  * Cria um Baralho direto pela API — usado quando a prova não quer depender da
- * UI para preparar o acervo. Mantém o corpo do contrato `POST /baralhos` e
- * confere o status de sucesso esperado.
+ * UI para preparar o acervo. Recebe o mesmo corpo do contrato `POST /baralhos`
+ * e confere o status de sucesso esperado.
  */
 export async function criarBaralhoPelaApi(
   enderecoDaApi: string,
-  nome: string,
+  baralho: { nome: string },
 ): Promise<{ id: string; nome: string }> {
   const resposta = await fetch(`${enderecoDaApi}/baralhos`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ nome }),
+    body: JSON.stringify(baralho),
   });
 
   if (resposta.status !== 201) {
@@ -368,14 +393,14 @@ export async function criarBaralhoPelaApi(
 }
 
 /**
- * Cria um Vínculo direto pela API — usado quando a prova não quer depender da
- * UI para preparar o acervo. Mantém o corpo do contrato
- * `POST /baralhos/{baralhoId}/vinculos` e confere o status de sucesso.
+ * Vincula um Cartão existente a um Baralho existente direto na API real.
+ * Recebe `cartaoId` e `baralhoId`, nessa ordem, e mantém o corpo do contrato
+ * `POST /baralhos/{baralhoId}/vinculos`.
  */
 export async function vincularCartaoPelaApi(
   enderecoDaApi: string,
-  baralhoId: string,
   cartaoId: string,
+  baralhoId: string,
 ): Promise<void> {
   const resposta = await fetch(
     `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
@@ -387,8 +412,39 @@ export async function vincularCartaoPelaApi(
   );
 
   if (resposta.status !== 201) {
-    throw new Error(`POST /baralhos/${baralhoId}/vinculos respondeu ${resposta.status}`);
+    throw new Error(
+      `POST /baralhos/${baralhoId}/vinculos respondeu ${resposta.status}`,
+    );
   }
+}
+
+/**
+ * Lê os Cartões direto da API na forma completa publicada pela feature 003:
+ * cada Cartão com os Baralhos a que está vinculado. É a conferência exata de
+ * propagação de nome e de preservação de Cartões após excluir Baralho.
+ */
+export async function listarCartoesComBaralhosPelaApi(
+  enderecoDaApi: string,
+): Promise<
+  {
+    id: string;
+    frente: string;
+    verso: string;
+    baralhos: { id: string; nome: string }[];
+  }[]
+> {
+  const resposta = await fetch(`${enderecoDaApi}/cartoes`);
+
+  if (!resposta.ok) {
+    throw new Error(`GET /cartoes respondeu ${resposta.status}`);
+  }
+
+  return (await resposta.json()) as {
+    id: string;
+    frente: string;
+    verso: string;
+    baralhos: { id: string; nome: string }[];
+  }[];
 }
 
 /**

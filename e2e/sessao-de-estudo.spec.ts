@@ -72,7 +72,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
 
     // Prepara o acervo direto pela API: um Baralho com cinco Cartões
     // vinculados — o cenário canônico da Sessão.
-    const baralho = await criarBaralhoPelaApi(enderecoDaApi, NOME_DO_BARALHO);
+    const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
+      nome: NOME_DO_BARALHO,
+    });
 
     for (let indice = 1; indice <= QUANTIDADE_DE_CARTOES; indice += 1) {
       const cartao = await criarCartaoPelaApi(enderecoDaApi, {
@@ -80,7 +82,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
         verso: `Verso ${indice}`,
       });
 
-      await vincularCartaoPelaApi(enderecoDaApi, baralho.id, cartao.id);
+      await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
     }
 
     const baralhoPreparado = await obterBaralhoPelaApi(
