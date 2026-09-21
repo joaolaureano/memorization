@@ -26,6 +26,12 @@ Glossário normativo em `CONTEXT.md`.
 - Q: A recusa de Entrar revela o motivo? → A: Não. Mensagem única, sem dizer se
   o Nome de usuário existe ou se a Senha está errada (decidido no clarify da
   `007`).
+- Q: O que acontece com os Cartões, Baralhos e Vínculos que já existem, criados
+  antes de haver Usuário? → A: São descartados quando esta feature é instalada.
+  Cada Usuário começa com acervo vazio.
+- Q: Deve haver bloqueio temporário depois de várias tentativas erradas de
+  Entrar? → A: Não. Fica adiado para quando houver implantação fora da máquina
+  local.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -139,6 +145,8 @@ navegação do navegador não o traz de volta.
 
 ### Edge Cases
 
+- **Acervo criado antes desta feature**: é descartado na instalação. É uma
+  perda de dados assumida pelo Product Owner no clarify.
 - **Página recarregada ou fechada**: exige Entrar de novo. Recarregar não é
   Entrar.
 - **Duas abas abertas**: são independentes. Cada aba Entra separadamente, e Sair
@@ -221,6 +229,9 @@ usuário:
 - **FR-098**: A navegação principal para Cartões e Baralhos MUST aparecer somente
   depois de Entrar, e o link "Criar conta" oferecido pela `007` na navegação
   principal MUST passar a ser oferecido na tela "Entrar".
+- **FR-099**: Os Cartões, Baralhos e Vínculos existentes antes desta feature,
+  que não têm dono, MUST ser descartados quando ela for instalada. Depois
+  disso, MUST NOT existir Cartão, Baralho ou Vínculo sem dono.
 
 ### Verificação dos Requisitos Negativos
 
@@ -276,6 +287,8 @@ usuário:
 - **SC-036**: Em cem por cento das tentativas de Entrar em que o Nome de usuário
   difere do cadastrado apenas em maiúsculas e minúsculas ou em espaços ao redor,
   Entrar é aceito.
+- **SC-037**: Depois da instalação desta feature, nenhum Cartão, Baralho ou
+  Vínculo sem dono existe, e cada Usuário começa com acervo vazio.
 
 ## Invariantes de Domínio
 
@@ -301,10 +314,8 @@ usuário:
 
 ## Assumptions
 
-- Cartões, Baralhos e Vínculos existentes antes desta feature, criados sem dono,
-  são adotados pelo primeiro Usuário cadastrado — **a confirmar no clarify**.
-- Não há bloqueio por tentativas, porque a aplicação só escuta na própria
-  máquina — **a confirmar no clarify**. Vale também como funcionalidade adiada.
+- O descarte do acervo sem dono e a ausência de bloqueio por tentativas foram
+  confirmados no clarify de 2026-09-21.
 - A mensagem única de recusa foi confirmada no clarify de 2026-09-21, junto da
   revelação de Nome de usuário repetido no Cadastro: num Cadastro aberto a
   revelação é inevitável, e no Entrar não há revelação alguma.

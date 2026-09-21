@@ -44,10 +44,10 @@
 
 ### Avaliação de 2026-09-21
 
-- **Requisitos funcionais**: 19. São 6 transversais reutilizados (FR-042,
-  FR-044, FR-045, FR-046, FR-078, FR-079) e 13 específicos (FR-086 a FR-098),
+- **Requisitos funcionais**: 20. São 6 transversais reutilizados (FR-042,
+  FR-044, FR-045, FR-046, FR-078, FR-079) e 14 específicos (FR-086 a FR-099),
   sem lacuna na numeração.
-- **Critérios de sucesso**: 10, todos novos, SC-027 a SC-036, sem lacuna na
+- **Critérios de sucesso**: 11, todos novos, SC-027 a SC-037, sem lacuna na
   numeração. SC-012 não é reutilizado, porque esta feature não grava nada: a
   falha de gravação não tem cenário aplicável.
 - **Requisitos negativos**: FR-078, FR-079, FR-088, FR-090, FR-092 e FR-044 têm
@@ -71,3 +71,9 @@
   servidor permanecem na `007`.
 
 Nenhum item reprovado. **21 de 21.**
+
+### Clarify de 2026-09-21
+
+Duas perguntas respondidas pelo PO: o acervo sem dono é descartado (origem de
+FR-099 e SC-037), e não há bloqueio por tentativas, que fica adiado. As
+premissas "a confirmar" foram eliminadas. Continua 21 de 21.

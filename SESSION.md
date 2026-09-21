@@ -4099,3 +4099,30 @@ acervo existente sem dono e o bloqueio por tentativas. Checklist: 21 de 21.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-073
+
+> **SPEC KIT** — Comando: clarify | Invocação: skill `speckit-clarify` |
+> Integração: claude | Artefatos: specs/008-entrar/spec.md, checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 02:03 -03
+- **Ator**: PRODUCT OWNER ↔ ARCHITECT
+- **Feature / Task**: 008-entrar / clarify
+- **Commit anterior**: `063515b` (registra o hash de EVT-072)
+
+Duas perguntas:
+
+1. **Acervo existente sem dono**: o PO escolheu **descartar** (opção B),
+   contra a recomendação do Arquiteto, que era a adoção pelo primeiro Usuário.
+   Isso gerou FR-099, SC-037 e um caso-limite que declara a perda de dados como
+   assumida.
+2. **Bloqueio por tentativas**: não; fica adiado para implantação fora da
+   máquina local (recomendação aceita).
+
+As premissas "a confirmar" foram eliminadas. Contagem: 20 FRs e 11 SCs.
+Checklist: 21 de 21.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
