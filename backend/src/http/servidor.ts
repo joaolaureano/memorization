@@ -16,6 +16,13 @@ import { CORPO_INVALIDO, registrarRotasDeCartoes } from "./rotas.ts";
 export const HOST_LOCAL = "127.0.0.1";
 
 /**
+ * Caminho das rotas de Cartão (contrato `api-cartoes.md`). Usado pelo CORS
+ * mínimo: são as únicas rotas que o frontend de navegador consome de outra
+ * origem.
+ */
+export const CAMINHO_DOS_CARTOES = "/cartoes";
+
+/**
  * Erro lançado quando o servidor está escutando fora do loopback.
  *
  * A ausência de autenticação torna inegociável que o processo não fique
@@ -52,6 +59,36 @@ export function criarServidor(): FastifyInstance {
     }
 
     return resposta.send(erro);
+  });
+
+  /**
+   * CORS mínimo para o frontend local (T014; specs/001-criar-cartao/tasks.md).
+   *
+   * O frontend real roda em outra porta do mesmo loopback, e o navegador
+   * trata a diferença de porta como outra origem: sem estes cabeçalhos, o
+   * `fetch` do navegador recusa o pré-voo do `POST /cartoes` (o content-type
+   * application/json torna a requisição não simples) e impede a leitura das
+   * respostas de listagem e de criação. Como a aplicação não possui
+   * autenticação e escuta exclusivamente em 127.0.0.1, permitir qualquer
+   * origem é a configuração mínima segura — o serviço não é alcançável pela
+   * rede.
+   */
+  servidor.options(CAMINHO_DOS_CARTOES, async (_requisicao, resposta) => {
+    resposta
+      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-methods", "GET, POST, OPTIONS")
+      .header("access-control-allow-headers", "content-type")
+      .header("access-control-max-age", "86400");
+
+    return resposta.code(204).send();
+  });
+
+  servidor.addHook("onSend", async (requisicao, resposta, carga) => {
+    if (requisicao.url.split("?")[0] === CAMINHO_DOS_CARTOES) {
+      resposta.header("access-control-allow-origin", "*");
+    }
+
+    return carga;
   });
 
   return servidor;

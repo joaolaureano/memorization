@@ -3274,3 +3274,28 @@ build e lint do frontend, todos verdes. T011 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-047
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: persistência E2E
+
+- **Data/hora**: 2026-09-20 23:13 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T014 — concluída
+
+O worker criou prova Playwright integral sem transporte simulado: API e
+frontend reais usam portas livres e SQLite temporário. O navegador cria dois
+Cartões pela UI; ambos os processos são encerrados e reiniciados sobre o mesmo
+arquivo; a UI e a API confirmam Frentes, Versos e ids persistidos. O suporte
+encerra processos em `finally` e remove os artefatos temporários.
+
+O navegador exigiu CORS entre duas portas do loopback. Foi adicionado CORS
+mínimo apenas em `/cartoes`, com cinco testes HTTP. Na revisão independente,
+passaram 50 testes backend, 51 frontend, builds, lints e três E2E, incluindo o
+reinício real. T014 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
