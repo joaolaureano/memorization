@@ -4872,3 +4872,31 @@ sessão) ficaram obsoletos: a 008 entregou a Credencial por requisição.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-094
+
+> **SPEC KIT** — Comando: clarify | Invocação: skill `speckit-clarify` |
+> Integração: claude | Artefatos: specs/011-hospedagem-aws/spec.md
+
+- **Data/hora**: 2026-09-21 07:02 -03
+- **Ator**: PRODUCT OWNER ↔ ARCHITECT
+- **Feature / Task**: 011-hospedagem-aws / clarify
+- **Commit anterior**: `db62b56` (registra o hash de EVT-093)
+
+Uma pergunta: publicar de fato ou só preparar? O PO escolheu **preparar e
+publicar** (opção B), contra a recomendação do Arquiteto, que era só preparar.
+O Arquiteto executará a migração no Neon, `tofu apply` e o deploy do SPA, e
+validará pelo endereço do CloudFront.
+
+Pré-condições conferidas sem exibir valores:
+- OpenTofu 1.12 e AWS CLI instalados;
+- identidade AWS: usuário `robot`;
+- `terraform.tfvars` com a connection string do Neon, fora do git;
+- state anterior sem recursos, porque a infra foi destruída depois da
+  validação anterior.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum ARN com conta, connection string ou
+  credencial registrado.

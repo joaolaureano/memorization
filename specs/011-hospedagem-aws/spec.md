@@ -21,6 +21,10 @@ PostgreSQL.
 
 ### Session 2026-09-21
 
+- Q: Nesta entrega o projeto é publicado de fato na AWS ou só preparado? → A:
+  Preparado **e publicado**. O Arquiteto executa a migração no Neon, a aplicação
+  da infraestrutura e o deploy do SPA, e valida SC-051 e SC-058 pelo endereço do
+  CloudFront.
 - Q: A entrada pelo provedor Google e o cookie de sessão, pendentes da
   infraestrutura, continuam no escopo? → A: Não, são obsoletas. A autenticação
   foi entregue pela `008-entrar` com a Credencial apresentada em cada
