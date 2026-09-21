@@ -4,6 +4,7 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
 } from "../../src/acervo-cliente/cliente";
 import type {
   Baralho,
@@ -19,15 +20,15 @@ import {
 } from "../../src/acervo-cliente/validacao";
 
 /**
- * T008 e T106 — bateria dos contratos de Cartões e de Baralhos contra os dois
- * Adapters da Seam `ClienteDoAcervo`
- * (specs/001-criar-cartao/contracts/api-cartoes.md e
- * specs/002-criar-baralho/contracts/api-baralhos.md).
+ * T008, T106, T208, T403 e T503 — bateria dos contratos de Cartões, de
+ * Baralhos, de Vínculos, de edição e de exclusão contra os dois Adapters da
+ * Seam `ClienteDoAcervo`.
  *
- * A **mesma** bateria — criação, listagem, os modos de recusa de domínio com
- * mensagem exata em português e a indisponibilidade — roda contra
- * `ClienteHttp` e `ClienteEmMemoria`, e produz resultados idênticos. Nenhuma
- * resposta que não seja de sucesso aparece como operação concluída (FR-044).
+ * A **mesma** bateria — criação, listagem, Vínculos, edição, exclusão, os
+ * modos de recusa de domínio com mensagem exata em português e a
+ * indisponibilidade — roda contra `ClienteHttp` e `ClienteEmMemoria`, e
+ * produz resultados idênticos. Nenhuma resposta que não seja de sucesso
+ * aparece como operação concluída (FR-044).
  */
 
 const FRENTE_VALIDA = "To walk";
@@ -66,17 +67,41 @@ function criarAmbienteEmMemoria(): AmbienteDeCliente {
 
 /**
  * Servidor de contrato simulado para o `ClienteHttp`: uma `fetch` falsa que
- * implementa as rotas de Cartões e de Baralhos exatamente como a API —
- * `201`/`200` no sucesso, `400` com `{ erro, mensagem }` nas recusas de
- * domínio, propriedade extra ignorada. A indisponibilidade é simulada fazendo
- * a `fetch` lançar, como numa falha de rede real.
+ * implementa as rotas de Cartões, de Baralhos, de Vínculos, de edição e de
+ * exclusão exatamente como a API. A indisponibilidade é simulada fazendo a
+ * `fetch` lançar, como numa falha de rede real.
  */
 function criarAmbienteHttp(): AmbienteDeCliente {
   const cartoesNoServidor: Cartao[] = [];
   const baralhosNoServidor: Baralho[] = [];
+  const vinculosNoServidor: { cartaoId: string; baralhoId: string }[] = [];
   let sequencia = 0;
   let sequenciaDeBaralhos = 0;
   let indisponivel = false;
+
+  function baralhosDoCartao(cartaoId: string): Baralho[] {
+    return vinculosNoServidor
+      .filter((vinculo) => vinculo.cartaoId === cartaoId)
+      .map((vinculo) =>
+        baralhosNoServidor.find((baralho) => baralho.id === vinculo.baralhoId),
+      )
+      .filter((baralho): baralho is Baralho => baralho !== undefined)
+      .map((baralho) => ({ id: baralho.id, nome: baralho.nome }));
+  }
+
+  function cartoesDoBaralho(baralhoId: string): Cartao[] {
+    return vinculosNoServidor
+      .filter((vinculo) => vinculo.baralhoId === baralhoId)
+      .map((vinculo) =>
+        cartoesNoServidor.find((cartao) => cartao.id === vinculo.cartaoId),
+      )
+      .filter((cartao): cartao is Cartao => cartao !== undefined)
+      .map((cartao) => ({
+        id: cartao.id,
+        frente: cartao.frente,
+        verso: cartao.verso,
+      }));
+  }
 
   const fetchDeTeste = async (
     entrada: unknown,
@@ -87,9 +112,17 @@ function criarAmbienteHttp(): AmbienteDeCliente {
     }
 
     const url = typeof entrada === "string" ? entrada : String(entrada);
+    const caminho = new URL(url).pathname;
     const metodo = opcoes?.method ?? "GET";
 
-    if (url === `${ENDERECO_DA_API}/cartoes` && metodo === "POST") {
+    const cartaoPorId = caminho.match(/^\/cartoes\/([^/]+)$/);
+    const baralhoPorId = caminho.match(/^\/baralhos\/([^/]+)$/);
+    const vinculoEmBaralho = caminho.match(/^\/baralhos\/([^/]+)\/vinculos$/);
+    const vinculoEspecifico = caminho.match(
+      /^\/baralhos\/([^/]+)\/vinculos\/([^/]+)$/,
+    );
+
+    if (caminho === "/cartoes" && metodo === "POST") {
       const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
 
       const falha =
@@ -114,11 +147,17 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       return respostaDeTeste(201, cartao);
     }
 
-    if (url === `${ENDERECO_DA_API}/cartoes` && metodo === "GET") {
-      return respostaDeTeste(200, [...cartoesNoServidor]);
+    if (caminho === "/cartoes" && metodo === "GET") {
+      return respostaDeTeste(
+        200,
+        cartoesNoServidor.map((cartao) => ({
+          ...cartao,
+          baralhos: baralhosDoCartao(cartao.id),
+        })),
+      );
     }
 
-    if (url === `${ENDERECO_DA_API}/baralhos` && metodo === "POST") {
+    if (caminho === "/baralhos" && metodo === "POST") {
       const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
 
       const falha = validarNomeDeBaralho(corpo.nome as string);
@@ -140,11 +179,13 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       return respostaDeTeste(201, baralho);
     }
 
-    if (url === `${ENDERECO_DA_API}/baralhos` && metodo === "GET") {
+    if (caminho === "/baralhos" && metodo === "GET") {
       return respostaDeTeste(
         200,
         baralhosNoServidor.map((baralho) => {
-          const quantidadeDeCartoes = 0;
+          const quantidadeDeCartoes = vinculosNoServidor.filter(
+            (vinculo) => vinculo.baralhoId === baralho.id,
+          ).length;
 
           return {
             ...baralho,
@@ -153,6 +194,196 @@ function criarAmbienteHttp(): AmbienteDeCliente {
           };
         }),
       );
+    }
+
+    if (vinculoEmBaralho !== null && metodo === "POST") {
+      const baralhoId = decodeURIComponent(vinculoEmBaralho[1]);
+      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+      const cartaoId = corpo.cartaoId as string;
+
+      if (!cartoesNoServidor.some((cartao) => cartao.id === cartaoId)) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Cartão não encontrado.",
+        });
+      }
+
+      if (!baralhosNoServidor.some((baralho) => baralho.id === baralhoId)) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        });
+      }
+
+      if (
+        vinculosNoServidor.some(
+          (vinculo) =>
+            vinculo.cartaoId === cartaoId && vinculo.baralhoId === baralhoId,
+        )
+      ) {
+        return respostaDeTeste(409, {
+          erro: "vinculo_duplicado",
+          mensagem: "O vínculo já existe.",
+        });
+      }
+
+      vinculosNoServidor.push({ cartaoId, baralhoId });
+
+      return respostaDeTeste(201, null);
+    }
+
+    if (vinculoEspecifico !== null && metodo === "DELETE") {
+      const baralhoId = decodeURIComponent(vinculoEspecifico[1]);
+      const cartaoId = decodeURIComponent(vinculoEspecifico[2]);
+      const indice = vinculosNoServidor.findIndex(
+        (vinculo) =>
+          vinculo.cartaoId === cartaoId && vinculo.baralhoId === baralhoId,
+      );
+
+      if (indice === -1) {
+        return respostaDeTeste(404, {
+          erro: "vinculo_nao_encontrado",
+          mensagem: "O vínculo não existe.",
+        });
+      }
+
+      vinculosNoServidor.splice(indice, 1);
+
+      return respostaDeTeste(204, null);
+    }
+
+    if (baralhoPorId !== null && metodo === "GET") {
+      const id = decodeURIComponent(baralhoPorId[1]);
+      const baralho = baralhosNoServidor.find((item) => item.id === id);
+
+      if (baralho === undefined) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        });
+      }
+
+      const cartoes = cartoesDoBaralho(id);
+
+      return respostaDeTeste(200, {
+        id: baralho.id,
+        nome: baralho.nome,
+        elegivel: cartoes.length > 0,
+        cartoes,
+      });
+    }
+
+    if (cartaoPorId !== null && metodo === "PUT") {
+      const id = decodeURIComponent(cartaoPorId[1]);
+      const indice = cartoesNoServidor.findIndex((cartao) => cartao.id === id);
+
+      if (indice === -1) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Cartão não encontrado.",
+        });
+      }
+
+      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+      const falha =
+        validarFrente(corpo.frente as string) ??
+        validarVerso(corpo.verso as string);
+
+      if (falha !== null) {
+        return respostaDeTeste(400, {
+          erro: falha.erro,
+          mensagem: falha.mensagem,
+        });
+      }
+
+      const cartao: Cartao = {
+        id,
+        frente: corpo.frente as string,
+        verso: corpo.verso as string,
+      };
+
+      cartoesNoServidor[indice] = cartao;
+
+      return respostaDeTeste(200, cartao);
+    }
+
+    if (baralhoPorId !== null && metodo === "PUT") {
+      const id = decodeURIComponent(baralhoPorId[1]);
+      const indice = baralhosNoServidor.findIndex(
+        (baralho) => baralho.id === id,
+      );
+
+      if (indice === -1) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        });
+      }
+
+      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+      const falha = validarNomeDeBaralho(corpo.nome as string);
+
+      if (falha !== null) {
+        return respostaDeTeste(400, {
+          erro: falha.erro,
+          mensagem: falha.mensagem,
+        });
+      }
+
+      const baralho: Baralho = {
+        id,
+        nome: corpo.nome as string,
+      };
+
+      baralhosNoServidor[indice] = baralho;
+
+      return respostaDeTeste(200, baralho);
+    }
+
+    if (cartaoPorId !== null && metodo === "DELETE") {
+      const id = decodeURIComponent(cartaoPorId[1]);
+      const indice = cartoesNoServidor.findIndex((cartao) => cartao.id === id);
+
+      if (indice === -1) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Cartão não encontrado.",
+        });
+      }
+
+      cartoesNoServidor.splice(indice, 1);
+
+      for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
+        if (vinculosNoServidor[i].cartaoId === id) {
+          vinculosNoServidor.splice(i, 1);
+        }
+      }
+
+      return respostaDeTeste(204, null);
+    }
+
+    if (baralhoPorId !== null && metodo === "DELETE") {
+      const id = decodeURIComponent(baralhoPorId[1]);
+      const indice = baralhosNoServidor.findIndex(
+        (baralho) => baralho.id === id,
+      );
+
+      if (indice === -1) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        });
+      }
+
+      baralhosNoServidor.splice(indice, 1);
+
+      for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
+        if (vinculosNoServidor[i].baralhoId === id) {
+          vinculosNoServidor.splice(i, 1);
+        }
+      }
+
+      return respostaDeTeste(204, null);
     }
 
     return respostaDeTeste(404, {
@@ -175,7 +406,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 }
 
 /**
- * A bateria compartilhada. Toda asserção atravessa a Interface
+ * A bateria compartilhada de Cartões. Toda asserção atravessa a Interface
  * `ClienteDoAcervo`, nunca o estado interno do Adapter, e usa expectativas
  * exatas — inclusive as mensagens do contrato — para que os dois Adapters
  * sejam comprovados idênticos na superfície observável.
@@ -203,7 +434,7 @@ function executarBateriaDoContrato(
       });
     });
 
-    it("lista o Cartão criado (FR-001, FR-003)", async () => {
+    it("lista o Cartão criado, agora com baralhos vazio (FR-001, FR-003)", async () => {
       const { cliente } = criarAmbiente();
 
       const criacao = await cliente.criarCartao({
@@ -217,7 +448,7 @@ function executarBateriaDoContrato(
 
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [criacao.cartao],
+        cartoes: [{ ...criacao.cartao, baralhos: [] }],
       });
     });
 
@@ -248,11 +479,14 @@ function executarBateriaDoContrato(
 
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: expect.arrayContaining([primeiro.cartao, segundo.cartao]),
+        cartoes: expect.arrayContaining([
+          { ...primeiro.cartao, baralhos: [] },
+          { ...segundo.cartao, baralhos: [] },
+        ]),
       });
     });
 
-    it("devolve cada Cartão com exatamente id, Frente e Verso (FR-004)", async () => {
+    it("devolve cada Cartão com exatamente id, Frente, Verso e baralhos (FR-004)", async () => {
       const { cliente } = criarAmbiente();
 
       await cliente.criarCartao({
@@ -268,10 +502,16 @@ function executarBateriaDoContrato(
       expect(listagem.cartoes).toHaveLength(1);
 
       for (const cartao of listagem.cartoes) {
-        expect(Object.keys(cartao).sort()).toEqual(["frente", "id", "verso"]);
+        expect(Object.keys(cartao).sort()).toEqual([
+          "baralhos",
+          "frente",
+          "id",
+          "verso",
+        ]);
         expect(cartao.id).toEqual(expect.any(String));
         expect(cartao.frente).toBe(FRENTE_VALIDA);
         expect(cartao.verso).toBe(VERSO_VALIDO);
+        expect(cartao.baralhos).toEqual([]);
       }
     });
 
@@ -297,7 +537,7 @@ function executarBateriaDoContrato(
       ]);
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [criacao.cartao],
+        cartoes: [{ ...criacao.cartao, baralhos: [] }],
       });
     });
 
@@ -458,9 +698,7 @@ function executarBateriaDoContrato(
 
 /**
  * A bateria compartilhada de Baralhos. Toda asserção atravessa a Interface
- * `ClienteDoAcervo`, nunca o estado interno do Adapter, e usa expectativas
- * exatas — inclusive as mensagens do contrato — para que os dois Adapters
- * sejam comprovados idênticos na superfície observável.
+ * `ClienteDoAcervo`, nunca o estado interno do Adapter.
  */
 function executarBateriaDeBaralhos(
   nomeDoAdapter: string,
@@ -694,14 +932,629 @@ function executarBateriaDeBaralhos(
   });
 }
 
+/**
+ * Bateria compartilhada de Vínculos (T208; specs/003-vincular-cartao-baralho/contracts/api-vinculos.md).
+ */
+function executarBateriaDeVinculos(
+  nomeDoAdapter: string,
+  criarAmbiente: () => AmbienteDeCliente,
+): void {
+  describe(`${nomeDoAdapter} — bateria do contrato de Vínculos`, () => {
+    it("vincula um Cartão a um Baralho e o Baralho torna-se elegível (FR-019, FR-024)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      expect(
+        await cliente.vincular(cartao.cartao.id, baralho.baralho.id),
+      ).toEqual({ ok: true });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            ...baralho.baralho,
+            quantidadeDeCartoes: 1,
+            elegivel: true,
+          },
+        ],
+      });
+    });
+
+    it("obterBaralho devolve o Baralho com seus Cartões vinculados (FR-014)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+
+      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
+        ok: true,
+        baralho: {
+          id: baralho.baralho.id,
+          nome: baralho.baralho.nome,
+          elegivel: true,
+          cartoes: [cartao.cartao],
+        },
+      });
+    });
+
+    it("listarCartoes devolve os Baralhos de cada Cartão; Cartão sem Baralho traz lista vazia (FR-003)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const cartaoSemBaralho = await cliente.criarCartao({
+        frente: "To run",
+        verso: "Correr",
+      });
+      const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+      const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
+
+      if (
+        !cartao.ok ||
+        !cartaoSemBaralho.ok ||
+        !primeiroBaralho.ok ||
+        !segundoBaralho.ok
+      ) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
+      await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
+
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [
+          {
+            ...cartao.cartao,
+            baralhos: [primeiroBaralho.baralho, segundoBaralho.baralho],
+          },
+          { ...cartaoSemBaralho.cartao, baralhos: [] },
+        ],
+      });
+    });
+
+    it("recusa vincular Cartão inexistente como nao_encontrado (FR-022)", async () => {
+      const { cliente } = criarAmbiente();
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação deveria ser aceita");
+      }
+
+      expect(
+        await cliente.vincular("c-inexistente", baralho.baralho.id),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+    });
+
+    it("recusa vincular Baralho inexistente como nao_encontrado (FR-022)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+
+      if (!cartao.ok) {
+        throw new Error("a criação deveria ser aceita");
+      }
+
+      expect(
+        await cliente.vincular(cartao.cartao.id, "b-inexistente"),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      });
+    });
+
+    it("recusa Vínculo duplicado com vinculo_duplicado (FR-020)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+
+      expect(
+        await cliente.vincular(cartao.cartao.id, baralho.baralho.id),
+      ).toEqual({
+        ok: false,
+        erro: "vinculo_duplicado",
+        mensagem: "O vínculo já existe.",
+      });
+    });
+
+    it("desvincular preserva Cartão e Baralho, e o Baralho perde a elegibilidade (FR-021, FR-024)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+      expect(
+        await cliente.desvincular(cartao.cartao.id, baralho.baralho.id),
+      ).toEqual({ ok: true });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            ...baralho.baralho,
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+        ],
+      });
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+      });
+      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
+        ok: true,
+        baralho: {
+          id: baralho.baralho.id,
+          nome: baralho.baralho.nome,
+          elegivel: false,
+          cartoes: [],
+        },
+      });
+    });
+
+    it("recusa desvincular Vínculo inexistente com vinculo_nao_encontrado (FR-021)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.desvincular("c-inexistente", "b-inexistente"),
+      ).toEqual({
+        ok: false,
+        erro: "vinculo_nao_encontrado",
+        mensagem: "O vínculo não existe.",
+      });
+    });
+
+    it("obterBaralho inexistente é recusado como nao_encontrado (FR-014)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(await cliente.obterBaralho("b-inexistente")).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      });
+    });
+
+    it("com o transporte indisponível, Vínculos falham com a mensagem própria", async () => {
+      const { cliente, indisponibilizar } = criarAmbiente();
+      indisponibilizar();
+
+      expect(await cliente.vincular("c1", "b1")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+      });
+      expect(await cliente.desvincular("c1", "b1")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+      });
+      expect(await cliente.obterBaralho("b1")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      });
+    });
+  });
+}
+
+/**
+ * Bateria compartilhada de edição (T403; specs/005-editar-cartao-e-baralho/contracts/api-edicao.md).
+ */
+function executarBateriaDeEdicao(
+  nomeDoAdapter: string,
+  criarAmbiente: () => AmbienteDeCliente,
+): void {
+  describe(`${nomeDoAdapter} — bateria do contrato de Edição`, () => {
+    it("edita Frente e Verso e a alteração aparece nas leituras (FR-005)", async () => {
+      const { cliente } = criarAmbiente();
+      const criacao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+
+      if (!criacao.ok) {
+        throw new Error("a criação deveria ser aceita");
+      }
+
+      expect(
+        await cliente.editarCartao(criacao.cartao.id, "To run", "Correr"),
+      ).toEqual({
+        ok: true,
+        cartao: {
+          id: criacao.cartao.id,
+          frente: "To run",
+          verso: "Correr",
+        },
+      });
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [
+          {
+            id: criacao.cartao.id,
+            frente: "To run",
+            verso: "Correr",
+            baralhos: [],
+          },
+        ],
+      });
+    });
+
+    it("edita Cartão vinculado sem alterar o Vínculo (FR-005)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+      await cliente.editarCartao(cartao.cartao.id, "To run", "Correr");
+
+      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
+        ok: true,
+        baralho: {
+          id: baralho.baralho.id,
+          nome: baralho.baralho.nome,
+          elegivel: true,
+          cartoes: [
+            {
+              id: cartao.cartao.id,
+              frente: "To run",
+              verso: "Correr",
+            },
+          ],
+        },
+      });
+    });
+
+    it("recusa edição com Frente vazia, com as mesmas regras da criação (FR-005)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+
+      if (!cartao.ok) {
+        throw new Error("a criação deveria ser aceita");
+      }
+
+      expect(
+        await cliente.editarCartao(cartao.cartao.id, "", VERSO_VALIDO),
+      ).toEqual({
+        ok: false,
+        erro: "frente_vazia",
+        mensagem: "A frente do cartão não pode ficar vazia.",
+      });
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+      });
+    });
+
+    it("recusa edição de Cartão inexistente como nao_encontrado", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.editarCartao("c-inexistente", "To run", "Correr"),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+    });
+
+    it("renomeia Baralho preservando Vínculos e elegibilidade (FR-015)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+
+      expect(
+        await cliente.renomearBaralho(baralho.baralho.id, "Espanhol"),
+      ).toEqual({
+        ok: true,
+        baralho: {
+          id: baralho.baralho.id,
+          nome: "Espanhol",
+        },
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            id: baralho.baralho.id,
+            nome: "Espanhol",
+            quantidadeDeCartoes: 1,
+            elegivel: true,
+          },
+        ],
+      });
+      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
+        ok: true,
+        baralho: {
+          id: baralho.baralho.id,
+          nome: "Espanhol",
+          elegivel: true,
+          cartoes: [cartao.cartao],
+        },
+      });
+    });
+
+    it("recusa renomeação com nome vazio, com as mesmas regras da criação (FR-015)", async () => {
+      const { cliente } = criarAmbiente();
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação deveria ser aceita");
+      }
+
+      expect(await cliente.renomearBaralho(baralho.baralho.id, "")).toEqual({
+        ok: false,
+        erro: "nome_vazio",
+        mensagem: "O nome do baralho não pode ficar vazio.",
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            ...baralho.baralho,
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+        ],
+      });
+    });
+
+    it("recusa renomeação de Baralho inexistente como nao_encontrado", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.renomearBaralho("b-inexistente", "Espanhol"),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      });
+    });
+
+    it("com o transporte indisponível, editar e renomear falham sem gravar", async () => {
+      const { cliente, indisponibilizar } = criarAmbiente();
+      indisponibilizar();
+
+      expect(
+        await cliente.editarCartao("c1", "To run", "Correr"),
+      ).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+      });
+      expect(await cliente.renomearBaralho("b1", "Espanhol")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      });
+    });
+  });
+}
+
+/**
+ * Bateria compartilhada de exclusão (T503; specs/006-excluir-cartao-e-baralho/contracts/api-exclusao.md).
+ */
+function executarBateriaDeExclusao(
+  nomeDoAdapter: string,
+  criarAmbiente: () => AmbienteDeCliente,
+): void {
+  describe(`${nomeDoAdapter} — bateria do contrato de Exclusão`, () => {
+    it("excluir Cartão remove seus Vínculos e preserva os Baralhos (FR-007, FR-008)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+      const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
+
+      if (!cartao.ok || !primeiroBaralho.ok || !segundoBaralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
+      await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
+
+      expect(await cliente.excluirCartao(cartao.cartao.id)).toEqual({
+        ok: true,
+      });
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [],
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: expect.arrayContaining([
+          {
+            ...primeiroBaralho.baralho,
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+          {
+            ...segundoBaralho.baralho,
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+        ]),
+      });
+      expect(await cliente.obterBaralho(primeiroBaralho.baralho.id)).toEqual({
+        ok: true,
+        baralho: {
+          id: primeiroBaralho.baralho.id,
+          nome: primeiroBaralho.baralho.nome,
+          elegivel: false,
+          cartoes: [],
+        },
+      });
+    });
+
+    it("excluir Baralho remove seus Vínculos e preserva os Cartões (FR-016, FR-017)", async () => {
+      const { cliente } = criarAmbiente();
+      const primeiroCartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const segundoCartao = await cliente.criarCartao({
+        frente: "To run",
+        verso: "Correr",
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!primeiroCartao.ok || !segundoCartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(primeiroCartao.cartao.id, baralho.baralho.id);
+      await cliente.vincular(segundoCartao.cartao.id, baralho.baralho.id);
+
+      expect(await cliente.excluirBaralho(baralho.baralho.id)).toEqual({
+        ok: true,
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [],
+      });
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: expect.arrayContaining([
+          { ...primeiroCartao.cartao, baralhos: [] },
+          { ...segundoCartao.cartao, baralhos: [] },
+        ]),
+      });
+    });
+
+    it("Cartão que fica sem Baralho continua acessível pela lista (SC-006)", async () => {
+      const { cliente } = criarAmbiente();
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+      await cliente.excluirBaralho(baralho.baralho.id);
+
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+      });
+    });
+
+    it("recusa excluir Cartão inexistente como nao_encontrado", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(await cliente.excluirCartao("c-inexistente")).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+    });
+
+    it("recusa excluir Baralho inexistente como nao_encontrado", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(await cliente.excluirBaralho("b-inexistente")).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      });
+    });
+
+    it("com o transporte indisponível, exclusões falham sem remover entidades", async () => {
+      const { cliente, indisponibilizar } = criarAmbiente();
+      indisponibilizar();
+
+      expect(await cliente.excluirCartao("c1")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+      });
+      expect(await cliente.excluirBaralho("b1")).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      });
+    });
+  });
+}
+
 executarBateriaDoContrato("ClienteHttp", criarAmbienteHttp);
 executarBateriaDoContrato("ClienteEmMemoria", criarAmbienteEmMemoria);
 
 executarBateriaDeBaralhos("ClienteHttp", criarAmbienteHttp);
 executarBateriaDeBaralhos("ClienteEmMemoria", criarAmbienteEmMemoria);
 
+executarBateriaDeVinculos("ClienteHttp", criarAmbienteHttp);
+executarBateriaDeVinculos("ClienteEmMemoria", criarAmbienteEmMemoria);
+
+executarBateriaDeEdicao("ClienteHttp", criarAmbienteHttp);
+executarBateriaDeEdicao("ClienteEmMemoria", criarAmbienteEmMemoria);
+
+executarBateriaDeExclusao("ClienteHttp", criarAmbienteHttp);
+executarBateriaDeExclusao("ClienteEmMemoria", criarAmbienteEmMemoria);
+
 describe("resultados idênticos entre os dois Adapters", () => {
-  it("a mesma sequência de operações produz o mesmo resultado observável", async () => {
+  it("a mesma sequência de operações de Cartão produz o mesmo resultado observável", async () => {
     const noHttp = await cenarioCompleto(criarAmbienteHttp());
     const emMemoria = await cenarioCompleto(criarAmbienteEmMemoria());
 
@@ -711,6 +1564,27 @@ describe("resultados idênticos entre os dois Adapters", () => {
   it("a mesma sequência de operações de Baralho produz o mesmo resultado observável", async () => {
     const noHttp = await cenarioDeBaralhos(criarAmbienteHttp());
     const emMemoria = await cenarioDeBaralhos(criarAmbienteEmMemoria());
+
+    expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
+  });
+
+  it("a mesma sequência de Vínculos produz o mesmo resultado observável", async () => {
+    const noHttp = await cenarioDeVinculos(criarAmbienteHttp());
+    const emMemoria = await cenarioDeVinculos(criarAmbienteEmMemoria());
+
+    expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
+  });
+
+  it("a mesma sequência de edição produz o mesmo resultado observável", async () => {
+    const noHttp = await cenarioDeEdicao(criarAmbienteHttp());
+    const emMemoria = await cenarioDeEdicao(criarAmbienteEmMemoria());
+
+    expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
+  });
+
+  it("a mesma sequência de exclusão produz o mesmo resultado observável", async () => {
+    const noHttp = await cenarioDeExclusao(criarAmbienteHttp());
+    const emMemoria = await cenarioDeExclusao(criarAmbienteEmMemoria());
 
     expect(comIdsOcultos(emMemoria)).toEqual(comIdsOcultos(noHttp));
   });
@@ -794,6 +1668,212 @@ async function cenarioDeBaralhos(ambiente: AmbienteDeCliente) {
     criacaoIndisponivel,
     listaIndisponivel,
     listaAposRestaurar,
+  };
+}
+
+/**
+ * Sequência de Vínculos que atravessa sucesso, recusas e indisponibilidade.
+ */
+async function cenarioDeVinculos(ambiente: AmbienteDeCliente) {
+  const { cliente, indisponibilizar, restaurar } = ambiente;
+
+  const cartao = await cliente.criarCartao({
+    frente: FRENTE_VALIDA,
+    verso: VERSO_VALIDO,
+  });
+  const outroCartao = await cliente.criarCartao({
+    frente: "To run",
+    verso: "Correr",
+  });
+  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+  if (!cartao.ok || !outroCartao.ok || !baralho.ok) {
+    throw new Error("as criações deveriam ser aceitas");
+  }
+
+  const vinculado = await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+  const duplicado = await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+  const baralhoObtido = await cliente.obterBaralho(baralho.baralho.id);
+  const cartoesComBaralhos = await cliente.listarCartoes();
+  const baralhos = await cliente.listarBaralhos();
+  const desvinculado = await cliente.desvincular(
+    cartao.cartao.id,
+    baralho.baralho.id,
+  );
+  const desvinculadoDeNovo = await cliente.desvincular(
+    cartao.cartao.id,
+    baralho.baralho.id,
+  );
+
+  indisponibilizar();
+  const vinculoIndisponivel = await cliente.vincular(
+    outroCartao.cartao.id,
+    baralho.baralho.id,
+  );
+  const desvinculoIndisponivel = await cliente.desvincular(
+    cartao.cartao.id,
+    baralho.baralho.id,
+  );
+  const obterIndisponivel = await cliente.obterBaralho(baralho.baralho.id);
+
+  restaurar();
+  const baralhosAposRestaurar = await cliente.listarBaralhos();
+
+  return {
+    cartao,
+    outroCartao,
+    baralho,
+    vinculado,
+    duplicado,
+    baralhoObtido,
+    cartoesComBaralhos,
+    baralhos,
+    desvinculado,
+    desvinculadoDeNovo,
+    vinculoIndisponivel,
+    desvinculoIndisponivel,
+    obterIndisponivel,
+    baralhosAposRestaurar,
+  };
+}
+
+/**
+ * Sequência de edição que atravessa sucesso, recusas e indisponibilidade.
+ */
+async function cenarioDeEdicao(ambiente: AmbienteDeCliente) {
+  const { cliente, indisponibilizar, restaurar } = ambiente;
+
+  const cartao = await cliente.criarCartao({
+    frente: FRENTE_VALIDA,
+    verso: VERSO_VALIDO,
+  });
+  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+  if (!cartao.ok || !baralho.ok) {
+    throw new Error("as criações deveriam ser aceitas");
+  }
+
+  await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+
+  const edicao = await cliente.editarCartao(cartao.cartao.id, "To run", "Correr");
+  const edicaoInvalida = await cliente.editarCartao(cartao.cartao.id, "", "Correr");
+  const edicaoInexistente = await cliente.editarCartao(
+    "c-inexistente",
+    "To run",
+    "Correr",
+  );
+  const renomeacao = await cliente.renomearBaralho(baralho.baralho.id, "Espanhol");
+  const renomeacaoInvalida = await cliente.renomearBaralho(baralho.baralho.id, "");
+  const renomeacaoInexistente = await cliente.renomearBaralho(
+    "b-inexistente",
+    "Espanhol",
+  );
+  const cartoes = await cliente.listarCartoes();
+  const baralhos = await cliente.listarBaralhos();
+  const baralhoObtido = await cliente.obterBaralho(baralho.baralho.id);
+
+  indisponibilizar();
+  const edicaoIndisponivel = await cliente.editarCartao(
+    cartao.cartao.id,
+    "Never",
+    "Nunca",
+  );
+  const renomeacaoIndisponivel = await cliente.renomearBaralho(
+    baralho.baralho.id,
+    "Nunca",
+  );
+
+  restaurar();
+  const baralhosAposRestaurar = await cliente.listarBaralhos();
+
+  return {
+    cartao,
+    baralho,
+    edicao,
+    edicaoInvalida,
+    edicaoInexistente,
+    renomeacao,
+    renomeacaoInvalida,
+    renomeacaoInexistente,
+    cartoes,
+    baralhos,
+    baralhoObtido,
+    edicaoIndisponivel,
+    renomeacaoIndisponivel,
+    baralhosAposRestaurar,
+  };
+}
+
+/**
+ * Sequência de exclusão que atravessa sucesso, recusas e indisponibilidade.
+ */
+async function cenarioDeExclusao(ambiente: AmbienteDeCliente) {
+  const { cliente, indisponibilizar, restaurar } = ambiente;
+
+  const cartao = await cliente.criarCartao({
+    frente: FRENTE_VALIDA,
+    verso: VERSO_VALIDO,
+  });
+  const outroCartao = await cliente.criarCartao({
+    frente: "To run",
+    verso: "Correr",
+  });
+  const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+  const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
+
+  if (
+    !cartao.ok ||
+    !outroCartao.ok ||
+    !primeiroBaralho.ok ||
+    !segundoBaralho.ok
+  ) {
+    throw new Error("as criações deveriam ser aceitas");
+  }
+
+  await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
+  await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
+  await cliente.vincular(outroCartao.cartao.id, primeiroBaralho.baralho.id);
+
+  const exclusaoDeCartao = await cliente.excluirCartao(cartao.cartao.id);
+  const exclusaoDeCartaoInexistente = await cliente.excluirCartao(
+    "c-inexistente",
+  );
+  const exclusaoDeBaralho = await cliente.excluirBaralho(
+    primeiroBaralho.baralho.id,
+  );
+  const exclusaoDeBaralhoInexistente = await cliente.excluirBaralho(
+    "b-inexistente",
+  );
+  const cartoes = await cliente.listarCartoes();
+  const baralhos = await cliente.listarBaralhos();
+  const baralhoRestante = await cliente.obterBaralho(segundoBaralho.baralho.id);
+
+  indisponibilizar();
+  const exclusaoIndisponivelDeCartao = await cliente.excluirCartao(
+    outroCartao.cartao.id,
+  );
+  const exclusaoIndisponivelDeBaralho = await cliente.excluirBaralho(
+    segundoBaralho.baralho.id,
+  );
+
+  restaurar();
+  const cartoesAposRestaurar = await cliente.listarCartoes();
+
+  return {
+    cartao,
+    outroCartao,
+    primeiroBaralho,
+    segundoBaralho,
+    exclusaoDeCartao,
+    exclusaoDeCartaoInexistente,
+    exclusaoDeBaralho,
+    exclusaoDeBaralhoInexistente,
+    cartoes,
+    baralhos,
+    baralhoRestante,
+    exclusaoIndisponivelDeCartao,
+    exclusaoIndisponivelDeBaralho,
+    cartoesAposRestaurar,
   };
 }
 
@@ -957,6 +2037,76 @@ describe("ClienteHttp — resposta fora do contrato de Baralhos nunca aparece co
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+    });
+  });
+});
+
+describe("ClienteHttp — resposta fora do contrato de Vínculos, edição e exclusão (FR-044)", () => {
+  it("trata 200 em vincular como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () => respostaDeTeste(200, null));
+
+    expect(await cliente.vincular("c1", "b1")).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+    });
+  });
+
+  it("trata 409 com código fora do contrato em vincular como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(409, {
+        erro: "corpo_invalido",
+        mensagem: "O corpo da requisição não é válido.",
+      }),
+    );
+
+    expect(await cliente.vincular("c1", "b1")).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+    });
+  });
+
+  it("trata 200 com corpo inválido em obterBaralho como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(200, {
+        id: "b1",
+        nome: "Inglês",
+        elegivel: true,
+      }),
+    );
+
+    expect(await cliente.obterBaralho("b1")).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+    });
+  });
+
+  it("trata 404 com código de Vínculo em editarCartao como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(404, {
+        erro: "vinculo_nao_encontrado",
+        mensagem: "O vínculo não existe.",
+      }),
+    );
+
+    expect(
+      await cliente.editarCartao("c1", FRENTE_VALIDA, VERSO_VALIDO),
+    ).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+    });
+  });
+
+  it("trata 200 em excluirCartao como indisponivel", async () => {
+    const cliente = clienteHttpCom(async () => respostaDeTeste(200, null));
+
+    expect(await cliente.excluirCartao("c1")).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
     });
   });
 });

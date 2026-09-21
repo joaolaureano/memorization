@@ -104,6 +104,55 @@ export function validarVerso(verso: string): FalhaDeRegraDeCartao | null {
 export const LIMITE_DE_CARACTERES_DE_BARALHO = 100;
 
 /**
+ * Código estável de erro de Vínculo, consumido pelo cliente. Exaustivo nas
+ * operações de Vínculo: `vinculo_duplicado`, a recusa do par repetido imposta
+ * pelo esquema; `vinculo_nao_encontrado`, a desvinculação de um Vínculo que
+ * não existe; e `nao_encontrado`, Cartão ou Baralho inexistente.
+ */
+export const CODIGOS_DE_ERRO_DE_VINCULO = [
+  "vinculo_duplicado",
+  "vinculo_nao_encontrado",
+  "nao_encontrado",
+] as const;
+
+export type CodigoDeErroDeVinculo =
+  (typeof CODIGOS_DE_ERRO_DE_VINCULO)[number];
+
+/**
+ * Distingue um código de erro de Vínculo de qualquer outro valor que a rede
+ * possa entregar. Usado pelo `ClienteHttp` para nunca deixar passar uma
+ * resposta que não esteja entre os modos de erro da Interface.
+ */
+export function ehCodigoDeErroDeVinculo(
+  valor: unknown,
+): valor is CodigoDeErroDeVinculo {
+  return (
+    typeof valor === "string" &&
+    CODIGOS_DE_ERRO_DE_VINCULO.some((codigo) => codigo === valor)
+  );
+}
+
+/**
+ * Código estável para entidade inexistente, compartilhado pelas operações de
+ * Vínculo, edição e exclusão. O `ClienteHttp` o reconhece apenas nos status em
+ * que o contrato o prevê; em qualquer outro lugar, vira `indisponivel`.
+ */
+export const CODIGO_DE_ERRO_NAO_ENCONTRADO = "nao_encontrado" as const;
+
+export type CodigoDeErroDeNaoEncontrado =
+  typeof CODIGO_DE_ERRO_NAO_ENCONTRADO;
+
+/**
+ * Distingue o código de entidade inexistente de qualquer outro valor que a
+ * rede possa entregar.
+ */
+export function ehCodigoDeErroDeNaoEncontrado(
+  valor: unknown,
+): valor is CodigoDeErroDeNaoEncontrado {
+  return valor === CODIGO_DE_ERRO_NAO_ENCONTRADO;
+}
+
+/**
  * Código estável de erro de regra de Baralho, consumido pelo cliente.
  * Exaustivo nesta feature: não há outro modo de falha de domínio.
  */

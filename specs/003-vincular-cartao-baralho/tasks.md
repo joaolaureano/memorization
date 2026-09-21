@@ -40,7 +40,7 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 - [X] T205 Elegibilidade passa a variar, derivada por contagem
 - [X] T206 `listarCartoes` estendido com os Baralhos de cada Cartão
 - [X] T207 Rotas de Vínculo e `GET /baralhos/{id}` conforme o contrato
-- [ ] T208 `ClienteDoAcervo` cobre as rotas de Vínculo nos dois Adapters
+- [X] T208 `ClienteDoAcervo` cobre as rotas de Vínculo nos dois Adapters
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

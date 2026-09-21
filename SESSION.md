@@ -3568,3 +3568,26 @@ em `main`: backend 164, frontend 115, e2e 5, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-058
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: ClienteDoAcervo: Vínculo, edição, exclusão
+
+- **Data/hora**: 2026-09-21 00:34 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 003/T208, 005/T403 (metade cliente), 006/T503 (metade cliente) — concluídas
+- **Commit anterior**: `a7a985a`
+
+A Seam `ClienteDoAcervo` ganhou `vincular`, `desvincular`, `obterBaralho`,
+`editarCartao`, `renomearBaralho`, `excluirCartao` e `excluirBaralho` nos dois
+Adapters; `ClienteEmMemoria` passou a derivar contagem e elegibilidade de seus
+Vínculos. Baterias compartilhadas rodam contra os dois Adapters, com casos de
+resposta fora do contrato para `ClienteHttp`. Com a metade backend já em `main`,
+T403 e T503 ficam concluídas. Arquiteto conferiu os status tratados contra os
+contratos e repetiu em `main`: backend 164, frontend 171, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

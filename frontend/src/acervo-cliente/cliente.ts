@@ -1,10 +1,17 @@
-import type { CodigoDeErroDeBaralho, CodigoDeErroDeCartao } from "./validacao";
+import type {
+  CodigoDeErroDeBaralho,
+  CodigoDeErroDeCartao,
+  CodigoDeErroDeNaoEncontrado,
+  CodigoDeErroDeVinculo,
+} from "./validacao";
 
 /**
- * Seam `ClienteDoAcervo` (T008; specs/001-criar-cartao/plan.md; T106).
+ * Seam `ClienteDoAcervo` (T008; specs/001-criar-cartao/plan.md; T106;
+ * specs/003-vincular-cartao-baralho/plan.md; specs/005-editar-cartao-e-baralho/plan.md;
+ * specs/006-excluir-cartao-e-baralho/plan.md).
  *
- * Espelha as quatro operações da Interface do Module `Acervo` e acrescenta o
- * que a rede introduz. As operações são **assíncronas e sujeitas a
+ * Espelha as operações da Interface do Module `Acervo` e acrescenta o que a
+ * rede introduz. As operações são **assíncronas e sujeitas a
  * indisponibilidade** — a diferença essencial em relação ao `Acervo`, e a
  * razão de esta Seam existir. Dois Adapters justificados: `ClienteHttp` em
  * produção e `ClienteEmMemoria` em teste.
@@ -25,6 +32,17 @@ export interface Cartao {
   id: string;
   frente: string;
   verso: string;
+}
+
+/**
+ * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
+ * está vinculado (FR-003). O Cartão sem nenhum Baralho devolve `baralhos: []`
+ * — estado legítimo, e não ausência de campo. `criarCartao` e `editarCartao`
+ * continuam devolvendo apenas `Cartao`, sem carregar campos que a escrita não
+ * exige.
+ */
+export interface CartaoListado extends Cartao {
+  baralhos: Baralho[];
 }
 
 /**
@@ -65,6 +83,14 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS =
   "Não foi possível acessar os Baralhos. Tente novamente.";
 
 /**
+ * Mensagem em português destinada ao usuário quando o transporte até as rotas
+ * de Vínculo falha (FR-046). Mantida separada das mensagens de Cartão e de
+ * Baralho para que cada operação anuncie a entidade que falhou.
+ */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS =
+  "Não foi possível acessar os Vínculos. Tente novamente.";
+
+/**
  * Resultado de `criarCartao`. Falha é resultado previsto, e não exceção: o
  * caller distingue `ok` e, na recusa, recebe o código estável e a mensagem
  * em português — os códigos de regra de Cartão, ou `indisponivel`.
@@ -82,7 +108,7 @@ export type ResultadoDeCriacaoDeCartao =
  * modo de falha é `indisponivel`, e nenhuma lista é entregue sem sucesso.
  */
 export type ResultadoDeListagemDeCartoes =
-  | { ok: true; cartoes: Cartao[] }
+  | { ok: true; cartoes: CartaoListado[] }
   | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
 
 /**
@@ -109,13 +135,22 @@ export interface DadosDeBaralho {
 
 /**
  * Baralho como devolvido por `listarBaralhos`: o Baralho mais a contagem de
- * Cartões e a elegibilidade, ambas derivadas na leitura — nunca armazenadas
- * (FR-024). Nesta feature são sempre `0` e `false`, porque ainda não existe
- * Vínculo.
+ * Cartões e a elegibilidade, ambas derivadas na leitura a partir dos Vínculos
+ * — nunca armazenadas (FR-024).
  */
 export interface BaralhoListado extends Baralho {
   quantidadeDeCartoes: number;
   elegivel: boolean;
+}
+
+/**
+ * Baralho como devolvido por `obterBaralho`: o Baralho com a elegibilidade
+ * derivada e os Cartões vinculados, conforme o contrato de
+ * `GET /baralhos/{id}` (FR-014).
+ */
+export interface BaralhoComCartoes extends Baralho {
+  elegivel: boolean;
+  cartoes: Cartao[];
 }
 
 /**
@@ -140,9 +175,103 @@ export type ResultadoDeListagemDeBaralhos =
   | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
 
 /**
+ * Resultado de `vincular`. Sucesso não tem carga; as recusas de domínio são
+ * `vinculo_duplicado` (par já existente) e `nao_encontrado` (Cartão ou Baralho
+ * inexistente).
+ */
+export type ResultadoDeVinculacao =
+  | { ok: true }
+  | {
+      ok: false;
+      erro:
+        | "vinculo_duplicado"
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `desvincular`. Sucesso não tem carga; a única recusa de domínio
+ * é `vinculo_nao_encontrado` (Vínculo inexistente).
+ */
+export type ResultadoDeDesvinculacao =
+  | { ok: true }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeVinculo | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterBaralho`. Sucesso devolve o Baralho com seus Cartões;
+ * Baralho inexistente é recusado como `nao_encontrado`.
+ */
+export type ResultadoDeObterBaralho =
+  | { ok: true; baralho: BaralhoComCartoes }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `editarCartao`. As regras de conteúdo são as mesmas da criação;
+ * Cartão inexistente é recusado como `nao_encontrado`.
+ */
+export type ResultadoDeEdicaoDeCartao =
+  | { ok: true; cartao: Cartao }
+  | {
+      ok: false;
+      erro:
+        | CodigoDeErroDeCartao
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `renomearBaralho`. As regras de nome são as mesmas da criação;
+ * Baralho inexistente é recusado como `nao_encontrado`.
+ */
+export type ResultadoDeRenomeacaoDeBaralho =
+  | { ok: true; baralho: Baralho }
+  | {
+      ok: false;
+      erro:
+        | CodigoDeErroDeBaralho
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `excluirCartao`. Sucesso não tem carga; Cartão inexistente é
+ * recusado como `nao_encontrado`.
+ */
+export type ResultadoDeExclusaoDeCartao =
+  | { ok: true }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `excluirBaralho`. Sucesso não tem carga; Baralho inexistente é
+ * recusado como `nao_encontrado`.
+ */
+export type ResultadoDeExclusaoDeBaralho =
+  | { ok: true }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
  *
- * Quatro operações assíncronas escondem o transporte até a API e a forma dos
+ * As operações assíncronas escondem o transporte até a API e a forma dos
  * dados na rede. Os dois Adapters — `ClienteHttp` e `ClienteEmMemoria` —
  * satisfazem esta mesma Interface e passam pela mesma bateria de contrato
  * com resultados idênticos.
@@ -151,9 +280,10 @@ export interface ClienteDoAcervo {
   criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
 
   /**
-   * Lista todos os Cartões existentes, cada um com sua Frente e seu Verso
-   * (FR-003, FR-004). A Frente não é identificador: dois Cartões de Frente
-   * idêntica são ambos devolvidos, sem deduplicação.
+   * Lista todos os Cartões existentes, cada um com sua Frente, seu Verso e
+   * os Baralhos a que está vinculado (FR-003, FR-004). A Frente não é
+   * identificador: dois Cartões de Frente idêntica são ambos devolvidos, sem
+   * deduplicação.
    */
   listarCartoes(): Promise<ResultadoDeListagemDeCartoes>;
 
@@ -167,9 +297,63 @@ export interface ClienteDoAcervo {
 
   /**
    * Lista todos os Baralhos existentes, cada um com id, nome, contagem de
-   * Cartões e elegibilidade derivadas na leitura. O nome é rótulo, não
-   * identificador: dois Baralhos de nome idêntico são ambos devolvidos, sem
-   * deduplicação.
+   * Cartões e elegibilidade derivadas na leitura, a partir dos Vínculos. O
+   * nome é rótulo, não identificador: dois Baralhos de nome idêntico são
+   * ambos devolvidos, sem deduplicação.
    */
   listarBaralhos(): Promise<ResultadoDeListagemDeBaralhos>;
+
+  /**
+   * Devolve um Baralho com a elegibilidade derivada e os Cartões vinculados
+   * (FR-014). Baralho inexistente é recusado como `nao_encontrado`.
+   */
+  obterBaralho(id: string): Promise<ResultadoDeObterBaralho>;
+
+  /**
+   * Vincula um Cartão existente a um Baralho existente (FR-019). O par
+   * repetido é recusado como `vinculo_duplicado`; Cartão ou Baralho
+   * inexistente, como `nao_encontrado`.
+   */
+  vincular(cartaoId: string, baralhoId: string): Promise<ResultadoDeVinculacao>;
+
+  /**
+   * Desfaz o Vínculo, preservando Cartão e Baralho (FR-021). Vínculo
+   * inexistente é recusado como `vinculo_nao_encontrado`.
+   */
+  desvincular(
+    cartaoId: string,
+    baralhoId: string,
+  ): Promise<ResultadoDeDesvinculacao>;
+
+  /**
+   * Edita a Frente e o Verso de um Cartão existente (FR-005), reaplicando as
+   * mesmas regras de conteúdo da criação. A alteração vale em todos os
+   * Baralhos a que o Cartão está vinculado, sem alterar Vínculos.
+   */
+  editarCartao(
+    id: string,
+    frente: string,
+    verso: string,
+  ): Promise<ResultadoDeEdicaoDeCartao>;
+
+  /**
+   * Renomeia um Baralho existente (FR-015), reaplicando as mesmas regras de
+   * nome da criação. Vínculos e elegibilidade são preservados.
+   */
+  renomearBaralho(
+    id: string,
+    nome: string,
+  ): Promise<ResultadoDeRenomeacaoDeBaralho>;
+
+  /**
+   * Exclui um Cartão existente (FR-007), removendo também os seus Vínculos e
+   * preservando todos os Baralhos (FR-008).
+   */
+  excluirCartao(id: string): Promise<ResultadoDeExclusaoDeCartao>;
+
+  /**
+   * Exclui um Baralho existente (FR-016), removendo também os seus Vínculos e
+   * preservando todos os Cartões (FR-017).
+   */
+  excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
 }
