@@ -4371,3 +4371,52 @@ Premissas "a confirmar no clarify":
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-081
+
+> **SPEC KIT** — Comando: plan | Invocação: skill `speckit-plan` e
+> `setup-plan.sh --json`; redação por worker `deepseek-flash` em worktree
+> exclusivo | Integração: claude | Artefatos: plan.md, research.md,
+> data-model.md, contracts/porta-de-armazenamento.md,
+> contracts/scripts-e-construcao.md, quickstart.md (specs/009-porta-de-persistencia)
+
+- **Data/hora**: 2026-09-21 02:29 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 009-porta-de-persistencia / plan
+- **Commit anterior**: `02c1614` (registra o hash de EVT-080)
+
+### Decisões de arquitetura (Arquiteto)
+
+- **Ports no nível do domínio**, assíncronas: `ArmazenamentoDoAcervo` e, na
+  007, `ArmazenamentoDeUsuarios`. Nenhum SQL atravessa a Port. Violações de
+  restrição chegam como resultados tipados. As regras continuam nos Modules.
+- **Reversão explícita da decisão da 001**, que rejeitou a Port de repositório
+  por ter um único Adapter. Com o SQLite agora e o PostgreSQL na 010, a Seam é
+  real.
+- **Interface do `Acervo` assíncrona**. O contrato HTTP não muda, e o frontend
+  fica intocado.
+- **Adapter SQLite** em `backend/src/armazenamento/sqlite/`, dono das migrações
+  existentes, sem mudar conteúdo nem versões.
+- **Bateria compartilhada da Port**, parametrizada pela fábrica do Adapter.
+- **Composition roots por banco** (`src/entradas/local.ts`, e na 010
+  `nuvem.ts`). Um teste confere que nenhum Module importa driver nem Adapter.
+- **Build**: `scripts/construir.mjs --banco=...` com esbuild (devDependency
+  nova) gera `dist/<banco>/servidor.mjs` contendo só a entrada escolhida.
+  Scripts: `typecheck`, `build` (exige o parâmetro), `build:local`,
+  `start:local` e `dev`. Os portões de qualidade passam a ser `typecheck` e
+  `build:local`.
+- **Seção "Impacto em 007 e 008"**: os planos delas são lidos sobre as Ports
+  assíncronas.
+
+### Interpretações do worker aceitas
+
+- Na 009, `--banco=postgresql` é recusado como valor ainda não aceito; a 010 o
+  acrescenta.
+- O "único comando" a partir de uma cópia limpa é `npm run dev`.
+- Os quickstarts de 001 a 008 citam `npm run build` como verificação de tipos
+  e precisam ser ajustados. Isso fica registrado para a etapa de tasks.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
