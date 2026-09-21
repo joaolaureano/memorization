@@ -4900,3 +4900,50 @@ Pré-condições conferidas sem exibir valores:
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum ARN com conta, connection string ou
   credencial registrado.
+
+---
+
+## EVT-095
+
+> **SPEC KIT** — Comando: plan | Invocação: skill `speckit-plan` e
+> `setup-plan.sh --json`; redação por worker `deepseek-flash` | Integração:
+> claude | Artefatos: plan.md, research.md, data-model.md,
+> contracts/funcao-da-nuvem.md, contracts/pacotes-e-operacao.md, quickstart.md
+> (specs/011-hospedagem-aws)
+
+- **Data/hora**: 2026-09-21 07:08 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / plan
+- **Commit anterior**: `e689c5c` (registra o hash de EVT-094)
+
+### Decisões do Arquiteto
+
+- **Raiz de composição `entradas/lambda.ts`** com `@fastify/aws-lambda`. A
+  aplicação é montada uma vez por contêiner; a promise de inicialização é
+  descartada quando falha. Não há `listen`.
+- **Seam `LeitorDeSegredos`** com dois Adapters: SSM (`GetParameters` com
+  decriptação, três nomes) e memória.
+- **Guarda do segredo de origem** como primeiro hook, com `timingSafeEqual` e
+  resposta 403.
+- **Reuso da 010**: validação de `DB_URL` e conferência do esquema sem migrar.
+- **CORS** desligado na função e mantido no modo local.
+- **Pacote**: `--banco=lambda` gera `dist/lambda/lambda.mjs` e
+  `backend/dist-lambda.zip`.
+- **Infra**: `SEGREDO_DAS_SENHAS` no SSM e memória de 1024 MB.
+- **Checagens da infra**: `tofu fmt` e `tofu validate`.
+- **Frontend**: script `build:aws`.
+- **Manual de operação** no quickstart.
+- **`aws_pendencias.md`** será removido ao final.
+
+### Escolhas do worker aceitas
+
+- `--banco=lambda` como valor único, preservando o contrato de construção da
+  009.
+- A guarda de origem é registrada por opção do `criarServidor`, para ser o
+  primeiro hook.
+- A Implementation fica em `src/funcao/`, e o dublê em memória em
+  `tests/funcao/`.
+- O corpo do 403 é o mesmo da stub já validada em campo.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
