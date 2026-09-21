@@ -1,24 +1,32 @@
 import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
 } from "./cliente";
 import type {
+  Baralho,
+  BaralhoListado,
   Cartao,
   ClienteDoAcervo,
+  DadosDeBaralho,
   DadosDeCartao,
+  ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
+  ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
 } from "./cliente";
-import { ehCodigoDeErroDeCartao } from "./validacao";
-import type { CodigoDeErroDeCartao } from "./validacao";
+import { ehCodigoDeErroDeBaralho, ehCodigoDeErroDeCartao } from "./validacao";
+import type { CodigoDeErroDeBaralho, CodigoDeErroDeCartao } from "./validacao";
 
 /**
- * Adapter HTTP do `ClienteDoAcervo` (T008).
+ * Adapter HTTP do `ClienteDoAcervo` (T008, T106).
  *
- * Transporta as duas operações até a API conforme o contrato
- * (specs/001-criar-cartao/contracts/api-cartoes.md): `POST /cartoes` para
- * criar, `GET /cartoes` para listar. O endereço da API é recebido na
- * construção — em tempo de build na aplicação (plan.md).
+ * Transporta as quatro operações até a API conforme os contratos de Cartões
+ * (specs/001-criar-cartao/contracts/api-cartoes.md) e de Baralhos
+ * (specs/002-criar-baralho/contracts/api-baralhos.md): `POST /cartoes` e
+ * `POST /baralhos` para criar, `GET /cartoes` e `GET /baralhos` para listar.
+ * O endereço da API é recebido na construção — em tempo de build na aplicação
+ * (plan.md).
  *
  * Invariante do Adapter: nenhuma resposta que não seja de sucesso aparece
  * como operação concluída (FR-044). Sucesso é, exatamente, `201` na criação
@@ -73,6 +81,46 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  async criarBaralho(
+    dados: DadosDeBaralho,
+  ): Promise<ResultadoDeCriacaoDeBaralho> {
+    try {
+      const resposta = await fetch(`${this.endereco}/baralhos`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nome: dados.nome }),
+      });
+
+      if (resposta.status === 201) {
+        const baralho = (await resposta.json()) as Baralho;
+        return { ok: true, baralho };
+      }
+
+      if (resposta.status === 400) {
+        return this.traduzirRecusaDeBaralho(await resposta.json());
+      }
+
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    }
+  }
+
+  async listarBaralhos(): Promise<ResultadoDeListagemDeBaralhos> {
+    try {
+      const resposta = await fetch(`${this.endereco}/baralhos`);
+
+      if (resposta.status === 200) {
+        const baralhos = (await resposta.json()) as BaralhoListado[];
+        return { ok: true, baralhos };
+      }
+
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    }
+  }
+
   /**
    * Traduz a recusa uniforme do contrato (`{ erro, mensagem }`) no modo de
    * erro correspondente. Um código que não seja regra de Cartão — por
@@ -87,6 +135,21 @@ export class ClienteHttp implements ClienteDoAcervo {
     return this.falhaDeIndisponibilidade();
   }
 
+  /**
+   * Traduz a recusa uniforme do contrato de Baralhos no modo de erro
+   * correspondente. Um código que não seja regra de Baralho vira
+   * `indisponivel`, e a operação continua não concluída.
+   */
+  private traduzirRecusaDeBaralho(
+    corpo: unknown,
+  ): ResultadoDeCriacaoDeBaralho {
+    if (ehCorpoDeRecusaDeBaralho(corpo)) {
+      return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+    }
+
+    return this.falhaDeIndisponibilidadeDeBaralhos();
+  }
+
   private falhaDeIndisponibilidade(): {
     ok: false;
     erro: typeof INDISPONIVEL;
@@ -96,6 +159,18 @@ export class ClienteHttp implements ClienteDoAcervo {
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDeBaralhos(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
     };
   }
 }
@@ -115,6 +190,26 @@ function ehCorpoDeRecusa(
 
   return (
     ehCodigoDeErroDeCartao(campos.erro) &&
+    typeof campos.mensagem === "string"
+  );
+}
+
+/**
+ * Reconhece o corpo de recusa do contrato de Baralhos: código estável de
+ * regra de Baralho e mensagem em texto. Qualquer outra forma é tratada como
+ * indisponibilidade.
+ */
+function ehCorpoDeRecusaDeBaralho(
+  corpo: unknown,
+): corpo is { erro: CodigoDeErroDeBaralho; mensagem: string } {
+  if (typeof corpo !== "object" || corpo === null) {
+    return false;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  return (
+    ehCodigoDeErroDeBaralho(campos.erro) &&
     typeof campos.mensagem === "string"
   );
 }

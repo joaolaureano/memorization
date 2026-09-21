@@ -3439,3 +3439,40 @@ T104 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-054
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: rotas de Baralho, ClienteDoAcervo de Baralho
+
+- **Data/hora**: 2026-09-21 00:02 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T105 e T106 — concluídas
+- **Commit anterior**: `d06ed99`
+
+### Diretiva do Product Owner
+
+"Finalize o produto. Use DeepSeek como implementadores; você será o arquiteto."
+
+### Mecanismo de worker
+
+Após o travamento do job de T105 (EVT-053), o Arquiteto passou a acionar os
+workers por um loop agêntico próprio sobre a API DeepSeek (`deepseek-v4-pro`),
+fora do repositório (scratchpad). Ferramentas do worker: listar, ler, escrever e
+editar arquivos, e executar comandos no worktree. Escrita confinada a
+`backend/`, `frontend/` e `e2e/`; `git commit` e comandos destrutivos
+bloqueados. Cada worker recebe worktree exclusivo com dependências instaladas e
+baseline verde. O Arquiteto revisa o diff, repete as verificações e integra.
+
+### T105 e T106
+
+`POST /baralhos` e `GET /baralhos` como Adapter fino sobre o `Acervo`, com
+CORS equivalente ao de Cartões; nome repetido devolve 201. `ClienteDoAcervo`
+ganhou `criarBaralho` e `listarBaralhos` nos dois Adapters, com a mesma
+bateria de contrato. Arquiteto repetiu: backend 97 testes, frontend 90 testes,
+build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

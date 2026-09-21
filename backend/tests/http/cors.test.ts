@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { criarAcervo } from "../../src/acervo/acervo.ts";
 import { abrirBanco } from "../../src/acervo/esquema.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
-import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
+import {
+  registrarRotasDeBaralhos,
+  registrarRotasDeCartoes,
+} from "../../src/http/rotas.ts";
 
 /**
  * T014 — CORS mínimo para o frontend local
@@ -29,6 +32,7 @@ beforeEach(() => {
   banco = abrirBanco(":memory:");
   servidor = criarServidor();
   registrarRotasDeCartoes(servidor, criarAcervo(banco));
+  registrarRotasDeBaralhos(servidor, criarAcervo(banco));
 });
 
 afterEach(async () => {
@@ -79,6 +83,54 @@ describe("CORS para o frontend local", () => {
       method: "POST",
       url: "/cartoes",
       payload: { frente: "", verso: "Caminhar" },
+    });
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de POST /baralhos com 204 e os cabeçalhos de permissão", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/baralhos",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
+    expect(resposta.headers["access-control-allow-headers"]).toContain(
+      "content-type",
+    );
+  });
+
+  it("permite a leitura da listagem: GET /baralhos devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({ method: "GET", url: "/baralhos" });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("permite a leitura da criação concluída: POST /baralhos 201 devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("permite a leitura até da recusa: POST /baralhos 400 devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "" },
     });
 
     expect(resposta.statusCode).toBe(400);

@@ -38,8 +38,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 - [X] T103 `Acervo` cria Baralho, recusando nome inválido
 - [X] T104 `Acervo` lista Baralhos com elegibilidade derivada
-- [ ] T105 Rotas `POST /baralhos` e `GET /baralhos` conforme o contrato
-- [ ] T106 `ClienteDoAcervo` cobre as rotas de Baralho nos dois Adapters
+- [X] T105 Rotas `POST /baralhos` e `GET /baralhos` conforme o contrato
+- [X] T106 `ClienteDoAcervo` cobre as rotas de Baralho nos dois Adapters
 - [ ] T107 Telas de lista e criação de Baralho, com estado vazio e aviso de limite
 - [ ] T108 Falha de gravação reportada, com o conteúdo digitado preservado
 

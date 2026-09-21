@@ -3,7 +3,11 @@ import type { AddressInfo } from "node:net";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 
 import type { Acervo } from "../acervo/acervo.ts";
-import { CORPO_INVALIDO, registrarRotasDeCartoes } from "./rotas.ts";
+import {
+  CORPO_INVALIDO,
+  registrarRotasDeBaralhos,
+  registrarRotasDeCartoes,
+} from "./rotas.ts";
 
 /**
  * Servidor HTTP local.
@@ -17,10 +21,15 @@ export const HOST_LOCAL = "127.0.0.1";
 
 /**
  * Caminho das rotas de Cartão (contrato `api-cartoes.md`). Usado pelo CORS
- * mínimo: são as únicas rotas que o frontend de navegador consome de outra
- * origem.
+ * mínimo: o frontend de navegador consome essas rotas de outra origem.
  */
 export const CAMINHO_DOS_CARTOES = "/cartoes";
+
+/**
+ * Caminho das rotas de Baralho (contrato `api-baralhos.md`). Passa a receber
+ * o mesmo tratamento de CORS das rotas de Cartão.
+ */
+export const CAMINHO_DOS_BARALHOS = "/baralhos";
 
 /**
  * Erro lançado quando o servidor está escutando fora do loopback.
@@ -66,12 +75,12 @@ export function criarServidor(): FastifyInstance {
    *
    * O frontend real roda em outra porta do mesmo loopback, e o navegador
    * trata a diferença de porta como outra origem: sem estes cabeçalhos, o
-   * `fetch` do navegador recusa o pré-voo do `POST /cartoes` (o content-type
-   * application/json torna a requisição não simples) e impede a leitura das
-   * respostas de listagem e de criação. Como a aplicação não possui
-   * autenticação e escuta exclusivamente em 127.0.0.1, permitir qualquer
-   * origem é a configuração mínima segura — o serviço não é alcançável pela
-   * rede.
+   * `fetch` do navegador recusa o pré-voo dos `POST` de Cartões e de Baralhos
+   * (o content-type application/json torna a requisição não simples) e impede
+   * a leitura das respostas de listagem e de criação. Como a aplicação não
+   * possui autenticação e escuta exclusivamente em 127.0.0.1, permitir
+   * qualquer origem é a configuração mínima segura — o serviço não é
+   * alcançável pela rede.
    */
   servidor.options(CAMINHO_DOS_CARTOES, async (_requisicao, resposta) => {
     resposta
@@ -83,8 +92,23 @@ export function criarServidor(): FastifyInstance {
     return resposta.code(204).send();
   });
 
+  servidor.options(CAMINHO_DOS_BARALHOS, async (_requisicao, resposta) => {
+    resposta
+      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-methods", "GET, POST, OPTIONS")
+      .header("access-control-allow-headers", "content-type")
+      .header("access-control-max-age", "86400");
+
+    return resposta.code(204).send();
+  });
+
   servidor.addHook("onSend", async (requisicao, resposta, carga) => {
-    if (requisicao.url.split("?")[0] === CAMINHO_DOS_CARTOES) {
+    const caminho = requisicao.url.split("?")[0];
+
+    if (
+      caminho === CAMINHO_DOS_CARTOES ||
+      caminho === CAMINHO_DOS_BARALHOS
+    ) {
       resposta.header("access-control-allow-origin", "*");
     }
 
@@ -127,6 +151,7 @@ export async function iniciarServidor(
 ): Promise<FastifyInstance> {
   const servidor = criarServidor();
   registrarRotasDeCartoes(servidor, acervo);
+  registrarRotasDeBaralhos(servidor, acervo);
 
   await servidor.listen(opcoesDeEscuta(env));
 
