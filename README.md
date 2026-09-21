@@ -1,104 +1,126 @@
 # Memorization
 
-Aplicação web de estudo por flashcards. A pessoa registra **Cartões** (Frente e
-Verso), agrupa-os em **Baralhos** por assunto e os exercita em **Sessões de
-estudo**, com recordação ativa e autoavaliação. Cada **Usuário** tem o seu
-próprio acervo.
+Trabalho da cadeira **AGL11091 - Tendências em Engenharia de Software**.
 
-Publicada na AWS: <https://d2mp2j3zeufjr0.cloudfront.net>
+O objetivo principal é **estudar e aplicar Spec-Driven Development (SDD)** com o
+[GitHub Spec Kit](https://github.com/github/spec-kit). O produto construído para
+exercitar a metodologia é uma aplicação web de estudo por flashcards. A pessoa
+cria **Cartões** (Frente e Verso), agrupa-os em **Baralhos** e os pratica em
+**Sessões de estudo**, revelando o Verso e declarando se acertou ou errou. Cada
+**Usuário** tem o seu próprio acervo.
 
-## Como o projeto foi construído
-
-Desenvolvimento dirigido por especificação (Spec-Driven Development), com o
-[GitHub Spec Kit](https://github.com/github/spec-kit). Cada funcionalidade passou
-por *specify → clarify → plan → tasks → analyze → implement → converge*:
-
-| Feature | O que entrega |
-|---|---|
-| [`001-criar-cartao`](specs/001-criar-cartao/spec.md) | Criar e listar Cartões |
-| [`002-criar-baralho`](specs/002-criar-baralho/spec.md) | Criar e listar Baralhos |
-| [`003-vincular-cartao-baralho`](specs/003-vincular-cartao-baralho/spec.md) | Vincular Cartões a Baralhos; elegibilidade derivada |
-| [`004-sessao-de-estudo`](specs/004-sessao-de-estudo/spec.md) | Sessão de estudo: Revelação, Resultado e Resumo |
-| [`005-editar-cartao-e-baralho`](specs/005-editar-cartao-e-baralho/spec.md) | Editar Cartão e renomear Baralho |
-| [`006-excluir-cartao-e-baralho`](specs/006-excluir-cartao-e-baralho/spec.md) | Excluir, com confirmação e Vínculos em cascata |
-| [`007-criar-usuario`](specs/007-criar-usuario/spec.md) | Cadastro; Senha com sal, HMAC e scrypt |
-| [`008-entrar`](specs/008-entrar/spec.md) | Entrar e Sair; Credencial em toda requisição; acervo por Usuário |
-| [`009-porta-de-persistencia`](specs/009-porta-de-persistencia/spec.md) | Port de armazenamento; Adapter SQLite; build por banco |
-| [`010-postgresql-na-nuvem`](specs/010-postgresql-na-nuvem/spec.md) | Adapter PostgreSQL com TLS verificado; migração da nuvem |
-| [`011-hospedagem-aws`](specs/011-hospedagem-aws/spec.md) | Lambda, CloudFront, S3, SSM e Neon |
-
-Referências normativas:
-- [`.specify/memory/constitution.md`](.specify/memory/constitution.md): a
-  constituição do projeto;
-- [`CONTEXT.md`](CONTEXT.md): o glossário do domínio;
-- [`SESSION.md`](SESSION.md): o registro auditável, append-only, de todas as
-  decisões.
-
-Todo o código foi escrito por workers DeepSeek, cada um em worktree exclusivo.
-O papel de arquiteto e revisor coube ao Claude, que revisou cada diff e repetiu
-as verificações antes de integrar.
+Cada funcionalidade nasceu de uma especificação e percorreu o fluxo do Spec Kit:
+*specify → clarify → plan → tasks → analyze → implement → converge*. O código
+só foi escrito depois de a spec, o plano e as tarefas estarem aprovados, e todo
+requisito vigente é citado por pelo menos um teste que o verifica.
 
 ## Stack
 
-TypeScript de ponta a ponta sobre Node 24+.
-- **Backend**: Fastify, com Zod nas bordas. O armazenamento fica atrás de uma
-  Port: `node:sqlite` na execução local e `pg` na nuvem.
-- **Frontend**: React com Vite.
-- **Testes**: Vitest e Testing Library; E2E com Playwright contra servidores
-  reais.
-- **Infraestrutura**: OpenTofu.
+| Camada | Tecnologia |
+|---|---|
+| Linguagem | TypeScript de ponta a ponta, sobre Node.js 24+ |
+| Backend | Fastify, com validação de entrada por Zod |
+| Frontend | React com Vite (SPA com navegação por hash) |
+| Persistência | Port de armazenamento com dois Adapters: SQLite (`node:sqlite`) na execução local e PostgreSQL (`pg`) na nuvem |
+| Segurança | Senha com sal por Usuário, HMAC-SHA256 com segredo do servidor e scrypt; Credencial enviada em toda requisição, sem sessão nem cookie |
+| Testes | Vitest e Testing Library; E2E com Playwright em navegador real, contra API e banco reais |
+| Infraestrutura | AWS provisionada com OpenTofu; banco PostgreSQL no Neon |
 
-```text
-backend/    API, Modules de domínio (Acervo, Identidade), Adapters de armazenamento, entradas
-frontend/   SPA (navegação por hash) e a Seam ClienteDoAcervo
-e2e/        provas em navegador real
-specs/      artefatos do Spec Kit, um diretório por feature
-backend/terraform/   infraestrutura AWS
+Scripts principais do backend:
+
+| Script | Uso |
+|---|---|
+| `npm run dev` | Desenvolvimento local com SQLite |
+| `npm run build:local` / `start:local` | Pacote e execução local com SQLite |
+| `npm run build:cloud` / `migrate:cloud` / `start:cloud` | Pacote, migração e execução com PostgreSQL (`DB_URL`) |
+| `npm run build:lambda` | Pacote da função AWS Lambda (`dist-lambda.zip`) |
+
+## Entrega na AWS
+
+A aplicação publicada está em **<https://d2mp2j3zeufjr0.cloudfront.net>**.
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    U[Navegador] -->|HTTPS| CF[Amazon CloudFront]
+    CF -->|/ e assets| S3[(Amazon S3<br/>SPA React)]
+    CF -->|/api/* e /health<br/>+ segredo de origem| L[AWS Lambda<br/>API Fastify]
+    L -->|lê segredos no início a frio| SSM[AWS SSM<br/>Parameter Store]
+    L -->|TLS verificado| DB[(Neon<br/>PostgreSQL)]
+    L -.->|logs| CW[Amazon CloudWatch]
 ```
 
-## Executar localmente (SQLite)
+- **CloudFront** é a porta única. Serve o SPA a partir do S3 e encaminha
+  `/api/*` à Lambda, removendo o prefixo `/api` na borda. Também injeta um
+  segredo de origem, sem o qual a Lambda responde 403.
+- **Lambda** executa a mesma API do modo local, sem escutar porta alguma.
+- **SSM** guarda os três segredos: a URL do banco, o segredo de origem e o
+  segredo das Senhas.
+- **Neon** hospeda o PostgreSQL. As migrações rodam por comando separado, antes
+  do deploy.
+
+O passo a passo da publicação está em
+[`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
+e em [`backend/terraform/README.md`](backend/terraform/README.md).
+
+## Estrutura padrão de uma spec
+
+Cada funcionalidade tem o seu diretório em `specs/NNN-nome/`, gerado e mantido
+pelos comandos do Spec Kit. Todos seguem a mesma estrutura:
+
+| Arquivo | Papel |
+|---|---|
+| `spec.md` | **O quê e por quê**: histórias de usuário, cenários de aceitação, requisitos funcionais (`FR-xxx`), critérios de sucesso (`SC-xxx`) e esclarecimentos do Product Owner. Não trata de tecnologia |
+| `checklists/requirements.md` | Checklist de qualidade da spec: completude, testabilidade e ausência de detalhes de implementação |
+| `plan.md` | **Como**: decisões técnicas, Modules e Interfaces, conferência contra a constituição, riscos e estrutura de pastas |
+| `research.md` | Cada decisão técnica relevante, com justificativa e alternativas descartadas |
+| `data-model.md` | Entidades, campos, restrições e migrações |
+| `contracts/` | Contratos observáveis: rotas HTTP, Interfaces de Module, scripts |
+| `quickstart.md` | Roteiro de validação ponta a ponta, com comandos e resultados esperados |
+| `tasks.md` | Tarefas pequenas e ordenadas, com dependências, testes e matriz de rastreabilidade entre requisitos e tarefas |
+
+Além delas, [`.specify/memory/constitution.md`](.specify/memory/constitution.md)
+reúne os princípios que valem para todas as specs, e [`CONTEXT.md`](CONTEXT.md)
+é o glossário do domínio.
+
+## Specs criadas
+
+| Spec | Do que trata |
+|---|---|
+| [`specs/001-criar-cartao/`](specs/001-criar-cartao/) | Criar e listar Cartões, com limites de tamanho, persistência, acessibilidade e uso em telefone. Estabelece a base do projeto |
+| [`specs/002-criar-baralho/`](specs/002-criar-baralho/) | Criar e listar Baralhos. Introduz as migrações versionadas do esquema |
+| [`specs/003-vincular-cartao-baralho/`](specs/003-vincular-cartao-baralho/) | Vincular Cartões a Baralhos (um Cartão pode estar em vários). Um Baralho é elegível para estudo quando tem pelo menos um Cartão |
+| [`specs/004-sessao-de-estudo/`](specs/004-sessao-de-estudo/) | Sessão de estudo com ordem aleatória, sem repetição, Revelação do Verso, Resultado e Resumo. Nada é persistido |
+| [`specs/005-editar-cartao-e-baralho/`](specs/005-editar-cartao-e-baralho/) | Editar Cartão e renomear Baralho, preservando os Vínculos |
+| [`specs/006-excluir-cartao-e-baralho/`](specs/006-excluir-cartao-e-baralho/) | Excluir Cartão ou Baralho com confirmação. Os Vínculos saem em cascata e a outra entidade é preservada |
+| [`specs/007-criar-usuario/`](specs/007-criar-usuario/) | Cadastro de Usuário. A Senha é guardada com sal, HMAC com segredo do servidor e scrypt, de forma que um vazamento não a revele |
+| [`specs/008-entrar/`](specs/008-entrar/) | Entrar e Sair. A Credencial fica só na memória da página e segue em toda requisição, e cada Usuário vê apenas o próprio acervo |
+| [`specs/009-porta-de-persistencia/`](specs/009-porta-de-persistencia/) | Port and Adapter para a persistência, com o Adapter SQLite e a escolha do banco por parâmetro na construção |
+| [`specs/010-postgresql-na-nuvem/`](specs/010-postgresql-na-nuvem/) | Adapter PostgreSQL por URL, com TLS verificado, comando de migração e scripts de nuvem |
+| [`specs/011-hospedagem-aws/`](specs/011-hospedagem-aws/) | Hospedagem na AWS: função Lambda, segredos no SSM, segredo de origem, pacote da função e publicação |
+
+## SESSION.md
+
+[`SESSION.md`](SESSION.md) é o **registro auditável** do projeto. Cada interação
+relevante vira um evento numerado, com data e hora, ator, comando do Spec Kit
+usado, decisão tomada, verificações executadas e commit correspondente. Os
+eventos anteriores não são reescritos, e nenhum segredo é registrado. É ali que
+fica o histórico das decisões do Product Owner e do Arquiteto.
+
+## Como executar localmente
 
 ```bash
 export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # mantenha o mesmo para a mesma base
-cd backend && npm install && npm run dev               # API em 127.0.0.1:3001
+cd backend && npm install && npm run dev               # API em 127.0.0.1:3001 com SQLite
 cd frontend && npm install && npm run dev              # abrir o endereço impresso pelo Vite
 ```
-
-Em modo empacotado: `npm run build:local && npm run start:local`, dentro de
-`backend/`. A API escuta apenas no loopback.
-
-## Executar com PostgreSQL (configuração de nuvem)
-
-```bash
-cd backend
-npm run build:cloud
-DB_URL='<url-postgresql>' npm run migrate:cloud   # aplica as migrações (endpoint direto no Neon)
-DB_URL='<url-postgresql>' npm run start:cloud     # confere a versão do esquema e nunca migra
-```
-
-A `DB_URL` é um segredo: nunca é versionada nem aparece em logs. A conexão
-exige TLS com certificado verificado.
-
-## Publicar na AWS
-
-O manual de operação completo está em
-[`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md),
-e o resumo em [`backend/terraform/README.md`](backend/terraform/README.md). A
-ordem é:
-1. migrar o Neon;
-2. `npm run build:lambda`;
-3. `tofu apply` com o pacote;
-4. `deploy-frontend.sh`;
-5. validar pelo endereço do CloudFront.
 
 ## Verificação
 
 ```bash
 cd backend  && npm test && npm run typecheck && npm run build:local && npm run lint
 cd frontend && npm test && npm run build && npm run lint
-npm run test:e2e                                   # na raiz
+npm run test:e2e                                   # na raiz, em navegador real
 tofu -chdir=backend/terraform validate
 ```
-
-Todo requisito vigente das specs é citado por pelo menos um teste que o
-verifica (Princípio IX da constituição).
