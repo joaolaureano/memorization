@@ -105,6 +105,12 @@ describe("PaginaDeBaralhos", () => {
     );
     expect(screen.queryByText(/ainda não há Baralhos/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Nome")).toHaveValue("");
+
+    // O nome do Baralho é o acesso à tela de Vínculos do próprio Baralho.
+    const linkDoBaralho = within(baralhoListado).getByRole("link", {
+      name: "Inglês",
+    });
+    expect(linkDoBaralho.getAttribute("href")).toMatch(/^#\/baralhos\//);
   });
 
   it("recusa de domínio exibe a mensagem do cliente e não lista o Baralho (FR-046)", async () => {

@@ -35,6 +35,16 @@ body {
   max-width: 40rem;
   margin: 0 auto;
   padding: 2rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+.voltar {
+  margin: 0 0 1rem;
+}
+
+.voltar a {
+  color: #1a5fb4;
+  font-weight: 600;
 }
 
 .formulario-de-cartao,
@@ -119,6 +129,21 @@ body {
   margin: 0.25rem 0;
 }
 
+.baralhos-do-cartao {
+  font-size: 0.9rem;
+  color: #444444;
+}
+
+.botao-de-vinculo {
+  justify-self: start;
+  padding: 0.4rem 1rem;
+  font: inherit;
+}
+
+.anuncio-de-vinculo {
+  color: #155724;
+}
+
 .lista-de-baralhos {
   margin: 1rem 0 0;
   padding: 0;
@@ -140,6 +165,10 @@ body {
 
 .nome-do-baralho {
   font-weight: 600;
+}
+
+.nome-do-baralho a {
+  color: #1a1a1a;
 }
 
 .elegibilidade-do-baralho {

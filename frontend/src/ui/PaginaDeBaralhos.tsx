@@ -103,9 +103,8 @@ export function PaginaDeBaralhos({
     if (resultado.ok) {
       // O contrato de criação devolve `Baralho` (id e nome); a lista exige
       // também a forma `BaralhoListado`. Um Baralho recém-criado ainda não
-      // tem Vínculo — nesta feature não há Vínculo algum — então os campos
-      // derivados são 0 e falso. A reconciliação abaixo relê os valores
-      // autoritativos quando a listagem tinha falhado.
+      // tem Vínculo, então os campos derivados são 0 e falso. A reconciliação
+      // abaixo relê os valores autoritativos quando a listagem tinha falhado.
       setBaralhos((atuais) => [
         ...atuais,
         {
@@ -239,7 +238,9 @@ export function PaginaDeBaralhos({
           <ul className="lista-de-baralhos">
             {baralhos.map((baralho) => (
               <li key={baralho.id} className="baralho">
-                <p className="nome-do-baralho">{baralho.nome}</p>
+                <p className="nome-do-baralho">
+                  <a href={`#/baralhos/${baralho.id}`}>{baralho.nome}</a>
+                </p>
                 <p className="quantidade-de-cartoes">
                   <span className="rotulo">Cartões</span>{" "}
                   {baralho.quantidadeDeCartoes}

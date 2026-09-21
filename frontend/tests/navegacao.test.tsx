@@ -43,6 +43,17 @@ describe("interpretarRota", () => {
     expect(interpretarRota("#/baralhos")).toEqual({ nome: "baralhos" });
     expect(interpretarRota("#/baralhos/")).toEqual({ nome: "baralhos" });
   });
+
+  it("reconhece a rota de detalhe do Baralho", () => {
+    expect(interpretarRota("#/baralhos/b1")).toEqual({
+      nome: "baralho",
+      id: "b1",
+    });
+    expect(interpretarRota("#/baralhos/b1/")).toEqual({
+      nome: "baralho",
+      id: "b1",
+    });
+  });
 });
 
 describe("Aplicacao — navegação", () => {

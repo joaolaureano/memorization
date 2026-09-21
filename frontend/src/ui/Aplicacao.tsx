@@ -4,6 +4,7 @@ import type { ClienteDoAcervo } from "../acervo-cliente/cliente";
 import { useRota } from "./navegacao";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
+import { PaginaDoBaralho } from "./PaginaDoBaralho";
 
 /**
  * Casca da aplicação e navegação principal.
@@ -54,7 +55,11 @@ export function Aplicacao({ cliente }: PropriedadesDaAplicacao) {
         </a>
         <a
           href="#/baralhos"
-          aria-current={rota.nome === "baralhos" ? "page" : undefined}
+          aria-current={
+            rota.nome === "baralhos" || rota.nome === "baralho"
+              ? "page"
+              : undefined
+          }
         >
           Baralhos
         </a>
@@ -63,6 +68,8 @@ export function Aplicacao({ cliente }: PropriedadesDaAplicacao) {
       <main className="aplicacao" ref={principal}>
         {rota.nome === "baralhos" ? (
           <PaginaDeBaralhos cliente={cliente} />
+        ) : rota.nome === "baralho" ? (
+          <PaginaDoBaralho cliente={cliente} id={rota.id} />
         ) : (
           <PaginaDeCartoes cliente={cliente} />
         )}

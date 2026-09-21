@@ -59,12 +59,12 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Tela, acessibilidade e validação
 
-- [ ] T209 Tela de Vínculos, com os três estados vazios distinguidos
-- [ ] T210 Vincular e desvincular por teclado, com foco preservado
-- [ ] T211 Mudanças de Vínculo e de elegibilidade anunciadas
-- [ ] T212 Falha de gravação reportada, sem exibir Vínculo inexistente
-- [ ] T213 [P] Tela utilizável em largura de telefone
-- [ ] T214 Vínculos sobrevivem a fechar e reabrir
+- [X] T209 Tela de Vínculos, com os três estados vazios distinguidos
+- [X] T210 Vincular e desvincular por teclado, com foco preservado
+- [X] T211 Mudanças de Vínculo e de elegibilidade anunciadas
+- [X] T212 Falha de gravação reportada, sem exibir Vínculo inexistente
+- [X] T213 [P] Tela utilizável em largura de telefone
+- [X] T214 Vínculos sobrevivem a fechar e reabrir
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

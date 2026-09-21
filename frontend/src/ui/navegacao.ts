@@ -20,7 +20,8 @@ export const ROTA_PADRAO = "#/cartoes";
  */
 export type Rota =
   | { nome: "cartoes" }
-  | { nome: "baralhos" };
+  | { nome: "baralhos" }
+  | { nome: "baralho"; id: string };
 
 /**
  * Interpreta o hash corrente como uma `Rota`.
@@ -48,11 +49,11 @@ export function interpretarRota(hash: string): Rota {
     return { nome: "baralhos" };
   }
 
+  if (segmentos.length === 2 && segmentos[0] === "baralhos") {
+    return { nome: "baralho", id: segmentos[1] };
+  }
+
   // Features futuras estendem apenas este bloco:
-  //
-  // if (segmentos.length === 2 && segmentos[0] === "baralhos") {
-  //   return { nome: "baralho", id: segmentos[1] };
-  // }
   //
   // if (
   //   segmentos.length === 3 &&

@@ -242,6 +242,36 @@ export async function encerrarProcesso(
 }
 
 /**
+ * Lê um Baralho direto da API com os Cartões vinculados — a conferência de
+ * persistência exata de Vínculos (os mesmos ids, a mesma elegibilidade e os
+ * mesmos Cartões), além da conferência pela UI.
+ */
+export async function obterBaralhoPelaApi(
+  enderecoDaApi: string,
+  id: string,
+): Promise<{
+  id: string;
+  nome: string;
+  elegivel: boolean;
+  cartoes: { id: string; frente: string; verso: string }[];
+}> {
+  const resposta = await fetch(
+    `${enderecoDaApi}/baralhos/${encodeURIComponent(id)}`,
+  );
+
+  if (!resposta.ok) {
+    throw new Error(`GET /baralhos/${id} respondeu ${resposta.status}`);
+  }
+
+  return (await resposta.json()) as {
+    id: string;
+    nome: string;
+    elegivel: boolean;
+    cartoes: { id: string; frente: string; verso: string }[];
+  };
+}
+
+/**
  * Lê os Cartões direto da API — a conferência de persistência exata (os
  * mesmos ids, Frentes e Versos), além da conferência pela UI.
  */

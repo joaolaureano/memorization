@@ -3616,3 +3616,27 @@ verde, build e lint.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-060
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: tela do Baralho (Vínculos), extensões das listas, e2e
+
+- **Data/hora**: 2026-09-21 00:51 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 003-vincular-cartao-baralho / T209–T214 — concluídas (feature 003 completa)
+- **Commit anterior**: `7a587d7`
+
+Rota `#/baralhos/<id>` com `PaginaDoBaralho`: Cartões vinculados com
+Desvincular (sem confirmação, FR-066) e não vinculados com Vincular, três
+estados vazios distintos, releitura após cada operação para nunca exibir Vínculo
+não confirmado, foco preservado na lista oposta e anúncios de Vínculo e de
+elegibilidade. Lista de Baralhos aponta para o detalhe; lista de Cartões mostra
+os Baralhos de cada Cartão. E2E de telefone e de persistência, com a versão do
+esquema derivada das migrações. Arquiteto repetiu em `main`: backend 164,
+frontend 205, e2e 7, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

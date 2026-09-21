@@ -106,6 +106,32 @@ describe("PaginaDeCartoes", () => {
     expect(screen.getByLabelText("Verso")).toHaveValue("");
   });
 
+  it("indica os Baralhos de cada Cartão, inclusive quando não há Baralho (FR-003, FR-004)", async () => {
+    const cliente = new ClienteEmMemoria();
+    const vinculado = await cliente.criarCartao({
+      frente: "To walk",
+      verso: "Caminhar",
+    });
+    const semBaralho = await cliente.criarCartao({
+      frente: "To run",
+      verso: "Correr",
+    });
+    const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+
+    if (!vinculado.ok || !semBaralho.ok || !baralho.ok) {
+      throw new Error("as criações do cenário deveriam ser aceitas");
+    }
+
+    await cliente.vincular(vinculado.cartao.id, baralho.baralho.id);
+
+    render(<PaginaDeCartoes cliente={cliente} />);
+
+    expect(await screen.findByText("Inglês")).toBeInTheDocument();
+    expect(screen.getAllByText("Nenhum Baralho vinculado.")).toHaveLength(1);
+    expect(screen.getByText("To walk")).toBeInTheDocument();
+    expect(screen.getByText("To run")).toBeInTheDocument();
+  });
+
   it("recusa de domínio exibe a mensagem do cliente e não lista o Cartão (FR-046)", async () => {
     renderizarPaginaDeCartoes();
 

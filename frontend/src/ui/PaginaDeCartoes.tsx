@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { Cartao, ClienteDoAcervo } from "../acervo-cliente/cliente";
+import type { CartaoListado, ClienteDoAcervo } from "../acervo-cliente/cliente";
 import {
   LIMITE_DE_CARACTERES_DE_CARTAO,
   ehCodigoDeErroDeCartao,
@@ -78,7 +78,7 @@ interface PropriedadesDaPaginaDeCartoes {
 export function PaginaDeCartoes({
   cliente,
 }: PropriedadesDaPaginaDeCartoes) {
-  const [cartoes, setCartoes] = useState<Cartao[]>([]);
+  const [cartoes, setCartoes] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [falhaDeListagem, setFalhaDeListagem] = useState<string | null>(null);
 
@@ -120,7 +120,13 @@ export function PaginaDeCartoes({
     const resultado = await cliente.criarCartao({ frente, verso });
 
     if (resultado.ok) {
-      setCartoes((atuais) => [...atuais, resultado.cartao]);
+      // Um Cartão recém-criado ainda não está vinculado a Baralho algum; a
+      // lista exige a forma estendida de `listarCartoes`, e a reconciliação
+      // abaixo relê os valores autoritativos quando a listagem tinha falhado.
+      setCartoes((atuais) => [
+        ...atuais,
+        { ...resultado.cartao, baralhos: [] },
+      ]);
       setFrente("");
       setVerso("");
 
@@ -274,6 +280,12 @@ export function PaginaDeCartoes({
                 </p>
                 <p className="verso-do-cartao">
                   <span className="rotulo">Verso</span> {cartao.verso}
+                </p>
+                <p className="baralhos-do-cartao">
+                  <span className="rotulo">Baralhos</span>{" "}
+                  {cartao.baralhos.length === 0
+                    ? "Nenhum Baralho vinculado."
+                    : cartao.baralhos.map((baralho) => baralho.nome).join(", ")}
                 </p>
               </li>
             ))}
