@@ -1,0 +1,10 @@
+# State e variaveis carregam segredos (a connection string do Neon) e ficam
+# so no disco de quem aplica. O .terraform.lock.hcl e versionado de proposito:
+# fixa as versoes dos providers para todo mundo.
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+.terraform/
+.build/

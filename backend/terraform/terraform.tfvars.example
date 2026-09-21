@@ -1,0 +1,6 @@
+# Copie para terraform.tfvars (ignorado pelo git) e preencha.
+
+# Connection string do projeto no Neon (Dashboard > Connect). Prefira o
+# endpoint sem "-pooler" para as migrations (DDL); se o runtime usa o pooled
+# ou o direto e decisao do lado do codigo (aws_pendencias.md).
+db_conn_string = "postgresql://usuario:senha@ep-exemplo-123456.us-east-1.aws.neon.tech/neondb?sslmode=require"
