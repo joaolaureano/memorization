@@ -7,6 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "demo": "node scripts/demo.mjs",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts"
   },
   "devDependencies": {

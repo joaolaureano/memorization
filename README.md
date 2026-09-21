@@ -118,6 +118,14 @@ cd backend && npm install && npm run dev               # API em 127.0.0.1:3001 c
 cd frontend && npm install && npm run dev              # abrir o endereço impresso pelo Vite
 ```
 
+### Apresentação local (um comando)
+
+Na raiz do repositório, `npm run demo` instala as dependências que faltarem, cria
+o segredo do servidor, empacota e sobe a API (SQLite) e o frontend, espera os
+dois responderem e imprime o endereço a abrir: **<http://127.0.0.1:5173>**. Os
+dados ficam em `backend/memorizacao.sqlite`, então o acervo de uma apresentação
+continua na seguinte, e `Ctrl+C` encerra API e frontend juntos.
+
 ## Verificação
 
 ```bash
