@@ -4,6 +4,7 @@ import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 
 import type { Identidade } from "../identidade/identidade.ts";
 import { exigirCredencial } from "./credencial.ts";
+import { exigirSegredoDeOrigem } from "./origem.ts";
 import {
   CORPO_INVALIDO,
   registrarRotaDeEntrada,
@@ -118,15 +119,52 @@ function permitirPreVoo(servidor: FastifyInstance, caminho: string): void {
 }
 
 /**
- * O servidor da aplicação, com o hook da Credencial e as respostas comuns.
+ * As duas questões de borda da construção de servidor, ambas opcionais: a
+ * guarda do segredo de origem, que só a Função da nuvem registra, e a política
+ * permissiva de outra origem, que vale apenas onde a aplicação escuta no
+ * loopback. Nenhuma delas cria um segundo servidor: as rotas, os hooks e o
+ * tratamento de erro são **os mesmos** em qualquer combinação (FR-125, FR-128).
+ */
+export interface OpcoesDoServidor {
+  /**
+   * O segredo que só o CloudFront injeta. Informado, a guarda de origem é o
+   * **primeiro** `onRequest` da aplicação, e toda requisição sem ele é recusada
+   * com `403` antes de qualquer trabalho de Credencial; ausente, não há guarda,
+   * que é o caso de todas as execuções que escutam no loopback.
+   */
+  segredoDeOrigem?: string;
+  /**
+   * A política permissiva de outra origem — pré-voo e
+   * `access-control-allow-origin` —, **ligada** por padrão. A execução local a
+   * mantém, porque escuta exclusivamente no loopback; a Função da nuvem a
+   * desliga, porque SPA e API dividem a origem do CloudFront (FR-128).
+   */
+  politicaDeOutraOrigem?: boolean;
+}
+
+/**
+ * O servidor da aplicação, com as guardas e as respostas comuns.
  *
  * O `Identidade` entra pela construção porque é ele quem verifica a Credencial:
  * **não há como montar um servidor sem credencial**, e é por isso que nenhuma
  * rota nasce desprotegida (FR-090). As rotas são registradas sobre o servidor
- * já com o hook, e nenhuma delas repete a verificação.
+ * já com o hook, e nenhuma delas repete a verificação. As opções de borda
+ * chegam pelo segundo parâmetro — a guarda de origem, quando houver, primeiro —
+ * e quem monta um servidor sem elas obtém exatamente o servidor de hoje.
  */
-export function criarServidor(identidade: Identidade): FastifyInstance {
+export function criarServidor(
+  identidade: Identidade,
+  opcoes: OpcoesDoServidor = {},
+): FastifyInstance {
   const servidor = Fastify();
+
+  /**
+   * A guarda do segredo de origem é o **primeiro** hook: a requisição que não
+   * veio do CloudFront não chega ao trabalho de verificar Senha (FR-125).
+   */
+  if (opcoes.segredoDeOrigem !== undefined) {
+    exigirSegredoDeOrigem(servidor, opcoes.segredoDeOrigem);
+  }
 
   /**
    * O ponto único da verificação, registrado **antes** das rotas: daqui em
@@ -166,36 +204,43 @@ export function criarServidor(identidade: Identidade): FastifyInstance {
    * cabeçalhos, agora incluindo `authorization`. Como a aplicação escuta
    * exclusivamente em 127.0.0.1, permitir qualquer origem é a configuração
    * mínima segura — o serviço não é alcançável pela rede.
+   *
+   * Com `politicaDeOutraOrigem` desligada, nem o pré-voo nem o `onSend` são
+   * registrados: em produção, com SPA e API na mesma origem do CloudFront, a
+   * resposta da função simplesmente **não tem** cabeçalho permissivo — a
+   * ausência é por construção, e não limpeza posterior (FR-128, SC-056).
    */
-  for (const caminho of [
-    CAMINHO_DOS_CARTOES,
-    "/cartoes/:id",
-    CAMINHO_DOS_BARALHOS,
-    "/baralhos/:id",
-    "/baralhos/:baralhoId/vinculos",
-    "/baralhos/:baralhoId/vinculos/:cartaoId",
-    CAMINHO_DOS_USUARIOS,
-    CAMINHO_DE_ENTRAR,
-  ]) {
-    permitirPreVoo(servidor, caminho);
-  }
-
-  servidor.addHook("onSend", async (requisicao, resposta, carga) => {
-    const caminho = requisicao.url.split("?")[0];
-
-    if (
-      caminho === CAMINHO_DOS_CARTOES ||
-      caminho.startsWith("/cartoes/") ||
-      caminho === CAMINHO_DOS_BARALHOS ||
-      caminho.startsWith("/baralhos/") ||
-      caminho === CAMINHO_DOS_USUARIOS ||
-      caminho === CAMINHO_DE_ENTRAR
-    ) {
-      resposta.header("access-control-allow-origin", "*");
+  if (opcoes.politicaDeOutraOrigem ?? true) {
+    for (const caminho of [
+      CAMINHO_DOS_CARTOES,
+      "/cartoes/:id",
+      CAMINHO_DOS_BARALHOS,
+      "/baralhos/:id",
+      "/baralhos/:baralhoId/vinculos",
+      "/baralhos/:baralhoId/vinculos/:cartaoId",
+      CAMINHO_DOS_USUARIOS,
+      CAMINHO_DE_ENTRAR,
+    ]) {
+      permitirPreVoo(servidor, caminho);
     }
 
-    return carga;
-  });
+    servidor.addHook("onSend", async (requisicao, resposta, carga) => {
+      const caminho = requisicao.url.split("?")[0];
+
+      if (
+        caminho === CAMINHO_DOS_CARTOES ||
+        caminho.startsWith("/cartoes/") ||
+        caminho === CAMINHO_DOS_BARALHOS ||
+        caminho.startsWith("/baralhos/") ||
+        caminho === CAMINHO_DOS_USUARIOS ||
+        caminho === CAMINHO_DE_ENTRAR
+      ) {
+        resposta.header("access-control-allow-origin", "*");
+      }
+
+      return carga;
+    });
+  }
 
   return servidor;
 }

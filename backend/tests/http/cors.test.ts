@@ -344,3 +344,145 @@ describe("CORS para o frontend local", () => {
     expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
   });
 });
+
+/**
+ * T1003 — a política permissiva de outra origem é uma **opção** da mesma
+ * construção de servidor, e a Função da nuvem a desliga (FR-128, SC-056).
+ *
+ * Com `politicaDeOutraOrigem: false` nem o pré-voo nem o cabeçalho permissivo
+ * existem: a ausência é **por construção**, e não limpeza posterior — em
+ * produção o SPA e a API dividem a origem do CloudFront, e o navegador não faz
+ * pré-voo de outra origem. O mesmo cenário com o padrão continua permissivo,
+ * como hoje, e é o que os cenários acima provam. Nenhuma rota, hook ou
+ * tratamento de erro é duplicado: é o mesmo `criarServidor`.
+ */
+describe("política de outra origem desligada (T1003, FR-128, SC-056)", () => {
+  let producao: ServidorDeContrato;
+
+  beforeEach(async () => {
+    producao = await montarServidorDeContrato(
+      ({ servidor, acervoDe, identidade }) => {
+        registrarRotasDeCartoes(servidor, acervoDe);
+        registrarRotasDeBaralhos(servidor, acervoDe);
+        registrarRotasDeUsuarios(servidor, identidade);
+      },
+      { politicaDeOutraOrigem: false },
+    );
+  });
+
+  afterEach(async () => {
+    await producao.encerrar();
+  });
+
+  /** Envia a requisição com a Credencial do Usuário que entrou (FR-090). */
+  function pedirNaProducao(requisicao: InjectOptions) {
+    return pedirComCredencial(
+      producao.servidor,
+      producao.credencial,
+      requisicao,
+    );
+  }
+
+  /** Nenhum cabeçalho permissivo de outra origem — em nenhuma resposta. */
+  function exigirSemPermissivos(resposta: { headers: Record<string, unknown> }) {
+    const permissivos = Object.keys(resposta.headers).filter((cabecalho) =>
+      cabecalho.toLowerCase().startsWith("access-control-"),
+    );
+
+    expect(permissivos).toEqual([]);
+  }
+
+  it("não responde ao pré-voo de outra origem", async () => {
+    const resposta = await pedirNaProducao({
+      method: "OPTIONS",
+      url: "/cartoes",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type, authorization",
+      },
+    });
+
+    expect(resposta.statusCode).not.toBe(204);
+    exigirSemPermissivos(resposta);
+  });
+
+  it("não envia cabeçalho permissivo na listagem concluída", async () => {
+    const resposta = await pedirNaProducao({ method: "GET", url: "/cartoes" });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
+    exigirSemPermissivos(resposta);
+  });
+
+  it("não envia cabeçalho permissivo na criação concluída", async () => {
+    const resposta = await pedirNaProducao({
+      method: "POST",
+      url: "/cartoes",
+      payload: { frente: "To walk", verso: "Caminhar" },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    exigirSemPermissivos(resposta);
+  });
+
+  it("não envia cabeçalho permissivo na recusa de forma", async () => {
+    const resposta = await pedirNaProducao({
+      method: "POST",
+      url: "/cartoes",
+      payload: { frente: "", verso: "Caminhar" },
+    });
+
+    expect(resposta.statusCode).toBe(400);
+    exigirSemPermissivos(resposta);
+  });
+
+  it("não envia cabeçalho permissivo na recusa de Credencial", async () => {
+    const resposta = await producao.servidor.inject({
+      method: "GET",
+      url: "/cartoes",
+    });
+
+    expect(resposta.statusCode).toBe(401);
+    exigirSemPermissivos(resposta);
+  });
+
+  it("não envia cabeçalho permissivo no Cadastro, que é isento de Credencial", async () => {
+    const resposta = await producao.servidor.inject({
+      method: "POST",
+      url: "/usuarios",
+      payload: { nomeDeUsuario: "Bruno.Souza", senha: senhaGerada() },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    exigirSemPermissivos(resposta);
+  });
+
+  it("mantém as rotas iguais às do servidor local, mudando só a política de origem", async () => {
+    /** A recusa de forma é determinística, e é a mesma nas duas construções. */
+    const recusa: InjectOptions = {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "" },
+    };
+
+    const local = await pedir(recusa);
+    const daProducao = await pedirNaProducao(recusa);
+
+    expect(daProducao.statusCode).toBe(local.statusCode);
+    expect(daProducao.body).toBe(local.body);
+
+    /** E o sucesso continua sendo o de sempre: 201 com o Baralho criado. */
+    const criacao: InjectOptions = {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    };
+
+    const criadoLocal = await pedir(criacao);
+    const criadoNaProducao = await pedirNaProducao(criacao);
+
+    expect(criadoNaProducao.statusCode).toBe(criadoLocal.statusCode);
+    expect(criadoNaProducao.json()).toMatchObject({ nome: "Inglês" });
+  });
+});

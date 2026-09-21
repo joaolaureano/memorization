@@ -35,11 +35,11 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Função da nuvem
 
-- [ ] T1001 A Seam `LeitorDeSegredos` lê os três segredos numa chamada, e parâmetro ausente falha nomeando o nome, nunca o valor
-- [ ] T1002 Toda requisição sem o segredo de origem correto é recusada com 403 indistinguível, antes de qualquer trabalho de Credencial
-- [ ] T1003 A política permissiva de outra origem é uma opção, desligada pela função e mantida como hoje na execução local
-- [ ] T1004 A entrada da função monta a aplicação uma vez por contêiner, não escuta em porto algum e descarta a inicialização que falhou
-- [ ] T1005 O handler responde 403, 200 e 401 por eventos sintéticos, grava no PostgreSQL real e não vaza segredo nem cabeçalho permissivo
+- [X] T1001 A Seam `LeitorDeSegredos` lê os três segredos numa chamada, e parâmetro ausente falha nomeando o nome, nunca o valor
+- [X] T1002 Toda requisição sem o segredo de origem correto é recusada com 403 indistinguível, antes de qualquer trabalho de Credencial
+- [X] T1003 A política permissiva de outra origem é uma opção, desligada pela função e mantida como hoje na execução local
+- [X] T1004 A entrada da função monta a aplicação uma vez por contêiner, não escuta em porto algum e descarta a inicialização que falhou
+- [X] T1005 O handler responde 403, 200 e 401 por eventos sintéticos, grava no PostgreSQL real e não vaza segredo nem cabeçalho permissivo
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

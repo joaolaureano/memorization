@@ -4978,3 +4978,38 @@ problema CRITICAL, HIGH ou MEDIUM.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-097
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: src/funcao, src/http/origem.ts, entradas/lambda.ts, testes do handler
+
+- **Data/hora**: 2026-09-21 07:24 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / T1001–T1005 — concluídas (bloco da função)
+- **Commit anterior**: `228e47a` (registra o hash do evento anterior)
+
+- **Seam `LeitorDeSegredos`** com os Adapters SSM (uma chamada, decriptação,
+  mensagens próprias) e memória. As falhas são tipadas e nomeiam o parâmetro,
+  nunca o valor.
+- **Guarda de origem** como primeiro `onRequest`: tamanho conferido antes do
+  `timingSafeEqual` e 403 com o corpo da stub.
+- **CORS** passa a ser opção do `criarServidor`, desligada na função.
+- **`criarFuncao`** com promise de inicialização descartada na falha. Reusa a
+  010 (URL e versão do esquema, nunca migra) e a 007 (segredo). Sem `listen`.
+- **`entradas/lambda.ts`** exporta `handler` e lê só `SSM_PREFIX` do ambiente.
+- 18 cenários de payload v2 contra PostgreSQL real com TLS, incluindo a ida e
+  volta autenticada, a nova tentativa depois de uma inicialização falha e a
+  ausência de segredos em toda a saída.
+- Desvio aceito: `caminhoDoCertificado` como costura de teste, para exercitar
+  TLS real com a CA privada de teste sem ler o ambiente.
+- Dependências: `@fastify/aws-lambda` (execução) e `@aws-sdk/client-ssm`
+  (desenvolvimento; o runtime já o fornece).
+
+Verificado em `main`: backend 569, frontend 337, e2e 18, `typecheck`,
+`build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

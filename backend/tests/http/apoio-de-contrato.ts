@@ -10,7 +10,7 @@ import {
   type ArmazenamentoSqliteAberto,
 } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import type { AcervoDeUsuario } from "../../src/http/rotas.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+import { criarServidor, type OpcoesDoServidor } from "../../src/http/servidor.ts";
 import { criarIdentidade, type Identidade } from "../../src/identidade/identidade.ts";
 import {
   cadastrarUsuarioDeTeste,
@@ -58,13 +58,19 @@ export interface ServidorDeContrato {
 /**
  * Monta o servidor de contrato com as rotas que o arquivo registra e devolve o
  * Usuário que entrou, já cadastrado com Senha gerada.
+ *
+ * As opções de borda — o segredo de origem e a política de outra origem — são
+ * repassadas à construção, de modo que um arquivo de teste exercite a **mesma**
+ * criação de servidor da aplicação, com ou sem elas. Sem opção alguma, o
+ * servidor é o de hoje.
  */
 export async function montarServidorDeContrato(
   registrarRotas: (rotas: RotasDeContrato) => void,
+  opcoesDoServidor: OpcoesDoServidor = {},
 ): Promise<ServidorDeContrato> {
   const aberto = await abrirArmazenamentoSqlite(":memory:");
   const identidade = criarIdentidade(aberto.usuarios, segredoGerado());
-  const servidor = criarServidor(identidade);
+  const servidor = criarServidor(identidade, opcoesDoServidor);
   const acervoDe: AcervoDeUsuario = (usuarioId) =>
     criarAcervo(aberto.armazenamento, usuarioId);
 
