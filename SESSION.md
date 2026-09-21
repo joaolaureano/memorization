@@ -4593,3 +4593,38 @@ Verificado em `main`: backend 257, frontend 240, e2e 13, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-087
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: Adapter PostgreSQL, migrações 1–3 em dialeto PostgreSQL, PostgreSQL real de teste com TLS
+
+- **Data/hora**: 2026-09-21 03:30 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 010-postgresql-na-nuvem / T901–T905 — concluídas
+- **Commit anterior**: `030f183` (registra o hash do evento anterior)
+
+- **Adapter** `armazenamento/postgresql/` sobre `pg`, com pool de no máximo 4
+  conexões e tratador de erro. SQLSTATE 23505 e 23503 traduzidos em desfechos
+  tipados. Abrir não migra.
+- **Migrações 1 a 3** com as mesmas versões e `CHECK`s equivalentes, uma
+  transação por migração sob `pg_advisory_xact_lock`, e releitura da versão
+  depois da trava.
+- **TLS** sempre com `rejectUnauthorized`. A URL é decomposta em campos, para
+  que um `sslmode` no texto não rebaixe a cifra.
+- **Testes**: PostgreSQL real via `embedded-postgres`, sem Docker, com senha
+  gerada e CA e certificado criados por `openssl` a cada execução. A bateria
+  compartilhada da 009 passa sem edição (23 cenários). Cobertos também:
+  conexão sem a CA recusada, dois aplicadores simultâneos, reconexão depois de
+  `pg_terminate_backend` e servidor parado respondendo `indisponivel`.
+- **Decisão do Arquiteto**: o `backend/package-lock.json` era ignorado pelo
+  `.gitignore` global do PO. Passou a ser versionado com `git add -f`, como o
+  do frontend, para builds de nuvem reproduzíveis.
+
+Verificado em `main`: backend 308 (estável em 4 execuções do worker), frontend
+240, e2e 13, `typecheck`, `build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

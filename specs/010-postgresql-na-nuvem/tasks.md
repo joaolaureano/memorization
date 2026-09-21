@@ -26,8 +26,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Verificação real
 
-- [ ] T901 A suíte sobe um PostgreSQL real com TLS ligado, senha gerada por execução e CA descartável, e falha alto se não conseguir
-- [ ] T902 Cada cenário recebe uma base PostgreSQL nova e vazia, migrada pelo mesmo caminho do comando
+- [X] T901 A suíte sobe um PostgreSQL real com TLS ligado, senha gerada por execução e CA descartável, e falha alto se não conseguir
+- [X] T902 Cada cenário recebe uma base PostgreSQL nova e vazia, migrada pelo mesmo caminho do comando
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -42,9 +42,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Adapter de PostgreSQL
 
-- [ ] T903 O Adapter traz o DDL de PostgreSQL das migrações 1 a 3 e o aplicador com trava consultiva
-- [ ] T904 A bateria compartilhada de `009` roda contra o Adapter de PostgreSQL e passa cem por cento
-- [ ] T905 Conexão ociosa encerrada pelo provedor não derruba a próxima operação, e a base indisponível é reportada como falha
+- [X] T903 O Adapter traz o DDL de PostgreSQL das migrações 1 a 3 e o aplicador com trava consultiva
+- [X] T904 A bateria compartilhada de `009` roda contra o Adapter de PostgreSQL e passa cem por cento
+- [X] T905 Conexão ociosa encerrada pelo provedor não derruba a próxima operação, e a base indisponível é reportada como falha
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
