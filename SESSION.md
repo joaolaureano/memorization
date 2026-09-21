@@ -4346,3 +4346,28 @@ Premissas "a confirmar no clarify":
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-080
+
+> **SPEC KIT** — Comando: clarify | Invocação: skill `speckit-clarify` |
+> Integração: claude | Artefatos: specs/010-postgresql-na-nuvem/spec.md,
+> checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 02:23 -03
+- **Ator**: PRODUCT OWNER ↔ ARCHITECT
+- **Feature / Task**: 010-postgresql-na-nuvem / clarify
+- **Commit anterior**: `8d21271` (registra o hash de EVT-079)
+
+1. **Verificação sem Docker**: o PO respondeu "Não se preocupe com isso". O
+   Arquiteto decidiu por PostgreSQL real iniciado pelos próprios testes na
+   máquina, a partir de um pacote de desenvolvimento, sem Docker e sem segredo
+   versionado.
+2. **Migração**: por comando separado de migração para a nuvem. O início da
+   nuvem só confere a versão e recusa esquema desatualizado. Recomendação
+   aceita; deu origem ao FR-121, e o FR-116 e o SC-048 foram reescritos.
+3. **"Nuvem"**: é configuração, não lugar físico. Decorre da resposta 1.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

@@ -44,8 +44,9 @@
 
 ### Avaliação de 2026-09-21
 
-- **Requisitos funcionais**: 12. São 2 transversais reutilizados (FR-044 e
-  FR-045) e 10 específicos (FR-110 a FR-119), sem lacuna na numeração. A faixa
+- **Requisitos funcionais**: 13. São 2 transversais reutilizados (FR-044 e
+  FR-045) e 11 específicos (FR-110 a FR-119 e FR-121). O FR-121 veio do clarify;
+  o FR-120 pertence à `009`. A faixa
   começa em FR-110, continuando a numeração de `009-porta-de-persistencia`, que
   terminou em FR-109.
 - **FR-044 e FR-045 reutilizados com o mesmo enunciado de `009`**: a queda de
@@ -115,3 +116,14 @@
   Usuário e Credencial. Nenhum sinônimo de `_Avoid_` é usado.
 
 Nenhum item reprovado. **21 de 21.**
+
+### Clarify de 2026-09-21
+
+Três pontos resolvidos:
+- verificação contra PostgreSQL real local, por decisão do Arquiteto delegada
+  pelo PO;
+- migração por comando separado, com o início recusando esquema desatualizado
+  (origem do FR-121);
+- "nuvem" como configuração, e não como lugar físico.
+
+Continua 21 de 21.

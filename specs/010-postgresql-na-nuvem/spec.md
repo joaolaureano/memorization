@@ -16,6 +16,22 @@ armazenamento, a bateria compartilhada de cenários, o parâmetro de construçã
 que escolhe o banco e o script de início local. Nenhum Module do acervo nem o da
 identidade é alterado por esta feature.
 
+## Clarifications
+
+### Session 2026-09-21
+
+- Q: Como o Adapter de PostgreSQL é verificado, sem Docker? → A: O PO delegou a
+  decisão ("Não se preocupe com isso"). Decisão do Arquiteto: a bateria
+  compartilhada roda contra um PostgreSQL real, iniciado pelos próprios testes
+  na máquina de desenvolvimento, sem Docker e sem segredo versionado.
+- Q: As migrações rodam sozinhas no início ou por comando separado? → A: Por
+  comando separado de migração para a nuvem, executado uma vez por implantação.
+  O início da nuvem só confere a versão do esquema e recusa iniciar se ela
+  estiver desatualizada.
+- Q: "Exclusivamente na nuvem" proíbe usar um PostgreSQL local? → A: Não.
+  "Nuvem" é a configuração de construção e início, e não a localização física da
+  base; os testes usam um PostgreSQL local. Decorre da primeira resposta.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Gravar na nuvem com PostgreSQL, apontado por URL de conexão (Priority: P1)
@@ -215,9 +231,9 @@ e o script local pertencem à `009-porta-de-persistencia`.
 - **FR-115**: A conexão à base MUST ser cifrada, e o certificado do servidor MUST
   ser verificado; uma conexão que não possa ser verificada MUST ser recusada, e
   nenhuma operação sobre ela MUST passar por concluída.
-- **FR-116**: Numa base PostgreSQL nova e vazia, as migrações versionadas MUST
-  trazer o esquema à versão corrente, e repetir a subida MUST NOT reaplicar o que
-  já foi aplicado.
+- **FR-116**: O sistema MUST oferecer um comando de migração para a nuvem que,
+  numa base PostgreSQL nova e vazia, traga o esquema à versão corrente; repetir
+  o comando MUST NOT reaplicar o que já foi aplicado.
 - **FR-117**: O sistema MUST oferecer, entre os seus scripts de inicialização, um
   de construção para a nuvem e um de início para a nuvem; o script de início
   local MUST NOT usar PostgreSQL, e o script de início da nuvem MUST NOT usar o
@@ -230,6 +246,9 @@ e o script local pertencem à `009-porta-de-persistencia`.
   restabelecê-la; enquanto o armazenamento estiver indisponível, as operações
   MUST ser reportadas como falha (FR-044) e MUST NOT passar por concluídas
   (FR-045).
+- **FR-121**: O início da nuvem MUST NOT aplicar migrações. Ele MUST conferir a
+  versão do esquema e MUST recusar iniciar, com mensagem clara em português,
+  quando o esquema estiver desatualizado.
 
 ### Verificação dos Requisitos Negativos
 
@@ -279,9 +298,9 @@ e o script local pertencem à `009-porta-de-persistencia`.
 - **SC-047**: Em cem por cento dos usos, a conexão é cifrada e o certificado do
   servidor é verificado; uma conexão que não possa ser verificada é recusada, e
   nenhuma operação é apresentada como concluída sobre ela.
-- **SC-048**: Numa base PostgreSQL nova e vazia, cem por cento das subidas resulta
-  no esquema da versão corrente, e repetir a subida não reaplica nenhuma migração
-  já aplicada.
+- **SC-048**: Numa base PostgreSQL nova e vazia, cem por cento das execuções do
+  comando de migração resultam no esquema da versão corrente, repetir o comando
+  não reaplica nenhuma migração e iniciar com esquema desatualizado é recusado.
 - **SC-049**: Cem por cento das operações depois de uma queda de conexão
   restabelece a conexão, e, enquanto o armazenamento estiver indisponível,
   nenhuma operação é apresentada como concluída e o conteúdo informado é
@@ -324,21 +343,11 @@ e o script local pertencem à `009-porta-de-persistencia`.
 
 ## Assumptions
 
+- A forma de verificação, o comando de migração e o sentido de "nuvem" foram
+  confirmados no clarify de 2026-09-21.
 - A URL de conexão é entregue pela infraestrutura de nuvem existente sob o nome
   de variável de ambiente `DB_URL`. O nome é uma imposição dessa infraestrutura,
   declarado aqui como contrato de integração, e não uma decisão desta feature.
-- Como o Adapter de PostgreSQL é verificado em desenvolvimento, sem depender de
-  container, é uma escolha em aberto: uma base de teste real, apontada por uma URL
-  de conexão de teste, ou uma emulação em processo. Esta feature exige apenas que a
-  bateria compartilhada da Porta rode contra PostgreSQL no pipeline de
-  verificação — **a confirmar no clarify**.
-- Se o esquema da base nova e vazia é levado à versão corrente automaticamente no
-  início ou por um comando explícito de migração é uma escolha em aberto; em
-  qualquer caso, reexecutar não reaplica o já aplicado — **a confirmar no
-  clarify**.
-- Quem desenvolve pode apontar a construção da nuvem para qualquer PostgreSQL,
-  inclusive um local, para teste: "nuvem" nomeia a configuração de execução, não a
-  localização física da base — **a confirmar no clarify**.
 - A `009-porta-de-persistencia` já entregou a Porta, a bateria compartilhada de
   cenários, o parâmetro de construção que escolhe o armazenamento e o script de
   início local, e esta feature se apoia neles sem alterá-los.
