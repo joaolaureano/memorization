@@ -1,6 +1,7 @@
 # Pendências
 
-Estado verificado em **2026-09-20**, commit `231d833`.
+Estado verificado em **2026-09-21**, commit `5789c90`. **Produto concluído**: as 83
+tarefas das seis features estão entregues e verificadas.
 
 Este arquivo lista o que falta. É um inventário de trabalho, não um registro de
 decisões — o histórico decisório vive em `SESSION.md`, que a constituição 2.0.0
@@ -54,25 +55,28 @@ entidade recebe identificador próprio.
 
 ## 3. Implementação
 
-O fluxo de implementação já foi iniciado e está integrado até o ponto abaixo.
+Concluída.
 
 | Feature | Tarefas | Concluídas |
 |---|---|---|
-| `001-criar-cartao` | 14 | **14** — concluída |
-| `002-criar-baralho` | 12 | **4** — T101–T104 concluídas; T105 é a próxima |
-| `003-vincular-cartao-baralho` | 14 | 0 |
-| `004-sessao-de-estudo` | 8 | 0 |
-| `005-editar-cartao-e-baralho` | 7 | 0 |
-| `006-excluir-cartao-e-baralho` | 8 | 0 |
+| `001-criar-cartao` | 14 | **14** |
+| `002-criar-baralho` | 12 | **12** |
+| `003-vincular-cartao-baralho` | 14 | **14** |
+| `004-sessao-de-estudo` | 8 | **8** |
+| `005-editar-cartao-e-baralho` | 7 | **7** |
+| `006-excluir-cartao-e-baralho` | 8 | **8** |
 
-**Existe**: backend com migrações versionadas, tabelas `cartao` e `baralho`,
-rotas HTTP de cartões e baralhos, frontend React, testes de contrato, testes
-E2E de responsividade, acessibilidade e persistência. A suíte do backend está
-com 78 testes verdes; build e lint também estão verdes.
+Verificação em `main`: backend 165 testes, frontend 240 testes, e2e 13
+cenários em Chromium real contra API e SQLite reais; build e lint verdes nos
+dois projetos. `converge` executado: 69 de 69 FRs e todos os SCs citados em
+testes que os verificam (EVT-063).
 
-**Próxima pendência imediata**: T105 (rotas HTTP de criação e listagem de
-baralhos com contrato completo). O trabalho foi delegado em worktree próprio,
-mas ainda não foi revisado nem integrado; portanto continua pendente.
+**Como executar localmente**
+
+```bash
+cd backend && npm install && npm run dev     # API em 127.0.0.1:3001, SQLite em memorizacao.sqlite
+cd frontend && npm install && npm run dev    # abrir o endereço que o Vite imprimir
+```
 
 ---
 
@@ -92,13 +96,13 @@ implementação de T001 e estão registrados em `SESSION.md`, EVT-032 e EVT-033.
 
 ## 5. Itens estruturais em aberto
 
-- **`converge` nunca foi executado.** Depende de haver implementação a avaliar.
-- **A feature `004-sessao-de-estudo` terá a Interface de maior Depth do
-  sistema**, e ela será desenhada pelo Arquiteto **sem propostas alternativas
-  comparadas**, porque o processo `Design It Twice` foi removido do projeto por
-  decisão do Product Owner (EVT-021). O risco está registrado e aceito.
-- **Nenhuma ADR existe e nenhuma será criada.** A constituição 2.0.0 as declara
-  inaplicáveis; o histórico decisório vive em `SESSION.md`.
+- **Worktrees antigos** de T003–T104 (`/private/tmp/memorization-t0*`,
+  `-t10*`) continuam registrados no git. São descartáveis; não foram removidos
+  por terem sido criados antes desta sessão. `git worktree remove` em cada um
+  os elimina.
+- **`backend/src/hello-world.ts`** não rastreado, de origem externa ao fluxo;
+  preservado e fora dos commits.
+- **Nenhuma ADR existe e nenhuma será criada** (constituição 2.0.0).
 
 ---
 
@@ -108,7 +112,7 @@ Para não confundir o que falta com o que existe:
 
 - Constituição **2.1.0** ratificada, com onze princípios.
 - `CONTEXT.md` com onze termos canônicos.
-- `SESSION.md` com 35 eventos auditáveis, append-only.
+- `SESSION.md` com 63 eventos auditáveis, append-only.
 - Seis features decompostas, com cobertura verificada por script: **53 de 53
   requisitos e 16 de 16 critérios** preservados na decomposição.
 - Fluxo do Spec Kit conforme nas features `001` e `002`, com
@@ -119,9 +123,11 @@ Para não confundir o que falta com o que existe:
   `002-criar-baralho` implementada até T104, com validações automatizadas
   registradas em `SESSION.md` (EVT-042 a EVT-052).
 
-## 7. Encerramento desta sessão
+## 7. Encerramento
 
-Nenhuma alteração de código foi feita nesta atualização. Permanece
-deliberadamente fora do escopo o arquivo não rastreado `backend/src/hello-world.ts`.
-As features `003`–`006` e T105 em diante continuam sendo o backlog de
-implementação.
+Implementação feita integralmente por workers DeepSeek (`deepseek-v4-pro`) em
+worktrees exclusivos, com revisão, reverificação e integração pelo Arquiteto
+(EVT-054 a EVT-063). Defeitos pegos na revisão e corrigidos antes do commit:
+versão de esquema fixada em E2E, E2E de edição/exclusão contra API falsa,
+conflito de integração entre workers paralelos, colisão de portas de E2E e uma
+lacuna real de produto (SC-015).
