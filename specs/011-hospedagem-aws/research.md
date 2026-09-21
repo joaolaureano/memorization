@@ -334,6 +334,15 @@ sessão; aumentar o timeout, que não reduz latência; usar memória de
 `provisioned concurrency`, que é custo fixo e pertence ao encadeamento automático
 adiado na spec.
 
+**Atualização pós-publicação (2026-09-21)**: medido pelo CloudFront a partir
+do Brasil:
+- a 1024 MB, o p95 de um GET autenticado foi de 0,99 s, no limite do SC-059;
+- a 1769 MB, um vCPU inteiro, foi de 0,81 s;
+- o `/health`, sem derivação, teve mediana de 0,65 s, portanto a rede domina.
+
+Aplicando o remédio previsto, o padrão de `lambda_memory_mb` passou a ser 1769
+MB. O hash não foi enfraquecido.
+
 ## Decisão 11 — O SPA de produção por `npm run build:aws`, e o script de publicação usando-o
 
 **Decisão**: o `package.json` do frontend ganha `build:aws`

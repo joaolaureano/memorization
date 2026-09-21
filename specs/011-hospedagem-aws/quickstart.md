@@ -118,7 +118,7 @@ Sem `-var lambda_package`, o `apply` volta a publicar a **stub** de
 para o resto. O caminho do pacote é relativo ao diretório do `tofu`, e é por isso
 que ele aparece como `../dist-lambda.zip`: o arquivo está em `backend/`.
 
-A memória da função é a variável `lambda_memory_mb`, com padrão **1024 MB**. Não é
+A memória da função é a variável `lambda_memory_mb`, com padrão **1769 MB** (um vCPU inteiro; elevado de 1024 MB depois da medição da publicação, ver a nota em `research.md`, Decisão 10). Não é
 folga: a Credencial é verificada em **cada** requisição (não há sessão, FR-079), e
 a Lambda troca memória por CPU. Se o percentil 95 medido no passo 6 estiver acima
 de 1 segundo, o remédio é **elevar a memória** — nunca enfraquecer a derivação da

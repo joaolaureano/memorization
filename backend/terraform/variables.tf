@@ -43,12 +43,16 @@ variable "lambda_handler" {
 
 # A Lambda troca memoria por CPU, e a Senha e verificada em **cada** requisicao
 # autenticada: nao ha sessao, cookie nem token (FR-079, FR-131), e o scrypt roda
-# sempre. Elevar este numero e o remedio quando o p95 das operacoes simples
-# passa de 1s (SC-059); enfraquecer a derivacao da Senha nunca e.
+# sempre. Medido no deploy real, atraves do CloudFront: com 1024 MB o p95 de um
+# GET autenticado ficava em 0,99s (limite de 1s, SC-059); com 1769 MB - que e um
+# vCPU inteiro na Lambda - caiu para 0,81s. Ja o /health, que nao verifica a
+# Senha, tem mediana de 0,65s e ali o que domina e a rede. Elevar este numero e o
+# remedio quando o p95 das operacoes simples passa de 1s (SC-059); enfraquecer a
+# derivacao da Senha nunca e.
 variable "lambda_memory_mb" {
-  description = "Memoria da funcao, em MB. Elevar e mais CPU para a verificacao da Senha em cada requisicao."
+  description = "Memoria da funcao, em MB. 1769 MB e um vCPU inteiro: elevar e mais CPU para a verificacao da Senha em cada requisicao."
   type        = number
-  default     = 1024
+  default     = 1769
 }
 
 variable "secrets_version" {

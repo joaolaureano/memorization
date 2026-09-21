@@ -5043,3 +5043,65 @@ Verificado em `main`: backend 576, frontend 340, e2e 18, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-099
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: infra AWS aplicada, SPA publicado, README da infra, research e quickstart da 011, aws_pendencias.md removido
+
+- **Data/hora**: 2026-09-21 07:51 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / T1012–T1014 — concluídas (feature 011 completa; aplicação publicada)
+- **Commit anterior**: `d98296d` (registra o hash do evento anterior)
+
+Tarefas de operador executadas pelo Arquiteto, com a autorização do PO no
+clarify (EVT-094).
+
+**T1012 — publicação**
+1. `terraform.tfvars` preparado em `backend/terraform/`, onde é ignorado pelo
+   git. O state novo também vive em
+   `backend/terraform/terraform.tfstate`, ignorado.
+2. `migrate:cloud` no endpoint **direto** do Neon: esquema na versão 5. O
+   endpoint direto foi derivado do pooled; nenhum valor foi exibido.
+3. O pacote de nuvem foi testado localmente contra o endpoint pooled: `/health`
+   200 e acervo sem credencial 401.
+4. `tofu plan`: 20 recursos a criar, nenhum alterado ou destruído, conferidos um
+   a um. `tofu apply`: 20 adicionados.
+5. SPA publicado com `deploy-frontend.sh` (`build:aws`).
+
+Validação pelo endereço do CloudFront, com credenciais geradas:
+- SPA 200 e `/health` 200;
+- Function URL direta 403, sem segredo de origem;
+- acervo sem credencial 401, sem `WWW-Authenticate`;
+- cadastro 201, entrar 200, cartão criado 201 e listado;
+- Senha errada 401;
+- nenhum cabeçalho CORS e nenhum `Set-Cookie`.
+
+Em navegador real (Chromium):
+- primeira tela Entrar, depois Cadastro, depois Entrar e Cartões, com o cartão
+  criado e listado;
+- zero itens em localStorage, sessionStorage e cookie;
+- recarregar volta para Entrar.
+
+**T1013 — desempenho**: o p95 de um GET autenticado foi de 0,99 s a 1024 MB, no
+limite. A 1769 MB, 0,81 s; o `/health` sem derivação ficou em 0,65 s, então a
+rede domina. O padrão passou a 1769 MB (mudança feita por worker `flash`), e o
+`tofu plan` depois do ajuste deu "No changes".
+
+**T1014 — documentação**: o README da infra ganhou a ordem de subida, a
+verificação, o desempenho e a operação do Neon. O `aws_pendencias.md` foi
+**removido**: os itens 2 a 6 e 8 foram resolvidos por 009, 010 e 011, e os itens
+1 e 10 (Google e cookie) ficaram obsoletos pela 008. O item 7 (CLI do Neon)
+ficou documentado como passo opcional, que exige login interativo. O item 9
+(roteamento por caminho) continua adiado. A research da 011 registra a
+atualização da memória.
+
+**Aplicação no ar**: https://d2mp2j3zeufjr0.cloudfront.net
+
+Verificado em `main`: backend 576, frontend 340, e2e 18, `typecheck`,
+`build:local`, `build:lambda`, lint, `tofu fmt` e `validate` verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

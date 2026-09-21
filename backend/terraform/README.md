@@ -41,33 +41,58 @@ aws iam put-user-policy --profile root --user-name robot \
 
 ## Subir
 
+A ordem completa, com o porquê de cada passo, está no manual de operação
+[`specs/011-hospedagem-aws/quickstart.md`](../../specs/011-hospedagem-aws/quickstart.md).
+Em resumo, da raiz do repositório:
+
 ```bash
-cp terraform.tfvars.example terraform.tfvars   # preencha db_conn_string
-tofu init
-tofu plan
-tofu apply
-./scripts/deploy-frontend.sh                    # build com VITE_ENDERECO_DA_API=/api
+cp backend/terraform/terraform.tfvars.example backend/terraform/terraform.tfvars   # preencha db_conn_string (fora do git)
+# 1. migrar o Neon pelo endpoint DIRETO (sem "-pooler"): DDL e trava consultiva
+(cd backend && npm run build:cloud && DB_URL='<url-do-endpoint-direto>' npm run migrate:cloud)
+# 2. empacotar a função (dist-lambda.zip, sem segredo algum)
+(cd backend && npm run build:lambda)
+# 3. aplicar a infra com o pacote real
+tofu -chdir=backend/terraform init
+tofu -chdir=backend/terraform apply -var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler
+# 4. publicar o SPA (npm run build:aws, com a API em /api)
+(cd backend/terraform && ./scripts/deploy-frontend.sh)
 ```
+
+Sem `-var lambda_package`, o apply volta para a stub. A função **nunca migra**:
+se o esquema estiver atrasado, ela recusa servir (503) até o passo 1 ser feito.
 
 ## Verificar
 
 ```bash
-curl -s "$(tofu output -raw health_url)"             # {"status":"ok"}
-curl -si "$(tofu output -raw function_url)health"    # 403: não veio pelo CloudFront
-curl -si "$(tofu output -raw api_url)/cartoes"       # 503 da stub
+curl -s "$(tofu output -raw health_url)"               # {"status":"ok"}
+curl -si "$(tofu output -raw function_url)health"      # 403: não veio pelo CloudFront
+curl -si "$(tofu output -raw api_url)/cartoes"         # 401: acervo exige a Credencial
 aws logs tail /aws/lambda/memorization-api --since 10m
 ```
 
-## Publicar a API real
+Validação completa: cadastrar um Usuário, Entrar e criar um Cartão pelo
+endereço do CloudFront, com Nome de usuário e Senha gerados na hora.
 
-Quando `backend/src/lambda.ts` existir:
+## Desempenho
 
-```bash
-./scripts/build-lambda.sh
-tofu apply -var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler
-```
+A Senha é verificada em toda requisição (não há sessão), então cada operação
+paga uma derivação scrypt. `lambda_memory_mb` tem padrão de **1769 MB**, um vCPU
+inteiro. Medição em 2026-09-21, pelo CloudFront, a partir do Brasil:
+- a 1024 MB, o p95 de um GET autenticado foi de 0,99 s;
+- a 1769 MB, foi de 0,81 s;
+- o `/health`, sem derivação, teve mediana de 0,65 s, ou seja, a rede domina.
 
-Sem `-var lambda_package`, o apply volta para a stub.
+O remédio para latência é memória, nunca enfraquecer o hash.
+
+## Operação do Neon
+
+- **Runtime**: o endpoint pooled (`-pooler`) em `db_conn_string`.
+- **Migrações**: o endpoint direto, informado só no comando.
+- O TLS é sempre verificado contra a cadeia pública; URLs com
+  `sslmode=disable`, `allow` ou `prefer` são recusadas.
+- A configuração do projeto pela CLI do Neon (`neon link`, `neon config init`)
+  exige login interativo. Ela não faz parte do fluxo automatizado e não é
+  necessária para subir a aplicação.
 
 ## Trocar um segredo
 

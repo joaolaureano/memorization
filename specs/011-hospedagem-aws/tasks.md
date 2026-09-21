@@ -93,9 +93,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 4 — Publicação e validação (tarefas do Arquiteto)
 
-- [ ] T1012 A migração no endpoint direto, a aplicação com o pacote e a publicação do SPA deixam a aplicação real no ar, validada pelo endereço do CloudFront
-- [ ] T1013 [P] O percentil 95 das operações simples na função fica abaixo de um segundo, e o remédio é memória
-- [ ] T1014 [P] O manual de operação documenta a ordem, e o inventário de pendências sai do repositório com as notas do operador no README de infraestrutura
+- [X] T1012 A migração no endpoint direto, a aplicação com o pacote e a publicação do SPA deixam a aplicação real no ar, validada pelo endereço do CloudFront
+- [X] T1013 [P] O percentil 95 das operações simples na função fica abaixo de um segundo, e o remédio é memória
+- [X] T1014 [P] O manual de operação documenta a ordem, e o inventário de pendências sai do repositório com as notas do operador no README de infraestrutura
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

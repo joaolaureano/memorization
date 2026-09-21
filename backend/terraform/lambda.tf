@@ -80,10 +80,11 @@ resource "aws_lambda_function" "api" {
   timeout = 30
 
   # Memoria tambem compra CPU na Lambda. Com a Credencial apresentada em cada
-  # requisicao - nao ha sessao (FR-079) -, o scrypt roda sempre, e 1024 MB
-  # (var.lambda_memory_mb) mantem o p95 das operacoes simples abaixo de 1s
-  # (SC-059); o custo por request continua desprezivel porque a cobranca e por
-  # ms efetivo. Elevar a memoria e o remedio, e nao enfraquecer a derivacao.
+  # requisicao - nao ha sessao (FR-079) -, o scrypt roda sempre, e a memoria
+  # padrao (var.lambda_memory_mb: 1769 MB, um vCPU inteiro) mantem o p95 das
+  # operacoes simples abaixo de 1s (SC-059); o custo por request continua
+  # desprezivel porque a cobranca e por ms efetivo. Elevar a memoria e o
+  # remedio, e nao enfraquecer a derivacao.
   memory_size = var.lambda_memory_mb
 
   environment {
