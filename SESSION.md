@@ -4012,3 +4012,35 @@ fantasma e nenhum id ausente (verificação do worker repetida na etapa
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-070
+
+> **SPEC KIT** — Comando: analyze | Invocação: skill `speckit-analyze` e
+> `check-prerequisites.sh --json --require-spec --require-tasks --include-tasks` |
+> Integração: claude | Artefatos: nenhum alterado (somente leitura)
+
+- **Data/hora**: 2026-09-21 01:58 -03
+- **Ator**: ARCHITECT
+- **Feature / Task**: 007-criar-usuario / analyze
+- **Commit anterior**: `68cecdb` (registra o hash de EVT-069)
+
+- AVAILABLE_DOCS: research, data-model, contracts, quickstart e tasks, que com
+  spec e plan formam os sete artefatos.
+- 21 FRs e 8 SCs, todos na matriz; nenhum id fantasma em plan ou tasks; nenhum id
+  após a matriz fora de uma linha dela; as 14 tarefas batem com os metadados, e
+  todas citam requisito.
+- Terminologia: "password", "login" e "account" aparecem no plan só na lista de
+  termos proibidos e no atributo HTML `type="password"`. Aceito.
+- Nenhum problema CRITICAL ou HIGH.
+- **M1 (MEDIUM)**: T602 faz a API exigir o segredo. Integrada sozinha, quebraria
+  toda a E2E existente até T606 entrar. Remediação proposta: T602 e T606 são
+  integradas no mesmo commit.
+- **L1 (LOW)**: `criarUsuario` fica na Seam chamada `ClienteDoAcervo`, embora
+  Usuário não seja acervo. Aceito por decisão do plan (Seam única de
+  transporte); um eventual novo nome fica para quando existir um segundo
+  consumidor.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
