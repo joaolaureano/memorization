@@ -112,6 +112,8 @@ describe("dependências dos Modules", () => {
 
     expect(varridos).toContain("src/acervo/acervo.ts");
     expect(varridos).toContain("src/http/rotas.ts");
+    expect(varridos).toContain("src/identidade/identidade.ts");
+    expect(varridos).toContain("src/identidade/senha.ts");
     expect(varridos.length).toBeGreaterThan(0);
   });
 

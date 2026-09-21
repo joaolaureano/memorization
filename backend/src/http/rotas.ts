@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import type { Acervo } from "../acervo/acervo.ts";
+import type { Identidade } from "../identidade/identidade.ts";
 
 /**
  * Adapter HTTP do Module `Acervo` (T007, T207, T403, T503 e T805).
@@ -53,6 +54,18 @@ const corpoDeBaralho = z.object({
  */
 const corpoDeVinculo = z.object({
   cartaoId: z.string(),
+});
+
+/**
+ * Forma do corpo de `POST /usuarios`: exatamente o Nome de usuário e a Senha,
+ * ambos texto (FR-071). O esquema **não é estrito**: propriedade extra — e a
+ * Confirmação da Senha, que não faz parte deste contrato — é descartada na
+ * borda e nunca alcança o `Identidade` (FR-072). Forma inválida é recusada aqui,
+ * antes de qualquer chamada ao Module.
+ */
+const corpoDeUsuario = z.object({
+  nomeDeUsuario: z.string(),
+  senha: z.string(),
 });
 
 /**
@@ -337,4 +350,55 @@ export function registrarRotasDeBaralhos(
       return resposta.status(204).send();
     },
   );
+}
+
+/**
+ * Registra a rota de Usuário do contrato sobre o `Identidade` informado:
+ * `POST /usuarios`. A rota é uma casca fina sobre a Interface, como as demais:
+ * valida a **forma** do corpo na borda com Zod, **aguarda** o `cadastrar` do
+ * Module e converte o código de erro em status — 400 para as recusas de regra,
+ * 409 para o Nome de usuário já existente, 503 para a falha do armazenamento —,
+ * repassando o código estável e a mensagem em português que o Module devolveu
+ * (FR-046). Nenhuma regra de domínio é reproduzida aqui: o tamanho, o alfabeto,
+ * o intervalo da Senha e a unicidade sem distinção entre maiúsculas e
+ * minúsculas continuam sendo julgados exclusivamente pelo `Identidade`
+ * (FR-070, SC-026).
+ *
+ * A resposta de sucesso carrega apenas `id` e `nomeDeUsuario`: **nenhuma
+ * resposta contém a Senha, qualquer transformação dela ou credencial
+ * reutilizável**, e nenhuma traz `Set-Cookie` (FR-076, FR-078, FR-079).
+ */
+export function registrarRotasDeUsuarios(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+): void {
+  servidor.post("/usuarios", async (requisicao, resposta) => {
+    const corpo = corpoDeUsuario.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    const resultado = await identidade.cadastrar(corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
+      if (resultado.erro === "nome_de_usuario_existente") {
+        return resposta.status(409).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(400).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(201).send(resultado.usuario);
+  });
 }

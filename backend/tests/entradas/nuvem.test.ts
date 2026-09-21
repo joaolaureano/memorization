@@ -82,6 +82,12 @@ const SENHA_GERADA = randomBytes(24).toString("base64url");
 /** Uma segunda senha gerada, para o cenário de credencial recusada. */
 const OUTRA_SENHA_GERADA = randomBytes(24).toString("base64url");
 
+/**
+ * O segredo das Senhas desta execução, gerado agora e nunca versionado: a
+ * entrada da nuvem recusa iniciar sem ele (FR-077).
+ */
+const SEGREDO_DA_EXECUCAO = randomBytes(48).toString("base64url");
+
 /** O tempo de espera de um processo da entrada, folgado para o TLS de verdade. */
 const PRAZO_DA_ENTRADA = 60_000;
 
@@ -103,14 +109,19 @@ afterAll(async () => {
   await servidor.encerrar();
 });
 
-/** O ambiente da entrada sem `DB_URL` nem `DB_CA_CERT` herdados do processo. */
+/**
+ * O ambiente da entrada sem `DB_URL` nem `DB_CA_CERT` herdados do processo —
+ * e com o segredo das Senhas **gerado nesta execução**, porque o início da
+ * nuvem recusa subir sem ele (FR-077). O segredo é o mesmo em todos os
+ * cenários deste arquivo, como é o mesmo numa mesma base.
+ */
 function ambienteSemUrl(): NodeJS.ProcessEnv {
   const ambiente = { ...process.env };
 
   delete ambiente.DB_URL;
   delete ambiente.DB_CA_CERT;
 
-  return ambiente;
+  return { ...ambiente, SEGREDO_DAS_SENHAS: SEGREDO_DA_EXECUCAO };
 }
 
 /** Devolve uma porta livre do loopback, escolhida pelo sistema operacional. */
@@ -528,6 +539,7 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
     expect(tabelas.map((tabela) => tabela.nome)).toEqual([
       "baralho",
       "cartao",
+      "usuario",
       "versao_do_esquema",
       "vinculo",
     ]);

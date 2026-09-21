@@ -13,8 +13,12 @@ import {
   type ConfiguracaoDaConexao,
 } from "../../../src/armazenamento/postgresql/conexao.ts";
 import { aplicarMigracoes } from "../../../src/armazenamento/postgresql/esquema.ts";
-import type { ArmazenamentoDoAcervo } from "../../../src/armazenamento/porta.ts";
+import type {
+  ArmazenamentoDeUsuarios,
+  ArmazenamentoDoAcervo,
+} from "../../../src/armazenamento/porta.ts";
 import type { ArmazenamentoAberto } from "../bateria-da-porta.ts";
+import type { ArmazenamentoDeUsuariosAberto } from "../bateria-da-porta-de-usuarios.ts";
 import {
   servidorDeTeste,
   type FerramentasDoServidor,
@@ -48,6 +52,8 @@ export interface BaseDeTeste {
   /** O nome da base criada para este cenário. */
   readonly nomeDaBase: string;
   readonly armazenamento: ArmazenamentoDoAcervo;
+  /** A segunda Porta, sobre a mesma base: os Usuários da identidade. */
+  readonly usuarios: ArmazenamentoDeUsuarios;
   /** Fecha o conjunto de conexões e descarta a base; em dobro não falha. */
   encerrar(): Promise<void>;
 }
@@ -138,6 +144,7 @@ export async function abrirBaseDeTeste(
   return {
     nomeDaBase,
     armazenamento: aberto.armazenamento,
+    usuarios: aberto.usuarios,
 
     async encerrar() {
       if (encerrado) {
@@ -158,6 +165,17 @@ export async function abrirBaseDeTeste(
  */
 export async function criarArmazenamentoDeTeste(): Promise<ArmazenamentoAberto> {
   return await abrirBaseDeTeste();
+}
+
+/**
+ * A fábrica da bateria compartilhada da segunda Porta: a **mesma** base nova e
+ * migrada por chamada, agora pela Interface dos Usuários. Nenhum cenário da
+ * bateria conhece porta, senha, nome de base ou TLS.
+ */
+export async function criarArmazenamentoDeUsuariosDeTeste(): Promise<ArmazenamentoDeUsuariosAberto> {
+  const base = await abrirBaseDeTeste();
+
+  return { usuarios: base.usuarios, encerrar: () => base.encerrar() };
 }
 
 /** Descarta as bases que esta execução criou e ainda não descartou. */

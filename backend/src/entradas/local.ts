@@ -4,21 +4,32 @@ import {
   type ArmazenamentoSqliteAberto,
 } from "../armazenamento/sqlite/armazenamento.ts";
 import { iniciarServidor } from "../http/servidor.ts";
+import { criarIdentidade } from "../identidade/identidade.ts";
+import {
+  segredoConfigurado,
+  SegredoAusenteError,
+} from "../identidade/segredo.ts";
 
 /**
  * Raiz de composição da execução local (FR-109).
  *
  * É o único lugar do programa que importa um Adapter da Porta: a escolha do
  * armazenamento acontece **uma vez**, no início do processo, e todo o resto
- * conhece apenas `ArmazenamentoDoAcervo` (FR-100, SC-043). A
- * `010-postgresql-na-nuvem` acrescenta a entrada da nuvem ao lado desta, e
- * nenhum Module muda.
+ * conhece apenas `ArmazenamentoDoAcervo` e `ArmazenamentoDeUsuarios` (FR-100,
+ * SC-043). A `010-postgresql-na-nuvem` acrescenta a entrada da nuvem ao lado
+ * desta, e nenhum Module muda.
  *
- * Nada de regra de domínio vive aqui: o `Acervo` as garante pela sua Interface,
- * e o Adapter HTTP as expõe conforme o contrato. O caminho do arquivo local é
- * configurável por `CAMINHO_DO_BANCO`, com o padrão `memorizacao.sqlite`
- * preservado (FR-103); a porta, por `PORTA` (padrão 3001). Nenhuma variável de
- * ambiente escolhe armazenamento: quem escolhe é a construção.
+ * Nada de regra de domínio vive aqui: o `Acervo` e o `Identidade` as garantem
+ * pelas suas Interfaces, e o Adapter HTTP as expõe conforme o contrato. O
+ * caminho do arquivo local é configurável por `CAMINHO_DO_BANCO`, com o padrão
+ * `memorizacao.sqlite` preservado (FR-103); a porta, por `PORTA` (padrão 3001).
+ * Nenhuma variável de ambiente escolhe armazenamento: quem escolhe é a
+ * construção.
+ *
+ * O **segredo do servidor** é lido do ambiente no início, pela função
+ * `segredoConfigurado`, e passado ao `Identidade` como dependência explícita:
+ * sem ele a aplicação **recusa iniciar** (FR-077, SC-024), e nenhum Module lê
+ * `process.env`.
  */
 
 /**
@@ -38,6 +49,27 @@ const FALHA_NO_INICIO =
   "Falha no armazenamento local: não foi possível abrir o arquivo configurado. " +
   "A aplicação não foi iniciada.";
 
+/**
+ * Lê o segredo do servidor, ou devolve `null` depois de reportar a recusa.
+ *
+ * A mensagem nomeia a variável de ambiente e a regra, e **nunca** o valor: é o
+ * mesmo padrão de `PortaInvalidaError` em `servidor.ts` (FR-077, FR-078).
+ */
+function lerSegredo(): string | null {
+  try {
+    return segredoConfigurado(process.env);
+  } catch (erro) {
+    if (erro instanceof SegredoAusenteError) {
+      console.error(erro.message);
+      process.exitCode = 1;
+
+      return null;
+    }
+
+    throw erro;
+  }
+}
+
 /** Abre o Adapter local; a falha do arquivo é reportada e interrompe o início. */
 async function abrirArmazenamentoLocal(): Promise<ArmazenamentoSqliteAberto | null> {
   try {
@@ -56,12 +88,17 @@ async function abrirArmazenamentoLocal(): Promise<ArmazenamentoSqliteAberto | nu
   }
 }
 
-const aberto = await abrirArmazenamentoLocal();
+const segredo = lerSegredo();
 
-if (aberto !== null) {
-  const acervo = criarAcervo(aberto.armazenamento);
+if (segredo !== null) {
+  const aberto = await abrirArmazenamentoLocal();
 
-  console.log(LINHA_DE_INICIO);
+  if (aberto !== null) {
+    const acervo = criarAcervo(aberto.armazenamento);
+    const identidade = criarIdentidade(aberto.usuarios, segredo);
 
-  await iniciarServidor(process.env, acervo);
+    console.log(LINHA_DE_INICIO);
+
+    await iniciarServidor(process.env, acervo, identidade);
+  }
 }

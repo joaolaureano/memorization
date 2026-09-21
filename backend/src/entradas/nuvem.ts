@@ -15,6 +15,11 @@ import {
   versaoCorrenteConhecida,
 } from "../armazenamento/postgresql/esquema.ts";
 import { iniciarServidor } from "../http/servidor.ts";
+import { criarIdentidade } from "../identidade/identidade.ts";
+import {
+  segredoConfigurado,
+  SegredoAusenteError,
+} from "../identidade/segredo.ts";
 
 /**
  * Raiz de composição da execução da nuvem (FR-110, FR-117).
@@ -25,15 +30,19 @@ import { iniciarServidor } from "../http/servidor.ts";
  * por isso que a leitura de variável aparece apenas aqui e em
  * `migrar-nuvem.ts`, e em nenhum Module (FR-113).
  *
- * A ordem do início é a do contrato: lê e valida a URL → abre o conjunto de
- * conexões → **confere a versão do esquema** → informa o armazenamento em uso →
- * começa a escutar. O início **não** migra: uma base atrasada é recusada, e não
- * servida sobre um esquema que este binário não conhece (FR-121, SC-048).
+ * A ordem do início é a do contrato: lê e valida **o segredo do servidor** →
+ * lê e valida a URL → abre o conjunto de conexões → **confere a versão do
+ * esquema** → informa o armazenamento em uso → começa a escutar. O início
+ * **não** migra: uma base atrasada é recusada, e não servida sobre um esquema
+ * que este binário não conhece (FR-121, SC-048).
+ *
+ * O segredo das Senhas vem primeiro porque sem ele não há Cadastro possível: a
+ * aplicação **recusa iniciar** (FR-077, SC-024), e nada mais é lido do ambiente.
  *
  * Nada de sensível alcança a saída ou o registro: nem a URL, nem o usuário, nem
- * a senha, nem o host. A falha do driver vira mensagem genérica em português,
- * acrescida do SQLSTATE quando houver — um código, e não um valor (FR-118,
- * SC-045).
+ * a senha, nem o host, nem o segredo das Senhas. A falha do driver vira
+ * mensagem genérica em português, acrescida do SQLSTATE quando houver — um
+ * código, e não um valor (FR-118, SC-045).
  */
 
 /**
@@ -80,6 +89,27 @@ function mensagemDaFalha(erro: unknown): string {
   return codigo === undefined
     ? FALHA_NO_ACESSO
     : `${FALHA_NO_ACESSO} (SQLSTATE ${codigo})`;
+}
+
+/**
+ * Lê o segredo do servidor, ou devolve `null` depois de reportar a recusa.
+ *
+ * A mensagem nomeia a variável de ambiente e a regra, e **nunca** o valor: é o
+ * mesmo padrão da recusa de `DB_URL` (FR-077, FR-078).
+ */
+function lerSegredo(): string | null {
+  try {
+    return segredoConfigurado(process.env);
+  } catch (erro) {
+    if (erro instanceof SegredoAusenteError) {
+      console.error(`${PREFIXO_DA_RECUSA}: ${erro.message}`);
+      process.exitCode = 1;
+
+      return null;
+    }
+
+    throw erro;
+  }
 }
 
 /**
@@ -153,16 +183,22 @@ async function abrirArmazenamentoDaNuvem(
   }
 }
 
-const configuracao = lerConfiguracao();
+const segredo = lerSegredo();
+const configuracao = segredo === null ? null : lerConfiguracao();
 
-if (configuracao !== null && (await esquemaNaVersaoCorrente(configuracao))) {
+if (
+  segredo !== null &&
+  configuracao !== null &&
+  (await esquemaNaVersaoCorrente(configuracao))
+) {
   const aberto = await abrirArmazenamentoDaNuvem(configuracao);
 
   if (aberto !== null) {
     const acervo = criarAcervo(aberto.armazenamento);
+    const identidade = criarIdentidade(aberto.usuarios, segredo);
 
     console.log(LINHA_DE_INICIO);
 
-    await iniciarServidor(process.env, acervo);
+    await iniciarServidor(process.env, acervo, identidade);
   }
 }

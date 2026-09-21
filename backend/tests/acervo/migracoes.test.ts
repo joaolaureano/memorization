@@ -59,14 +59,15 @@ function comBanco(corpo: (banco: DatabaseSync) => void): void {
 }
 
 describe("base nova — todas as migrações, em ordem", () => {
-  it("cria cartao, baralho e vinculo e registra a versão 3, com controle de versão de um único inteiro", () => {
+  it("cria cartao, baralho, vinculo e usuario e registra a versão 4, com controle de versão de um único inteiro", () => {
     const banco = abrirBanco(":memory:");
 
     try {
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
-      expect(versaoAtual(banco)).toBe(3);
+      expect(existeTabela(banco, "usuario")).toBe(true);
+      expect(versaoAtual(banco)).toBe(4);
 
       const colunas = banco
         .prepare("PRAGMA table_info(versao_do_esquema)")
@@ -133,7 +134,7 @@ describe("base já migrada — migração não reaplica", () => {
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
 
@@ -173,7 +174,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
   /** Cria uma tabela e só então falha: o DDL parcial é o que o ROLLBACK desfaz. */
   const migracaoQueFalha: readonly Migracao[] = [
     {
-      versao: 4,
+      versao: 5,
       sql:
         "CREATE TABLE parcial (id TEXT PRIMARY KEY); " +
         "INSERT INTO nao_existe (id) VALUES ('x');",
@@ -184,7 +185,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
     const banco = abrirBanco(":memory:");
 
     try {
-      expect(versaoAtual(banco)).toBe(3);
+      expect(versaoAtual(banco)).toBe(4);
 
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
@@ -192,7 +193,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
-      expect(versaoAtual(banco)).toBe(3);
+      expect(versaoAtual(banco)).toBe(4);
     } finally {
       banco.close();
     }
@@ -205,11 +206,11 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
       aplicarMigracoes(banco, [
-        { versao: 4, sql: "CREATE TABLE tabela_quatro (id TEXT PRIMARY KEY);" },
+        { versao: 5, sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);" },
       ]);
 
-      expect(existeTabela(banco, "tabela_quatro")).toBe(true);
-      expect(versaoAtual(banco)).toBe(4);
+      expect(existeTabela(banco, "tabela_cinco")).toBe(true);
+      expect(versaoAtual(banco)).toBe(5);
     } finally {
       banco.close();
     }
@@ -236,7 +237,8 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
       expect(existeTabela(banco, "versao_do_esquema")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
-      expect(versaoAtual(banco)).toBe(3);
+      expect(existeTabela(banco, "usuario")).toBe(true);
+      expect(versaoAtual(banco)).toBe(4);
 
       const lido = banco
         .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")
@@ -268,8 +270,8 @@ describe("arquivo criado antes desta feature — mesma versão, mesmos dados", (
     try {
       const caminho = join(diretorio, "memorizacao.sqlite");
 
-      // O que uma execução anterior a esta feature deixava em disco: as três
-      // migrações aplicadas, a versão 3 registrada e conteúdo real.
+      // O que uma execução anterior a esta feature deixava em disco: as
+      // migrações aplicadas até a 3, a versão 3 registrada e conteúdo real.
       const anterior = new DatabaseSync(caminho);
 
       try {
@@ -310,7 +312,7 @@ describe("arquivo criado antes desta feature — mesma versão, mesmos dados", (
       const reaberto = new DatabaseSync(caminho);
 
       try {
-        expect(versaoAtual(reaberto)).toBe(3);
+        expect(versaoAtual(reaberto)).toBe(4);
         expect(existeTabela(reaberto, "cartao")).toBe(true);
         expect(existeTabela(reaberto, "baralho")).toBe(true);
         expect(existeTabela(reaberto, "vinculo")).toBe(true);

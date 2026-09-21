@@ -29,11 +29,11 @@ import {
 } from "./servidor-de-teste.ts";
 
 /**
- * T903 — o Adapter traz o DDL de PostgreSQL das migrações 1 a 3 e o aplicador
+ * T903 — o Adapter traz o DDL de PostgreSQL das migrações 1 a 4 e o aplicador
  * com trava consultiva (FR-112, FR-116, SC-048).
  *
  * A verificação é da Seam interna do Adapter: base nova e vazia chega à versão
- * corrente com as **mesmas versões** do SQLite, as três tabelas existem com as
+ * corrente com as **mesmas versões** do SQLite, as tabelas existem com as
  * `CHECK` de Frente, Verso e nome (`btrim` e `char_length`), a chave primária
  * composta de `vinculo` e as duas `ON DELETE CASCADE`; base já migrada não
  * reaplica nada; dois aplicadores disparados ao mesmo tempo não aplicam a mesma
@@ -95,13 +95,13 @@ async function versaoRegistrada(
 }
 
 describe("base nova e vazia", () => {
-  it("começa na versão 0 e chega à versão corrente com as três tabelas", async () => {
+  it("começa na versão 0 e chega à versão corrente com as tabelas do esquema", async () => {
     await comBaseVazia("nova", async (piscina, consultar) => {
       /** Antes de migrar, a base não tem nem a tabela de controle. */
       expect(await lerVersaoDoEsquema(piscina)).toBe(0);
 
       expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
-      expect(versaoCorrenteConhecida()).toBe(3);
+      expect(versaoCorrenteConhecida()).toBe(4);
 
       const tabelas = await consultar<{ nome: string }>(
         "SELECT tablename AS nome FROM pg_tables WHERE schemaname = 'public';",
@@ -110,6 +110,7 @@ describe("base nova e vazia", () => {
       expect(tabelas.map((tabela) => tabela.nome).sort()).toEqual([
         "baralho",
         "cartao",
+        "usuario",
         "versao_do_esquema",
         "vinculo",
       ]);
@@ -122,7 +123,7 @@ describe("base nova e vazia", () => {
       );
 
       expect(colunas).toEqual([{ nome: "versao", tipo: "integer" }]);
-      expect(await versaoRegistrada(consultar)).toEqual([3]);
+      expect(await versaoRegistrada(consultar)).toEqual([4]);
     });
   });
 
@@ -312,7 +313,7 @@ describe("base já migrada", () => {
       );
 
       /** A lista inteira percorrida, nada pendente, uma única linha intacta. */
-      expect(linhas.rows).toEqual([{ versao: 3 }]);
+      expect(linhas.rows).toEqual([{ versao: 4 }]);
     } finally {
       await piscina.end();
     }
@@ -357,7 +358,7 @@ describe("dois aplicadores ao mesmo tempo", () => {
         "SELECT versao FROM versao_do_esquema;",
       );
 
-      expect(linhas.rows).toEqual([{ versao: 3 }]);
+      expect(linhas.rows).toEqual([{ versao: 4 }]);
     } finally {
       await primeira.end();
       await segunda.end();
@@ -369,7 +370,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
   /** Cria uma tabela e só então falha: o DDL parcial é o que o ROLLBACK desfaz. */
   const migracaoQueFalha: readonly Migracao[] = [
     {
-      versao: 4,
+      versao: 5,
       sql:
         "CREATE TABLE parcial (id TEXT PRIMARY KEY); " +
         "INSERT INTO nao_existe (id) VALUES ('x');",
@@ -387,7 +388,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       );
 
       expect(parciais).toEqual([]);
-      expect(await versaoRegistrada(consultar)).toEqual([3]);
+      expect(await versaoRegistrada(consultar)).toEqual([4]);
 
       const tabelas = await consultar<{ nome: string }>(
         `SELECT tablename AS nome FROM pg_tables
@@ -397,6 +398,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
         "baralho",
         "cartao",
+        "usuario",
         "versao_do_esquema",
         "vinculo",
       ]);
@@ -408,16 +410,173 @@ describe("falha no meio da migração — sem estado parcial", () => {
       await expect(aplicarMigracoes(piscina, migracaoQueFalha)).rejects.toThrow();
 
       await aplicarMigracoes(piscina, [
-        { versao: 4, sql: "CREATE TABLE tabela_quatro (id TEXT PRIMARY KEY);" },
+        { versao: 5, sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);" },
       ]);
 
       const tabelas = await consultar<{ nome: string }>(
-        "SELECT tablename AS nome FROM pg_tables WHERE tablename = 'tabela_quatro';",
+        "SELECT tablename AS nome FROM pg_tables WHERE tablename = 'tabela_cinco';",
       );
 
-      expect(tabelas).toEqual([{ nome: "tabela_quatro" }]);
-      expect(await versaoRegistrada(consultar)).toEqual([4]);
+      expect(tabelas).toEqual([{ nome: "tabela_cinco" }]);
+      expect(await versaoRegistrada(consultar)).toEqual([5]);
     });
+  });
+});
+
+/**
+ * T601, no dialeto da nuvem — a migração 4 cria a tabela `usuario` com as
+ * mesmas regras do Adapter local, preservando a base instalada.
+ *
+ * A verificação é do esquema: o índice único é sobre `lower(nome_de_usuario)`,
+ * equivalente ao `COLLATE NOCASE` do SQLite; as `CHECK` repetem FR-073 e
+ * FR-076 — tamanho de 3 a 50, alfabeto ASCII, `sal` com exatamente 16 bytes —; e
+ * uma base já na versão 3 (a da feature `006`), com Cartões, Baralhos e
+ * Vínculos dentro, chega à versão corrente sem perder nada.
+ */
+describe("migração 4 — tabela usuario", () => {
+  it("guarda o índice único sobre lower(nome_de_usuario) e as CHECK de Nome de usuário e de sal", async () => {
+    await comBaseVazia("usuario-forma", async (piscina, consultar) => {
+      await aplicarMigracoes(piscina);
+
+      const indices = await consultar<{ nome: string; definicao: string }>(
+        `SELECT indexname AS nome, indexdef AS definicao
+           FROM pg_indexes WHERE tablename = 'usuario';`,
+      );
+
+      /** Dois índices, e só um deles é nosso: a chave primária e o único. */
+      expect(indices.map((indice) => indice.nome).sort()).toEqual([
+        "usuario_nome_de_usuario_unico",
+        "usuario_pkey",
+      ]);
+
+      const unico = indices.find(
+        (indice) => indice.nome === "usuario_nome_de_usuario_unico",
+      );
+
+      expect(unico?.definicao).toMatch(/UNIQUE INDEX/);
+      expect(unico?.definicao).toMatch(/lower\(nome_de_usuario\)/);
+
+      const restricoes = await consultar<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'usuario'::regclass AND contype = 'c';`,
+      );
+
+      const definicoes = restricoes
+        .map((restricao) => restricao.definicao)
+        .join(" ");
+
+      expect(definicoes).toMatch(/char_length\(nome_de_usuario\) >= 3/);
+      expect(definicoes).toMatch(/char_length\(nome_de_usuario\) <= 50/);
+      expect(definicoes).toMatch(/A-Za-z0-9\._-\]/);
+      expect(definicoes).toMatch(/octet_length\(sal\) = 16/);
+
+      /** Nenhuma coluna capaz de guardar a Senha, nem derivada dela. */
+      const colunas = await consultar<{ nome: string }>(
+        `SELECT column_name AS nome
+           FROM information_schema.columns
+          WHERE table_name = 'usuario' ORDER BY column_name;`,
+      );
+
+      expect(colunas.map((coluna) => coluna.nome)).toEqual([
+        "hash",
+        "id",
+        "nome_de_usuario",
+        "parametros",
+        "sal",
+      ]);
+    });
+  });
+
+  it("recusa Nome de usuário inválido, sal fora de 16 bytes e duplicata sem distinguir maiúsculas", async () => {
+    const nomeDaBase = await criarBaseMigrada("usuario-restricoes");
+    const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+    const inserir = (id: string, nomeDeUsuario: string, sal = Buffer.alloc(16)) =>
+      piscina.query(
+        `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+         VALUES ($1, $2, $3, $4, '{}');`,
+        [id, nomeDeUsuario, sal, Buffer.from("hash-sintetico")],
+      );
+
+    try {
+      await inserir("u1", "Ana.Silva");
+
+      /** `ana.silva` e `Ana.Silva` são o mesmo Nome de usuário (FR-074). */
+      await expect(inserir("u2", "ana.silva")).rejects.toThrow();
+      await expect(inserir("u3", "ANA.SILVA")).rejects.toThrow();
+
+      await expect(inserir("u4", "ab")).rejects.toThrow();
+      await expect(inserir("u5", "a".repeat(51))).rejects.toThrow();
+      await expect(inserir("u6", "josé")).rejects.toThrow();
+      await expect(inserir("u7", "ana silva")).rejects.toThrow();
+      await expect(inserir("u8", "bruno.souza", Buffer.alloc(15))).rejects.toThrow();
+
+      /** A leitura também não distingue caixa: quem existe é a linha de u1. */
+      const lido = await piscina.query(
+        "SELECT id FROM usuario WHERE lower(nome_de_usuario) = lower($1);",
+        ["ANA.SILVA"],
+      );
+
+      expect(lido.rows).toEqual([{ id: "u1" }]);
+    } finally {
+      await piscina.end();
+    }
+  });
+
+  it("leva uma base da feature 006 à versão corrente preservando Cartões, Baralhos e Vínculos", async () => {
+    const apoio = await servidorDeTeste();
+    const nomeDaBase = await apoio.criarBase("usuario-base-instalada");
+    const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+    try {
+      /** O que a feature 006 deixou instalado: as migrações 1 a 3, com dados. */
+      await aplicarMigracoes(piscina, MIGRACOES.slice(0, 3));
+
+      await piscina.query(
+        "INSERT INTO cartao (id, frente, verso) VALUES ('c1', 'To walk', 'Caminhar');",
+      );
+      await piscina.query(
+        "INSERT INTO baralho (id, nome) VALUES ('b1', 'Inglês');",
+      );
+      await piscina.query(
+        "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
+      );
+
+      expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
+
+      const tabelas = await piscina.query<{ nome: string }>(
+        `SELECT tablename AS nome FROM pg_tables
+          WHERE schemaname = 'public' ORDER BY tablename;`,
+      );
+
+      expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "baralho",
+        "cartao",
+        "usuario",
+        "versao_do_esquema",
+        "vinculo",
+      ]);
+
+      /** Nada do que existia foi perdido pela migração 4. */
+      const cartoes = await piscina.query("SELECT id FROM cartao ORDER BY id;");
+      const vinculos = await piscina.query(
+        "SELECT cartao_id, baralho_id FROM vinculo;",
+      );
+
+      expect(cartoes.rows).toEqual([{ id: "c1" }]);
+      expect(vinculos.rows).toEqual([{ cartao_id: "c1", baralho_id: "b1" }]);
+
+      const versoes = await piscina.query<{ versao: number }>(
+        "SELECT versao FROM versao_do_esquema;",
+      );
+
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
+        versaoCorrenteConhecida(),
+      ]);
+    } finally {
+      await piscina.end();
+    }
   });
 });
 
@@ -554,6 +713,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "usuario",
       "versao_do_esquema",
       "vinculo",
     ]);
@@ -596,6 +756,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "usuario",
       "versao_do_esquema",
       "vinculo",
     ]);
@@ -615,6 +776,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "usuario",
       "versao_do_esquema",
       "vinculo",
     ]);

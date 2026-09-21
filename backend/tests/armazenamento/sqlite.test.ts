@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { bateriaDaPorta } from "./bateria-da-porta.ts";
+import { bateriaDaPortaDeUsuarios } from "./bateria-da-porta-de-usuarios.ts";
 
 /**
  * T803 — a bateria compartilhada da Porta contra o Adapter do armazenamento
@@ -43,6 +44,28 @@ bateriaDaPorta(() => abrirArmazenamentoSqlite(":memory:"), "SQLite em memória")
 
 bateriaDaPorta(
   abrirEmArquivoTemporario,
+  "SQLite em arquivo temporário",
+);
+
+/**
+ * A bateria da segunda Porta, contra o mesmo Adapter: os Usuários são da tabela
+ * `usuario`, criada pela migração 4, e nenhum cenário dela conhece o SQLite.
+ */
+bateriaDaPortaDeUsuarios(
+  async () => {
+    const aberto = await abrirArmazenamentoSqlite(":memory:");
+
+    return { usuarios: aberto.usuarios, encerrar: () => aberto.encerrar() };
+  },
+  "SQLite em memória",
+);
+
+bateriaDaPortaDeUsuarios(
+  async () => {
+    const aberto = await abrirEmArquivoTemporario();
+
+    return { usuarios: aberto.usuarios, encerrar: () => aberto.encerrar() };
+  },
   "SQLite em arquivo temporário",
 );
 

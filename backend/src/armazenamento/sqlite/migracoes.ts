@@ -90,6 +90,38 @@ CREATE TABLE vinculo (
 `;
 
 /**
+ * A migração 4 cria a tabela `usuario` — a entidade durável da feature
+ * `007-criar-usuario`, e a primeira que não pertence ao acervo. Nenhuma tabela
+ * existente é tocada, de modo que Cartões, Baralhos e Vínculos de uma base já
+ * instalada sobrevivem intactos (FR-040).
+ *
+ * O `UNIQUE COLLATE NOCASE` é o que garante a unicidade **sem distinguir
+ * maiúsculas de minúsculas** (FR-074, SC-025) pelo banco, e não por uma
+ * consulta prévia sujeita a corrida; a violação é traduzida pelo Adapter em
+ * `nome_de_usuario_existente`. Como o `NOCASE` do SQLite só iguala maiúsculas e
+ * minúsculas em ASCII, o alfabeto permitido é `A–Z`, `a–z`, dígitos, `.`, `_` e
+ * `-` (Decisão 5 de `research.md`): com acentos, `É` e `é` seriam distintos
+ * justamente nos nomes mais prováveis em português.
+ *
+ * Os dois `CHECK` repetem FR-073 de propósito, como rede de segurança contra
+ * erro de programação — a validação primária, com mensagem útil, vive no
+ * `Identidade`. `sal` é `BLOB` com exatamente 16 bytes (FR-076) e `parametros`
+ * é o JSON da derivação, para que os parâmetros evoluam sem migração de dados.
+ * **Nenhuma coluna guarda a Senha**: FR-076 vale por construção.
+ */
+const ESQUEMA_USUARIO = `
+CREATE TABLE usuario (
+  id              TEXT PRIMARY KEY,
+  nome_de_usuario TEXT NOT NULL UNIQUE COLLATE NOCASE
+                  CHECK (length(nome_de_usuario) BETWEEN 3 AND 50)
+                  CHECK (nome_de_usuario NOT GLOB '*[^A-Za-z0-9._-]*'),
+  sal             BLOB NOT NULL CHECK (length(sal) = 16),
+  hash            BLOB NOT NULL,
+  parametros      TEXT NOT NULL
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -98,4 +130,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 1, sql: ESQUEMA_CARTAO },
   { versao: 2, sql: ESQUEMA_BARALHO },
   { versao: 3, sql: ESQUEMA_VINCULO },
+  { versao: 4, sql: ESQUEMA_USUARIO },
 ];

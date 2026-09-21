@@ -2,10 +2,14 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type {
   ArmazenamentoDoAcervo,
+  ArmazenamentoDeUsuarios,
   Baralho,
   Cartao,
   ContagemPorBaralho,
   Desfecho,
+  DesfechoDeInsercaoDeUsuario,
+  DesfechoDeLeituraDeUsuario,
+  Usuario,
 } from "../porta.ts";
 import { abrirBanco } from "./esquema.ts";
 
@@ -35,6 +39,8 @@ import { abrirBanco } from "./esquema.ts";
  */
 export interface ArmazenamentoSqliteAberto {
   armazenamento: ArmazenamentoDoAcervo;
+  /** A segunda Porta, sobre o mesmo arquivo: os Usuários da identidade. */
+  usuarios: ArmazenamentoDeUsuarios;
   /** Encerra a conexão com o arquivo. O conteúdo gravado permanece nele. */
   encerrar(): Promise<void>;
 }
@@ -60,6 +66,18 @@ const VINCULO_DUPLICADO: Desfecho<never> = {
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
 const SEM_CARGA: Desfecho<void> = { ok: true, valor: undefined };
 
+/** Desfecho do Nome de usuário já existente, imposto pela unicidade sem caixa. */
+const NOME_DE_USUARIO_EXISTENTE = {
+  ok: false,
+  erro: "nome_de_usuario_existente",
+} as const;
+
+/** Desfecho de falha do armazenamento na Porta de Usuários. */
+const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
+
+/** Desfecho de ausência de Usuário, na leitura pelo Nome de usuário. */
+const USUARIO_NAO_ENCONTRADO = { ok: false, erro: "nao_encontrado" } as const;
+
 /**
  * Executa a operação e traduz a falha do SQLite em `indisponivel`.
  *
@@ -71,6 +89,20 @@ function comDesfecho<T>(operacao: () => Desfecho<T>): Desfecho<T> {
     return operacao();
   } catch {
     return FALHA_INDISPONIVEL;
+  }
+}
+
+/**
+ * Mesma tradução da falha do driver, no vocabulário de desfecho da Porta de
+ * Usuários — que tem códigos próprios e não compartilha `vinculo_duplicado` nem
+ * `nao_encontrado` com os do acervo. A duplicata de Nome de usuário não passa
+ * por aqui: ela é reconhecida antes de chegar ao `catch`.
+ */
+function comDesfechoDeUsuario<D>(operacao: () => D, indisponivel: D): D {
+  try {
+    return operacao();
+  } catch {
+    return indisponivel;
   }
 }
 
@@ -104,6 +136,43 @@ function baralhoDaLinha(linha: Record<string, unknown>): Baralho {
     id: linha.id as string,
     nome: linha.nome as string,
   };
+}
+
+/** Lê a linha como Usuário: o Nome de usuário e a transformação da Senha. */
+function usuarioDaLinha(linha: Record<string, unknown>): Usuario {
+  return {
+    id: linha.id as string,
+    nomeDeUsuario: linha.nome_de_usuario as string,
+    sal: linha.sal as Uint8Array,
+    hash: linha.hash as Uint8Array,
+    parametros: linha.parametros as string,
+  };
+}
+
+/**
+ * Reconhece a violação da unicidade do Nome de usuário. O SQLite entrega
+ * `errcode` 2067 (SQLITE_CONSTRAINT_UNIQUE) quando o Nome de usuário já existe,
+ * e a mensagem nomeia a coluna única — que é como este Adapter distingue a
+ * duplicata, que é resultado de domínio, da violação da chave primária de `id`
+ * (errcode 1555), que é falha do armazenamento.
+ */
+function ehNomeDeUsuarioExistente(erro: unknown): boolean {
+  if (typeof erro !== "object" || erro === null) {
+    return false;
+  }
+
+  const candidato = erro as {
+    code?: unknown;
+    errcode?: unknown;
+    message?: unknown;
+  };
+
+  return (
+    candidato.code === "ERR_SQLITE_ERROR" &&
+    candidato.errcode === 2067 &&
+    typeof candidato.message === "string" &&
+    candidato.message.includes("usuario.nome_de_usuario")
+  );
 }
 
 /**
@@ -167,6 +236,22 @@ export async function abrirArmazenamentoSqlite(
        FROM baralho
        LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
       GROUP BY baralho.id`,
+  );
+
+  const inserirUsuario = banco.prepare(
+    `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  /**
+   * A comparação é a da coluna: `nome_de_usuario` é `UNIQUE COLLATE NOCASE`, e
+   * é essa colação que faz a leitura não distinguir maiúsculas de minúsculas
+   * (FR-074). Nenhum `lower` em SQL é necessário, e não há índice extra a
+   * manter.
+   */
+  const obterUsuarioPorNomeDeUsuario = banco.prepare(
+    `SELECT id, nome_de_usuario, sal, hash, parametros
+       FROM usuario
+      WHERE nome_de_usuario = ?`,
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
@@ -306,8 +391,55 @@ export async function abrirArmazenamentoSqlite(
     },
   };
 
+  /**
+   * A segunda Porta, sobre a mesma conexão. O Adapter é o mesmo, e a tabela
+   * `usuario` é deste Adapter como as demais: nenhum SQL atravessa o domínio,
+   * e a violação do `UNIQUE COLLATE NOCASE` vira desfecho tipado em vez de
+   * erro do driver (FR-074, FR-107).
+   */
+  const usuarios: ArmazenamentoDeUsuarios = {
+    async inserirUsuario(usuario) {
+      return comDesfechoDeUsuario<DesfechoDeInsercaoDeUsuario>(
+        () => {
+          try {
+            inserirUsuario.run(
+              usuario.id,
+              usuario.nomeDeUsuario,
+              usuario.sal,
+              usuario.hash,
+              usuario.parametros,
+            );
+          } catch (erro) {
+            if (ehNomeDeUsuarioExistente(erro)) {
+              return NOME_DE_USUARIO_EXISTENTE;
+            }
+
+            throw erro;
+          }
+
+          return { ok: true, valor: usuario };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async obterUsuarioPorNomeDeUsuario(nomeDeUsuario) {
+      return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
+        () => {
+          const linha = obterUsuarioPorNomeDeUsuario.get(nomeDeUsuario);
+
+          return linha === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(linha) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+  };
+
   return {
     armazenamento,
+    usuarios,
 
     async encerrar() {
       banco.close();

@@ -2,10 +2,14 @@ import type { Pool } from "pg";
 
 import type {
   ArmazenamentoDoAcervo,
+  ArmazenamentoDeUsuarios,
   Baralho,
   Cartao,
   ContagemPorBaralho,
   Desfecho,
+  DesfechoDeInsercaoDeUsuario,
+  DesfechoDeLeituraDeUsuario,
+  Usuario,
 } from "../porta.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
 
@@ -44,6 +48,8 @@ import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
  */
 export interface ArmazenamentoPostgresqlAberto {
   armazenamento: ArmazenamentoDoAcervo;
+  /** A segunda Porta, sobre o mesmo conjunto de conexões: os Usuários. */
+  usuarios: ArmazenamentoDeUsuarios;
   /** Fecha o conjunto de conexões. O conteúdo gravado permanece na base. */
   encerrar(): Promise<void>;
 }
@@ -69,6 +75,18 @@ const VINCULO_DUPLICADO: Desfecho<never> = {
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
 const SEM_CARGA: Desfecho<void> = { ok: true, valor: undefined };
 
+/** Desfecho do Nome de usuário já existente, imposto pelo índice único. */
+const NOME_DE_USUARIO_EXISTENTE = {
+  ok: false,
+  erro: "nome_de_usuario_existente",
+} as const;
+
+/** Desfecho de falha do armazenamento na Porta de Usuários. */
+const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
+
+/** Desfecho de ausência de Usuário, na leitura pelo Nome de usuário. */
+const USUARIO_NAO_ENCONTRADO = { ok: false, erro: "nao_encontrado" } as const;
+
 /** SQLSTATE de unicidade violada — no Vínculo, é o par repetido (FR-020). */
 const VIOLACAO_DE_UNICIDADE = "23505";
 
@@ -81,6 +99,13 @@ const VIOLACAO_DE_CHAVE_ESTRANGEIRA = "23503";
  * qualquer outra unicidade violada, que é falha do armazenamento.
  */
 const CHAVE_PRIMARIA_DE_VINCULO = "vinculo_pkey";
+
+/**
+ * Nome estável do índice único de Nome de usuário da migração 4. É por ele que
+ * o Nome de usuário repetido — resultado de domínio — se distingue de qualquer
+ * outra unicidade violada, que é falha do armazenamento.
+ */
+const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
 
 const INSERIR_CARTAO = `
 INSERT INTO cartao (id, frente, verso) VALUES ($1, $2, $3);
@@ -152,6 +177,23 @@ SELECT baralho.id AS "baralhoId",
  GROUP BY baralho.id;
 `;
 
+const INSERIR_USUARIO = `
+INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+VALUES ($1, $2, $3, $4, $5);
+`;
+
+/**
+ * A leitura não distingue maiúsculas de minúsculas, e é o `lower` de ambos os
+ * lados que o garante: o índice único da migração 4 é sobre
+ * `lower(nome_de_usuario)`, e a consulta usa a mesma expressão, de modo que a
+ * leitura e a unicidade falam da mesma coisa (FR-074).
+ */
+const OBTER_USUARIO_POR_NOME = `
+SELECT id, nome_de_usuario, sal, hash, parametros
+  FROM usuario
+ WHERE lower(nome_de_usuario) = lower($1);
+`;
+
 /** Linha de `cartao` como o Adapter a lê, sem deixar a forma do driver passar. */
 type LinhaDeCartao = {
   id: string;
@@ -169,6 +211,15 @@ type LinhaDeBaralho = {
 type LinhaDeContagem = {
   baralhoId: string;
   quantidadeDeCartoes: string;
+};
+
+/** Linha de `usuario`; o `BYTEA` do PostgreSQL chega como `Buffer`. */
+type LinhaDeUsuario = {
+  id: string;
+  nome_de_usuario: string;
+  sal: Buffer;
+  hash: Buffer;
+  parametros: string;
 };
 
 /**
@@ -222,6 +273,23 @@ async function comDesfecho<T>(
   }
 }
 
+/**
+ * Mesma tradução da falha do driver, no vocabulário de desfecho da Porta de
+ * Usuários: qualquer falha ali é `indisponivel` — não há chave estrangeira na
+ * tabela `usuario`, e a unicidade violada que é resultado de domínio já foi
+ * reconhecida antes de chegar ao `catch`.
+ */
+async function comDesfechoDeUsuario<D>(
+  operacao: () => Promise<D>,
+  indisponivel: D,
+): Promise<D> {
+  try {
+    return await operacao();
+  } catch {
+    return indisponivel;
+  }
+}
+
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
   return { id: linha.id, frente: linha.frente, verso: linha.verso };
@@ -230,6 +298,17 @@ function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
 /** Lê a linha como Baralho, sem deixar a forma do driver atravessar a Porta. */
 function baralhoDaLinha(linha: LinhaDeBaralho): Baralho {
   return { id: linha.id, nome: linha.nome };
+}
+
+/** Lê a linha como Usuário: o Nome de usuário e a transformação da Senha. */
+function usuarioDaLinha(linha: LinhaDeUsuario): Usuario {
+  return {
+    id: linha.id,
+    nomeDeUsuario: linha.nome_de_usuario,
+    sal: linha.sal,
+    hash: linha.hash,
+    parametros: linha.parametros,
+  };
 }
 
 /**
@@ -404,8 +483,61 @@ export async function abrirArmazenamentoPostgresql(
     },
   };
 
+  /**
+   * A segunda Porta, sobre o mesmo conjunto de conexões. O Adapter é o mesmo, e
+   * o índice único de `usuario` é deste Adapter como as demais restrições: o
+   * SQLSTATE `23505` do índice nomeado vira desfecho tipado em vez de erro do
+   * driver (FR-074, FR-118). O `BYTEA` é enviado e lido como bytes, sem
+   * codificação que pudesse alterar o `sal` ou o `hash`.
+   */
+  const usuarios: ArmazenamentoDeUsuarios = {
+    async inserirUsuario(usuario) {
+      return comDesfechoDeUsuario<DesfechoDeInsercaoDeUsuario>(
+        async () => {
+          try {
+            await piscina.query(INSERIR_USUARIO, [
+              usuario.id,
+              usuario.nomeDeUsuario,
+              Buffer.from(usuario.sal),
+              Buffer.from(usuario.hash),
+              usuario.parametros,
+            ]);
+          } catch (erro) {
+            if (
+              ehViolacao(erro, VIOLACAO_DE_UNICIDADE, INDICE_DE_NOME_DE_USUARIO)
+            ) {
+              return NOME_DE_USUARIO_EXISTENTE;
+            }
+
+            throw erro;
+          }
+
+          return { ok: true, valor: usuario };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async obterUsuarioPorNomeDeUsuario(nomeDeUsuario) {
+      return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
+        async () => {
+          const { rows } = await piscina.query<LinhaDeUsuario>(
+            OBTER_USUARIO_POR_NOME,
+            [nomeDeUsuario],
+          );
+
+          return rows[0] === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(rows[0]) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+  };
+
   return {
     armazenamento,
+    usuarios,
 
     async encerrar() {
       if (encerrado) {

@@ -76,11 +76,12 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
         banco.close();
       }
 
-      // A reabertura migra até a versão 3, criando apenas a tabela vinculo.
+      // A reabertura migra até a versão corrente, criando apenas a tabela
+      // vinculo (e, depois dela, a usuario, que não é deste cenário).
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
         expect(existeTabela(banco, "cartao")).toBe(true);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
@@ -103,11 +104,11 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
         banco.close();
       }
 
-      // Reabrir de novo não reaplica a migração 3: a versão permanece 3.
+      // Reabrir de novo não reaplica a migração 3: a versão permanece 4.
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
         expect(existeTabela(banco, "vinculo")).toBe(true);
         expect(
           banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,

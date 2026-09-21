@@ -21,8 +21,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Fundação
 
-- [ ] T601 Migração 4 cria a tabela `usuario`, preservando a base instalada
-- [ ] T602 [P] Aplicação recusa iniciar sem o segredo do servidor
+- [X] T601 Migração 4 cria a tabela `usuario`, preservando a base instalada
+- [X] T602 [P] Aplicação recusa iniciar sem o segredo do servidor
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -37,10 +37,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Cadastro no servidor
 
-- [ ] T603 `Identidade.cadastrar` valida as regras de Nome de usuário e de Senha
-- [ ] T604 Ler os dados armazenados não revela a Senha nem revela Senhas iguais
-- [ ] T605 Rota `POST /usuarios` responde conforme o contrato, sem credencial na resposta e sem Senha em log
-- [ ] T606 Harness e2e sobe a API real com segredo aleatório e a suíte existente continua verde
+- [X] T603 `Identidade.cadastrar` valida as regras de Nome de usuário e de Senha
+- [X] T604 Ler os dados armazenados não revela a Senha nem revela Senhas iguais
+- [X] T605 Rota `POST /usuarios` responde conforme o contrato, sem credencial na resposta e sem Senha em log
+- [X] T606 Harness e2e sobe a API real com segredo aleatório e a suíte existente continua verde
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

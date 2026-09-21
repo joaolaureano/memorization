@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -19,6 +20,15 @@ import { fileURLToPath } from "node:url";
 // no `finally` do teste, inclusive quando a prova falha no meio.
 
 const RAIZ_DO_REPOSITORIO = dirname(dirname(fileURLToPath(import.meta.url)));
+
+/**
+ * O segredo do servidor das Senhas desta execução da suíte (T606, FR-077):
+ * **gerado agora** com `randomBytes` e nunca versionado. Ele é criado uma única
+ * vez, aqui, e reusado em todos os reinícios da API — o segredo precisa ser o
+ * mesmo para uma mesma base, e os cenários de persistência reiniciam a API sobre
+ * o mesmo arquivo. Nenhum valor literal de segredo existe neste arquivo.
+ */
+const SEGREDO_DAS_SENHAS = randomBytes(48).toString("base64url");
 
 /** Mantém apenas as últimas linhas da saída, para relatar falhas sem crescer sem limite. */
 const LIMITE_DE_LINHAS_DE_SAIDA = 200;
@@ -191,6 +201,8 @@ export function iniciarApi(
     ambiente: {
       PORTA: String(porta),
       CAMINHO_DO_BANCO: caminhoDoBanco,
+      /** Sem o segredo a API recusa iniciar (FR-077): ele vai em toda subida. */
+      SEGREDO_DAS_SENHAS,
     },
   });
 }

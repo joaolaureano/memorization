@@ -92,14 +92,53 @@ CREATE TABLE vinculo (
 `;
 
 /**
+ * A migração 4 cria a tabela `usuario` — a entidade durável da feature
+ * `007-criar-usuario`, com o mesmo número de versão da migração do Adapter
+ * local. Nenhuma tabela existente é tocada: Cartões, Baralhos e Vínculos de uma
+ * base instalada sobrevivem intactos.
+ *
+ * O dialeto é o mesmo mapeamento das migrações anteriores — `char_length` para
+ * contar caracteres —, acrescido de `octet_length` para contar os bytes do
+ * `sal` e de uma expressão regular equivalente ao `GLOB` do Adapter local:
+ * `~ '^[A-Za-z0-9._-]+$'` aceita exatamente o mesmo alfabeto, de modo que as
+ * duas `CHECK` recusam os mesmos Nomes de usuário.
+ *
+ * A unicidade sem distinção entre maiúsculas e minúsculas (FR-074, SC-025) é um
+ * **índice único sobre `lower(nome_de_usuario)`**, e não uma coluna `citext` nem
+ * uma consulta prévia sujeita a corrida: é a mesma promessa do
+ * `COLLATE NOCASE` do Adapter local, e as duas valem para o mesmo alfabeto
+ * ASCII. O índice é **nomeado** porque é por esse nome que o Adapter distingue
+ * o Nome de usuário repetido — resultado de domínio — de qualquer outra
+ * unicidade violada, que é falha do armazenamento.
+ *
+ * `sal` é `BYTEA` com exatamente 16 bytes (FR-076) e `parametros` é o JSON da
+ * derivação, para que os parâmetros evoluam sem migração de dados. **Nenhuma
+ * coluna guarda a Senha**: FR-076 vale por construção.
+ */
+const ESQUEMA_USUARIO = `
+CREATE TABLE usuario (
+  id              TEXT PRIMARY KEY,
+  nome_de_usuario TEXT NOT NULL
+                  CHECK (char_length(nome_de_usuario) BETWEEN 3 AND 50)
+                  CHECK (nome_de_usuario ~ '^[A-Za-z0-9._-]+$'),
+  sal             BYTEA NOT NULL CHECK (octet_length(sal) = 16),
+  hash            BYTEA NOT NULL,
+  parametros      TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX usuario_nome_de_usuario_unico
+    ON usuario (lower(nome_de_usuario));
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
- * executaram. As versões 4 (`usuario`) e 5 (Dono no acervo) serão acrescentadas
- * aqui pelas features `007-criar-usuario` e `008-entrar`, com os mesmos números
- * de versão das migrações do Adapter local.
+ * executaram. A versão 5 (Dono no acervo) será acrescentada aqui pela feature
+ * `008-entrar`, com o mesmo número de versão da migração do Adapter local.
  */
 export const MIGRACOES: readonly Migracao[] = [
   { versao: 1, sql: ESQUEMA_CARTAO },
   { versao: 2, sql: ESQUEMA_BARALHO },
   { versao: 3, sql: ESQUEMA_VINCULO },
+  { versao: 4, sql: ESQUEMA_USUARIO },
 ];

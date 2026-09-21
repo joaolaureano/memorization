@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
@@ -39,6 +40,12 @@ const DIRETORIO_TEMPORARIO = mkdtempSync(
   join(tmpdir(), "inicio-indisponivel-"),
 );
 
+/**
+ * O segredo do servidor, gerado nesta execução: sem ele a API recusa iniciar,
+ * e é o armazenamento que precisa falhar aqui (FR-077).
+ */
+const SEGREDO = randomBytes(48).toString("base64url");
+
 /** A frase da falha do início: em português, sem caminho e sem driver. */
 const FALHA_NO_INICIO = /falha no armazenamento local/i;
 
@@ -76,7 +83,8 @@ async function executarEntrada(
 ): Promise<ExecucaoDaEntrada> {
   const processo: ChildProcess = spawn(process.execPath, [ENTRADA_LOCAL], {
     cwd: RAIZ_DO_BACKEND,
-    env: { ...process.env, ...ambiente },
+    /** O segredo gerado nesta execução: o início exige um (FR-077). */
+    env: { ...process.env, SEGREDO_DAS_SENHAS: SEGREDO, ...ambiente },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

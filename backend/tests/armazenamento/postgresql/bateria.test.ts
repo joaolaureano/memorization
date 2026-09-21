@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { bateriaDaPorta } from "../bateria-da-porta.ts";
+import { bateriaDaPortaDeUsuarios } from "../bateria-da-porta-de-usuarios.ts";
 import {
   abrirArmazenamentoDaBase,
   criarArmazenamentoDeTeste,
+  criarArmazenamentoDeUsuariosDeTeste,
   criarBaseMigrada,
   descartarBasesDeTeste,
 } from "./base-de-teste.ts";
@@ -36,6 +38,16 @@ afterAll(async () => {
 });
 
 bateriaDaPorta(criarArmazenamentoDeTeste, "PostgreSQL na nuvem");
+
+/**
+ * A bateria da segunda Porta contra o **mesmo** Adapter: os Usuários são da
+ * tabela `usuario` da migração 4, e as duas baterias compartilhadas provam que
+ * SQLite e PostgreSQL não duplicam regra (FR-111, SC-044).
+ */
+bateriaDaPortaDeUsuarios(
+  criarArmazenamentoDeUsuariosDeTeste,
+  "PostgreSQL na nuvem",
+);
 
 describe("persistência entre duas aberturas do mesmo armazenamento", () => {
   it("devolve o mesmo conteúdo depois de encerrar o conjunto e abrir de novo", async () => {

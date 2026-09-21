@@ -96,7 +96,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       }
 
       // A abertura pelo Adapter migra: adota o cartao existente (1), cria
-      // baralho (2) e cria vinculo (3).
+      // baralho (2), cria vinculo (3) e cria usuario (4).
       const aberto = await abrirArmazenamentoSqlite(caminho);
 
       try {
@@ -117,19 +117,19 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       let banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
       } finally {
         banco.close();
       }
 
-      // Reabrir de novo não reaplica as migrações: a versão permanece 3 e os
+      // Reabrir de novo não reaplica as migrações: a versão permanece 4 e os
       // Cartões continuam lá. Reaplicar falharia, pois as tabelas já existem.
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
         expect(
@@ -159,7 +159,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
+        expect(versaoAtual(banco)).toBe(4);
 
         const lido = banco
           .prepare("SELECT id, nome FROM baralho WHERE id = ?")

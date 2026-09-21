@@ -4663,3 +4663,39 @@ recusado.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-089
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: Port de Usuários, migração 4 nos dois dialetos, Module Identidade, POST /usuarios, segredo
+
+- **Data/hora**: 2026-09-21 04:03 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 007-criar-usuario / T601–T606 — concluídas (bloco do servidor)
+- **Commit anterior**: `122872d` (registra o hash do evento anterior)
+
+- **Adaptação ao Port** (Arquiteto): a Port `ArmazenamentoDeUsuarios` é
+  implementada nos dois Adapters. A migração 4 existe nos dois dialetos: no
+  SQLite com `UNIQUE COLLATE NOCASE`, no PostgreSQL com índice único em
+  `lower(...)`.
+- **Module `Identidade`**: `criarIdentidade(armazenamento, segredo)`, com HMAC e
+  scrypt e sal de 16 bytes. Importa só a Port.
+- **T602**: `SegredoAusenteError` nas entradas local e de nuvem.
+- **T604**: verificação negativa lendo as linhas armazenadas no SQLite e no
+  PostgreSQL reais.
+- **T605**: `POST /usuarios` com CORS; a Senha não aparece na saída do processo
+  real.
+- **T606**: o harness E2E gera o segredo uma vez e o reusa nos reinícios. T602 e
+  T606 foram integradas no mesmo commit, como manda a remediação M1.
+- **Desvio aceito, com débito**: testes que fixavam a versão de esquema 3 foram
+  subidos para 4. Como já aconteceu na 002, isso quebrará de novo na migração 5.
+  O worker da 008 recebe a instrução de derivar a versão da lista de migrações.
+
+Verificado em `main`: backend 439, frontend 240, e2e 13, `typecheck`,
+`build:local`, `build:cloud` e lint verdes; a entrada local sem segredo é
+recusada.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

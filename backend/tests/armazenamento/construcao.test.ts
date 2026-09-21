@@ -4,6 +4,7 @@ import {
   type ChildProcess,
   type SpawnSyncReturns,
 } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdtempSync,
@@ -123,6 +124,18 @@ function ambienteSemSegredo(): NodeJS.ProcessEnv {
   delete ambiente.DB_CA_CERT;
 
   return ambiente;
+}
+
+/** O segredo gerado nesta execução: a API recusa iniciar sem ele (FR-077). */
+const SEGREDO_DA_EXECUCAO = randomBytes(48).toString("base64url");
+
+/**
+ * O ambiente de execução dos pacotes: o mesmo da construção, acrescido do
+ * segredo das Senhas gerado nesta execução. O que executa precisa dele; o que
+ * só constrói, e o comando de migração, não.
+ */
+function ambienteDeExecucao(): NodeJS.ProcessEnv {
+  return { ...ambienteSemSegredo(), SEGREDO_DAS_SENHAS: SEGREDO_DA_EXECUCAO };
 }
 
 /** Executa o script de construção com os argumentos e o ambiente informados. */
@@ -375,6 +388,7 @@ describe("linha de início do pacote local", () => {
       ...process.env,
       PORTA: String(porta),
       CAMINHO_DO_BANCO: caminhoDoBanco,
+      SEGREDO_DAS_SENHAS: SEGREDO_DA_EXECUCAO,
     });
 
     try {
@@ -398,7 +412,11 @@ describe("linha de início do pacote local", () => {
   it("usa o caminho padrão memorizacao.sqlite quando nada é informado", async () => {
     const pasta = mkdtempSync(join(PASTA_TEMPORARIA, "padrao-"));
     const porta = await portaLivre();
-    const ambiente: NodeJS.ProcessEnv = { ...process.env, PORTA: String(porta) };
+    const ambiente: NodeJS.ProcessEnv = {
+      ...process.env,
+      PORTA: String(porta),
+      SEGREDO_DAS_SENHAS: SEGREDO_DA_EXECUCAO,
+    };
 
     delete ambiente.CAMINHO_DO_BANCO;
 
@@ -559,6 +577,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
     expect(tabelas.map((tabela) => tabela.nome)).toEqual([
       "baralho",
       "cartao",
+      "usuario",
       "versao_do_esquema",
       "vinculo",
     ]);
@@ -570,7 +589,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
     const porta = await portaLivre();
 
     const pacote = iniciarPacote(PACOTE_DA_NUVEM, pasta, {
-      ...ambienteSemSegredo(),
+      ...ambienteDeExecucao(),
       PORTA: String(porta),
       DB_URL: servidor.urlDaBase(nomeDaBase),
       DB_CA_CERT: certificado.caminho,
@@ -609,7 +628,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
     const caminhoDoBanco = join(pasta, "memorizacao.sqlite");
 
     const pacote = iniciarPacoteLocal(pasta, {
-      ...ambienteSemSegredo(),
+      ...ambienteDeExecucao(),
       PORTA: String(porta),
       CAMINHO_DO_BANCO: caminhoDoBanco,
       /** Uma URL de conexão válida, que o caminho local **não** usa. */

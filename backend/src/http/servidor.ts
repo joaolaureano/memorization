@@ -3,10 +3,12 @@ import type { AddressInfo } from "node:net";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 
 import type { Acervo } from "../acervo/acervo.ts";
+import type { Identidade } from "../identidade/identidade.ts";
 import {
   CORPO_INVALIDO,
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDeUsuarios,
 } from "./rotas.ts";
 
 /**
@@ -30,6 +32,12 @@ export const CAMINHO_DOS_CARTOES = "/cartoes";
  * o mesmo tratamento de CORS das rotas de Cartão.
  */
 export const CAMINHO_DOS_BARALHOS = "/baralhos";
+
+/**
+ * Caminho da rota de Usuário (contrato `api-usuarios.md`). Recebe o mesmo
+ * tratamento de CORS mínimo das demais rotas.
+ */
+export const CAMINHO_DOS_USUARIOS = "/usuarios";
 
 /**
  * Erro lançado quando o servidor está escutando fora do loopback.
@@ -124,7 +132,8 @@ export function criarServidor(): FastifyInstance {
    * `fetch` do navegador recusa o pré-voo dos `POST`, `PUT` e `DELETE` — o
    * content-type application/json torna as requisições com corpo não simples —
    * e impede a leitura das respostas. Os caminhos parametrizados de edição,
-   * exclusão e Vínculo recebem o mesmo tratamento das rotas de coleção. Como
+   * exclusão e Vínculo recebem o mesmo tratamento das rotas de coleção, e
+   * `/usuarios` entra na mesma lista com os mesmos métodos e cabeçalhos. Como
    * a aplicação não possui autenticação e escuta exclusivamente em 127.0.0.1,
    * permitir qualquer origem é a configuração mínima segura — o serviço não é
    * alcançável pela rede.
@@ -136,6 +145,7 @@ export function criarServidor(): FastifyInstance {
     "/baralhos/:id",
     "/baralhos/:baralhoId/vinculos",
     "/baralhos/:baralhoId/vinculos/:cartaoId",
+    CAMINHO_DOS_USUARIOS,
   ]) {
     permitirPreVoo(servidor, caminho);
   }
@@ -147,7 +157,8 @@ export function criarServidor(): FastifyInstance {
       caminho === CAMINHO_DOS_CARTOES ||
       caminho.startsWith("/cartoes/") ||
       caminho === CAMINHO_DOS_BARALHOS ||
-      caminho.startsWith("/baralhos/")
+      caminho.startsWith("/baralhos/") ||
+      caminho === CAMINHO_DOS_USUARIOS
     ) {
       resposta.header("access-control-allow-origin", "*");
     }
@@ -188,11 +199,13 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 export async function iniciarServidor(
   env: NodeJS.ProcessEnv = process.env,
   acervo: Acervo,
+  identidade: Identidade,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
   const servidor = criarServidor();
   registrarRotasDeCartoes(servidor, acervo);
   registrarRotasDeBaralhos(servidor, acervo);
+  registrarRotasDeUsuarios(servidor, identidade);
 
   await servidor.listen(opcoes);
 

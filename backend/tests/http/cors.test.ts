@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
+import { randomBytes } from "node:crypto";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
@@ -11,7 +13,9 @@ import { criarServidor } from "../../src/http/servidor.ts";
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDeUsuarios,
 } from "../../src/http/rotas.ts";
+import { criarIdentidade } from "../../src/identidade/identidade.ts";
 
 /**
  * T014 — CORS mínimo para o frontend local
@@ -27,6 +31,14 @@ import {
 
 const ORIGEM_DO_FRONTEND = "http://127.0.0.1:5173";
 
+/** O segredo descartável desta execução: o Cadastro exige um (FR-077). */
+const SEGREDO = randomBytes(48).toString("base64url");
+
+/** Uma Senha gerada nesta execução, com 16 caracteres — nunca literal. */
+function senhaGerada(): string {
+  return randomBytes(12).toString("base64url");
+}
+
 let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
@@ -35,6 +47,10 @@ beforeEach(async () => {
   servidor = criarServidor();
   registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
   registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
+  registrarRotasDeUsuarios(
+    servidor,
+    criarIdentidade(aberto.usuarios, SEGREDO),
+  );
 });
 
 afterEach(async () => {
@@ -245,6 +261,47 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de POST /usuarios com 204 e os cabeçalhos de permissão", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/usuarios",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
+    expect(resposta.headers["access-control-allow-headers"]).toContain(
+      "content-type",
+    );
+  });
+
+  it("permite a leitura do Cadastro concluído: POST /usuarios 201 devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/usuarios",
+      payload: { nomeDeUsuario: "Ana.Silva", senha: senhaGerada() },
+    });
+
+    expect(resposta.statusCode).toBe(201);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("permite a leitura até da recusa: POST /usuarios 400 devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/usuarios",
+      payload: { nomeDeUsuario: "ab", senha: senhaGerada() },
+    });
+
+    expect(resposta.statusCode).toBe(400);
     expect(resposta.headers["access-control-allow-origin"]).toBe("*");
   });
 

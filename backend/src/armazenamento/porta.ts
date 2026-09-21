@@ -23,6 +23,11 @@
  *   ausência de linha e a falha do armazenamento chegam como desfecho tipado,
  *   sem texto do driver, caminho de arquivo, cadeia de conexão ou credencial
  *   (FR-108).
+ *
+ * O arquivo declara também a **segunda Porta**, `ArmazenamentoDeUsuarios`, por
+ * onde o Module `Identidade` lê e grava Usuários. Ela é implementada pelos
+ * mesmos Adapters e obedece às mesmas regras de desfecho; os Modules do acervo
+ * continuam conhecendo apenas `ArmazenamentoDoAcervo`.
  */
 
 /**
@@ -78,6 +83,84 @@ export type CodigoDeFalhaDeArmazenamento =
 export type Desfecho<T> =
   | { ok: true; valor: T }
   | { ok: false; erro: CodigoDeFalhaDeArmazenamento };
+
+/**
+ * Usuário como o armazenamento o guarda: identificador opaco, Nome de usuário
+ * e a transformação **irreversível** da Senha — o `sal` aleatório de cada
+ * Usuário, o `hash` derivado dele e os `parametros` da derivação, em JSON, para
+ * que um hash antigo continue verificável quando os parâmetros evoluírem.
+ *
+ * Nenhum campo carrega a Senha, nem derivado dela: nenhuma coluna consegue
+ * guardá-la (FR-076). É a Porta quem declara esta forma, porque é ela quem
+ * troca esses dados com o armazenamento; o Module `Identidade` a re-exporta na
+ * sua Interface.
+ */
+export interface Usuario {
+  id: string;
+  nomeDeUsuario: string;
+  sal: Uint8Array;
+  hash: Uint8Array;
+  parametros: string;
+}
+
+/**
+ * Códigos de falha tipada da gravação de Usuário. `nome_de_usuario_existente`
+ * é a unicidade do esquema — sem distinção entre maiúsculas e minúsculas —
+ * reconhecida pelo Adapter e devolvida como resultado de domínio, e não como
+ * erro do driver; `indisponivel` é a falha do armazenamento, e jamais significa
+ * concluído (FR-074, FR-044, FR-107).
+ */
+export type CodigoDeFalhaDeInsercaoDeUsuario =
+  | "nome_de_usuario_existente"
+  | "indisponivel";
+
+/**
+ * Códigos de falha tipada da leitura de Usuário: ausência de linha a ler e
+ * falha do armazenamento.
+ */
+export type CodigoDeFalhaDeLeituraDeUsuario = "nao_encontrado" | "indisponivel";
+
+/** Desfecho da gravação de Usuário: gravado, ou a recusa tipada. */
+export type DesfechoDeInsercaoDeUsuario =
+  | { ok: true; valor: Usuario }
+  | { ok: false; erro: CodigoDeFalhaDeInsercaoDeUsuario };
+
+/** Desfecho da leitura de Usuário: o Usuário guardado, ou a falha tipada. */
+export type DesfechoDeLeituraDeUsuario =
+  | { ok: true; valor: Usuario }
+  | { ok: false; erro: CodigoDeFalhaDeLeituraDeUsuario };
+
+/**
+ * Segunda Porta: a Interface por onde o `Identidade` lê e grava Usuários.
+ *
+ * É implementada pelos **mesmos** Adapters da `ArmazenamentoDoAcervo`, e as
+ * regras que ela garante ao caller são as mesmas da primeira: toda operação
+ * devolve `Promise`, nenhum erro do driver atravessa a Interface e o Nome de
+ * usuário repetido chega como desfecho tipado (`nome_de_usuario_existente`),
+ * nunca como erro de unicidade do driver.
+ *
+ * A Porta não valida, não transforma a Senha e não tem texto em português: a
+ * derivação, a validação e as mensagens são do Module `Identidade`, que é o
+ * dono da regra de Cadastro.
+ */
+export interface ArmazenamentoDeUsuarios {
+  /**
+   * Guarda um Usuário já validado e já derivado pelo Module. `id` é opaco e
+   * vem de quem chama. O Nome de usuário já existente é recusado como
+   * `nome_de_usuario_existente`, pela unicidade sem distinção entre maiúsculas
+   * e minúsculas do esquema (FR-074).
+   */
+  inserirUsuario(usuario: Usuario): Promise<DesfechoDeInsercaoDeUsuario>;
+
+  /**
+   * Devolve o Usuário do Nome de usuário informado, **sem distinguir
+   * maiúsculas de minúsculas**; ausente é `nao_encontrado`. É a leitura de que
+   * a verificação da Senha da `008-entrar` vai precisar.
+   */
+  obterUsuarioPorNomeDeUsuario(
+    nomeDeUsuario: string,
+  ): Promise<DesfechoDeLeituraDeUsuario>;
+}
 
 /**
  * A Interface única por onde o acervo lê e grava dados persistidos.
