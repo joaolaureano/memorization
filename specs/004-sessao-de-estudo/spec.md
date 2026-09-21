@@ -7,6 +7,13 @@
 
 **Depende de**: `003-vincular-cartao-baralho` (exige um Baralho elegível)
 
+## Clarifications
+
+### Session 2026-09-20
+
+- Q: Esta feature precisa de falha de gravação e estado vazio? → A: Não. A Sessão nunca persiste (FR-038); sem armazenamento próprio, falha de gravação não se aplica. A indisponibilidade do acervo antes do início é tratada pela recusa de iniciar.
+- Q: Quais requisitos transversais permanecem observáveis? → A: Interface em português e telas utilizáveis em largura pequena. Teclado, foco e leitor de tela já são requisitos próprios da Sessão.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Exercitar a memória e ver o resultado (Priority: P1)
@@ -60,6 +67,11 @@ confirmar que o Resumo apresenta três estudados com a soma correta.
     conteúdo e permanece visível sem depender de cor.
 15. **Given** um Item com o Verso revelado, **When** o Resultado é registrado,
     **Then** a mudança de estado é perceptível por leitor de tela.
+16. **Given** uma tela da Sessão, **When** é apresentada, **Then** seus textos
+    estão em português e usam os termos canônicos.
+17. **Given** uma tela da Sessão em largura de telefone, **When** o usuário a
+    percorre, **Then** as ações e o conteúdo permanecem utilizáveis sem rolagem
+    horizontal.
 
 ### Edge Cases
 
@@ -114,6 +126,11 @@ confirmar que o Resumo apresenta três estudados com a soma correta.
   recém-apresentado ao avançar de Item.
 - **FR-049**: Mudanças de estado relevantes — Verso revelado, Resultado
   registrado, Sessão concluída — MUST ser perceptíveis por leitor de tela.
+- **FR-042**: O sistema MUST apresentar suas telas de forma utilizável em telas
+  pequenas.
+- **FR-046**: O sistema MUST apresentar toda a sua interface em português,
+  empregando os termos canônicos de `CONTEXT.md` e MUST NOT empregar os
+  sinônimos listados como `_Avoid_`.
 
 ### Verificação dos Requisitos Negativos
 

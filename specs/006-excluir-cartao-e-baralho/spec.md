@@ -7,6 +7,12 @@
 
 **Depende de**: `003-vincular-cartao-baralho`
 
+## Clarifications
+
+### Session 2026-09-20
+
+- Q: Como a confirmação de exclusão deve atender requisitos transversais? → A: É operável por teclado, mantém foco visível, anuncia consequência e resultado ao leitor de tela; falha preserva a entidade exibida. As telas permanecem em português e utilizáveis em telefone.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Descartar o que não serve, sem perder o que serve (Priority: P2)
@@ -47,6 +53,15 @@ Baralho restante sobrevive.
    confirmação explícita.
 8. **Given** uma exclusão que não parte da interface, **When** alcança o
    servidor, **Then** a semântica não-cascateante é preservada igualmente.
+9. **Given** o diálogo de exclusão, **When** o usuário o percorre por teclado,
+   **Then** entende a consequência, confirma ou cancela, e o foco permanece
+   identificável.
+10. **Given** uma exclusão concluída ou recusada, **When** o estado muda,
+    **Then** a consequência é perceptível por leitor de tela.
+11. **Given** o armazenamento indisponível, **When** o usuário confirma a
+    exclusão, **Then** a falha é reportada e a entidade continua exibida.
+12. **Given** a tela de exclusão em largura de telefone, **When** é apresentada,
+    **Then** permanece utilizável e seus textos estão em português.
 
 ### Edge Cases
 
@@ -73,6 +88,12 @@ Baralho restante sobrevive.
   explícita que informe quantos Cartões continuarão existindo após a exclusão.
 - **FR-017**: A exclusão de um Baralho MUST remover todos os seus Vínculos e MUST
   NOT destruir nenhum Cartão.
+- **FR-042**: O sistema MUST apresentar suas telas de forma utilizável em telas pequenas.
+- **FR-044**: O sistema MUST NOT apresentar como concluída qualquer operação que não tenha sido efetivamente persistida.
+- **FR-045**: Quando uma operação falhar por indisponibilidade do armazenamento, o sistema MUST reportar a falha e MUST preservar o estado da tela, permitindo nova tentativa.
+- **FR-046**: O sistema MUST apresentar toda a sua interface em português, empregando os termos canônicos de `CONTEXT.md` e MUST NOT empregar os sinônimos listados como `_Avoid_`.
+- **FR-068**: O sistema MUST permitir operar o diálogo de confirmação de exclusão inteiramente por teclado, com foco visível que não dependa apenas de cor.
+- **FR-069**: O diálogo de confirmação e a conclusão ou falha de exclusão MUST comunicar sua consequência por leitor de tela.
 
 ### Verificação dos Requisitos Negativos
 

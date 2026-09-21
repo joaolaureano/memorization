@@ -2983,3 +2983,36 @@ checklist 21 de 21, `AVAILABLE_DOCS` com os quatro artefatos.
   populado; contagem de caixas de seleção conferida.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-036
+
+> **SPEC KIT** — Comando: `clarify`, `plan`, `checklist`, `tasks`,
+> `analyze` | Invocação: `check-prerequisites.sh --json --require-tasks
+> --include-tasks` e inspeção de rastreabilidade | Integração: `claude` |
+> Artefatos: sete artefatos em cada uma das features `003` a `006`,
+> `pendencias.md`
+
+- **Data/hora**: 2026-09-20 21:01 -03
+- **Ator**: USER → ARCHITECT
+- **Fase**: correção integral do fluxo do Spec Kit
+- **Feature / Task**: `003-vincular-cartao-baralho`, `004-sessao-de-estudo`,
+  `005-editar-cartao-e-baralho`, `006-excluir-cartao-e-baralho` / —
+- **Tipo**: conclusão dos artefatos e correção dos requisitos transversais
+- **Skills aplicadas**: `domain-modeling`, `codebase-design`
+
+### Resultado e verificações
+
+- 003 corrigida: seção negativa única, três estados vazios, falha de vincular e
+  desvincular, e contagens internas corretas.
+- 004–006 receberam plano, pesquisa, modelo, contrato, quickstart, checklist e
+  tarefas; o débito transversal EVT-030 foi fechado nas quatro features.
+- Sessão permanece local e efêmera: nenhuma rota, tabela ou migração de Sessão.
+- Os quatro diretórios possuem os sete artefatos; pré-requisitos de 003 listam
+  `research.md`, `data-model.md`, `contracts/`, `quickstart.md` e
+  `tasks.md`; `git diff --check` passou.
+- Nenhum placeholder ou clarificação pendente foi encontrado.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

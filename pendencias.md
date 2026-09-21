@@ -17,14 +17,13 @@ Cada feature precisa de **sete artefatos**, no padrão estabelecido pela
 |---|---|---|---|---|---|---|---|---|
 | `001-criar-cartao` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `002-criar-baralho` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `003-vincular-cartao-baralho` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `004-sessao-de-estudo` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `005-editar-cartao-e-baralho` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| `006-excluir-cartao-e-baralho` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `003-vincular-cartao-baralho` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `004-sessao-de-estudo` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `005-editar-cartao-e-baralho` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `006-excluir-cartao-e-baralho` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-Sem `research.md`, `data-model.md`, `contracts/` e `quickstart.md`, o comando
-`check-prerequisites.sh` devolve `AVAILABLE_DOCS` vazio e os comandos seguintes
-do Spec Kit rodam cegos.
+Todas as features agora possuem os artefatos que tornam os comandos seguintes
+do Spec Kit verificáveis.
 
 ---
 
@@ -36,14 +35,14 @@ primeiro, e as demais receberam só a linha *"as premissas de 001 valem
 integralmente"*. **Premissa não é requisito**: não gera teste, não entra em
 matriz de rastreabilidade e não bloqueia conclusão de tarefa.
 
-Fechado nas features `001` e `002`. Aberto nas quatro restantes.
+Fechado nas seis features.
 
 | Feature | Falta acrescentar |
 |---|---|
-| `003-vincular-cartao-baralho` | teclado e foco na ação de vincular e desvincular; falha de gravação; idioma; responsividade; estado vazio quando não há Cartão ou Baralho a vincular |
-| `004-sessao-de-estudo` | idioma; responsividade das telas da Sessão. **Falha de gravação e estado vazio não se aplicam**, por a Sessão nunca persistir (FR-038) |
-| `005-editar-cartao-e-baralho` | teclado e foco nos formulários de edição; falha de gravação ao salvar; idioma; responsividade |
-| `006-excluir-cartao-e-baralho` | teclado e foco no diálogo de confirmação, com anúncio por leitor de tela; falha de gravação ao excluir; idioma; responsividade |
+| `003-vincular-cartao-baralho` | fechado: FR-062 a FR-066, cenários e tarefas |
+| `004-sessao-de-estudo` | fechado: FR-042 e FR-046 reutilizados; falha de gravação e estado vazio não se aplicam por FR-038 |
+| `005-editar-cartao-e-baralho` | fechado: FR-042, FR-044 a FR-046 reutilizados e FR-067 |
+| `006-excluir-cartao-e-baralho` | fechado: FR-042, FR-044 a FR-046 reutilizados e FR-068 a FR-069 |
 
 **Regra de numeração** estabelecida na feature `002`: requisito transversal de
 enunciado genérico é **reutilizado** com o mesmo identificador (FR-042, FR-044,
@@ -60,7 +59,10 @@ Nenhuma feature está implementada além da fundação do backend.
 |---|---|---|
 | `001-criar-cartao` | 14 | **1** — T001, esqueleto do backend |
 | `002-criar-baralho` | 12 | 0 |
-| `003` a `006` | — | ainda sem `tasks.md` |
+| `003-vincular-cartao-baralho` | 14 | 0 |
+| `004-sessao-de-estudo` | 8 | 0 |
+| `005-editar-cartao-e-baralho` | 7 | 0 |
+| `006-excluir-cartao-e-baralho` | 8 | 0 |
 
 **Existe**: `backend/` com projeto, `GET /health`, guarda de loopback imposta em
 runtime, 8 testes verdes.
