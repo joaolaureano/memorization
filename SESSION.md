@@ -4206,3 +4206,35 @@ o `Acervo` atual de gravar até T706 entrar, e que T707 muda o construtor do
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-076
+
+> **SPEC KIT** — Comando: analyze | Invocação: skill `speckit-analyze` e
+> `check-prerequisites.sh --json --require-spec --require-tasks --include-tasks` |
+> Integração: claude | Artefatos: nenhum alterado (somente leitura)
+
+- **Data/hora**: 2026-09-21 02:11 -03
+- **Ator**: ARCHITECT
+- **Feature / Task**: 008-entrar / analyze
+- **Commit anterior**: `a11e12e` (registra o hash de EVT-075)
+
+- Sete artefatos presentes.
+- 20 FRs e 11 SCs, todos na matriz; nenhum id fantasma nos sete artefatos;
+  nenhum id solto depois da matriz; 16 tarefas coerentes com os metadados.
+- Nenhum problema CRITICAL, HIGH ou MEDIUM. O defeito de ordem de integração foi
+  corrigido antes, no EVT-075.
+- **L1 (LOW)**: o FR-084 da 007 (link "Criar conta" na navegação principal) é
+  substituído pelo FR-098 da 008 (link na tela Entrar). É uma sequência prevista
+  e declarada no clarify das duas specs. Aceito.
+- **L2 (LOW)**: as specs 001 a 006 continuam com a premissa "usuário único". A
+  revogação está declarada na 008 (Assumptions e
+  `contracts/alteracao-contratos-001-006.md`); as specs antigas não são
+  reescritas. Aceito.
+
+**Fim do planejamento das specs 007 e 008.** A implementação depende de
+autorização do PO.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
