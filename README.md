@@ -82,9 +82,29 @@ pelos comandos do Spec Kit. Todos seguem a mesma estrutura:
 | `quickstart.md` | Roteiro de validação ponta a ponta, com comandos e resultados esperados |
 | `tasks.md` | Tarefas pequenas e ordenadas, com dependências, testes e matriz de rastreabilidade entre requisitos e tarefas |
 
-Além delas, [`.specify/memory/constitution.md`](.specify/memory/constitution.md)
-reúne os princípios que valem para todas as specs, e [`CONTEXT.md`](CONTEXT.md)
-é o glossário do domínio.
+Além delas, a constituição (abaixo) reúne os princípios que valem para todas as
+specs, e [`CONTEXT.md`](CONTEXT.md) é o glossário do domínio.
+
+## Constituição
+
+A [constituição](.specify/memory/constitution.md) (em
+[`.specify/memory/`](.specify/memory/)) é a lei acima das specs. O `plan` de
+cada feature a confere princípio a princípio, e o `analyze` trata uma violação
+como bloqueio.
+
+| Princípio | Em resumo |
+|---|---|
+| I. Spec-Driven Development (não negociável) | Nada é implementado antes de spec, clarify, plan, tasks e analyze aprovados. Onde código e spec divergem, a spec vence |
+| II. Auditabilidade Append-Only | Toda sessão fica registrada no `SESSION.md`, sem reescrever eventos anteriores e sem segredos |
+| III. Domínio Antes de Tecnologia | O `CONTEXT.md` é o glossário e manda na linguagem. O código usa os mesmos termos |
+| IV. Módulos Profundos | Interfaces pequenas escondendo muita implementação. Uma Seam só existe quando há pelo menos dois Adapters reais |
+| V. A Interface é a Superfície de Teste | Os testes passam pela mesma Interface que quem a chama e verificam resultados observáveis, nunca estado interno |
+| VI. Verificação Sobre Afirmação | Nenhuma afirmação de worker é aceita sem o Arquiteto inspecionar o diff e rodar os testes |
+| VII. Escopo Mínimo Honesto | Implementa-se só o que a spec pede. Premissas não validadas ficam explícitas |
+| VIII. Segredos Fora do Repositório (não negociável) | Nenhum segredo entra em arquivo versionado, sob nenhuma justificativa |
+| IX. Rastreabilidade Requisito–Teste | Todo requisito tem um teste que o exercita, e todo teste tem um requisito que o justifica |
+| X. Portões de Qualidade | Uma inconsistência crítica no `analyze` ou um checklist reprovado bloqueia o `implement` |
+| XI. Delegação Obrigatória de Código (não negociável) | Todo código de aplicação é escrito por workers DeepSeek. O Arquiteto especifica, revisa e integra |
 
 ## Specs criadas
 
