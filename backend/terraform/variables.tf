@@ -41,6 +41,16 @@ variable "lambda_handler" {
   default     = "lambda.handler"
 }
 
+# A Lambda troca memoria por CPU, e a Senha e verificada em **cada** requisicao
+# autenticada: nao ha sessao, cookie nem token (FR-079, FR-131), e o scrypt roda
+# sempre. Elevar este numero e o remedio quando o p95 das operacoes simples
+# passa de 1s (SC-059); enfraquecer a derivacao da Senha nunca e.
+variable "lambda_memory_mb" {
+  description = "Memoria da funcao, em MB. Elevar e mais CPU para a verificacao da Senha em cada requisicao."
+  type        = number
+  default     = 1024
+}
+
 variable "secrets_version" {
   description = "Versao dos segredos write-only. O Terraform nao enxerga o valor gravado, entao so reescreve quando este numero muda: incremente ao trocar um segredo."
   type        = number

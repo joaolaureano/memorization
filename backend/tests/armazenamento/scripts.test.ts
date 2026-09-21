@@ -186,6 +186,11 @@ describe("scripts de inicialização do backend", () => {
     );
     expect(SCRIPTS["start:local"]).toBe("node dist/sqlite/servidor.mjs");
 
+    /** O pacote da função e o zip têm o seu próprio comando (FR-130). */
+    expect(SCRIPTS["build:lambda"]).toBe(
+      "node scripts/construir.mjs --banco=lambda",
+    );
+
     /** Os scripts que existiam antes continuam, com o papel de cada um. */
     expect(SCRIPTS.typecheck).toBe("tsc --noEmit");
     expect(SCRIPTS.build).toBe("node scripts/construir.mjs");

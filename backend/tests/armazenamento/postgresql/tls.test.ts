@@ -45,12 +45,18 @@ const RAIZ_DO_REPOSITORIO = resolve(RAIZ_DO_BACKEND, "..");
 /** O próprio arquivo desta varredura, que carrega os marcadores como guarda. */
 const ARQUIVO_DA_VARREDURA = fileURLToPath(import.meta.url);
 
-/** Pastas que não são código versionado e ficam fora da varredura de segredos. */
+/**
+ * Pastas que não são código versionado e ficam fora da varredura de segredos.
+ * O `.terraform` guarda os binários dos providers baixados pelo `tofu init`:
+ * são centenas de megabytes de cache local, ignorados pelo Git, e não código
+ * do repositório.
+ */
 const PASTAS_IGNORADAS = new Set([
   "node_modules",
   "dist",
   "coverage",
   ".git",
+  ".terraform",
 ]);
 
 /** Marcadores de certificado e de chave privada: nada disso pode ser versionado. */

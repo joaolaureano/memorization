@@ -69,10 +69,19 @@ const COMANDO_DE_MIGRACAO = join(
   "migrar.mjs",
 );
 
+/** O pacote e o zip da função, cujo alvo é o terceiro valor aceito (FR-130). */
+const DIRETORIO_DA_FUNCAO = join(DIRETORIO_DE_SAIDA, "lambda");
+const PACOTE_DA_FUNCAO = join(DIRETORIO_DA_FUNCAO, "lambda.mjs");
+const ZIP_DA_FUNCAO = join(RAIZ_DO_BACKEND, "dist-lambda.zip");
+
 /** A forma da mensagem de recusa, com os valores aceitos derivados da tabela. */
 const CONSTRUCAO_RECUSADA =
   "Construção recusada. Informe --banco=<valor>, com um dos valores aceitos: " +
-  "sqlite, postgresql.";
+  "sqlite, postgresql, lambda.";
+
+/** A forma da mensagem de falha do empacotamento e do zip. */
+const FALHA_AO_EMPACOTAR =
+  "Falha ao empacotar o armazenamento escolhido. Nenhum artefato foi produzido.";
 
 /** A única linha de início do pacote local. */
 const LINHA_DE_INICIO = "Armazenamento: SQLite (arquivo local)";
@@ -781,4 +790,143 @@ describe("pacotes e inícios de cada armazenamento", () => {
 
     expect(conexoes.map((linha) => Number(linha.quantidade))).toEqual([0]);
   }, 60_000);
+});
+
+/**
+ * T1006 e T1007 — o alvo da função, o zip no caminho que a infraestrutura
+ * espera e o conteúdo de cada pacote (FR-120, FR-130, SC-057).
+ *
+ * A prova é do processo e do artefato, e não da intenção do empacotador:
+ * `--banco=lambda` produz o pacote e o zip **sem** segredo algum no ambiente, o
+ * zip tem `lambda.mjs` na **raiz** — o `handler` publicado é `lambda.handler`,
+ * que nomeia o arquivo —, o pacote da função não carrega o Adapter do
+ * armazenamento local, o `node:sqlite` nem o SDK da AWS — que é **externo**,
+ * porque o runtime `nodejs24.x` o fornece —, e o pacote local não carrega a
+ * entrada da função. O pacote da função é ainda iniciado por `node` e termina
+ * sozinho: ele não escuta porto algum.
+ *
+ * Uma falha do `zip` remove o diretório do alvo **e** o zip: nenhum artefato
+ * parcial fica de pé.
+ */
+describe("pacote da função", () => {
+  let resultadoDaFuncao: SpawnSyncReturns<string>;
+  let pacoteDaFuncao: string;
+  let pacoteLocal: string;
+
+  beforeAll(() => {
+    rmSync(DIRETORIO_DE_SAIDA, { recursive: true, force: true });
+    rmSync(ZIP_DA_FUNCAO, { force: true });
+    resultadoDaFuncao = construir(["--banco=lambda"], ambienteSemSegredo());
+    construir(["--banco=sqlite"], ambienteSemSegredo());
+    pacoteDaFuncao = readFileSync(PACOTE_DA_FUNCAO, "utf8");
+    pacoteLocal = readFileSync(PACOTE_LOCAL, "utf8");
+  }, 120_000);
+
+  it("produz o pacote e o zip sem segredo algum no ambiente, nomeando o alvo (FR-130)", () => {
+    const ambiente = ambienteSemSegredo();
+
+    expect(ambiente).not.toHaveProperty("DB_URL");
+    expect(ambiente).not.toHaveProperty("DB_CA_CERT");
+    expect(ambiente).not.toHaveProperty("SEGREDO_DAS_SENHAS");
+
+    expect(resultadoDaFuncao.status).toBe(0);
+
+    /** A mensagem de conclusão nomeia o alvo e os dois artefatos. */
+    const saida = saidaDe(resultadoDaFuncao);
+
+    expect(saida).toContain("lambda");
+    expect(saida).toContain("dist/lambda/lambda.mjs");
+    expect(saida).toContain("dist-lambda.zip");
+
+    expect(readdirSync(DIRETORIO_DA_FUNCAO)).toEqual(["lambda.mjs"]);
+    expect(existsSync(ZIP_DA_FUNCAO)).toBe(true);
+  });
+
+  it("o zip tem lambda.mjs na raiz, como o handler lambda.handler exige", () => {
+    const listagem = spawnSync("unzip", ["-Z1", ZIP_DA_FUNCAO], {
+      encoding: "utf8",
+    });
+
+    expect(listagem.status).toBe(0);
+
+    const nomes = listagem.stdout
+      .split("\n")
+      .map((linha) => linha.trim())
+      .filter((linha) => linha !== "");
+
+    expect(nomes).toEqual(["lambda.mjs"]);
+  });
+
+  it("não contém o Adapter do armazenamento local nem node:sqlite (FR-130)", () => {
+    expect(pacoteDaFuncao).not.toMatch(/node:sqlite|armazenamento\/sqlite/);
+
+    /** O único armazenamento no grafo do pacote é o da nuvem. */
+    const adapters = [
+      ...new Set(
+        [...pacoteDaFuncao.matchAll(/armazenamento\/([a-z-]+)\//g)].map(
+          (casamento) => casamento[1],
+        ),
+      ),
+    ];
+
+    expect(adapters).toEqual(["postgresql"]);
+
+    /** E a linha de início da execução local não existe no pacote da função. */
+    expect(pacoteDaFuncao).not.toContain(LINHA_DE_INICIO);
+  });
+
+  it("deixa o SDK da AWS e o pg-native fora do pacote, como externos (FR-130)", () => {
+    /**
+     * O SDK vem no runtime: ele aparece **uma** vez, como especificador
+     * importado, e nenhuma linha da implementação dele é empacotada.
+     */
+    expect(
+      [...pacoteDaFuncao.matchAll(/["']@aws-sdk\/[^"']+["']/g)].map(
+        ([ocorrencia]) => ocorrencia,
+      ),
+    ).toEqual(['"@aws-sdk/client-ssm"']);
+    expect(pacoteDaFuncao).not.toMatch(/@smithy|@aws-crypto/);
+
+    /** O `pg-native` é a opcional do `pg`: nunca é uma dependência a resolver. */
+    expect([...pacoteDaFuncao.matchAll(/["']pg-native["']/g)]).toHaveLength(1);
+    expect(pacoteDaFuncao).not.toMatch(/from\s*["']pg-native["']/);
+  });
+
+  it("roda sob node, sem exigir segredo e sem escutar porto algum (FR-122)", () => {
+    const execucao = spawnSync(process.execPath, [PACOTE_DA_FUNCAO], {
+      cwd: RAIZ_DO_BACKEND,
+      env: ambienteSemSegredo(),
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+
+    /** A função termina sozinha: um processo que escutasse ficaria de pé. */
+    expect(execucao.status).toBe(0);
+    expect(saidaDe(execucao)).not.toMatch(/listen|escutando|porta/i);
+  });
+
+  it("o pacote local não contém a entrada da função (FR-130)", () => {
+    expect(pacoteLocal).not.toMatch(/@fastify\/aws-lambda|entradas\/lambda/);
+    expect(pacoteLocal).toContain(LINHA_DE_INICIO);
+  });
+
+  it("remove o diretório do alvo e o zip quando a zipagem falha", () => {
+    rmSync(DIRETORIO_DE_SAIDA, { recursive: true, force: true });
+    rmSync(ZIP_DA_FUNCAO, { force: true });
+
+    const semZip = spawnSync(process.execPath, [SCRIPT, "--banco=lambda"], {
+      cwd: RAIZ_DO_BACKEND,
+      /** Sem o `zip` da máquina no caminho: a construção tem de falhar limpa. */
+      env: { ...ambienteSemSegredo(), PATH: "" },
+      encoding: "utf8",
+      timeout: 120_000,
+    });
+
+    expect(semZip.status).toBe(1);
+    expect(saidaDe(semZip)).toContain(FALHA_AO_EMPACOTAR);
+    expect(saidaDe(semZip)).not.toContain("dist-lambda.zip");
+
+    expect(existsSync(DIRETORIO_DA_FUNCAO)).toBe(false);
+    expect(existsSync(ZIP_DA_FUNCAO)).toBe(false);
+  }, 120_000);
 });

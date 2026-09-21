@@ -10,11 +10,21 @@ resource "random_password" "origin_secret" {
   special = false
 }
 
-# SESSION_SECRET entra aqui quando houver autenticacao (aws_pendencias.md).
+# O terceiro segredo do cofre: e com ele que o servidor das Senhas (007) deriva
+# o hash, e o mesmo valor tem de valer para toda a base - troca-lo torna
+# inverificaveis os hashes ja gravados. Nao ha sessao nesta aplicacao (FR-079):
+# a Credencial e apresentada em cada requisicao, e o que se guarda aqui e a
+# chave da derivacao, e nao um segredo de sessao.
+resource "random_password" "segredo_das_senhas" {
+  length  = 64
+  special = false
+}
+
 locals {
   secrets = {
-    DB_URL        = var.db_conn_string
-    ORIGIN_SECRET = random_password.origin_secret.result
+    DB_URL             = var.db_conn_string
+    ORIGIN_SECRET      = random_password.origin_secret.result
+    SEGREDO_DAS_SENHAS = random_password.segredo_das_senhas.result
   }
 
   ssm_prefix = "/${var.project_name}"
@@ -36,6 +46,8 @@ resource "aws_ssm_parameter" "secret" {
 # Sem statement de kms:Decrypt: SecureString sem chave propria usa a aws/ssm,
 # cuja key policy (gerenciada pela AWS) ja libera decrypt via SSM para qualquer
 # principal da conta. O que controla o acesso e o ssm:GetParameter abaixo.
+# O mapa de parametros e a unica fonte desta policy: o SEGREDO_DAS_SENHAS entra
+# na permissao por consequencia, sem uma linha de IAM nova.
 data "aws_iam_policy_document" "read_secrets" {
   statement {
     actions   = ["ssm:GetParameter", "ssm:GetParameters"]

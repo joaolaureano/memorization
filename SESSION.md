@@ -5013,3 +5013,33 @@ Verificado em `main`: backend 569, frontend 337, e2e 18, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-098
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: construir.mjs alvo lambda, build:lambda, build:aws, ssm.tf, variables.tf, lambda.tf, scripts de infra
+
+- **Data/hora**: 2026-09-21 07:38 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / T1006–T1011 — concluídas (pacotes e infraestrutura)
+- **Commit anterior**: `0111671` (registra o hash do evento anterior)
+
+- **`--banco=lambda`** gera `dist/lambda/lambda.mjs` e `dist-lambda.zip`, com
+  `lambda.mjs` na raiz do zip, SDK externo e nenhum Adapter SQLite. O script
+  `build-lambda.sh` virou uma chamada fina a `npm run build:lambda`.
+- **Frontend**: `build:aws` aponta a API para `/api`, comprovado lendo o pacote
+  gerado. `deploy-frontend.sh` passa a usá-lo.
+- **Infra**: `SEGREDO_DAS_SENHAS` como `random_password` no SSM, coberto pela
+  policy via `for_each`; memória da Lambda como variável de 1024 MB.
+  `tofu fmt -check` e `validate` passam sem credencial.
+- **Desvio aceito**: a varredura de segredos da 010 passa a ignorar `.terraform`,
+  o cache de providers com 808 MB.
+- `.gitignore` da raiz ignora `dist-lambda*`.
+
+Verificado em `main`: backend 576, frontend 340, e2e 18, `typecheck`,
+`build:local`, `build:lambda`, lint, `tofu fmt` e `validate` verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

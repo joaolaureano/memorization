@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:aws": "VITE_ENDERECO_DA_API=/api npm run build",
     "test": "vitest run",
     "lint": "eslint ."
   },

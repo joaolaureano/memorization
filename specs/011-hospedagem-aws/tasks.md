@@ -57,9 +57,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Pacotes
 
-- [ ] T1006 `npm run build:lambda` produz `dist/lambda/lambda.mjs` e `dist-lambda.zip`, com `lambda.mjs` na raiz, sem exigir segredo algum
-- [ ] T1007 O pacote da função não contém o Adapter local nem `node:sqlite`, e o pacote local não contém a entrada da função
-- [ ] T1008 [P] `npm run build:aws` constrói o SPA apontando a API para `/api`, e o script de publicação passa a usá-lo
+- [X] T1006 `npm run build:lambda` produz `dist/lambda/lambda.mjs` e `dist-lambda.zip`, com `lambda.mjs` na raiz, sem exigir segredo algum
+- [X] T1007 O pacote da função não contém o Adapter local nem `node:sqlite`, e o pacote local não contém a entrada da função
+- [X] T1008 [P] `npm run build:aws` constrói o SPA apontando a API para `/api`, e o script de publicação passa a usá-lo
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -75,9 +75,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Infraestrutura
 
-- [ ] T1009 [P] O segredo do servidor das Senhas existe no cofre sob o mesmo prefixo dos outros dois, e o comentário aponta para o lugar certo
-- [ ] T1010 [P] A memória da função é uma variável de 1024 MB, aplicada sem número fixo
-- [ ] T1011 O código de infraestrutura passa por formato e validação sem credencial AWS, e nenhum valor de segredo está versionado
+- [X] T1009 [P] O segredo do servidor das Senhas existe no cofre sob o mesmo prefixo dos outros dois, e o comentário aponta para o lugar certo
+- [X] T1010 [P] A memória da função é uma variável de 1024 MB, aplicada sem número fixo
+- [X] T1011 O código de infraestrutura passa por formato e validação sem credencial AWS, e nenhum valor de segredo está versionado
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

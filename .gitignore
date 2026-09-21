@@ -22,6 +22,10 @@ build/
 .vite/
 *.tsbuildinfo
 
+# O pacote da função e o zip que a infraestrutura publica, gerados por
+# `npm run build:lambda` — artefatos de construção, não do repositório
+dist-lambda*
+
 # Banco de dados local — artefato de execução, não do repositório
 *.sqlite
 *.sqlite3
