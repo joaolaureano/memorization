@@ -4322,3 +4322,27 @@ Premissas "a confirmar no clarify":
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhuma URL ou credencial registrada.
+
+---
+
+## EVT-079
+
+> **SPEC KIT** — Comando: clarify | Invocação: skill `speckit-clarify` |
+> Integração: claude | Artefatos: specs/009-porta-de-persistencia/spec.md,
+> checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 02:21 -03
+- **Ator**: PRODUCT OWNER ↔ ARCHITECT
+- **Feature / Task**: 009-porta-de-persistencia / clarify
+- **Commit anterior**: `ba0edee` (registra o hash de EVT-078)
+
+1. **Build**: um pacote por banco (`build:local` e `build:cloud`), cada um só
+   com o seu Adapter. Recomendação aceita; deu origem ao FR-120 (numeração
+   global, depois da faixa da 010) e a uma linha na tabela negativa.
+2. **Ordem de implementação**: 009 → 010 → 007 → 008 (recomendação aceita).
+3. **Rede**: o PO respondeu: "Já temos um trabalho de infraestrutura
+   para isso. Você irá olhar ele DEPOIS de tudo feito". A hospedagem
+   fica fora de 009 e 010, e o servidor continua só local.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

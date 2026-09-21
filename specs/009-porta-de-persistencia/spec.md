@@ -11,6 +11,21 @@ backend, decomposto em duas features: `009-porta-de-persistencia` (esta) e
 passa a persistir pela Porta, sem mudança de comportamento. É base para
 `007-criar-usuario` e `008-entrar`.
 
+## Clarifications
+
+### Session 2026-09-21
+
+- Q: O que o parâmetro de build deve produzir? → A: Um pacote executável por
+  banco. O build local contém só o Adapter do armazenamento local, e o build da
+  nuvem só o de PostgreSQL. O início local e o da nuvem executam o pacote
+  correspondente.
+- Q: A 009 deve ser implementada antes da 007 e da 008? → A: Sim. A ordem de
+  implementação é 009, 010, 007 e 008, e as features 007 e 008 são construídas
+  diretamente sobre a Porta.
+- Q: O servidor continua escutando só na própria máquina, inclusive com
+  PostgreSQL? → A: Sim. A hospedagem em nuvem é tratada
+  depois de concluídas as features, e não faz parte da 009 nem da 010.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Construir o backend escolhendo o armazenamento (Priority: P1)
@@ -206,6 +221,8 @@ conexão e os scripts de nuvem pertencem à `010-postgresql-na-nuvem`.
   único comando a partir de uma cópia limpa do repositório. O caminho de
   inicialização da nuvem é apenas declarado nesta feature e é entregue pela
   `010-postgresql-na-nuvem`.
+- **FR-120**: O pacote construído para um armazenamento MUST NOT conter o
+  Adapter do outro armazenamento.
 
 ### Verificação dos Requisitos Negativos
 
@@ -215,6 +232,7 @@ conexão e os scripts de nuvem pertencem à `010-postgresql-na-nuvem`.
 | FR-102 | Construção sem parâmetro de armazenamento válido não produz artefato executável | Teste que constrói e inicia sem o parâmetro e com valor não aceito, exigindo recusa, mensagem em português que nomeie os valores aceitos e nenhum artefato executável produzido |
 | FR-108 | Nenhum segredo de conexão aparece na saída nem no registro | Teste que informa um parâmetro de armazenamento com aparência de credencial e exige a recusa com mensagem que nomeie os valores aceitos sem repetir o valor informado, e teste que sobe a aplicação e exige ausência de senha, cadeia de conexão e endereço com credencial na saída e no registro |
 | FR-044 | Operação não persistida não aparece como concluída | Teste com o armazenamento indisponível, que exige a falha reportada, a aplicação não funcionando como se o armazenamento existisse e nenhuma operação apresentada como concluída |
+| FR-120 | O pacote de um armazenamento não contém o Adapter do outro | Teste que constrói o pacote local e exige a ausência do Adapter de PostgreSQL e de sua dependência, e vice-versa quando a `010` existir |
 
 ### Key Entities
 
@@ -285,15 +303,8 @@ conexão e os scripts de nuvem pertencem à `010-postgresql-na-nuvem`.
 
 ## Assumptions
 
-- A escolha do armazenamento acontece na construção do backend, e a construção
-  para execução local contém apenas o que o armazenamento local precisa — **a
-  confirmar no clarify**.
-- A implementação desta feature acontece antes da `007-criar-usuario` e da
-  `008-entrar`, que passam a ser construídas diretamente sobre a Porta — **a
-  confirmar no clarify**.
-- O servidor local continua escutando apenas na máquina local; o modelo de
-  hospedagem em nuvem não faz parte do escopo de banco de dados desta feature
-  nem da `010` — **a confirmar no clarify**.
+- A escolha no build, a ordem de implementação e a permanência do servidor na
+  máquina local foram confirmadas no clarify de 2026-09-21.
 - O Product Owner nomeou os dois armazenamentos: SQLite, na execução local, e
   PostgreSQL, na nuvem, apontado por URL de conexão. Esta feature entrega apenas
   o primeiro, e a URL de conexão é assunto da `010`.

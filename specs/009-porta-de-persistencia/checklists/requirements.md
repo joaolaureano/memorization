@@ -44,8 +44,9 @@
 
 ### Avaliação de 2026-09-21
 
-- **Requisitos funcionais**: 12. São 2 transversais reutilizados (FR-044 e
-  FR-045) e 10 específicos (FR-100 a FR-109), sem lacuna na numeração.
+- **Requisitos funcionais**: 13. São 2 transversais reutilizados (FR-044 e
+  FR-045) e 11 específicos (FR-100 a FR-109 e FR-120). O FR-120 veio do clarify
+  e segue a numeração global, depois da faixa FR-110 a FR-119 da `010`.
 - **FR-040 não é reutilizado**: o enunciado das features anteriores nomeia a
   entidade preservada ("preservar os Cartões", "preservar os Usuários"). A
   garantia de persistência desta feature é da capacidade de armazenamento e está
@@ -94,3 +95,9 @@
   sinônimo de `_Avoid_` é usado.
 
 Nenhum item reprovado. **21 de 21.**
+
+### Clarify de 2026-09-21
+
+Três perguntas respondidas pelo PO: um pacote por banco (origem do FR-120), ordem
+de implementação 009 → 010 → 007 → 008, e servidor só na máquina local, com a
+hospedagem tratada depois. Continua 21 de 21.
