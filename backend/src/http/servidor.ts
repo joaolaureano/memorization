@@ -1,6 +1,9 @@
 import type { AddressInfo } from "node:net";
 
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+
+import type { Acervo } from "../acervo/acervo.ts";
+import { CORPO_INVALIDO, registrarRotasDeCartoes } from "./rotas.ts";
 
 /**
  * Servidor HTTP local.
@@ -34,6 +37,23 @@ export function opcoesDeEscuta(env: NodeJS.ProcessEnv = process.env): {
 export function criarServidor(): FastifyInstance {
   const servidor = Fastify();
   servidor.get("/health", async () => ({ status: "ok" }));
+
+  /**
+   * Corpo malformado (JSON inválido sob content-type de JSON) é recusado pelo
+   * parser do Fastify antes de qualquer handler, com resposta padrão em
+   * inglês. Este handler converte apenas esses erros de forma — os de prefixo
+   * `FST_ERR_CTP`, todos de status 400 — na mesma recusa uniforme das rotas,
+   * mantendo a interface em português (FR-046). Qualquer outro erro segue o
+   * caminho padrão do Fastify, que é exatamente `resposta.send(erro)`.
+   */
+  servidor.setErrorHandler<FastifyError>((erro, _requisicao, resposta) => {
+    if (erro.statusCode === 400 && erro.code.startsWith("FST_ERR_CTP")) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    return resposta.send(erro);
+  });
+
   return servidor;
 }
 
@@ -66,8 +86,10 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 
 export async function iniciarServidor(
   env: NodeJS.ProcessEnv = process.env,
+  acervo: Acervo,
 ): Promise<FastifyInstance> {
   const servidor = criarServidor();
+  registrarRotasDeCartoes(servidor, acervo);
 
   await servidor.listen(opcoesDeEscuta(env));
 

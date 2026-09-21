@@ -3131,3 +3131,27 @@ restrito ao Acervo e aos testes. T006 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-041
+
+> **SPEC KIT** — Comando: implement | Invocação: dois workers DeepSeek em
+> worktrees exclusivos | Integração: claude | Artefatos: Adapter HTTP de Cartão
+
+- **Data/hora**: 2026-09-20 22:15 -03
+- **Ator**: USER → ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T007 — concluída
+
+O primeiro worker de T007 recebeu worktree sem dependências e seus checks
+falharam com exit 127; a revisão posterior revelou TS18046 no error handler.
+O Product Owner determinou eliminar a repetição desse erro.
+
+Foi instituído portão obrigatório: criar worktree, instalar dependências,
+validar baseline, delegar, repetir checks pelo worker e repetir pelo Arquiteto.
+Um novo worktree e um novo worker aplicaram o reparo. Resultado final: 45
+testes, build e lint verdes, escopo restrito às rotas HTTP, composição e testes
+de contrato. T007 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
