@@ -4238,3 +4238,51 @@ autorização do PO.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-077
+
+> **SPEC KIT** — Comando: specify | Invocação: skill `speckit-specify` e
+> `create-new-feature.sh --short-name porta-de-persistencia`; redação por
+> worker `deepseek-flash` em worktree exclusivo | Integração: claude |
+> Artefatos: specs/009-porta-de-persistencia/spec.md, checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 02:16 -03
+- **Ator**: PRODUCT OWNER → ARCHITECT → WORKER
+- **Feature / Task**: 009-porta-de-persistencia / specify
+- **Commit anterior**: `2a3cd4f` (registra o hash de EVT-076)
+
+### Prompt sanitizado
+
+Acrescentar a capacidade de banco PostgreSQL, usado exclusivamente em nuvem. O
+banco é escolhido por parâmetro na hora de construir o backend. Usar Port and
+Adapter, com Interfaces que abstraiam qualquer banco. Executar localmente com
+SQLite e na nuvem com PostgreSQL apontado por URL. Scripts no `package.json`
+separam as duas formas de subir. Tudo em duas specs do Spec Kit. O PO pediu
+isso antes de implementar 007 e 008.
+
+### Divisão (Arquiteto)
+
+- `009-porta-de-persistencia`: Porta de persistência, Adapter SQLite, escolha
+  do banco no build e script local.
+- `010-postgresql-na-nuvem`: Adapter PostgreSQL por URL e scripts de nuvem.
+
+Com dois Adapters reais, a Seam de persistência rejeitada na 001 (um Adapter
+só, portanto hipotética) passa a ser justificada.
+
+Insumo externo: a infra AWS feita em paralelo espera
+`DB_URL` com TLS verificado para o Neon. Isso vai para a 010.
+
+### Specify da 009
+
+FR-100 a FR-109 específicos; FR-044 e FR-045 reutilizados; SC-038 a SC-043.
+Três premissas "a confirmar no clarify":
+- escolha do banco no build;
+- 009 implementada antes de 007 e 008;
+- servidor local continua só no loopback.
+
+Checklist: 21 de 21.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
