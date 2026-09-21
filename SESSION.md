@@ -4821,3 +4821,54 @@ Verificado em `main`: backend 521, frontend 337, e2e 18, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-093
+
+> **SPEC KIT** — Comando: specify | Invocação: skill `speckit-specify` e
+> `create-new-feature.sh --short-name hospedagem-aws`; redação por worker
+> `deepseek-flash` em worktree exclusivo | Integração: claude | Artefatos:
+> specs/011-hospedagem-aws/spec.md, checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 05:27 -03
+- **Ator**: PRODUCT OWNER → ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / specify
+- **Commit anterior**: `85b4aef`
+
+### Prompt sanitizado
+
+"Completar E2E o projeto, de modo que ele fique completamente pronto de acordo
+com as specs. Depois, olhar o trabalho de infraestrutura e mesclar tudo que foi
+feito ali, de modo que esse projeto receba a capability de AWS, e preparar o
+projeto para que ele suba em Cloud AWS com PostgreSQL."
+
+### Mescla da infra
+
+O trabalho de infraestrutura entrou em `main` como `85b4aef`, mantendo o
+histórico linear do fluxo trunk-based. Ele traz
+CloudFront, S3, Lambda com stub, SSM, a policy do robot e os scripts. Nenhum
+segredo foi mesclado: state, `tfvars` e `.build` são ignorados, e o exemplo
+contém só marcadores.
+
+### Specify da 011
+
+FR-122 a FR-134; reutilizados FR-044, FR-045, FR-078 e FR-079; SC-051 a
+SC-061. Pontos cobertos:
+- entrada da função da nuvem, que não escuta porta;
+- três segredos lidos do SSM no início a frio;
+- segredo de origem conferido em tempo constante (403);
+- inicialização que falha não fica memorizada;
+- migração feita pelo operador;
+- CORS permissivo só no modo local;
+- SPA apontando para `/api`;
+- pacote da função;
+- limite de desempenho da verificação de Senha;
+- verificação sem publicar;
+- manual de operação.
+
+Os itens 1 e 10 de `aws_pendencias.md` (entrada pelo Google e cookie de
+sessão) ficaram obsoletos: a 008 entregou a Credencial por requisição.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
