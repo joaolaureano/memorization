@@ -78,6 +78,20 @@ export type ResultadoDeCriacaoDeBaralho =
   | { ok: false; erro: CodigoDeErroDeBaralho; mensagem: string };
 
 /**
+ * Baralho como devolvido por `listarBaralhos`: o Baralho mais a contagem de
+ * Cartões e a elegibilidade, ambas derivadas na leitura — nunca armazenadas.
+ *
+ * Nesta etapa não há tabela de vínculo Baralho–Cartão, então a contagem é
+ * derivada como 0 e a elegibilidade, como contagem maior que 0: nenhum
+ * Baralho é elegível. `criarBaralho` continua devolvendo apenas `Baralho`,
+ * sem carregar campos que a criação não exige.
+ */
+export interface BaralhoListado extends Baralho {
+  quantidadeDeCartoes: number;
+  elegivel: boolean;
+}
+
+/**
  * Interface profunda do Module `Acervo` (Princípio IV).
  *
  * As operações escondem esquema, transação e as regras de conteúdo de Cartão
@@ -108,6 +122,14 @@ export interface Acervo {
    * idêntica são ambos devolvidos, sem deduplicação.
    */
   listarCartoes(): Cartao[];
+
+  /**
+   * Lista todos os Baralhos existentes, cada um com id, nome, contagem de
+   * Cartões e elegibilidade derivadas na leitura. O nome é rótulo, não
+   * identificador: dois Baralhos de nome idêntico são ambos devolvidos, sem
+   * deduplicação.
+   */
+  listarBaralhos(): BaralhoListado[];
 }
 
 /**
@@ -129,6 +151,13 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
    * uma única vez e a escrita permanece atômica.
    */
   let inserirBaralho: StatementSync | undefined;
+
+  /**
+   * Preparado na primeira listagem, pelo mesmo motivo de `inserirBaralho`:
+   * uma base legada ainda sem a tabela `baralho` continua servindo
+   * `criarCartao`/`listarCartoes` até ser migrada.
+   */
+  let listarBaralhosStatement: StatementSync | undefined;
 
   return {
     criarCartao(dados) {
@@ -176,6 +205,26 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
         frente: linha.frente as string,
         verso: linha.verso as string,
       }));
+    },
+
+    listarBaralhos() {
+      listarBaralhosStatement ??= banco.prepare(
+        "SELECT id, nome FROM baralho",
+      );
+
+      return listarBaralhosStatement.all().map((linha) => {
+        // Derivada na leitura, nunca armazenada. Nesta etapa não há tabela
+        // de vínculo Baralho–Cartão: a contagem é 0 e a elegibilidade,
+        // contagem > 0, é falsa para todo Baralho.
+        const quantidadeDeCartoes = 0;
+
+        return {
+          id: linha.id as string,
+          nome: linha.nome as string,
+          quantidadeDeCartoes,
+          elegivel: quantidadeDeCartoes > 0,
+        };
+      });
     },
   };
 }

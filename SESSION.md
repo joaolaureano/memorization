@@ -3395,3 +3395,26 @@ T103 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-052
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: lista de Baralhos
+
+- **Data/hora**: 2026-09-20 23:40 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T104 — concluída
+
+`listarBaralhos` foi acrescentado à Interface do `Acervo`. Cada item contém
+id, nome, `quantidadeDeCartoes` e `elegivel`; os dois últimos são derivados na
+leitura e nunca persistidos. Como ainda não existe Vínculo, a contagem é zero
+e a elegibilidade é falsa. Baralhos homônimos permanecem distintos.
+
+Os testes atravessam exclusivamente a Interface e não dependem de ordenação.
+Worker e Arquiteto repetiram 78 testes backend, build e lint, todos verdes.
+T104 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
