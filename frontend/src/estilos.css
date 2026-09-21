@@ -15,6 +15,80 @@ body {
   padding: 2rem 1rem;
 }
 
-.aviso {
+.formulario-de-cartao {
+  display: grid;
+  gap: 1rem;
+}
+
+.campo {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.campo label {
+  font-weight: 600;
+}
+
+.campo textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 5rem;
+  padding: 0.5rem;
+  font: inherit;
+  resize: vertical;
+}
+
+.contador {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #555555;
+}
+
+.aviso-de-limite {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+.botao-de-criacao {
+  justify-self: start;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+}
+
+.erro {
+  margin: 0;
+  color: #a30d0d;
+}
+
+.estado-vazio {
   color: #444444;
+}
+
+.carregando {
+  color: #444444;
+}
+
+.lista-de-cartoes {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.cartao {
+  padding: 0.75rem 1rem;
+  border: 1px solid #dcdcdc;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+}
+
+.cartao p {
+  margin: 0.25rem 0;
+}
+
+.rotulo {
+  font-weight: 600;
 }

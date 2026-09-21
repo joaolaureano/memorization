@@ -3178,3 +3178,27 @@ aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-043
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: telas de Cartões
+
+- **Data/hora**: 2026-09-20 22:38 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T009 — concluída
+
+Após instalação e baseline verde no worktree exclusivo, o worker substituiu a
+tela de infraestrutura pelo fluxo de criação e listagem de Cartões, conectado
+somente à Interface `ClienteDoAcervo`. O estado vazio orienta a primeira ação,
+a contagem e o limite são comunicados durante a digitação e uma criação válida
+aparece imediatamente na lista. A composição de produção usa `ClienteHttp`.
+
+O diff ficou restrito ao frontend autorizado. Worker e Arquiteto executaram de
+forma independente a suíte com 40 testes, o build e o lint; todos passaram.
+T009 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
