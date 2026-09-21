@@ -132,7 +132,7 @@ conferir que o Baralho sobrevive; excluir um Baralho e conferir que o Cartão
 sobrevive; ambos pela Interface, sem inspecionar tabela. Teste de ausência de
 limite com 20 Baralhos e 60 Cartões. `e2e/` para persistência e foco.
 
-Comandos: `npm test`, `npm run build`, `npm run lint` em `backend/` e
+Comandos: `npm test`, `npm run typecheck`, `npm run build:local` e `npm run lint` em `backend/` (portões da `009`); `npm test`, `npm run build` e `npm run lint` em
 `frontend/`; `npm run test:e2e` na raiz.
 
 ## Project Structure

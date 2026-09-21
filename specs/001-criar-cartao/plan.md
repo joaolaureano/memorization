@@ -257,7 +257,8 @@ teclado e foco. `e2e/` reservado ao que só o navegador prova: persistência ent
 execuções (SC-003) e responsividade.
 
 Comandos de verificação: `npm test` em `backend/` e em `frontend/`,
-`npm run test:e2e` na raiz. No backend, `npm run build` é **verificação de
+`npm run test:e2e` na raiz. Desde a `009`, a verificação de tipos do backend é
+`npm run typecheck`, e `npm run build` empacota por armazenamento. Até então, `npm run build` era **verificação de
 tipos** (`tsc --noEmit`), não empacotamento: o Node 26 executa TypeScript
 diretamente, e nenhum artefato de build é necessário. Os imports relativos usam
 extensão `.ts`, porque o runtime — diferentemente do Vitest — não reescreve

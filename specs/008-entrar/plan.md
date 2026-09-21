@@ -11,6 +11,15 @@ segredo do servidor e a migração 4, e de `001` a `006`, cujo acervo passa a se
 decisões é reaberta. A premissa "usuário único" de `001` a `006` **deixa de
 valer**.
 
+
+> **Construída sobre a Porta assíncrona da `009-porta-de-persistencia`**
+> (ordem de implementação 009 → 010 → 007 → 008, decidida no clarify da `009`).
+> Onde este plano cita SQL, tabelas ou `migracoes.ts` do `Acervo`, leia: a
+> persistência de Usuários passa pela Porta `ArmazenamentoDeUsuarios`, e as
+> migrações são escritas nos dois Adapters, em
+> `backend/src/armazenamento/{sqlite,postgresql}/migracoes.ts`, com a mesma
+> versão. As Interfaces dos Modules são assíncronas.
+
 ## Summary
 
 Oitava feature, e a que transforma o acervo em acervo **de alguém**: a pessoa vê
@@ -211,7 +220,7 @@ A Interface é a superfície de teste.
   Sair seguido do voltar do navegador (SC-034) e ausência da Credencial em
   armazenamento, cookie e URL (SC-033).
 
-Comandos: `npm test`, `npm run build` e `npm run lint` em `backend/` e
+Comandos: `npm test`, `npm run typecheck`, `npm run build:local` e `npm run lint` em `backend/` (portões da `009`); `npm test`, `npm run build` e `npm run lint` em
 `frontend/`; `npm run test:e2e` na raiz.
 
 ## Project Structure

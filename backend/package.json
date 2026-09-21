@@ -7,8 +7,11 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "node --watch src/index.ts",
-    "build": "tsc --noEmit",
+    "dev": "node --watch src/entradas/local.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/construir.mjs",
+    "build:local": "node scripts/construir.mjs --banco=sqlite",
+    "start:local": "node dist/sqlite/servidor.mjs",
     "test": "vitest run",
     "lint": "eslint ."
   },
@@ -18,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^24",
+    "esbuild": "^0.28.2",
     "eslint": "^9.19.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.22.0",

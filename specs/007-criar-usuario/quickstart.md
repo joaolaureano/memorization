@@ -1,5 +1,10 @@
 # Quickstart — Validação da feature Criar Usuário
 
+
+> **Portões atualizados pela `009-porta-de-persistencia`**: no backend, a
+> verificação de tipos passou a ser `npm run typecheck`, e `npm run build` exige
+> `--banco`; o portão local é `npm run typecheck && npm run build:local`.
+
 ## Pré-requisitos
 
 Os mesmos de [`001`](../001-criar-cartao/quickstart.md): Node 24+, sem Docker e
@@ -23,7 +28,7 @@ segredo mudar, os hashes já gravados deixam de ser verificáveis, e a feature
 ## Executar e verificar
 
 ```bash
-cd backend && npm install && npm test && npm run build && npm run lint
+cd backend && npm install && npm test && npm run typecheck && npm run build:local && npm run lint
 cd frontend && npm install && npm test && npm run build && npm run lint
 npm run test:e2e
 ```

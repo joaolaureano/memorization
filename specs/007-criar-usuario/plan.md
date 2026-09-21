@@ -10,6 +10,15 @@ Vitest, Testing Library, Playwright), a Seam `ClienteDoAcervo` e a migração
 versionada introduzida em [`002-criar-baralho`](../002-criar-baralho/plan.md).
 Nenhuma dessas decisões é reaberta.
 
+
+> **Construída sobre a Porta assíncrona da `009-porta-de-persistencia`**
+> (ordem de implementação 009 → 010 → 007 → 008, decidida no clarify da `009`).
+> Onde este plano cita SQL, tabelas ou `migracoes.ts` do `Acervo`, leia: a
+> persistência de Usuários passa pela Porta `ArmazenamentoDeUsuarios`, e as
+> migrações são escritas nos dois Adapters, em
+> `backend/src/armazenamento/{sqlite,postgresql}/migracoes.ts`, com a mesma
+> versão. As Interfaces dos Modules são assíncronas.
+
 ## Summary
 
 Sétima feature, e a primeira que trata de **identidade** e de **segredo**. Uma
@@ -203,7 +212,7 @@ A Interface é a superfície de teste.
   navegador, a persistência após reinício e a inspeção do navegador para
   confirmar que não há cookie nem dado gravado.
 
-Comandos: `npm test`, `npm run build` e `npm run lint` em `backend/` e
+Comandos: `npm test`, `npm run typecheck`, `npm run build:local` e `npm run lint` em `backend/` (portões da `009`); `npm test`, `npm run build` e `npm run lint` em
 `frontend/`; `npm run test:e2e` na raiz.
 
 ## Project Structure

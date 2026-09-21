@@ -3,6 +3,11 @@
 Como executar e comprovar que a feature funciona. Valida comportamento
 observável; detalhes de implementação pertencem a `tasks.md`.
 
+
+> **Portões atualizados pela `009-porta-de-persistencia`**: no backend, a
+> verificação de tipos passou a ser `npm run typecheck`, e `npm run build` exige
+> `--banco`; o portão local é `npm run typecheck && npm run build:local`.
+
 ## Pré-requisitos
 
 - Node.js **24 ou superior**. A aplicação executa TypeScript nativamente, sem
@@ -19,7 +24,7 @@ cd frontend && npm install && npm run dev    # interface, em outro terminal
 ## Verificações automatizadas
 
 ```bash
-cd backend  && npm test && npm run build && npm run lint
+cd backend  && npm test && npm run typecheck && npm run build:local && npm run lint
 cd frontend && npm test
 npm run test:e2e
 ```

@@ -14,10 +14,10 @@ import { describe, expect, it } from "vitest";
  * diretório de Adapter. O único import permitido de `src/armazenamento/` é
  * `porta.ts`, que é a Interface que os Modules conhecem.
  *
- * Quem importa um Adapter é a raiz de composição (`src/index.ts` hoje,
- * `src/entradas/local.ts` com a `009`), que não é Module e por isso não é
- * varrida aqui. Os testes também não são Modules: é justamente por isso que a
- * bateria da Porta pode importar o Adapter local livremente.
+ * Quem importa um Adapter é a raiz de composição (`src/entradas/local.ts`), que
+ * não é Module e por isso não é varrida aqui. Os testes também não são Modules:
+ * é justamente por isso que a bateria da Porta pode importar o Adapter local
+ * livremente.
  */
 
 const RAIZ_DO_BACKEND = resolve(

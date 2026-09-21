@@ -4560,3 +4560,36 @@ Verificado em `main`: backend 240, frontend 240, e2e 13, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-086
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: entradas/local.ts, scripts/construir.mjs, scripts do backend, harness E2E, quickstarts e plans
+
+- **Data/hora**: 2026-09-21 03:04 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 009-porta-de-persistencia / Blocos 2 e 3: T808–T813, e T814 (Arquiteto) — concluídas (feature 009 completa)
+- **Commit anterior**: `e3e35e1` (registra o hash do evento anterior)
+
+- **T808**: `entradas/local.ts` é a única raiz que importa o Adapter e imprime
+  "Armazenamento: SQLite (arquivo local)". O `index.ts` foi removido.
+- **T809 a T811**: `scripts/construir.mjs` valida `--banco`, recusa sem gravar
+  nada e empacota com esbuild em `dist/sqlite/servidor.mjs`. Scripts
+  `typecheck`, `build`, `build:local`, `start:local` e `dev`. Quinze casos
+  executam o script de verdade.
+- **T812**: o harness E2E sobe a API pela entrada local.
+- **T813**: com o arquivo indisponível, o início falha e é reportado, sem expor
+  o caminho nem texto do driver.
+- **Desvio aceito**: um banner `createRequire` no pacote ESM. Sem ele, as
+  dependências CJS do Fastify impedem o pacote de executar.
+- **T814** (Arquiteto, documental): quickstarts de 001, 002, 003, 007 e 008 com
+  os portões novos; plans com os comandos atualizados; 007 e 008 marcadas como
+  construídas sobre a Port assíncrona.
+
+Verificado em `main`: backend 257, frontend 240, e2e 13, `typecheck`,
+`build:local` e lint verdes; `npm run build` sem parâmetro é recusado.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

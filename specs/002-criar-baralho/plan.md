@@ -134,7 +134,7 @@ dois Adapters. Tela testada com Testing Library, com as asserções de teclado,
 foco e semântica. `e2e/` apenas para persistência entre execuções e
 responsividade.
 
-Comandos: `npm test`, `npm run build`, `npm run lint` em `backend/` e
+Comandos: `npm test`, `npm run typecheck`, `npm run build:local` e `npm run lint` em `backend/` (portões da `009`); `npm test`, `npm run build` e `npm run lint` em
 `frontend/`; `npm run test:e2e` na raiz.
 
 ## Project Structure

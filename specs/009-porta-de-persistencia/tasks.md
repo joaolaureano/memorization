@@ -63,10 +63,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Construção e scripts
 
-- [ ] T808 A raiz de composição local é o único lugar que importa o Adapter e informa o armazenamento em uso numa linha
-- [ ] T809 `scripts/construir.mjs` valida `--banco=<valor>` e empacota `dist/<banco>/servidor.mjs`, sem escrever nada na recusa
-- [ ] T810 O backend oferece `typecheck`, `build`, `build:local`, `start:local` e `dev`
-- [ ] T811 As recusas da construção, o conteúdo do pacote e a linha de início são comprovados por execução do script
+- [X] T808 A raiz de composição local é o único lugar que importa o Adapter e informa o armazenamento em uso numa linha
+- [X] T809 `scripts/construir.mjs` valida `--banco=<valor>` e empacota `dist/<banco>/servidor.mjs`, sem escrever nada na recusa
+- [X] T810 O backend oferece `typecheck`, `build`, `build:local`, `start:local` e `dev`
+- [X] T811 As recusas da construção, o conteúdo do pacote e a linha de início são comprovados por execução do script
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -83,9 +83,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 4 — Validação e documentação
 
-- [ ] T812 O harness e2e sobe a API real pela raiz de composição local e toda a suíte e2e continua verde
-- [ ] T813 [P] Com o arquivo local indisponível, o início falha reportado e nenhuma operação aparece como concluída
-- [ ] T814 [P] Quickstarts de `001` a `008` e planos que citam a verificação de tipos declaram os portões novos, e `007` e `008` registram que são construídas sobre a Porta assíncrona da `009`
+- [X] T812 O harness e2e sobe a API real pela raiz de composição local e toda a suíte e2e continua verde
+- [X] T813 [P] Com o arquivo local indisponível, o início falha reportado e nenhuma operação aparece como concluída
+- [X] T814 [P] Quickstarts de `001` a `008` e planos que citam a verificação de tipos declaram os portões novos, e `007` e `008` registram que são construídas sobre a Porta assíncrona da `009`
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

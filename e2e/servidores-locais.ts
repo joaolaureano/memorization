@@ -171,9 +171,11 @@ export async function aguardarApiPronta(
 }
 
 /**
- * Inicia a API real sobre `caminhoDoBanco` — o mesmo `src/index.ts` da
- * aplicação, sem `--watch`: o processo é filho do teste e o teste controla
- * seu ciclo de vida inteiro.
+ * Inicia a API real sobre `caminhoDoBanco` — a mesma raiz de composição local
+ * da aplicação (`backend/src/entradas/local.ts`, a entrada da execução local),
+ * sem `--watch`: o processo é filho do teste e o teste controla seu ciclo de
+ * vida inteiro. É o único lugar que importa o Adapter do armazenamento local;
+ * a linha de início que ela imprime informa o armazenamento em uso.
  */
 export function iniciarApi(
   caminhoDoBanco: string,
@@ -182,7 +184,9 @@ export function iniciarApi(
   return iniciarProcesso({
     rotulo: "API",
     comando: process.execPath,
-    argumentos: [join(RAIZ_DO_REPOSITORIO, "backend", "src", "index.ts")],
+    argumentos: [
+      join(RAIZ_DO_REPOSITORIO, "backend", "src", "entradas", "local.ts"),
+    ],
     diretorio: join(RAIZ_DO_REPOSITORIO, "backend"),
     ambiente: {
       PORTA: String(porta),
