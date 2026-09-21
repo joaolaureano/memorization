@@ -4286,3 +4286,39 @@ Checklist: 21 de 21.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-078
+
+> **SPEC KIT** — Comando: specify | Invocação: skill `speckit-specify` e
+> `create-new-feature.sh --short-name postgresql-na-nuvem`; redação por worker
+> `deepseek-flash` em worktree exclusivo | Integração: claude | Artefatos:
+> specs/010-postgresql-na-nuvem/spec.md, checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 02:18 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 010-postgresql-na-nuvem / specify
+- **Commit anterior**: `15aac72` (registra o hash de EVT-077)
+
+Requisitos: FR-110 a FR-119 específicos; FR-044 e FR-045 reutilizados; SC-044 a
+SC-050.
+- Adapter PostgreSQL da Porta, aprovado na bateria compartilhada.
+- URL de conexão em `DB_URL`, nome imposto pela infra de nuvem existente.
+  Tratada como segredo: nunca registrada nem exibida.
+- Conexão cifrada, com certificado verificado.
+- Migrações versionadas também no PostgreSQL.
+- Reconexão depois de uma queda.
+- Scripts de nuvem.
+
+**Defeito corrigido na revisão**: o FR-114 e o SC-046 exigiam a URL também na
+construção. O segredo passaria a ser necessário para construir, e seria
+espalhado por qualquer ambiente de build. Agora só o início exige a URL.
+
+Premissas "a confirmar no clarify":
+- verificação sem Docker;
+- migração automática no início ou por comando;
+- "nuvem" como configuração, e não como localização física.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhuma URL ou credencial registrada.
