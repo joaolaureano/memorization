@@ -4947,3 +4947,34 @@ Pré-condições conferidas sem exibir valores:
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-096
+
+> **SPEC KIT** — Comandos: tasks e analyze | Invocação: skills `speckit-tasks`
+> (`setup-tasks.sh --json`, redação por worker `deepseek-flash`) e
+> `speckit-analyze` (`check-prerequisites.sh --json --require-spec
+> --require-tasks --include-tasks`) | Integração: claude | Artefatos:
+> specs/011-hospedagem-aws/tasks.md
+
+- **Data/hora**: 2026-09-21 07:11 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 011-hospedagem-aws / tasks e analyze
+- **Commit anterior**: `7d44f7c` (registra o hash de EVT-095)
+
+Quatorze tarefas (T1001–T1014) em quatro fases:
+1. função;
+2. pacotes;
+3. infraestrutura;
+4. publicação e validação.
+
+A fase 4 é do **Arquiteto**, e não de worker, porque são ações de operador com
+credenciais. Três blocos de integração atômicos para o código.
+
+Analyze: sete artefatos; 30 requisitos, todos na matriz; nenhum fantasma;
+nenhum id solto depois da matriz; tarefas coerentes com os metadados. Nenhum
+problema CRITICAL, HIGH ou MEDIUM.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
