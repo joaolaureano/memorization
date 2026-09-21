@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import {
+  entrarPelaUi,
+  prepararEntradaInterceptada,
+} from './servidores-locais';
+
 // T013 — telas utilizáveis em largura de telefone (FR-042, SC-011;
 // specs/001-criar-cartao/tasks.md).
 //
@@ -49,6 +54,10 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
 
   const cartoes = cartoesDeterministicos();
 
+  // Depois de `008-entrar`, o acervo só é alcançado com Credencial: a prova
+  // intercepta o Entrar e entra antes de medir a tela (FR-097, FR-090).
+  const credencial = await prepararEntradaInterceptada(page);
+
   await page.route(/\/cartoes$/, async (rota) => {
     if (rota.request().method() === 'GET') {
       await rota.fulfill({
@@ -63,6 +72,7 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
   });
 
   await page.goto(ENDERECO_DO_FRONTEND);
+  await entrarPelaUi(page, credencial);
 
   // A tela real de Cartões carrega: cabeçalho, formulário de criação e a
   // lista com os 50 Cartões do acervo interceptado.

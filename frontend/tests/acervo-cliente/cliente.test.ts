@@ -1,16 +1,22 @@
+import { randomBytes } from "node:crypto";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+  MENSAGEM_DE_NAO_AUTENTICADO,
+  NAO_AUTENTICADO,
 } from "../../src/acervo-cliente/cliente";
 import type {
   Baralho,
   Cartao,
   ClienteDoAcervo,
+  Credencial,
 } from "../../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../../src/acervo-cliente/cliente-em-memoria";
 import { ClienteHttp } from "../../src/acervo-cliente/cliente-http";
@@ -24,30 +30,73 @@ import {
 } from "../../src/acervo-cliente/validacao";
 
 /**
- * T008, T106, T208, T403, T503 e T607 — bateria dos contratos de Cartões, de
- * Baralhos, de Vínculos, de edição, de exclusão e de Usuários contra os dois
- * Adapters da Seam `ClienteDoAcervo`.
+ * T008, T106, T208, T403, T503, T607 e T707 — bateria dos contratos de
+ * Cartões, de Baralhos, de Vínculos, de edição, de exclusão, de Usuários e de
+ * Entrar contra os dois Adapters da Seam `ClienteDoAcervo`.
  *
  * A **mesma** bateria — criação, listagem, Vínculos, edição, exclusão,
- * Cadastro, os modos de recusa de domínio com mensagem exata em português e a
- * indisponibilidade — roda contra `ClienteHttp` e `ClienteEmMemoria`, e
- * produz resultados idênticos. Nenhuma resposta que não seja de sucesso
- * aparece como operação concluída (FR-044).
+ * Cadastro, Entrar, os modos de recusa de domínio com mensagem exata em
+ * português, a recusa por Credencial e a indisponibilidade — roda contra
+ * `ClienteHttp` e `ClienteEmMemoria`, e produz resultados idênticos. Nenhuma
+ * resposta que não seja de sucesso aparece como operação concluída (FR-044).
+ *
+ * Depois de `008-entrar`, o acervo é por Usuário: os dois Adapters recebem a
+ * Credencial na construção, o servidor simulado confere o cabeçalho
+ * `Authorization: Basic` antes de toda rota de acervo (FR-090) e os dados são
+ * escopados pelo dono (FR-092). A Senha é gerada a cada execução, e nenhum
+ * valor literal de Senha é versionado.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 const NOME_VALIDO = "Inglês";
 const NOME_DE_USUARIO_VALIDO = "Ana.Silva";
-const SENHA_VALIDA = "senha-de-prova";
+/** A Senha das provas de Cadastro, gerada agora: nenhuma Senha literal no arquivo. */
+const SENHA_VALIDA = randomBytes(12).toString("base64url");
 const ENDERECO_DA_API = "http://127.0.0.1:3001";
+
+/**
+ * O Usuário e a Credencial de prova (T707; specs/008-entrar/tasks.md): o dono
+ * do acervo das baterias de Cartão, de Baralho, de Vínculo, de edição e de
+ * exclusão, porque sem Credencial nenhuma delas opera (FR-090). A Senha é
+ * gerada a cada execução, e o Nome de usuário não colide com os das provas de
+ * Cadastro.
+ */
+const NOME_DE_USUARIO_DE_PROVA = "usuario.de.prova";
+const SENHA_DE_PROVA = randomBytes(12).toString("base64url");
+const CREDENCIAL_DE_PROVA: Credencial = {
+  nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+  senha: SENHA_DE_PROVA,
+};
+
+/** O segundo Usuário, das provas de isolamento do acervo (FR-092, SC-030). */
+const CREDENCIAL_DO_OUTRO: Credencial = {
+  nomeDeUsuario: "outro.usuario",
+  senha: randomBytes(12).toString("base64url"),
+};
+
+/** Senha errada, gerada agora: não confere com nenhuma Credencial. */
+const SENHA_ERRADA = randomBytes(12).toString("base64url");
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Cartão e Baralho como o servidor simulado os guarda: com o dono, que é o
+ * escopo de toda consulta (FR-092). A Interface nunca devolve este campo.
+ */
+type CartaoDoDono = Cartao & { usuarioId: string };
+type BaralhoDoDono = Baralho & { usuarioId: string };
+
 type AmbienteDeCliente = {
   cliente: ClienteDoAcervo;
+  /**
+   * Outro cliente sobre a **mesma** base — o mesmo stand-in, o mesmo servidor
+   * simulado —, com a Credencial informada: é o que permite provar, nos dois
+   * Adapters, que dois Usuários não enxergam o acervo um do outro (FR-092).
+   */
+  clienteComo: (credencial: Credencial | null) => ClienteDoAcervo;
   indisponibilizar: () => void;
   restaurar: () => void;
 };
@@ -62,10 +111,16 @@ function respostaDeTeste(status: number, corpo: unknown): RespostaDeTeste {
 }
 
 function criarAmbienteEmMemoria(): AmbienteDeCliente {
-  const cliente = new ClienteEmMemoria();
+  // O Usuário de prova já está cadastrado na base do stand-in, e a Credencial
+  // dele acompanha o cliente: é assim que o Adapter de memória atende à mesma
+  // bateria que o `ClienteHttp` (FR-090).
+  const cliente = new ClienteEmMemoria(CREDENCIAL_DE_PROVA, [
+    CREDENCIAL_DE_PROVA,
+  ]);
 
   return {
     cliente,
+    clienteComo: (credencial) => cliente.comoUsuario(credencial),
     indisponibilizar: () => cliente.simularIndisponibilidade(),
     restaurar: () => cliente.restaurarDisponibilidade(),
   };
@@ -74,42 +129,123 @@ function criarAmbienteEmMemoria(): AmbienteDeCliente {
 /**
  * Servidor de contrato simulado para o `ClienteHttp`: uma `fetch` falsa que
  * implementa as rotas de Cartões, de Baralhos, de Vínculos, de edição, de
- * exclusão e de Usuários exatamente como a API. A indisponibilidade é
- * simulada fazendo a `fetch` lançar, como numa falha de rede real.
+ * exclusão, de Usuários e de Entrar exatamente como a API. A indisponibilidade
+ * é simulada fazendo a `fetch` lançar, como numa falha de rede real.
+ *
+ * Como a API, o transporte exigido por `008-entrar` acompanha a Credencial:
+ * toda rota de acervo confere o cabeçalho `Authorization: Basic` antes de
+ * atender e responde `401` quando ele falta ou não confere (FR-090). O Cadastro
+ * é isento (FR-097). Sem esse espelho, a bateria de entrada provaria o
+ * contrato em um só Adapter.
  */
 function criarAmbienteHttp(): AmbienteDeCliente {
-  const cartoesNoServidor: Cartao[] = [];
-  const baralhosNoServidor: Baralho[] = [];
-  const vinculosNoServidor: { cartaoId: string; baralhoId: string }[] = [];
-  const usuariosNoServidor: { id: string; nomeDeUsuario: string }[] = [];
+  const cartoesNoServidor: CartaoDoDono[] = [];
+  const baralhosNoServidor: BaralhoDoDono[] = [];
+  const vinculosNoServidor: {
+    usuarioId: string;
+    cartaoId: string;
+    baralhoId: string;
+  }[] = [];
+  const usuariosNoServidor: {
+    id: string;
+    nomeDeUsuario: string;
+    senha: string;
+  }[] = [{ id: "u-prova", ...CREDENCIAL_DE_PROVA }];
   let sequencia = 0;
   let sequenciaDeBaralhos = 0;
   let sequenciaDeUsuarios = 0;
   let indisponivel = false;
 
-  function baralhosDoCartao(cartaoId: string): Baralho[] {
-    return vinculosNoServidor
-      .filter((vinculo) => vinculo.cartaoId === cartaoId)
-      .map((vinculo) =>
-        baralhosNoServidor.find((baralho) => baralho.id === vinculo.baralhoId),
-      )
-      .filter((baralho): baralho is Baralho => baralho !== undefined)
-      .map((baralho) => ({ id: baralho.id, nome: baralho.nome }));
+  /** O Cartão como a API o publica: sem o dono, que é Implementation. */
+  function cartaoPublicado(cartao: Cartao): Cartao {
+    return { id: cartao.id, frente: cartao.frente, verso: cartao.verso };
   }
 
-  function cartoesDoBaralho(baralhoId: string): Cartao[] {
-    return vinculosNoServidor
-      .filter((vinculo) => vinculo.baralhoId === baralhoId)
-      .map((vinculo) =>
-        cartoesNoServidor.find((cartao) => cartao.id === vinculo.cartaoId),
-      )
-      .filter((cartao): cartao is Cartao => cartao !== undefined)
-      .map((cartao) => ({
-        id: cartao.id,
-        frente: cartao.frente,
-        verso: cartao.verso,
-      }));
+  /** O Baralho como a API o publica: sem o dono, que é Implementation. */
+  function baralhoPublicado(baralho: Baralho): Baralho {
+    return { id: baralho.id, nome: baralho.nome };
   }
+
+  function baralhosDoCartao(usuarioId: string, cartaoId: string): Baralho[] {
+    return vinculosNoServidor
+      .filter(
+        (vinculo) =>
+          vinculo.usuarioId === usuarioId && vinculo.cartaoId === cartaoId,
+      )
+      .map((vinculo) =>
+        baralhosNoServidor.find(
+          (baralho) =>
+            baralho.id === vinculo.baralhoId &&
+            baralho.usuarioId === usuarioId,
+        ),
+      )
+      .filter((baralho): baralho is BaralhoDoDono => baralho !== undefined)
+      .map(baralhoPublicado);
+  }
+
+  function cartoesDoBaralho(usuarioId: string, baralhoId: string): Cartao[] {
+    return vinculosNoServidor
+      .filter(
+        (vinculo) =>
+          vinculo.usuarioId === usuarioId && vinculo.baralhoId === baralhoId,
+      )
+      .map((vinculo) =>
+        cartoesNoServidor.find(
+          (cartao) =>
+            cartao.id === vinculo.cartaoId && cartao.usuarioId === usuarioId,
+        ),
+      )
+      .filter((cartao): cartao is CartaoDoDono => cartao !== undefined)
+      .map(cartaoPublicado);
+  }
+
+  /**
+   * O Usuário da Credencial do cabeçalho, ou `null` quando o cabeçalho falta,
+   * está malformado ou não confere — os três casos que a API recusa com a
+   * mesma resposta (FR-088, FR-090).
+   */
+  function usuarioDoCabecalho(header?: RequestInit["headers"]): {
+    id: string;
+    nomeDeUsuario: string;
+  } | null {
+    const autorizacao = (header as Record<string, string> | undefined)?.[
+      "authorization"
+    ];
+
+    if (typeof autorizacao !== "string" || !autorizacao.startsWith("Basic ")) {
+      return null;
+    }
+
+    const bytes = Uint8Array.from(
+      atob(autorizacao.slice("Basic ".length)),
+      (caractere) => caractere.charCodeAt(0),
+    );
+    const decodificado = new TextDecoder().decode(bytes);
+    const doisPontos = decodificado.indexOf(":");
+
+    if (doisPontos < 0) {
+      return null;
+    }
+
+    const nomeDeUsuario = decodificado.slice(0, doisPontos);
+    const senha = decodificado.slice(doisPontos + 1);
+    const chave = nomeDeUsuario.trim().toLowerCase();
+    const usuario = usuariosNoServidor.find(
+      (candidato) => candidato.nomeDeUsuario.toLowerCase() === chave,
+    );
+
+    if (usuario === undefined || usuario.senha !== senha) {
+      return null;
+    }
+
+    return { id: usuario.id, nomeDeUsuario: usuario.nomeDeUsuario };
+  }
+
+  /** A recusa única de Credencial, com a mensagem do contrato (FR-088). */
+  const RECUSA_DE_CREDENCIAL = {
+    erro: "credencial_invalida",
+    mensagem: MENSAGEM_DE_CREDENCIAL_INVALIDA,
+  } as const;
 
   const fetchDeTeste = async (
     entrada: unknown,
@@ -123,46 +259,14 @@ function criarAmbienteHttp(): AmbienteDeCliente {
     const caminho = new URL(url).pathname;
     const metodo = opcoes?.method ?? "GET";
 
-    const cartaoPorId = caminho.match(/^\/cartoes\/([^/]+)$/);
-    const baralhoPorId = caminho.match(/^\/baralhos\/([^/]+)$/);
-    const vinculoEmBaralho = caminho.match(/^\/baralhos\/([^/]+)\/vinculos$/);
-    const vinculoEspecifico = caminho.match(
-      /^\/baralhos\/([^/]+)\/vinculos\/([^/]+)$/,
-    );
-
-    if (caminho === "/cartoes" && metodo === "POST") {
-      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
-
-      const falha =
-        validarFrente(corpo.frente as string) ??
-        validarVerso(corpo.verso as string);
-
-      if (falha !== null) {
-        return respostaDeTeste(400, {
-          erro: falha.erro,
-          mensagem: falha.mensagem,
-        });
-      }
-
-      const cartao: Cartao = {
-        id: `s${++sequencia}`,
-        frente: corpo.frente as string,
-        verso: corpo.verso as string,
-      };
-
-      cartoesNoServidor.push(cartao);
-
-      return respostaDeTeste(201, cartao);
+    // As rotas isentas de Credencial: o pré-voo de CORS, a prova de vida e o
+    // Cadastro — quem cria o Usuário ainda não tem Credencial (FR-097).
+    if (metodo === "OPTIONS") {
+      return respostaDeTeste(204, null);
     }
 
-    if (caminho === "/cartoes" && metodo === "GET") {
-      return respostaDeTeste(
-        200,
-        cartoesNoServidor.map((cartao) => ({
-          ...cartao,
-          baralhos: baralhosDoCartao(cartao.id),
-        })),
-      );
+    if (caminho === "/health" && metodo === "GET") {
+      return respostaDeTeste(200, { status: "ok" });
     }
 
     if (caminho === "/usuarios" && metodo === "POST") {
@@ -194,14 +298,82 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       const usuario = {
         id: `u${++sequenciaDeUsuarios}`,
         nomeDeUsuario,
+        senha: corpo.senha as string,
       };
 
       usuariosNoServidor.push(usuario);
 
       // A resposta traz uma propriedade a mais de propósito: nenhum retorno
       // de Cadastro entrega `sal`, `hash` nem Senha, e o Adapter descarta o
-      // que não seja campo canônico (FR-076, FR-078).
-      return respostaDeTeste(201, { ...usuario, hash: "nunca-atravessa" });
+      // que não seja campo canônico (FR-076, FR-078). A Senha fica apenas na
+      // base do servidor simulado, como o `hash` fica na base da API.
+      return respostaDeTeste(201, {
+        id: usuario.id,
+        nomeDeUsuario: usuario.nomeDeUsuario,
+        hash: "nunca-atravessa",
+      });
+    }
+
+    // Daqui em diante, toda rota exige Credencial válida: é o mesmo ponto
+    // único de verificação da API, antes de qualquer handler (FR-090).
+    const dono = usuarioDoCabecalho(opcoes?.headers);
+
+    if (dono === null) {
+      return respostaDeTeste(401, RECUSA_DE_CREDENCIAL);
+    }
+
+    const donoId = dono.id;
+
+    if (caminho === "/entrar" && metodo === "POST") {
+      return respostaDeTeste(200, {
+        id: dono.id,
+        nomeDeUsuario: dono.nomeDeUsuario,
+      });
+    }
+
+    const cartaoPorId = caminho.match(/^\/cartoes\/([^/]+)$/);
+    const baralhoPorId = caminho.match(/^\/baralhos\/([^/]+)$/);
+    const vinculoEmBaralho = caminho.match(/^\/baralhos\/([^/]+)\/vinculos$/);
+    const vinculoEspecifico = caminho.match(
+      /^\/baralhos\/([^/]+)\/vinculos\/([^/]+)$/,
+    );
+
+    if (caminho === "/cartoes" && metodo === "POST") {
+      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+
+      const falha =
+        validarFrente(corpo.frente as string) ??
+        validarVerso(corpo.verso as string);
+
+      if (falha !== null) {
+        return respostaDeTeste(400, {
+          erro: falha.erro,
+          mensagem: falha.mensagem,
+        });
+      }
+
+      const cartao: CartaoDoDono = {
+        id: `s${++sequencia}`,
+        usuarioId: donoId,
+        frente: corpo.frente as string,
+        verso: corpo.verso as string,
+      };
+
+      cartoesNoServidor.push(cartao);
+
+      return respostaDeTeste(201, cartaoPublicado(cartao));
+    }
+
+    if (caminho === "/cartoes" && metodo === "GET") {
+      return respostaDeTeste(
+        200,
+        cartoesNoServidor
+          .filter((cartao) => cartao.usuarioId === donoId)
+          .map((cartao) => ({
+            ...cartaoPublicado(cartao),
+            baralhos: baralhosDoCartao(donoId, cartao.id),
+          })),
+      );
     }
 
     if (caminho === "/baralhos" && metodo === "POST") {
@@ -216,30 +388,35 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const baralho: Baralho = {
+      const baralho: BaralhoDoDono = {
         id: `s${++sequenciaDeBaralhos}`,
+        usuarioId: donoId,
         nome: corpo.nome as string,
       };
 
       baralhosNoServidor.push(baralho);
 
-      return respostaDeTeste(201, baralho);
+      return respostaDeTeste(201, baralhoPublicado(baralho));
     }
 
     if (caminho === "/baralhos" && metodo === "GET") {
       return respostaDeTeste(
         200,
-        baralhosNoServidor.map((baralho) => {
-          const quantidadeDeCartoes = vinculosNoServidor.filter(
-            (vinculo) => vinculo.baralhoId === baralho.id,
-          ).length;
+        baralhosNoServidor
+          .filter((baralho) => baralho.usuarioId === donoId)
+          .map((baralho) => {
+            const quantidadeDeCartoes = vinculosNoServidor.filter(
+              (vinculo) =>
+                vinculo.usuarioId === donoId &&
+                vinculo.baralhoId === baralho.id,
+            ).length;
 
-          return {
-            ...baralho,
-            quantidadeDeCartoes,
-            elegivel: quantidadeDeCartoes > 0,
-          };
-        }),
+            return {
+              ...baralhoPublicado(baralho),
+              quantidadeDeCartoes,
+              elegivel: quantidadeDeCartoes > 0,
+            };
+          }),
       );
     }
 
@@ -248,14 +425,25 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
       const cartaoId = corpo.cartaoId as string;
 
-      if (!cartoesNoServidor.some((cartao) => cartao.id === cartaoId)) {
+      // Cartão e Baralho precisam existir no escopo de quem pede: o Vínculo
+      // entre donos diferentes é o mesmo `nao_encontrado` (FR-092, FR-093).
+      if (
+        !cartoesNoServidor.some(
+          (cartao) => cartao.id === cartaoId && cartao.usuarioId === donoId,
+        )
+      ) {
         return respostaDeTeste(404, {
           erro: "nao_encontrado",
           mensagem: "Cartão não encontrado.",
         });
       }
 
-      if (!baralhosNoServidor.some((baralho) => baralho.id === baralhoId)) {
+      if (
+        !baralhosNoServidor.some(
+          (baralho) =>
+            baralho.id === baralhoId && baralho.usuarioId === donoId,
+        )
+      ) {
         return respostaDeTeste(404, {
           erro: "nao_encontrado",
           mensagem: "Baralho não encontrado.",
@@ -265,7 +453,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       if (
         vinculosNoServidor.some(
           (vinculo) =>
-            vinculo.cartaoId === cartaoId && vinculo.baralhoId === baralhoId,
+            vinculo.usuarioId === donoId &&
+            vinculo.cartaoId === cartaoId &&
+            vinculo.baralhoId === baralhoId,
         )
       ) {
         return respostaDeTeste(409, {
@@ -274,7 +464,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      vinculosNoServidor.push({ cartaoId, baralhoId });
+      vinculosNoServidor.push({ usuarioId: donoId, cartaoId, baralhoId });
 
       return respostaDeTeste(201, null);
     }
@@ -284,7 +474,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       const cartaoId = decodeURIComponent(vinculoEspecifico[2]);
       const indice = vinculosNoServidor.findIndex(
         (vinculo) =>
-          vinculo.cartaoId === cartaoId && vinculo.baralhoId === baralhoId,
+          vinculo.usuarioId === donoId &&
+          vinculo.cartaoId === cartaoId &&
+          vinculo.baralhoId === baralhoId,
       );
 
       if (indice === -1) {
@@ -301,7 +493,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
     if (baralhoPorId !== null && metodo === "GET") {
       const id = decodeURIComponent(baralhoPorId[1]);
-      const baralho = baralhosNoServidor.find((item) => item.id === id);
+      const baralho = baralhosNoServidor.find(
+        (item) => item.id === id && item.usuarioId === donoId,
+      );
 
       if (baralho === undefined) {
         return respostaDeTeste(404, {
@@ -310,11 +504,10 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const cartoes = cartoesDoBaralho(id);
+      const cartoes = cartoesDoBaralho(donoId, id);
 
       return respostaDeTeste(200, {
-        id: baralho.id,
-        nome: baralho.nome,
+        ...baralhoPublicado(baralho),
         elegivel: cartoes.length > 0,
         cartoes,
       });
@@ -322,7 +515,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
     if (cartaoPorId !== null && metodo === "PUT") {
       const id = decodeURIComponent(cartaoPorId[1]);
-      const indice = cartoesNoServidor.findIndex((cartao) => cartao.id === id);
+      const indice = cartoesNoServidor.findIndex(
+        (cartao) => cartao.id === id && cartao.usuarioId === donoId,
+      );
 
       if (indice === -1) {
         return respostaDeTeste(404, {
@@ -343,21 +538,22 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const cartao: Cartao = {
+      const cartao: CartaoDoDono = {
         id,
+        usuarioId: donoId,
         frente: corpo.frente as string,
         verso: corpo.verso as string,
       };
 
       cartoesNoServidor[indice] = cartao;
 
-      return respostaDeTeste(200, cartao);
+      return respostaDeTeste(200, cartaoPublicado(cartao));
     }
 
     if (baralhoPorId !== null && metodo === "PUT") {
       const id = decodeURIComponent(baralhoPorId[1]);
       const indice = baralhosNoServidor.findIndex(
-        (baralho) => baralho.id === id,
+        (baralho) => baralho.id === id && baralho.usuarioId === donoId,
       );
 
       if (indice === -1) {
@@ -377,19 +573,22 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const baralho: Baralho = {
+      const baralho: BaralhoDoDono = {
         id,
+        usuarioId: donoId,
         nome: corpo.nome as string,
       };
 
       baralhosNoServidor[indice] = baralho;
 
-      return respostaDeTeste(200, baralho);
+      return respostaDeTeste(200, baralhoPublicado(baralho));
     }
 
     if (cartaoPorId !== null && metodo === "DELETE") {
       const id = decodeURIComponent(cartaoPorId[1]);
-      const indice = cartoesNoServidor.findIndex((cartao) => cartao.id === id);
+      const indice = cartoesNoServidor.findIndex(
+        (cartao) => cartao.id === id && cartao.usuarioId === donoId,
+      );
 
       if (indice === -1) {
         return respostaDeTeste(404, {
@@ -401,7 +600,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       cartoesNoServidor.splice(indice, 1);
 
       for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
-        if (vinculosNoServidor[i].cartaoId === id) {
+        const vinculo = vinculosNoServidor[i];
+
+        if (vinculo.usuarioId === donoId && vinculo.cartaoId === id) {
           vinculosNoServidor.splice(i, 1);
         }
       }
@@ -412,7 +613,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
     if (baralhoPorId !== null && metodo === "DELETE") {
       const id = decodeURIComponent(baralhoPorId[1]);
       const indice = baralhosNoServidor.findIndex(
-        (baralho) => baralho.id === id,
+        (baralho) => baralho.id === id && baralho.usuarioId === donoId,
       );
 
       if (indice === -1) {
@@ -425,7 +626,9 @@ function criarAmbienteHttp(): AmbienteDeCliente {
       baralhosNoServidor.splice(indice, 1);
 
       for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
-        if (vinculosNoServidor[i].baralhoId === id) {
+        const vinculo = vinculosNoServidor[i];
+
+        if (vinculo.usuarioId === donoId && vinculo.baralhoId === id) {
           vinculosNoServidor.splice(i, 1);
         }
       }
@@ -442,7 +645,8 @@ function criarAmbienteHttp(): AmbienteDeCliente {
   vi.stubGlobal("fetch", fetchDeTeste);
 
   return {
-    cliente: new ClienteHttp(ENDERECO_DA_API),
+    cliente: new ClienteHttp(ENDERECO_DA_API, CREDENCIAL_DE_PROVA),
+    clienteComo: (credencial) => new ClienteHttp(ENDERECO_DA_API, credencial),
     indisponibilizar: () => {
       indisponivel = true;
     },
@@ -1861,6 +2065,366 @@ executarBateriaDeExclusao("ClienteEmMemoria", criarAmbienteEmMemoria);
 
 executarBateriaDeCadastro("ClienteHttp", criarAmbienteHttp);
 executarBateriaDeCadastro("ClienteEmMemoria", criarAmbienteEmMemoria);
+
+executarBateriaDeEntrada("ClienteHttp", criarAmbienteHttp);
+executarBateriaDeEntrada("ClienteEmMemoria", criarAmbienteEmMemoria);
+
+/**
+ * T707 (specs/008-entrar/tasks.md) — bateria de Entrar e do modo
+ * `nao_autenticado`, a mesma contra os dois Adapters.
+ *
+ * Prova FR-086 a FR-092 e FR-044: Entrar com a Credencial válida devolve
+ * exatamente quem entrou; a Credencial que não confere é recusada uma só vez,
+ * com a mesma mensagem para Nome de usuário inexistente e para Senha errada;
+ * sem Credencial válida nenhuma operação do acervo é executada e nada muda; e
+ * `nao_autenticado` nunca se confunde com `indisponivel` — os dois modos levam
+ * a interface a decisões diferentes (SC-028, SC-029, SC-030, SC-035, SC-036).
+ */
+function executarBateriaDeEntrada(
+  nome: string,
+  criarAmbiente: () => AmbienteDeCliente,
+): void {
+  describe(`${nome} — Entrar e recusa por Credencial`, () => {
+    it("entrar com a Credencial válida devolve exatamente o Usuário que entrou (FR-086, FR-078)", async () => {
+      const { cliente } = criarAmbiente();
+
+      const resultado = await cliente.entrar(CREDENCIAL_DE_PROVA);
+
+      expect(resultado).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+        },
+      });
+
+      if (resultado.ok) {
+        // Nenhuma leitura devolve a Senha, nem qualquer derivação dela
+        // (FR-076, FR-078).
+        expect(Object.keys(resultado.usuario).sort()).toEqual([
+          "id",
+          "nomeDeUsuario",
+        ]);
+        expect(JSON.stringify(resultado)).not.toContain(SENHA_DE_PROVA);
+      }
+    });
+
+    it("descarta espaços ao redor do Nome de usuário e ignora maiúsculas; compara a Senha exatamente (FR-087, SC-036)", async () => {
+      const { cliente } = criarAmbiente();
+
+      expect(
+        await cliente.entrar({
+          nomeDeUsuario: `   ${NOME_DE_USUARIO_DE_PROVA.toUpperCase()}   `,
+          senha: SENHA_DE_PROVA,
+        }),
+      ).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+        },
+      });
+
+      // Os espaços da Senha são preservados na comparação: a Senha com
+      // espaços nas pontas não é a Senha cadastrada (FR-087).
+      expect(
+        await cliente.entrar({
+          nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+          senha: ` ${SENHA_DE_PROVA} `,
+        }),
+      ).toEqual({
+        ok: false,
+        erro: NAO_AUTENTICADO,
+        mensagem: MENSAGEM_DE_CREDENCIAL_INVALIDA,
+      });
+    });
+
+    it("recusa Nome de usuário inexistente e Senha errada com a mesma resposta (FR-088, SC-029)", async () => {
+      const { cliente } = criarAmbiente();
+
+      const semUsuario = await cliente.entrar({
+        nomeDeUsuario: "ninguem.aqui",
+        senha: SENHA_DE_PROVA,
+      });
+      const comSenhaErrada = await cliente.entrar({
+        nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+        senha: SENHA_ERRADA,
+      });
+
+      expect(semUsuario).toEqual({
+        ok: false,
+        erro: NAO_AUTENTICADO,
+        mensagem: MENSAGEM_DE_CREDENCIAL_INVALIDA,
+      });
+
+      // A recusa é uma só: nada distingue os dois casos, nem na mensagem nem
+      // nas chaves do resultado.
+      expect(comSenhaErrada).toEqual(semUsuario);
+      expect(Object.keys(semUsuario).sort()).toEqual(["erro", "mensagem", "ok"]);
+      expect(JSON.stringify(semUsuario)).not.toContain(SENHA_DE_PROVA);
+      expect(JSON.stringify(comSenhaErrada)).not.toContain(SENHA_ERRADA);
+    });
+
+    it("sem Credencial, toda operação do acervo é recusada com nao_autenticado e nada muda (FR-090, SC-028)", async () => {
+      const { cliente, clienteComo } = criarAmbiente();
+
+      // O acervo do dono: é ele que precisa permanecer exatamente como está
+      // depois de cada recusa.
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações do cenário deveriam ser aceitas");
+      }
+
+      const semCredencial = clienteComo(null);
+      const recusa = {
+        ok: false,
+        erro: NAO_AUTENTICADO,
+        mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+      };
+
+      expect(
+        await semCredencial.criarCartao({
+          frente: FRENTE_VALIDA,
+          verso: VERSO_VALIDO,
+        }),
+      ).toEqual(recusa);
+      expect(await semCredencial.listarCartoes()).toEqual(recusa);
+      expect(await semCredencial.criarBaralho({ nome: NOME_VALIDO })).toEqual(
+        recusa,
+      );
+      expect(await semCredencial.listarBaralhos()).toEqual(recusa);
+      expect(await semCredencial.obterBaralho(baralho.baralho.id)).toEqual(
+        recusa,
+      );
+      expect(
+        await semCredencial.vincular(cartao.cartao.id, baralho.baralho.id),
+      ).toEqual(recusa);
+      expect(
+        await semCredencial.desvincular(cartao.cartao.id, baralho.baralho.id),
+      ).toEqual(recusa);
+      expect(
+        await semCredencial.editarCartao(cartao.cartao.id, "To run", "Correr"),
+      ).toEqual(recusa);
+      expect(
+        await semCredencial.renomearBaralho(baralho.baralho.id, "Espanhol"),
+      ).toEqual(recusa);
+      expect(await semCredencial.excluirCartao(cartao.cartao.id)).toEqual(
+        recusa,
+      );
+      expect(await semCredencial.excluirBaralho(baralho.baralho.id)).toEqual(
+        recusa,
+      );
+
+      // O acervo do dono está intacto: nenhuma recusa alterou nada.
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [
+          {
+            id: cartao.cartao.id,
+            frente: FRENTE_VALIDA,
+            verso: VERSO_VALIDO,
+            baralhos: [],
+          },
+        ],
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            id: baralho.baralho.id,
+            nome: NOME_VALIDO,
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+        ],
+      });
+    });
+
+    it("Credencial que não confere e transporte parado são modos distintos: nao_autenticado e indisponivel (FR-091, SC-035)", async () => {
+      const { cliente, clienteComo, indisponibilizar } = criarAmbiente();
+      const comCredencialInvalida = clienteComo({
+        nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+        senha: SENHA_ERRADA,
+      });
+
+      expect(
+        await comCredencialInvalida.criarCartao({
+          frente: FRENTE_VALIDA,
+          verso: VERSO_VALIDO,
+        }),
+      ).toEqual({
+        ok: false,
+        erro: NAO_AUTENTICADO,
+        mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+      });
+      expect(
+        await comCredencialInvalida.entrar({
+          nomeDeUsuario: NOME_DE_USUARIO_DE_PROVA,
+          senha: SENHA_ERRADA,
+        }),
+      ).toEqual({
+        ok: false,
+        erro: NAO_AUTENTICADO,
+        mensagem: MENSAGEM_DE_CREDENCIAL_INVALIDA,
+      });
+
+      // A recusa não deixou rastro: o acervo do dono continua exatamente como
+      // estava — vazio, porque nada foi criado (FR-044, SC-028).
+      expect(await cliente.listarCartoes()).toEqual({ ok: true, cartoes: [] });
+
+      indisponibilizar();
+
+      // A mesma Credencial válida, com o transporte parado, é reportada como
+      // indisponibilidade — nunca como recusa por Credencial.
+      expect(
+        await cliente.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
+      ).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+      });
+      expect(await cliente.entrar(CREDENCIAL_DE_PROVA)).toEqual({
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+      });
+    });
+
+    it("dois Usuários não enxergam nem alteram o acervo um do outro (FR-092, FR-093, SC-030)", async () => {
+      const { cliente, clienteComo } = criarAmbiente();
+
+      // O Cadastro é isento de Credencial (FR-097): é por ele que o segundo
+      // Usuário passa a existir.
+      const cadastroDoOutro = await cliente.criarUsuario({
+        nomeDeUsuario: CREDENCIAL_DO_OUTRO.nomeDeUsuario,
+        senha: CREDENCIAL_DO_OUTRO.senha,
+      });
+
+      expect(cadastroDoOutro.ok).toBe(true);
+
+      const outro = clienteComo(CREDENCIAL_DO_OUTRO);
+
+      expect(await outro.entrar(CREDENCIAL_DO_OUTRO)).toEqual({
+        ok: true,
+        usuario: {
+          id: expect.any(String),
+          nomeDeUsuario: CREDENCIAL_DO_OUTRO.nomeDeUsuario,
+        },
+      });
+
+      const cartao = await cliente.criarCartao({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+      });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!cartao.ok || !baralho.ok) {
+        throw new Error("as criações do cenário deveriam ser aceitas");
+      }
+
+      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+
+      // O acervo do outro Usuário está vazio: nada do primeiro lhe aparece.
+      expect(await outro.listarCartoes()).toEqual({ ok: true, cartoes: [] });
+      expect(await outro.listarBaralhos()).toEqual({ ok: true, baralhos: [] });
+
+      // O conteúdo do primeiro se comporta como inexistente: mesma recusa de
+      // um id que nunca existiu, e nunca um código que revele a existência.
+      const inexistente = await outro.obterBaralho("b-que-nunca-existiu");
+
+      expect(inexistente).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      });
+      expect(await outro.obterBaralho(baralho.baralho.id)).toEqual(inexistente);
+      expect(
+        await outro.editarCartao(cartao.cartao.id, "To run", "Correr"),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+      expect(await outro.excluirCartao(cartao.cartao.id)).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+
+      // O Vínculo entre donos diferentes é impossível (FR-093), e o Baralho do
+      // outro continua sem Cartão algum.
+      const baralhoDoOutro = await outro.criarBaralho({ nome: "Espanhol" });
+
+      if (!baralhoDoOutro.ok) {
+        throw new Error("a criação do cenário deveria ser aceita");
+      }
+
+      expect(
+        await outro.vincular(cartao.cartao.id, baralhoDoOutro.baralho.id),
+      ).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Cartão não encontrado.",
+      });
+      expect(await outro.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            id: baralhoDoOutro.baralho.id,
+            nome: "Espanhol",
+            quantidadeDeCartoes: 0,
+            elegivel: false,
+          },
+        ],
+      });
+
+      // E o acervo do primeiro Usuário permanece exatamente como estava.
+      expect(await cliente.listarCartoes()).toEqual({
+        ok: true,
+        cartoes: [
+          {
+            id: cartao.cartao.id,
+            frente: FRENTE_VALIDA,
+            verso: VERSO_VALIDO,
+            baralhos: [{ id: baralho.baralho.id, nome: NOME_VALIDO }],
+          },
+        ],
+      });
+      expect(await cliente.listarBaralhos()).toEqual({
+        ok: true,
+        baralhos: [
+          {
+            id: baralho.baralho.id,
+            nome: NOME_VALIDO,
+            quantidadeDeCartoes: 1,
+            elegivel: true,
+          },
+        ],
+      });
+    });
+
+    it("não deixa a Credencial em armazenamento, cookie nem endereço (FR-078, FR-079, SC-033)", async () => {
+      const { cliente } = criarAmbiente();
+
+      await cliente.entrar(CREDENCIAL_DE_PROVA);
+      await cliente.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO });
+      await cliente.listarCartoes();
+
+      // Nada é gravado no navegador — nem `localStorage`, nem
+      // `sessionStorage`, nem cookie —, e o endereço não carrega a Credencial.
+      expect(Object.keys(window.localStorage)).toEqual([]);
+      expect(Object.keys(window.sessionStorage)).toEqual([]);
+      expect(document.cookie).toBe("");
+      expect(window.location.href).not.toContain(NOME_DE_USUARIO_DE_PROVA);
+      expect(window.location.href).not.toContain(SENHA_DE_PROVA);
+    });
+  });
+}
 
 describe("resultados idênticos entre os dois Adapters", () => {
   it("a mesma sequência de operações de Cartão produz o mesmo resultado observável", async () => {

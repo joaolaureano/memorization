@@ -10,6 +10,7 @@ import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
 } from "../../src/armazenamento/sqlite/armazenamento.ts";
+import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
  * T005 — `Acervo` cria Cartão pela sua Interface, recusando conteúdo
@@ -25,7 +26,13 @@ let acervo: Acervo;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
-  acervo = criarAcervo(aberto.armazenamento);
+  /**
+   * O acervo é de um **dono**: todo Cartão e todo Baralho pertencem a um
+   * Usuário, e a Interface do `Acervo` recebe o dono na construção (FR-092).
+   */
+  const dono = await criarDonoDeTeste(aberto.usuarios);
+
+  acervo = criarAcervo(aberto.armazenamento, dono);
 });
 
 afterEach(async () => {

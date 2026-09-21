@@ -2,6 +2,7 @@ import type { AddressInfo } from "node:net";
 
 import { afterAll, describe, expect, it } from "vitest";
 
+import { abrirArmazenamentoSqlite } from "../src/armazenamento/sqlite/armazenamento.ts";
 import {
   HOST_LOCAL,
   PortaInvalidaError,
@@ -9,6 +10,8 @@ import {
   opcoesDeEscuta,
   portaConfigurada,
 } from "../src/http/servidor.ts";
+import { criarIdentidade } from "../src/identidade/identidade.ts";
+import { segredoGerado } from "./armazenamento/usuarios-de-teste.ts";
 
 function ehAddressInfo(
   endereco: string | AddressInfo | null,
@@ -58,13 +61,21 @@ describe("constantes e configuração de escuta", () => {
   });
 });
 
+const aberto = await abrirArmazenamentoSqlite(":memory:");
+
+/** O servidor se monta como na aplicação: com o `Identidade` da Credencial. */
+const servidor = criarServidor(
+  criarIdentidade(aberto.usuarios, segredoGerado()),
+);
+
 describe("bind efetivo", () => {
-  const servidor = criarServidor();
 
   afterAll(async () => {
     if (servidor.server.listening) {
       await servidor.close();
     }
+
+    await aberto.encerrar();
   });
 
   it('escuta em "127.0.0.1", nunca em "0.0.0.0" nem "::"', async () => {

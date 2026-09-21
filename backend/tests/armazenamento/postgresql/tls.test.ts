@@ -139,7 +139,7 @@ describe("a conexão de teste é cifrada e verificada", () => {
 
     try {
       expect(
-        await semVerificacao.armazenamento.inserirCartao({
+        await semVerificacao.armazenamento.inserirCartao("dono-um", {
           id: "c1",
           frente: "To walk",
           verso: "Caminhar",
@@ -153,7 +153,9 @@ describe("a conexão de teste é cifrada e verificada", () => {
     const verificado = await abrirArmazenamentoDaBase(nomeDaBase);
 
     try {
-      expect(await verificado.armazenamento.listarCartoes()).toEqual([]);
+      expect(await verificado.armazenamento.listarCartoes("dono-um")).toEqual(
+        [],
+      );
     } finally {
       await verificado.encerrar();
     }

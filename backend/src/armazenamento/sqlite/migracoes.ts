@@ -122,6 +122,56 @@ CREATE TABLE usuario (
 `;
 
 /**
+ * A migração 5 dá **dono** ao acervo — a feature `008-entrar` transforma o
+ * acervo de todos no acervo de cada Usuário (FR-092).
+ *
+ * O SQLite não aceita `ALTER TABLE ADD COLUMN` com `NOT NULL` e chave
+ * estrangeira, e não há como dar dono a Cartões que nasceram sem dono: as três
+ * tabelas são **recriadas**, com as mesmas colunas e os mesmos `CHECK` das
+ * migrações 1 a 3, copiados literalmente delas, mais `usuario_id NOT NULL
+ * REFERENCES usuario(id) ON DELETE CASCADE` e um índice por dono. O acervo
+ * anterior é descartado — perda de dados assumida pelo Product Owner no clarify
+ * e verificada por FR-099 e SC-037 —, e a tabela `usuario` **não** é tocada: os
+ * Usuários da `007` sobrevivem à migração, e é o que permite a cada um voltar a
+ * Entrar depois da recriação.
+ *
+ * `vinculo` continua sem coluna de dono, de propósito: ele herda o dono dos
+ * extremos, e o escopo do `Acervo` impede ligar extremos de Usuários
+ * diferentes. As cascatas são preservadas, e a chave primária composta
+ * `(cartao_id, baralho_id)` continua fazendo o par ser único no esquema
+ * (FR-020, FR-093). As tabelas são derrubadas na ordem que respeita as chaves
+ * estrangeiras, com a conexão já com `PRAGMA foreign_keys = ON`.
+ */
+const ESQUEMA_DONO_NO_ACERVO = `
+DROP TABLE vinculo;
+DROP TABLE baralho;
+DROP TABLE cartao;
+
+CREATE TABLE cartao (
+  id         TEXT PRIMARY KEY,
+  frente     TEXT NOT NULL CHECK (length(trim(frente)) > 0 AND length(frente) <= 1000),
+  verso      TEXT NOT NULL CHECK (length(trim(verso))  > 0 AND length(verso)  <= 1000),
+  usuario_id TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE
+);
+
+CREATE INDEX indice_cartao_por_usuario ON cartao (usuario_id);
+
+CREATE TABLE baralho (
+  id         TEXT PRIMARY KEY,
+  nome       TEXT NOT NULL CHECK (length(trim(nome)) > 0 AND length(nome) <= 100),
+  usuario_id TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE
+);
+
+CREATE INDEX indice_baralho_por_usuario ON baralho (usuario_id);
+
+CREATE TABLE vinculo (
+  cartao_id  TEXT NOT NULL REFERENCES cartao(id)  ON DELETE CASCADE,
+  baralho_id TEXT NOT NULL REFERENCES baralho(id) ON DELETE CASCADE,
+  PRIMARY KEY (cartao_id, baralho_id)
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -131,4 +181,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 2, sql: ESQUEMA_BARALHO },
   { versao: 3, sql: ESQUEMA_VINCULO },
   { versao: 4, sql: ESQUEMA_USUARIO },
+  { versao: 5, sql: ESQUEMA_DONO_NO_ACERVO },
 ];

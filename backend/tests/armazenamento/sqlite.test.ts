@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { bateriaDaPorta } from "./bateria-da-porta.ts";
 import { bateriaDaPortaDeUsuarios } from "./bateria-da-porta-de-usuarios.ts";
+import { criarDonoDeTeste } from "./usuarios-de-teste.ts";
 
 /**
  * T803 — a bateria compartilhada da Porta contra o Adapter do armazenamento
@@ -78,9 +79,11 @@ describe("arquivo local", () => {
     const aberto = await abrirArmazenamentoSqlite(caminho);
 
     try {
+      const dono = await criarDonoDeTeste(aberto.usuarios);
+
       expect(existsSync(caminho)).toBe(true);
-      expect(await aberto.armazenamento.listarCartoes()).toEqual([]);
-      expect(await aberto.armazenamento.listarBaralhos()).toEqual([]);
+      expect(await aberto.armazenamento.listarCartoes(dono)).toEqual([]);
+      expect(await aberto.armazenamento.listarBaralhos(dono)).toEqual([]);
     } finally {
       await aberto.encerrar();
     }
@@ -91,33 +94,48 @@ describe("arquivo local", () => {
 
     const primeira = await abrirArmazenamentoSqlite(caminho);
 
-    await primeira.armazenamento.inserirCartao({
+    /** O acervo tem dono: o Usuário nasce com a base e sobrevive à reabertura. */
+    const dono = await criarDonoDeTeste(primeira.usuarios);
+    const outro = await criarDonoDeTeste(
+      primeira.usuarios,
+      "dono-dois",
+      "bruno.souza",
+    );
+
+    await primeira.armazenamento.inserirCartao(dono, {
       id: "c1",
       frente: "To walk",
       verso: "Caminhar",
     });
-    await primeira.armazenamento.inserirBaralho({ id: "b1", nome: "Inglês" });
-    await primeira.armazenamento.vincular("c1", "b1");
+    await primeira.armazenamento.inserirBaralho(dono, { id: "b1", nome: "Inglês" });
+    await primeira.armazenamento.vincular(dono, "c1", "b1");
     await primeira.encerrar();
 
     const segunda = await abrirArmazenamentoSqlite(caminho);
 
     try {
-      expect(await segunda.armazenamento.listarCartoes()).toEqual([
+      expect(await segunda.armazenamento.listarCartoes(dono)).toEqual([
         { id: "c1", frente: "To walk", verso: "Caminhar" },
       ]);
-      expect(await segunda.armazenamento.listarBaralhos()).toEqual([
+      expect(await segunda.armazenamento.listarBaralhos(dono)).toEqual([
         { id: "b1", nome: "Inglês" },
       ]);
-      expect(await segunda.armazenamento.listarBaralhosDoCartao("c1")).toEqual([
+      expect(await segunda.armazenamento.listarBaralhosDoCartao(dono, "c1")).toEqual([
         { id: "b1", nome: "Inglês" },
       ]);
-      expect(await segunda.armazenamento.listarCartoesDoBaralho("b1")).toEqual([
+      expect(await segunda.armazenamento.listarCartoesDoBaralho(dono, "b1")).toEqual([
         { id: "c1", frente: "To walk", verso: "Caminhar" },
       ]);
-      expect(await segunda.armazenamento.contarCartoesPorBaralho()).toContainEqual(
-        { baralhoId: "b1", quantidadeDeCartoes: 1 },
-      );
+      expect(
+        await segunda.armazenamento.contarCartoesPorBaralho(dono),
+      ).toContainEqual({ baralhoId: "b1", quantidadeDeCartoes: 1 });
+
+      /** O outro Usuário, na mesma base, continua com o acervo vazio. */
+      expect(await segunda.armazenamento.listarCartoes(outro)).toEqual([]);
+      expect(await segunda.armazenamento.obterCartao(outro, "c1")).toEqual({
+        ok: false,
+        erro: "nao_encontrado",
+      });
     } finally {
       await segunda.encerrar();
     }
@@ -127,31 +145,32 @@ describe("arquivo local", () => {
     const caminho = join(DIRETORIO_TEMPORARIO, "persistencia-sem-vinculo.sqlite");
 
     const primeira = await abrirArmazenamentoSqlite(caminho);
+    const dono = await criarDonoDeTeste(primeira.usuarios);
 
-    await primeira.armazenamento.inserirCartao({
+    await primeira.armazenamento.inserirCartao(dono, {
       id: "c1",
       frente: "To walk",
       verso: "Caminhar",
     });
-    await primeira.armazenamento.inserirBaralho({ id: "b1", nome: "Inglês" });
-    await primeira.armazenamento.vincular("c1", "b1");
-    await primeira.armazenamento.desvincular("c1", "b1");
+    await primeira.armazenamento.inserirBaralho(dono, { id: "b1", nome: "Inglês" });
+    await primeira.armazenamento.vincular(dono, "c1", "b1");
+    await primeira.armazenamento.desvincular(dono, "c1", "b1");
     await primeira.encerrar();
 
     const segunda = await abrirArmazenamentoSqlite(caminho);
 
     try {
-      expect(await segunda.armazenamento.obterCartao("c1")).toEqual({
+      expect(await segunda.armazenamento.obterCartao(dono, "c1")).toEqual({
         ok: true,
         valor: { id: "c1", frente: "To walk", verso: "Caminhar" },
       });
-      expect(await segunda.armazenamento.obterBaralho("b1")).toEqual({
+      expect(await segunda.armazenamento.obterBaralho(dono, "b1")).toEqual({
         ok: true,
         valor: { id: "b1", nome: "Inglês" },
       });
-      expect(await segunda.armazenamento.listarBaralhosDoCartao("c1")).toEqual(
-        [],
-      );
+      expect(
+        await segunda.armazenamento.listarBaralhosDoCartao(dono, "c1"),
+      ).toEqual([]);
     } finally {
       await segunda.encerrar();
     }

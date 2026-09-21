@@ -8,7 +8,9 @@ import { MIGRACOES } from "../backend/src/armazenamento/sqlite/migracoes";
 import {
   aguardarProntidao,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   lerVersaoDoEsquema,
@@ -89,13 +91,19 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
       (resposta) => resposta.ok,
     );
 
+    // O Usuário de prova é cadastrado antes de qualquer operação de acervo: o
+    // Cartão e o Baralho desta prova são do acervo dele (FR-090, FR-092).
+    await criarUsuarioDeProva(enderecoDaApi);
+
     // Prepara um Cartão e um Baralho reais, pelas telas das features 001 e
     // 002 — o Vínculo será um ato distinto, na tela desta feature.
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
     await criarCartaoPelaUi(page, CARTAO);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
+    await entrarSeNecessario(page);
     await criarBaralhoPelaUi(page, NOME_DO_BARALHO);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
@@ -105,6 +113,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
 
     // A tela de Vínculos é a página de detalhe do Baralho.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${idDoBaralho}`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
@@ -172,6 +181,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     // Reabrir a tela de Vínculos: o Vínculo persiste, o Baralho continua
     // elegível e o Cartão segue na lista de vinculados.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${idDoBaralho}`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),

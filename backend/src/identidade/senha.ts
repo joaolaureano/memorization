@@ -45,6 +45,20 @@ const PARAMETROS = {
   tamanhoDoHash: TAMANHO_DO_HASH,
 } as const;
 
+/**
+ * Os parâmetros como eles estão gravados ao lado do `hash`. Um hash antigo
+ * continua verificável porque a verificação reconstrói a derivação com os
+ * parâmetros com que ele foi produzido, e não com os parâmetros correntes.
+ */
+interface ParametrosDaDerivacao {
+  algoritmo: string;
+  entrada: string;
+  N: number;
+  r: number;
+  p: number;
+  tamanhoDoHash: number;
+}
+
 /** O que a derivação produz: o sal, o hash e os parâmetros que os explicam. */
 export interface DerivacaoDaSenha {
   sal: Uint8Array;
@@ -52,17 +66,23 @@ export interface DerivacaoDaSenha {
   parametros: string;
 }
 
-/** Deriva a chave com o scrypt do Node, sem bloquear o processo que atende. */
+/**
+ * Deriva a chave com o scrypt do Node, sem bloquear o processo que atende.
+ *
+ * Os parâmetros entram por argumento para que a **verificação** use os do hash
+ * gravado, e a criação, os correntes.
+ */
 function derivarComScrypt(
   entrada: Uint8Array,
   sal: Uint8Array,
+  parametros: ParametrosDaDerivacao,
 ): Promise<Buffer> {
   return new Promise((resolver, recusar) => {
     scrypt(
       entrada,
       sal,
-      TAMANHO_DO_HASH,
-      { N: PARAMETROS.N, r: PARAMETROS.r, p: PARAMETROS.p, maxmem: MEMORIA_MAXIMA },
+      parametros.tamanhoDoHash,
+      { N: parametros.N, r: parametros.r, p: parametros.p, maxmem: MEMORIA_MAXIMA },
       (erro, chave) => {
         if (erro !== null) {
           recusar(erro);
@@ -73,6 +93,31 @@ function derivarComScrypt(
       },
     );
   });
+}
+
+/**
+ * Lê os parâmetros gravados em JSON, com os correntes como retaguarda campo a
+ * campo. Um valor ilegível — que só existiria por corrupção da base — não pode
+ * derrubar a verificação: o pior caso é a derivação resultante não conferir com
+ * o `hash`, e a Credencial ser recusada (FR-088).
+ */
+function parametrosLidos(parametros: string): ParametrosDaDerivacao {
+  const lidos = JSON.parse(parametros) as Partial<ParametrosDaDerivacao>;
+
+  function inteiro(valor: unknown, corrente: number): number {
+    return typeof valor === "number" && Number.isInteger(valor) && valor > 0
+      ? valor
+      : corrente;
+  }
+
+  return {
+    algoritmo: typeof lidos.algoritmo === "string" ? lidos.algoritmo : PARAMETROS.algoritmo,
+    entrada: typeof lidos.entrada === "string" ? lidos.entrada : PARAMETROS.entrada,
+    N: inteiro(lidos.N, PARAMETROS.N),
+    r: inteiro(lidos.r, PARAMETROS.r),
+    p: inteiro(lidos.p, PARAMETROS.p),
+    tamanhoDoHash: inteiro(lidos.tamanhoDoHash, PARAMETROS.tamanhoDoHash),
+  };
 }
 
 /**
@@ -91,11 +136,36 @@ export async function derivarDaSenha(
 ): Promise<DerivacaoDaSenha> {
   const sal = randomBytes(TAMANHO_DO_SAL);
   const entrada = createHmac("sha256", segredo).update(senha, "utf8").digest();
-  const hash = await derivarComScrypt(entrada, sal);
+  const hash = await derivarComScrypt(entrada, sal, PARAMETROS);
 
   return {
     sal: new Uint8Array(sal),
     hash: new Uint8Array(hash),
     parametros: JSON.stringify(PARAMETROS),
   };
+}
+
+/**
+ * Reconstrói a derivação com o `sal` e os `parametros` **gravados**, e devolve
+ * a chave candidata para a conferência.
+ *
+ * É o outro lado de `derivarDaSenha`: a criação escolhe um `sal` novo e os
+ * parâmetros correntes; a verificação precisa repetir exatamente a derivação
+ * que produziu o hash guardado, e é por isso que ela não gera nem escolhe nada
+ * — nem toca no armazenamento (FR-089). Os parâmetros entram por argumento
+ * para que um hash antigo continue verificável quando os correntes evoluírem.
+ *
+ * Nenhum caminho desta função diz se a Senha está certa: quem compara as duas
+ * chaves em tempo constante é o `Identidade`.
+ */
+export async function derivarDaSenhaCom(
+  segredo: string,
+  senha: string,
+  sal: Uint8Array,
+  parametros: string,
+): Promise<Uint8Array> {
+  const entrada = createHmac("sha256", segredo).update(senha, "utf8").digest();
+  const hash = await derivarComScrypt(entrada, sal, parametrosLidos(parametros));
+
+  return new Uint8Array(hash);
 }

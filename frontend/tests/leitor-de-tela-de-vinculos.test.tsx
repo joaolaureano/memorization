@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
@@ -25,7 +26,7 @@ interface AcervoDeTeste {
 }
 
 async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const primeiroCartao = await cliente.criarCartao({
     frente: "To walk",
     verso: "Caminhar",
@@ -120,7 +121,7 @@ describe("PaginaDoBaralho para leitor de tela", () => {
   });
 
   it("o estado vazio sem Cartões é uma região ativa polida e nomeada (FR-062, FR-065)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
     if (!baralho.ok) {

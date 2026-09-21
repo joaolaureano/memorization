@@ -10,6 +10,15 @@ import {
   aplicarMigracoes,
 } from "../../src/armazenamento/sqlite/esquema.ts";
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
+import {
+  contarLinhas,
+  gravarBaralho,
+  gravarBaralhoSemDono,
+  gravarCartao,
+  gravarCartaoSemDono,
+  gravarDono,
+  gravarVinculo,
+} from "./banco-de-teste.ts";
 
 /**
  * A versão mais recente da lista de migrações — o que uma base nova registra
@@ -49,20 +58,33 @@ function existeTabela(banco: DatabaseSync, nome: string): boolean {
   );
 }
 
+/**
+ * O dono das linhas destes cenários. Todo Cartão e todo Baralho do acervo tem
+ * dono desde a migração 5 (FR-092), e é por isso que as gravações diretas
+ * começam pelo Usuário; as gravações da base **anterior** à migração, essas,
+ * não têm dono algum.
+ */
+let dono: string;
+
 function inserirCartao(banco: DatabaseSync, id: string): void {
-  banco
-    .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
-    .run(id, "To walk", "Caminhar");
+  gravarCartao(banco, dono, id);
 }
 
 function inserirBaralho(banco: DatabaseSync, id: string, nome: string): void {
-  banco.prepare("INSERT INTO baralho (id, nome) VALUES (?, ?)").run(id, nome);
+  gravarBaralho(banco, dono, id, nome);
 }
 
 function inserirVinculo(banco: DatabaseSync, cartaoId: string, baralhoId: string): void {
-  banco
-    .prepare("INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)")
-    .run(cartaoId, baralhoId);
+  gravarVinculo(banco, cartaoId, baralhoId);
+}
+
+/** As gravações da base anterior à migração 5, quando não há dono a informar. */
+function inserirCartaoSemDono(banco: DatabaseSync, id: string): void {
+  gravarCartaoSemDono(banco, id);
+}
+
+function inserirBaralhoSemDono(banco: DatabaseSync, id: string, nome: string): void {
+  gravarBaralhoSemDono(banco, id, nome);
 }
 
 describe("migração 3 — base da feature 002 com dados reais", () => {
@@ -78,16 +100,17 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
 
       try {
         aplicarMigracoes(banco, MIGRACOES.slice(0, 2));
-        inserirCartao(banco, "c1");
-        inserirCartao(banco, "c2");
-        inserirBaralho(banco, "b1", "Inglês");
-        inserirBaralho(banco, "b2", "Espanhol");
+        inserirCartaoSemDono(banco, "c1");
+        inserirCartaoSemDono(banco, "c2");
+        inserirBaralhoSemDono(banco, "b1", "Inglês");
+        inserirBaralhoSemDono(banco, "b2", "Espanhol");
       } finally {
         banco.close();
       }
 
-      // A reabertura migra até a versão corrente, criando apenas a tabela
-      // vinculo (e, depois dela, a usuario, que não é deste cenário).
+      // A reabertura migra até a versão corrente: cria vinculo (3) e usuario
+      // (4), e a migração 5 recria as três tabelas do acervo com dono — o
+      // acervo da feature 002, que não tem dono, é descartado (FR-099).
       banco = abrirBanco(caminho);
 
       try {
@@ -95,37 +118,31 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
         expect(existeTabela(banco, "cartao")).toBe(true);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
+        expect(existeTabela(banco, "usuario")).toBe(true);
+        expect(contarLinhas(banco, "cartao")).toBe(0);
+        expect(contarLinhas(banco, "baralho")).toBe(0);
+        expect(contarLinhas(banco, "vinculo")).toBe(0);
 
-        const cartoes = banco
-          .prepare("SELECT id FROM cartao ORDER BY id")
-          .all();
+        // A tabela vinculo recriada é a mesma de antes: chave primária
+        // composta e cascata nas duas chaves estrangeiras.
+        const colunas = banco.prepare("PRAGMA table_info(vinculo)").all();
 
-        expect(cartoes.map((linha) => linha.id)).toEqual(["c1", "c2"]);
-
-        const baralhos = banco
-          .prepare("SELECT id, nome FROM baralho ORDER BY id")
-          .all();
-
-        expect(baralhos).toEqual([
-          { id: "b1", nome: "Inglês" },
-          { id: "b2", nome: "Espanhol" },
+        expect(colunas.map((coluna) => coluna.name)).toEqual([
+          "cartao_id",
+          "baralho_id",
         ]);
+        expect(colunas.map((coluna) => coluna.pk)).toEqual([1, 2]);
       } finally {
         banco.close();
       }
 
-      // Reabrir de novo não reaplica a migração 3: a versão permanece 4.
+      // Reabrir de novo não reaplica migração alguma: a versão permanece a
+      // corrente, e as tabelas continuam onde estavam.
       banco = abrirBanco(caminho);
 
       try {
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "vinculo")).toBe(true);
-        expect(
-          banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,
-        ).toBe(2);
-        expect(
-          banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
-        ).toBe(2);
       } finally {
         banco.close();
       }
@@ -139,6 +156,7 @@ let banco: DatabaseSync;
 
 beforeEach(() => {
   banco = abrirBanco(":memory:");
+  dono = gravarDono(banco);
 });
 
 afterEach(() => {

@@ -17,7 +17,10 @@ import {
 } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import { registrarRotasDeUsuarios } from "../../src/http/rotas.ts";
-import { criarIdentidade } from "../../src/identidade/identidade.ts";
+import {
+  criarIdentidade,
+  type Identidade,
+} from "../../src/identidade/identidade.ts";
 import { VARIAVEL_DO_SEGREDO } from "../../src/identidade/segredo.ts";
 
 /**
@@ -61,14 +64,13 @@ function senhaDe(tamanho: number): string {
 
 let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let identidade: Identidade;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-  registrarRotasDeUsuarios(
-    servidor,
-    criarIdentidade(aberto.usuarios, SEGREDO),
-  );
+  identidade = criarIdentidade(aberto.usuarios, SEGREDO);
+  servidor = criarServidor(identidade);
+  registrarRotasDeUsuarios(servidor, identidade);
 });
 
 afterEach(async () => {
@@ -311,13 +313,15 @@ describe("POST /usuarios — armazenamento indisponível", () => {
 
     await fechado.encerrar();
 
-    /** O mesmo Adapter já encerrado: a falha é real, e não simulada. */
-    const outro = criarServidor();
+    /**
+     * O mesmo Adapter já encerrado: a falha é real, e não simulada. O Cadastro
+     * é isento de Credencial (FR-097), de modo que a falha do armazenamento
+     * continua alcançando o handler.
+     */
+    const outraIdentidade = criarIdentidade(fechado.usuarios, SEGREDO);
+    const outro = criarServidor(outraIdentidade);
 
-    registrarRotasDeUsuarios(
-      outro,
-      criarIdentidade(fechado.usuarios, SEGREDO),
-    );
+    registrarRotasDeUsuarios(outro, outraIdentidade);
 
     try {
       const resposta = await outro.inject({
@@ -337,7 +341,8 @@ describe("POST /usuarios — armazenamento indisponível", () => {
 
     /** O `afterEach` fecha um armazenamento novo, e não o já encerrado. */
     aberto = await abrirArmazenamentoSqlite(":memory:");
-    servidor = criarServidor();
+    identidade = criarIdentidade(aberto.usuarios, SEGREDO);
+    servidor = criarServidor(identidade);
   });
 });
 

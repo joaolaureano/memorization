@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
-import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 
 /**
@@ -124,7 +124,7 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 
 describe("PaginaDeCartoes por teclado", () => {
   it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Criar Cartão (FR-054, SC-017)", async () => {
-    render(<PaginaDeCartoes cliente={new ClienteEmMemoria()} />);
+    render(<PaginaDeCartoes cliente={clienteDeProva()} />);
     await screen.findByText(/ainda não há Cartões/i);
 
     const campoFrente = screen.getByLabelText("Frente");
@@ -161,7 +161,7 @@ describe("PaginaDeCartoes por teclado", () => {
   it.each(CASOS_DE_RECUSA)(
     "numa recusa $descricao, o foco vai ao campo $campo e o conteúdo permanece (FR-055)",
     async (caso) => {
-      render(<PaginaDeCartoes cliente={new ClienteEmMemoria()} />);
+      render(<PaginaDeCartoes cliente={clienteDeProva()} />);
       await screen.findByText(/ainda não há Cartões/i);
 
       const campoFrente = screen.getByLabelText("Frente");
@@ -192,7 +192,7 @@ describe("PaginaDeCartoes por teclado", () => {
   );
 
   it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-055)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeCartoes cliente={cliente} />);
     await screen.findByText(/ainda não há Cartões/i);
 

@@ -32,6 +32,12 @@ import {
  * tentativa. FR-083: a conclusão é confirmada de forma explícita, por região
  * ativa (FR-082). Depois do sucesso, os dois campos de Senha são apagados do
  * estado do componente — a Senha não permanece na página (FR-078).
+ *
+ * FR-097: o Cadastro é a única tela além de "Entrar" alcançável sem Credencial,
+ * e oferece a volta a "Entrar"; concluído o Cadastro, oferece Entrar em seguida
+ * — o próximo passo de quem acabou de criar o Usuário. As duas ofertas são
+ * exclusivas, de modo que exista uma única ação com o nome "Entrar" em cada
+ * momento da tela.
  */
 
 /**
@@ -153,6 +159,13 @@ export function PaginaDeCadastro({
         </p>
       )}
 
+      {usuarioCadastrado !== null && (
+        // FR-097: concluído o Cadastro, a tela oferece Entrar em seguida.
+        <p className="acesso-a-entrada">
+          <a href="#/entrar">Entrar</a>
+        </p>
+      )}
+
       <form className="formulario-de-cadastro" onSubmit={cadastrar}>
         <div className="campo">
           <label htmlFor="campo-nome-de-usuario">Nome de usuário</label>
@@ -244,6 +257,13 @@ export function PaginaDeCadastro({
           Criar conta
         </button>
       </form>
+
+      {usuarioCadastrado === null && (
+        // FR-097: a volta a "Entrar", o caminho de quem já tem Usuário.
+        <p className="acesso-a-entrada">
+          Já tem uma conta? <a href="#/entrar">Entrar</a>
+        </p>
+      )}
     </div>
   );
 }

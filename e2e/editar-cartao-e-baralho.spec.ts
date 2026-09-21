@@ -8,7 +8,9 @@ import {
   criarBaralhoPelaApi,
   criarCartaoPelaApi,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   listarCartoesComBaralhosPelaApi,
@@ -70,6 +72,11 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       (resposta) => resposta.ok,
     );
 
+    // Depois de `008-entrar`, o acervo é por Usuário: o Usuário de prova é
+    // cadastrado antes de preparar o Cartão e o Baralho, que são dele
+    // (FR-090, FR-092).
+    await criarUsuarioDeProva(enderecoDaApi);
+
     // Prepara um Cartão e um Baralho reais e os vincula pela API real; o que
     // está sob prova são as operações de edição da tela.
     const cartao = await criarCartaoPelaApi(enderecoDaApi, CARTAO);
@@ -79,8 +86,10 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
 
     await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
 
-    // A lista de Cartões já exibe o nome original do Baralho vinculado.
+    // A lista de Cartões já exibe o nome original do Baralho vinculado — e é
+    // alcançada depois de Entrar (FR-097).
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
@@ -94,6 +103,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
 
     // Renomeia o Baralho pela tela real de detalhe e confere o alcance.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_ORIGINAL_DO_BARALHO }),
@@ -125,6 +135,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // A propagação aparece na lista de Cartões: o Cartão passou a exibir o
     // novo nome do Baralho vinculado.
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),

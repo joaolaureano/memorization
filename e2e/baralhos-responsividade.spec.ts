@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import {
+  entrarPelaUi,
+  prepararEntradaInterceptada,
+} from './servidores-locais';
+
 // T111 — telas utilizáveis em largura de telefone, com 10 Baralhos
 // (FR-042, SC-011; specs/002-criar-baralho/tasks.md).
 //
@@ -49,6 +54,10 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
 
   const baralhos = baralhosDeterministicos();
 
+  // A prova entra antes de medir: sem Credencial, a única tela é "Entrar"
+  // (FR-097, FR-090).
+  const credencial = await prepararEntradaInterceptada(page);
+
   await page.route(/\/baralhos$/, async (rota) => {
     if (rota.request().method() === 'GET') {
       await rota.fulfill({
@@ -63,6 +72,7 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
   });
 
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos`);
+  await entrarPelaUi(page, credencial);
 
   // A tela real de Baralhos carrega: cabeçalho, formulário de criação e a
   // lista com os 10 Baralhos do acervo interceptado.

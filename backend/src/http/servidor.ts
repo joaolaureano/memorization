@@ -2,22 +2,26 @@ import type { AddressInfo } from "node:net";
 
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 
-import type { Acervo } from "../acervo/acervo.ts";
 import type { Identidade } from "../identidade/identidade.ts";
+import { exigirCredencial } from "./credencial.ts";
 import {
   CORPO_INVALIDO,
+  registrarRotaDeEntrada,
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
   registrarRotasDeUsuarios,
+  type AcervoDeUsuario,
 } from "./rotas.ts";
 
 /**
  * Servidor HTTP local.
  *
- * A aplicação não possui autenticação. Por isso, a única configuração segura é
- * escutar exclusivamente no loopback (127.0.0.1). A constante abaixo expressa
- * essa intenção; `assegurarEscutaLocal` a impõe em runtime, verificando o
- * endereço efetivamente vinculado após o `listen`.
+ * A Credencial é exigida em toda rota, exceto o Cadastro, a prova de vida e o
+ * pré-voo de CORS (FR-090). O transporte continua sendo local, e é por isso que
+ * a única configuração segura segue sendo escutar exclusivamente no loopback
+ * (127.0.0.1). A constante abaixo expressa essa intenção;
+ * `assegurarEscutaLocal` a impõe em runtime, verificando o endereço efetivamente
+ * vinculado após o `listen`.
  */
 export const HOST_LOCAL = "127.0.0.1";
 
@@ -40,10 +44,17 @@ export const CAMINHO_DOS_BARALHOS = "/baralhos";
 export const CAMINHO_DOS_USUARIOS = "/usuarios";
 
 /**
+ * Caminho da rota de Entrar (contrato `api-entrar.md`). Recebe o mesmo
+ * tratamento de CORS mínimo das demais rotas, e o pré-voo dela passa a pedir
+ * `authorization` entre os cabeçalhos permitidos.
+ */
+export const CAMINHO_DE_ENTRAR = "/entrar";
+
+/**
  * Erro lançado quando o servidor está escutando fora do loopback.
  *
- * A ausência de autenticação torna inegociável que o processo não fique
- * acessível pela rede; qualquer desvio deve abortar a inicialização.
+ * A Credencial protege o acervo, e nunca o transporte; escutar fora do loopback
+ * exporia o serviço à rede, e qualquer desvio deve abortar a inicialização.
  */
 export class EscutaInseguraError extends Error {}
 
@@ -89,23 +100,41 @@ export function opcoesDeEscuta(env: NodeJS.ProcessEnv = process.env): {
 
 /**
  * Registra o pré-voo de CORS para um caminho. O conjunto de métodos cobre as
- * operações de leitura e escrita do Acervo; os cabeçalhos pedidos pelo
- * frontend são exatamente `content-type`, único exigido pelos `fetch` de JSON.
+ * operações de leitura e escrita do Acervo; os cabeçalhos permitidos são
+ * `content-type`, exigido pelos `fetch` de JSON, e `authorization`, **exigido
+ * pela Credencial** que agora acompanha toda requisição: sem ele o navegador
+ * recusa o pré-voo dos `fetch` que carregam o cabeçalho (FR-090).
  */
 function permitirPreVoo(servidor: FastifyInstance, caminho: string): void {
   servidor.options(caminho, async (_requisicao, resposta) => {
     resposta
       .header("access-control-allow-origin", "*")
       .header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
-      .header("access-control-allow-headers", "content-type")
+      .header("access-control-allow-headers", "content-type, authorization")
       .header("access-control-max-age", "86400");
 
     return resposta.code(204).send();
   });
 }
 
-export function criarServidor(): FastifyInstance {
+/**
+ * O servidor da aplicação, com o hook da Credencial e as respostas comuns.
+ *
+ * O `Identidade` entra pela construção porque é ele quem verifica a Credencial:
+ * **não há como montar um servidor sem credencial**, e é por isso que nenhuma
+ * rota nasce desprotegida (FR-090). As rotas são registradas sobre o servidor
+ * já com o hook, e nenhuma delas repete a verificação.
+ */
+export function criarServidor(identidade: Identidade): FastifyInstance {
   const servidor = Fastify();
+
+  /**
+   * O ponto único da verificação, registrado **antes** das rotas: daqui em
+   * diante toda rota exige Credencial válida, menos as três isentas do
+   * contrato.
+   */
+  exigirCredencial(servidor, identidade);
+
   servidor.get("/health", async () => ({ status: "ok" }));
 
   /**
@@ -133,10 +162,10 @@ export function criarServidor(): FastifyInstance {
    * content-type application/json torna as requisições com corpo não simples —
    * e impede a leitura das respostas. Os caminhos parametrizados de edição,
    * exclusão e Vínculo recebem o mesmo tratamento das rotas de coleção, e
-   * `/usuarios` entra na mesma lista com os mesmos métodos e cabeçalhos. Como
-   * a aplicação não possui autenticação e escuta exclusivamente em 127.0.0.1,
-   * permitir qualquer origem é a configuração mínima segura — o serviço não é
-   * alcançável pela rede.
+   * `/usuarios` e `/entrar` entram na mesma lista com os mesmos métodos e
+   * cabeçalhos, agora incluindo `authorization`. Como a aplicação escuta
+   * exclusivamente em 127.0.0.1, permitir qualquer origem é a configuração
+   * mínima segura — o serviço não é alcançável pela rede.
    */
   for (const caminho of [
     CAMINHO_DOS_CARTOES,
@@ -146,6 +175,7 @@ export function criarServidor(): FastifyInstance {
     "/baralhos/:baralhoId/vinculos",
     "/baralhos/:baralhoId/vinculos/:cartaoId",
     CAMINHO_DOS_USUARIOS,
+    CAMINHO_DE_ENTRAR,
   ]) {
     permitirPreVoo(servidor, caminho);
   }
@@ -158,7 +188,8 @@ export function criarServidor(): FastifyInstance {
       caminho.startsWith("/cartoes/") ||
       caminho === CAMINHO_DOS_BARALHOS ||
       caminho.startsWith("/baralhos/") ||
-      caminho === CAMINHO_DOS_USUARIOS
+      caminho === CAMINHO_DOS_USUARIOS ||
+      caminho === CAMINHO_DE_ENTRAR
     ) {
       resposta.header("access-control-allow-origin", "*");
     }
@@ -173,6 +204,9 @@ export function criarServidor(): FastifyInstance {
  * Invariante de runtime: o socket aceito precisa estar vinculado exatamente a
  * `HOST_LOCAL`. Não basta declarar `host` no `listen`; o endereço efetivo é
  * conferido depois que o sistema operacional já vinculou a porta.
+ *
+ * A Credencial não substitui esta invariante: ela protege o acervo de outro
+ * Usuário, e não a máquina de estranhos na rede.
  */
 export function assegurarEscutaLocal(servidor: FastifyInstance): void {
   const endereco = servidor.server.address();
@@ -180,8 +214,8 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
   if (endereco === null || typeof endereco === "string") {
     throw new EscutaInseguraError(
       "Não foi possível determinar o endereço efetivamente vinculado pelo servidor. " +
-        "Como a aplicação não possui autenticação, ela deve escutar exclusivamente " +
-        `no loopback (${HOST_LOCAL}). A inicialização foi abortada.`,
+        `A aplicação deve escutar exclusivamente no loopback (${HOST_LOCAL}). ` +
+        "A inicialização foi abortada.",
     );
   }
 
@@ -190,22 +224,30 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
   if (info.address !== HOST_LOCAL) {
     throw new EscutaInseguraError(
       `O servidor está escutando em ${info.address}, fora do loopback (${HOST_LOCAL}). ` +
-        "Como a aplicação não possui autenticação, isso expõe o serviço à rede. " +
-        "A inicialização foi abortada.",
+        "Isso expõe o serviço à rede. A inicialização foi abortada.",
     );
   }
 }
 
+/**
+ * Sobe o servidor com todas as rotas do contrato.
+ *
+ * O `Acervo` entra como **construtor por Usuário** (`acervoDe`), e não como
+ * instância: cada requisição recebe o acervo de quem Entrou, criado com o
+ * `usuarioId` que o hook decorou (FR-092). Nenhum `Acervo` de ninguém é
+ * guardado entre requisições, e nada de Credencial atravessa a composição.
+ */
 export async function iniciarServidor(
   env: NodeJS.ProcessEnv = process.env,
-  acervo: Acervo,
   identidade: Identidade,
+  acervoDe: AcervoDeUsuario,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
-  const servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, acervo);
-  registrarRotasDeBaralhos(servidor, acervo);
+  const servidor = criarServidor(identidade);
+  registrarRotasDeCartoes(servidor, acervoDe);
+  registrarRotasDeBaralhos(servidor, acervoDe);
   registrarRotasDeUsuarios(servidor, identidade);
+  registrarRotaDeEntrada(servidor);
 
   await servidor.listen(opcoes);
 

@@ -12,14 +12,17 @@ import {
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
 
 /**
- * T601 — a migração 4 cria a tabela `usuario` preservando a base instalada da
- * feature `006`.
+ * T601 — a migração 4 cria a tabela `usuario`, e a tabela criada é a que
+ * sobrevive a todas as migrações seguintes.
  *
- * O cenário central reconstrói uma base **já instalada**: `cartao`, `baralho` e
- * `vinculo` na versão 3, com Cartões, Baralhos e Vínculos reais gravados. A
- * reabertura pelo Adapter do armazenamento local aplica a migração 4, e nada do
- * que existia é perdido (FR-040). Reabrir de novo não reaplica nada: a
- * comparação é pela versão registrada, e reaplicar o `CREATE TABLE` falharia.
+ * O cenário central reconstrói uma base **já instalada pela feature 006**:
+ * `cartao`, `baralho` e `vinculo` na versão 3, com Cartões, Baralhos e Vínculos
+ * reais gravados. A reabertura pelo Adapter do armazenamento local sobe até a
+ * versão corrente e cria a tabela `usuario` (FR-040); o acervo daquela base,
+ * que não tem dono, é descartado pela migração 5 da `008-entrar` (FR-099) — a
+ * prova do descarte está em `tests/acervo/migracao-dono.test.ts`. Reabrir de
+ * novo não reaplica nada: a comparação é pela versão registrada, e reaplicar o
+ * `CREATE TABLE` falharia.
  *
  * As restrições são verificadas direto no SQLite em memória, porque é a rede de
  * segurança do banco que está sob verificação: a `CHECK` recusa Nome de usuário
@@ -61,7 +64,7 @@ function recusaPorAlfabeto(): RegExp {
 }
 
 describe("migração 4 — base instalada da feature 006 com dados reais", () => {
-  it("cria usuario preservando Cartões, Baralhos e Vínculos, sem reaplicar a migração", () => {
+  it("cria usuario, sobe até a versão corrente sem reaplicar migração e descarta o acervo sem dono", () => {
     const diretorio = mkdtempSync(join(tmpdir(), "identidade-usuario-"));
 
     try {
@@ -88,7 +91,11 @@ describe("migração 4 — base instalada da feature 006 com dados reais", () =>
         banco.close();
       }
 
-      /** A reabertura migra até a versão corrente, criando só a tabela nova. */
+      /**
+       * A reabertura migra até a versão corrente: cria `usuario` (4) e recria
+       * as três tabelas do acervo com dono (5). O acervo da feature 006 não
+       * tem dono a quem ser dado, e é por isso que ele é descartado (FR-099).
+       */
       banco = abrirBanco(caminho);
 
       try {
@@ -96,33 +103,31 @@ describe("migração 4 — base instalada da feature 006 com dados reais", () =>
         expect(existeTabela(banco, "usuario")).toBe(true);
 
         expect(banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total)
-          .toBe(2);
+          .toBe(0);
         expect(
-          banco.prepare("SELECT id, nome FROM baralho ORDER BY id").all(),
-        ).toEqual([{ id: "b1", nome: "Inglês" }]);
+          banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
+        ).toBe(0);
         expect(
-          banco
-            .prepare("SELECT cartao_id, baralho_id FROM vinculo")
-            .all(),
-        ).toEqual([{ cartao_id: "c1", baralho_id: "b1" }]);
+          banco.prepare("SELECT count(*) AS total FROM vinculo").get()?.total,
+        ).toBe(0);
       } finally {
         banco.close();
       }
 
-      /** Reabrir de novo não reaplica a migração 4 nem perde nada. */
+      /** Reabrir de novo não reaplica migração alguma e nada muda. */
       banco = abrirBanco(caminho);
 
       try {
         expect(versaoAtual(banco)).toBe(VERSAO_CORRENTE);
         expect(existeTabela(banco, "usuario")).toBe(true);
         expect(banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total)
-          .toBe(2);
+          .toBe(0);
         expect(
           banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
-        ).toBe(1);
+        ).toBe(0);
         expect(
           banco.prepare("SELECT count(*) AS total FROM vinculo").get()?.total,
-        ).toBe(1);
+        ).toBe(0);
       } finally {
         banco.close();
       }

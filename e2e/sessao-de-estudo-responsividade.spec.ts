@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import {
+  entrarPelaUi,
+  prepararEntradaInterceptada,
+} from './servidores-locais';
+
 // T307 — Sessão de estudo utilizável em largura de telefone e em português
 // (FR-042, FR-046; specs/004-sessao-de-estudo/tasks.md).
 //
@@ -50,7 +55,12 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
     await rota.fallback();
   });
 
+  // A prova entra antes de medir: sem Credencial, a única tela é "Entrar"
+  // (FR-097, FR-090).
+  const credencial = await prepararEntradaInterceptada(page);
+
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1/estudo`);
+  await entrarPelaUi(page, credencial);
 
   await expect(
     page.getByRole('heading', { level: 1, name: 'Estudar Inglês' }),

@@ -8,6 +8,7 @@ import {
   descartarBasesDeTeste,
 } from "./base-de-teste.ts";
 import { servidorDeTeste } from "./servidor-de-teste.ts";
+import { criarDonoDeTeste } from "../usuarios-de-teste.ts";
 
 /**
  * T902 — cada chamada da fábrica de teste cria uma **base nova e vazia**,
@@ -49,14 +50,17 @@ describe("a base de cada cenário", () => {
     const segunda = await criarArmazenamentoDeTeste();
 
     try {
-      await primeira.armazenamento.inserirCartao({
+      /** O acervo é de um Usuário: as duas bases são independentes (FR-092). */
+      const dono = await criarDonoDeTeste(primeira.usuarios);
+
+      await primeira.armazenamento.inserirCartao(dono, {
         id: "c1",
         frente: "To walk",
         verso: "Caminhar",
       });
 
-      expect(await primeira.armazenamento.listarCartoes()).toHaveLength(1);
-      expect(await segunda.armazenamento.listarCartoes()).toEqual([]);
+      expect(await primeira.armazenamento.listarCartoes(dono)).toHaveLength(1);
+      expect(await segunda.armazenamento.listarCartoes(dono)).toEqual([]);
     } finally {
       await primeira.encerrar();
       await segunda.encerrar();
@@ -76,8 +80,9 @@ describe("a base de cada cenário", () => {
 
   it("encerrar fecha o conjunto, descarta a base e não falha no encerramento repetido", async () => {
     const base = await abrirBaseDeTeste("descarte");
+    const dono = await criarDonoDeTeste(base.usuarios);
 
-    await base.armazenamento.inserirCartao({
+    await base.armazenamento.inserirCartao(dono, {
       id: "c1",
       frente: "To walk",
       verso: "Caminhar",

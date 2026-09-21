@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import {
+  entrarPelaUi,
+  prepararEntradaInterceptada,
+} from './servidores-locais';
+
 // T213 — tela de Vínculos utilizável em largura de telefone
 // (FR-042; specs/003-vincular-cartao-baralho/tasks.md).
 //
@@ -51,6 +56,10 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
   expect(browserName).toBe('chromium');
 
   const cartoes = cartoesDeterministicos();
+
+  // A prova entra antes de medir: sem Credencial, a única tela é "Entrar"
+  // (FR-097, FR-090).
+  const credencial = await prepararEntradaInterceptada(page);
   const vinculados = cartoes
     .slice(0, QUANTIDADE_DE_VINCULADOS)
     .map(({ id, frente, verso }) => ({ id, frente, verso }));
@@ -87,6 +96,7 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
   });
 
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1`);
+  await entrarPelaUi(page, credencial);
 
   // A tela real de Vínculos carrega: o Baralho, a elegibilidade e as duas
   // listas — a dos vinculados e a dos ainda não vinculados.

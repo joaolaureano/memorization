@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
@@ -69,7 +70,7 @@ function apertarEnter(elemento: HTMLElement): void {
 }
 
 async function criarCartao(): Promise<ClienteEmMemoria> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const cartao = await cliente.criarCartao({
     frente: "To walk",
     verso: "Caminhar",
@@ -86,7 +87,7 @@ async function criarBaralho(): Promise<{
   cliente: ClienteEmMemoria;
   idDoBaralho: string;
 }> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
   if (!baralho.ok) {

@@ -9,7 +9,9 @@ import {
   criarBaralhoPelaApi,
   criarCartaoPelaApi,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   portaLivre,
@@ -79,9 +81,13 @@ test("edição e exclusão de Cartão permanecem utilizáveis e sem rolagem hori
       (resposta) => resposta.ok,
     );
 
+    // Depois de `008-entrar`, o acervo é por Usuário: a prova cadastra o
+    // Usuário de prova e entra antes de operar (FR-090, FR-097).
+    await criarUsuarioDeProva(enderecoDaApi);
     await criarCartaoPelaApi(enderecoDaApi, CARTAO);
 
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
     await page.getByRole("button", { name: "Editar" }).click();
@@ -131,6 +137,8 @@ test("renomeação e exclusão de Baralho permanecem utilizáveis e sem rolagem 
       (resposta) => resposta.ok,
     );
 
+    await criarUsuarioDeProva(enderecoDaApi);
+
     const cartao = await criarCartaoPelaApi(enderecoDaApi, CARTAO);
     const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
       nome: NOME_DO_BARALHO,
@@ -139,6 +147,7 @@ test("renomeação e exclusão de Baralho permanecem utilizáveis e sem rolagem 
     await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
 
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),

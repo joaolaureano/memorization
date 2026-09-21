@@ -1,14 +1,14 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo } from "../../src/acervo/acervo.ts";
 import {
-  abrirArmazenamentoSqlite,
-  type ArmazenamentoSqliteAberto,
-} from "../../src/armazenamento/sqlite/armazenamento.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+  montarServidorDeContrato,
+  pedirComCredencial,
+  type ServidorDeContrato,
+} from "./apoio-de-contrato.ts";
 import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
+
 
 /**
  * T007 — contrato HTTP de `POST /cartoes`
@@ -29,19 +29,32 @@ const RECUSA_DE_CORPO_INVALIDO = {
   mensagem: "O corpo da requisição não é válido.",
 };
 
-let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
+  /**
+   * O servidor é montado como na aplicação, com o hook que exige a Credencial:
+   * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
+   */
+  contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+  registrarRotasDeCartoes(servidor, acervoDe);
+  });
+  servidor = contrato.servidor;
 });
 
 afterEach(async () => {
-  await servidor.close();
-  await aberto.encerrar();
+  await contrato.encerrar();
 });
+
+/**
+ * Envia a requisição com a Credencial do Usuário que entrou: sem ela, nenhuma
+ * rota de acervo roda (FR-090), e é assim que todas as chamadas deste arquivo
+ * a apresentam.
+ */
+function pedir(requisicao: InjectOptions) {
+  return pedirComCredencial(servidor, contrato.credencial, requisicao);
+}
 
 /**
  * Envia `POST /cartoes`. `corpo` ausente reproduz requisição sem corpo;
@@ -51,7 +64,7 @@ function postarCartao(
   corpo?: object | string,
   cabecalhos: Record<string, string> = {},
 ) {
-  return servidor.inject({
+  return pedir({
     method: "POST",
     url: "/cartoes",
     headers: cabecalhos,
@@ -98,7 +111,7 @@ describe("POST /cartoes — criação conforme o contrato", () => {
       verso: VERSO_VALIDO,
     });
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 
@@ -168,7 +181,7 @@ describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo",
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([]);
   });
 
@@ -178,7 +191,7 @@ describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo",
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([]);
   });
 
@@ -190,7 +203,7 @@ describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo",
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([]);
   });
 

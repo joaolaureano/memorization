@@ -357,15 +357,26 @@ const ARMAZENAMENTO_INDISPONIVEL = {
 } as const;
 
 /**
- * Cria o `Acervo` sobre a Porta de armazenamento informada — o Adapter do
- * armazenamento local na execução local, o de PostgreSQL na nuvem.
+ * Cria o `Acervo` do Usuário `usuarioId` sobre a Porta de armazenamento
+ * informada — o Adapter do armazenamento local na execução local, o de
+ * PostgreSQL na nuvem.
+ *
+ * O **dono entra pela construção**, e não por cada operação: a Interface
+ * pública do Module não muda, e o escopo por proprietário deixa de ser uma
+ * disciplina repetida em cada chamada para ser uma propriedade do valor criado.
+ * Quem cria o `Acervo` é a rota, **por requisição**, com o `usuarioId` que o
+ * hook da Credencial decorou na requisição (FR-090, FR-092); a Credencial em si
+ * nunca entra neste Module.
  *
  * O esquema e as migrações são responsabilidade do Adapter, e nenhum SQL
  * atravessa este Module (FR-100); aqui vive apenas o comportamento do Module,
  * com as mesmas regras, os mesmos códigos estáveis e as mesmas mensagens em
- * português de sempre, agora assíncronos.
+ * português de sempre, agora assíncronos e restritos a um dono.
  */
-export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
+export function criarAcervo(
+  armazenamento: ArmazenamentoDoAcervo,
+  usuarioId: string,
+): Acervo {
   return {
     async criarCartao(dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
@@ -380,7 +391,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
         verso: dados.verso,
       };
 
-      const gravado = await armazenamento.inserirCartao(cartao);
+      const gravado = await armazenamento.inserirCartao(usuarioId, cartao);
 
       if (!gravado.ok) {
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
@@ -401,7 +412,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
         nome: dados.nome,
       };
 
-      const gravado = await armazenamento.inserirBaralho(baralho);
+      const gravado = await armazenamento.inserirBaralho(usuarioId, baralho);
 
       if (!gravado.ok) {
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
@@ -412,19 +423,22 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
 
     async listarCartoes() {
       const cartoes: CartaoListado[] = (
-        await armazenamento.listarCartoes()
+        await armazenamento.listarCartoes(usuarioId)
       ).map((cartao) => ({ ...cartao, baralhos: [] }));
 
       for (const cartao of cartoes) {
-        cartao.baralhos = await armazenamento.listarBaralhosDoCartao(cartao.id);
+        cartao.baralhos = await armazenamento.listarBaralhosDoCartao(
+          usuarioId,
+          cartao.id,
+        );
       }
 
       return cartoes;
     },
 
     async listarBaralhos() {
-      const baralhos = await armazenamento.listarBaralhos();
-      const contagens = await armazenamento.contarCartoesPorBaralho();
+      const baralhos = await armazenamento.listarBaralhos(usuarioId);
+      const contagens = await armazenamento.contarCartoesPorBaralho(usuarioId);
 
       const quantidadePorBaralho = new Map(
         contagens.map((contagem) => [
@@ -448,7 +462,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
     },
 
     async obterBaralho(id) {
-      const encontrado = await armazenamento.obterBaralho(id);
+      const encontrado = await armazenamento.obterBaralho(usuarioId, id);
 
       if (!encontrado.ok) {
         if (encontrado.erro === "nao_encontrado") {
@@ -458,7 +472,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      const cartoes = await armazenamento.listarCartoesDoBaralho(id);
+      const cartoes = await armazenamento.listarCartoesDoBaralho(usuarioId, id);
 
       return {
         ok: true,
@@ -476,7 +490,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
        * esquema: só o Module sabe dizer ao usuário **qual** extremidade não
        * existe, e a Porta reporta a ausência sem distinguir as duas.
        */
-      const cartao = await armazenamento.obterCartao(cartaoId);
+      const cartao = await armazenamento.obterCartao(usuarioId, cartaoId);
 
       if (!cartao.ok) {
         return cartao.erro === "nao_encontrado"
@@ -484,7 +498,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
           : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      const baralho = await armazenamento.obterBaralho(baralhoId);
+      const baralho = await armazenamento.obterBaralho(usuarioId, baralhoId);
 
       if (!baralho.ok) {
         return baralho.erro === "nao_encontrado"
@@ -492,7 +506,11 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
           : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      const vinculado = await armazenamento.vincular(cartaoId, baralhoId);
+      const vinculado = await armazenamento.vincular(
+        usuarioId,
+        cartaoId,
+        baralhoId,
+      );
 
       if (!vinculado.ok) {
         return vinculado.erro === "vinculo_duplicado"
@@ -504,7 +522,11 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
     },
 
     async desvincular(cartaoId, baralhoId) {
-      const removido = await armazenamento.desvincular(cartaoId, baralhoId);
+      const removido = await armazenamento.desvincular(
+        usuarioId,
+        cartaoId,
+        baralhoId,
+      );
 
       if (!removido.ok) {
         return removido.erro === "nao_encontrado"
@@ -522,7 +544,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
         return { ok: false, ...falha };
       }
 
-      const gravado = await armazenamento.atualizarCartao({
+      const gravado = await armazenamento.atualizarCartao(usuarioId, {
         id,
         frente: dados.frente,
         verso: dados.verso,
@@ -544,7 +566,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
         return { ok: false, ...falha };
       }
 
-      const gravado = await armazenamento.atualizarBaralho({
+      const gravado = await armazenamento.atualizarBaralho(usuarioId, {
         id,
         nome: dados.nome,
       });
@@ -559,7 +581,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
     },
 
     async excluirCartao(id) {
-      const excluido = await armazenamento.excluirCartao(id);
+      const excluido = await armazenamento.excluirCartao(usuarioId, id);
 
       if (!excluido.ok) {
         return excluido.erro === "nao_encontrado"
@@ -571,7 +593,7 @@ export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
     },
 
     async excluirBaralho(id) {
-      const excluido = await armazenamento.excluirBaralho(id);
+      const excluido = await armazenamento.excluirBaralho(usuarioId, id);
 
       if (!excluido.ok) {
         return excluido.erro === "nao_encontrado"

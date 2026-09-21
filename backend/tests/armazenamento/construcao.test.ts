@@ -600,14 +600,46 @@ describe("pacotes e inícios de cada armazenamento", () => {
 
       await aguardarSaude(porta);
 
-      /** O conteúdo gravado contra a base é servido pelo pacote da nuvem. */
-      const resposta = await fetch(`http://127.0.0.1:${porta}/cartoes`, {
+      /**
+       * O conteúdo gravado contra a base é servido pelo pacote da nuvem — e
+       * toda operação de acervo exige Credencial desde a `008-entrar`: o
+       * Cadastro vem primeiro, e o Cartão é criado com o cabeçalho Basic.
+       */
+      const nomeDeUsuario = "Ana.Silva";
+      const senha = randomBytes(12).toString("base64url");
+
+      const cadastro = await fetch(`http://127.0.0.1:${porta}/usuarios`, {
         method: "POST",
         headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nomeDeUsuario, senha }),
+      });
+
+      expect(cadastro.status).toBe(201);
+
+      const credencial = Buffer.from(
+        `${nomeDeUsuario}:${senha}`,
+        "utf8",
+      ).toString("base64");
+
+      const resposta = await fetch(`http://127.0.0.1:${porta}/cartoes`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Basic ${credencial}`,
+        },
         body: JSON.stringify({ frente: "To walk", verso: "Caminhar" }),
       });
 
       expect(resposta.status).toBe(201);
+
+      /** E o pacote responde quem entrou, pela rota de Entrar (FR-086). */
+      const entrou = await fetch(`http://127.0.0.1:${porta}/entrar`, {
+        method: "POST",
+        headers: { authorization: `Basic ${credencial}` },
+      });
+
+      expect(entrou.status).toBe(200);
+      expect(await entrou.json()).toMatchObject({ nomeDeUsuario });
     } finally {
       await pacote.encerrar();
     }

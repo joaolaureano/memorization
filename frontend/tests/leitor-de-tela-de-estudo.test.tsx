@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
 import {
   MENSAGEM_DE_QUANTIDADE_INVALIDA,
@@ -26,7 +27,7 @@ async function criarAcervoElegivel(
   cliente: ClienteEmMemoria;
   idDoBaralho: string;
 }> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
 
   for (let indice = 1; indice <= quantidadeDeCartoes; indice += 1) {
     const cartao = await cliente.criarCartao({

@@ -1,14 +1,14 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo } from "../../src/acervo/acervo.ts";
 import {
-  abrirArmazenamentoSqlite,
-  type ArmazenamentoSqliteAberto,
-} from "../../src/armazenamento/sqlite/armazenamento.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+  montarServidorDeContrato,
+  pedirComCredencial,
+  type ServidorDeContrato,
+} from "./apoio-de-contrato.ts";
 import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
+
 
 /**
  * T403 (backend) — contrato HTTP de `PUT /baralhos/{id}`
@@ -29,23 +29,36 @@ const RECUSA_DE_CORPO_INVALIDO = {
   mensagem: "O corpo da requisição não é válido.",
 };
 
-let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-  registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
+  /**
+   * O servidor é montado como na aplicação, com o hook que exige a Credencial:
+   * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
+   */
+  contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+  registrarRotasDeBaralhos(servidor, acervoDe);
+  });
+  servidor = contrato.servidor;
 });
 
 afterEach(async () => {
-  await servidor.close();
-  await aberto.encerrar();
+  await contrato.encerrar();
 });
+
+/**
+ * Envia a requisição com a Credencial do Usuário que entrou: sem ela, nenhuma
+ * rota de acervo roda (FR-090), e é assim que todas as chamadas deste arquivo
+ * a apresentam.
+ */
+function pedir(requisicao: InjectOptions) {
+  return pedirComCredencial(servidor, contrato.credencial, requisicao);
+}
 
 /** Cria um Baralho pela rota de criação; falha se a criação for recusada. */
 async function criarBaralho(): Promise<{ id: string }> {
-  const resposta = await servidor.inject({
+  const resposta = await pedir({
     method: "POST",
     url: "/baralhos",
     payload: { nome: NOME_VALIDO },
@@ -62,7 +75,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
   it("responde 200 com o Baralho renomeado", async () => {
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/baralhos/${baralho.id}`,
       payload: { nome: NOME_EDITADO },
@@ -74,7 +87,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
       nome: NOME_EDITADO,
     });
 
-    const leitura = await servidor.inject({ method: "GET", url: "/baralhos" });
+    const leitura = await pedir({ method: "GET", url: "/baralhos" });
     expect(leitura.json()).toEqual([
       {
         id: baralho.id,
@@ -88,7 +101,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
   it("recusa nome vazio com 400 e a mesma mensagem da criação", async () => {
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/baralhos/${baralho.id}`,
       payload: { nome: "" },
@@ -102,7 +115,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
   });
 
   it("recusa Baralho inexistente com 404 e mensagem em português", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: "/baralhos/baralho-inexistente",
       payload: { nome: NOME_EDITADO },
@@ -118,7 +131,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
   it("recusa corpo sem nome com 400 e não altera o Baralho", async () => {
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/baralhos/${baralho.id}`,
       payload: {},
@@ -127,7 +140,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
 
-    const leitura = await servidor.inject({ method: "GET", url: "/baralhos" });
+    const leitura = await pedir({ method: "GET", url: "/baralhos" });
     expect(leitura.json()).toEqual([
       {
         id: baralho.id,

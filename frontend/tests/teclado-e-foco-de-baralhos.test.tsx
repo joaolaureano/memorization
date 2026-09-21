@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
-import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
 
 /**
@@ -98,7 +98,7 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 
 describe("PaginaDeBaralhos por teclado", () => {
   it("conclui a criação do campo ao salvamento apenas por teclado, na ordem visual Nome → Criar Baralho (FR-058, SC-018)", async () => {
-    render(<PaginaDeBaralhos cliente={new ClienteEmMemoria()} />);
+    render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
     await screen.findByText(/ainda não há Baralhos/i);
 
     const campoNome = screen.getByLabelText("Nome");
@@ -132,7 +132,7 @@ describe("PaginaDeBaralhos por teclado", () => {
   it.each(CASOS_DE_RECUSA)(
     "numa recusa $descricao, o foco vai ao campo Nome e o conteúdo permanece (FR-059)",
     async (caso) => {
-      render(<PaginaDeBaralhos cliente={new ClienteEmMemoria()} />);
+      render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
       await screen.findByText(/ainda não há Baralhos/i);
 
       const campoNome = screen.getByLabelText("Nome");
@@ -157,7 +157,7 @@ describe("PaginaDeBaralhos por teclado", () => {
   );
 
   it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-059)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeBaralhos cliente={cliente} />);
     await screen.findByText(/ainda não há Baralhos/i);
 

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
-import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../src/acervo-cliente/validacao";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 
@@ -27,7 +27,7 @@ import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
  */
 
 function renderizarPaginaDeCartoes(): void {
-  render(<PaginaDeCartoes cliente={new ClienteEmMemoria()} />);
+  render(<PaginaDeCartoes cliente={clienteDeProva()} />);
 }
 
 /** Preenche um dos campos do formulário de criação pelo rótulo acessível. */
@@ -107,7 +107,7 @@ describe("PaginaDeCartoes", () => {
   });
 
   it("indica os Baralhos de cada Cartão, inclusive quando não há Baralho (FR-003, FR-004)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     const vinculado = await cliente.criarCartao({
       frente: "To walk",
       verso: "Caminhar",
@@ -182,7 +182,7 @@ describe("PaginaDeCartoes", () => {
   });
 
   it("criação com o cliente indisponível reporta a mensagem da Interface, não conclui e preserva Frente e Verso (FR-044, FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeCartoes cliente={cliente} />);
 
     await screen.findByText(/ainda não há Cartões/i);
@@ -209,7 +209,7 @@ describe("PaginaDeCartoes", () => {
   });
 
   it("a nova tentativa reaproveita o conteúdo preservado e só então conclui a criação (FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeCartoes cliente={cliente} />);
 
     await screen.findByText(/ainda não há Cartões/i);
@@ -233,7 +233,7 @@ describe("PaginaDeCartoes", () => {
   });
 
   it("cliente indisponível desde o carregamento não apresenta a lista como concluída nem perde o conteúdo digitado (FR-043, FR-044, FR-045)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
     render(<PaginaDeCartoes cliente={cliente} />);
@@ -257,7 +257,7 @@ describe("PaginaDeCartoes", () => {
   });
 
   it("depois da falha, o acervo volta e a criação preservada é concluída e visível (FR-044, FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
     render(<PaginaDeCartoes cliente={cliente} />);

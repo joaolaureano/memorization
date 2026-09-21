@@ -15,6 +15,14 @@ import {
   type Migracao,
 } from "../../src/armazenamento/sqlite/migracoes.ts";
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
+import {
+  contarLinhas,
+  gravarBaralho,
+  gravarCartao,
+  gravarCartaoSemDono,
+  gravarDono,
+  gravarVinculo,
+} from "./banco-de-teste.ts";
 
 /**
  * T101 — infraestrutura de migração versionada, agora do Adapter do
@@ -135,10 +143,9 @@ describe("base já migrada — migração não reaplica", () => {
       const caminho = join(diretorio, "banco.sqlite");
 
       let banco = abrirBanco(caminho);
+      const dono = gravarDono(banco);
 
-      banco
-        .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
-        .run("c1", "To walk", "Caminhar");
+      gravarCartao(banco, dono, "c1");
       banco.close();
 
       banco = abrirBanco(caminho);
@@ -181,10 +188,16 @@ describe("base já migrada — migração não reaplica", () => {
 });
 
 describe("falha no meio da migração — sem estado parcial", () => {
+  /**
+   * A versão seguinte à última da lista: derivada, e não escrita à mão, porque
+   * uma migração de uma versão já aplicada seria ignorada e nada falharia.
+   */
+  const PROXIMA_VERSAO = ULTIMA_VERSAO_DO_ESQUEMA + 1;
+
   /** Cria uma tabela e só então falha: o DDL parcial é o que o ROLLBACK desfaz. */
   const migracaoQueFalha: readonly Migracao[] = [
     {
-      versao: 5,
+      versao: PROXIMA_VERSAO,
       sql:
         "CREATE TABLE parcial (id TEXT PRIMARY KEY); " +
         "INSERT INTO nao_existe (id) VALUES ('x');",
@@ -216,11 +229,14 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
       aplicarMigracoes(banco, [
-        { versao: 5, sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);" },
+        {
+          versao: PROXIMA_VERSAO,
+          sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);",
+        },
       ]);
 
       expect(existeTabela(banco, "tabela_cinco")).toBe(true);
-      expect(versaoAtual(banco)).toBe(5);
+      expect(versaoAtual(banco)).toBe(PROXIMA_VERSAO);
     } finally {
       banco.close();
     }
@@ -228,7 +244,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
 });
 
 describe("arquivo legado da feature 001 — cartao sem tabela de versão", () => {
-  it("adota o cartao existente como migração 1 e aplica as seguintes, preservando os Cartões guardados", () => {
+  it("adota o cartao existente como migração 1, sobe até a versão corrente e descarta o acervo sem dono", () => {
     comBanco((banco) => {
       // O que a feature 001 deixou em disco: cartao, sem versao_do_esquema.
       banco.exec(`
@@ -238,9 +254,7 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
           verso  TEXT NOT NULL CHECK (length(trim(verso))  > 0 AND length(verso)  <= 1000)
         );
       `);
-      banco
-        .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
-        .run("legado", "To walk", "Caminhar");
+      gravarCartaoSemDono(banco, "legado");
 
       aplicarEsquema(banco);
 
@@ -250,15 +264,11 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
       expect(existeTabela(banco, "usuario")).toBe(true);
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
-      const lido = banco
-        .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")
-        .get("legado");
-
-      expect(lido).toEqual({
-        id: "legado",
-        frente: "To walk",
-        verso: "Caminhar",
-      });
+      /**
+       * O Cartão legado não tem dono, e não há como dar dono a ele: a migração
+       * 5 recria as tabelas do acervo e o descarta (FR-099, SC-037).
+       */
+      expect(contarLinhas(banco, "cartao")).toBe(0);
 
       // O PRAGMA é por conexão: aplicarEsquema o liga também na base adotada.
       const pragma = banco.prepare("PRAGMA foreign_keys").get();
@@ -273,28 +283,24 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
   });
 });
 
-describe("arquivo criado antes desta feature — mesma versão, mesmos dados", () => {
+describe("arquivo já na versão corrente — mesma versão, mesmos dados", () => {
   it("abre na versão registrada, sem reaplicar migração, e serve o mesmo conteúdo pela Porta", async () => {
     const diretorio = mkdtempSync(join(tmpdir(), "acervo-antes-da-porta-"));
 
     try {
       const caminho = join(diretorio, "memorizacao.sqlite");
 
-      // O que uma execução anterior a esta feature deixava em disco: as
-      // migrações aplicadas até a 3, a versão 3 registrada e conteúdo real.
+      // O que uma execução anterior deixava em disco: as migrações aplicadas
+      // até a corrente, a versão registrada e conteúdo real de um Usuário.
       const anterior = new DatabaseSync(caminho);
 
       try {
         aplicarEsquema(anterior);
-        anterior
-          .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
-          .run("c1", "To walk", "Caminhar");
-        anterior
-          .prepare("INSERT INTO baralho (id, nome) VALUES (?, ?)")
-          .run("b1", "Inglês");
-        anterior
-          .prepare("INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)")
-          .run("c1", "b1");
+        const dono = gravarDono(anterior);
+
+        gravarCartao(anterior, dono, "c1");
+        gravarBaralho(anterior, dono, "b1", "Inglês");
+        gravarVinculo(anterior, "c1", "b1");
       } finally {
         anterior.close();
       }
@@ -304,14 +310,14 @@ describe("arquivo criado antes desta feature — mesma versão, mesmos dados", (
       const aberto = await abrirArmazenamentoSqlite(caminho);
 
       try {
-        expect(await aberto.armazenamento.listarCartoes()).toEqual([
+        expect(await aberto.armazenamento.listarCartoes("dono-um")).toEqual([
           { id: "c1", frente: "To walk", verso: "Caminhar" },
         ]);
-        expect(await aberto.armazenamento.listarBaralhosDoCartao("c1")).toEqual([
-          { id: "b1", nome: "Inglês" },
-        ]);
         expect(
-          await aberto.armazenamento.contarCartoesPorBaralho(),
+          await aberto.armazenamento.listarBaralhosDoCartao("dono-um", "c1"),
+        ).toEqual([{ id: "b1", nome: "Inglês" }]);
+        expect(
+          await aberto.armazenamento.contarCartoesPorBaralho("dono-um"),
         ).toContainEqual({ baralhoId: "b1", quantidadeDeCartoes: 1 });
       } finally {
         await aberto.encerrar();

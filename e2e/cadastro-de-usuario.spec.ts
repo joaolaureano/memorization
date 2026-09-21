@@ -72,7 +72,9 @@ test("Cadastro pela UI persiste após reiniciar API e frontend, sem cookie nem d
       (resposta) => resposta.ok,
     );
 
-    // A tela "Criar conta" é alcançada pela navegação principal da aplicação.
+    // A tela "Criar conta" é alcançada pela tela "Entrar", que é a primeira e
+    // única sem Credencial: o link deixou a navegação principal (FR-097,
+    // FR-098).
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
 
     await expect(page.getByRole("link", { name: "Criar conta" })).toBeVisible();

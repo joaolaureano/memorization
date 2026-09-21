@@ -107,66 +107,99 @@ const CHAVE_PRIMARIA_DE_VINCULO = "vinculo_pkey";
  */
 const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
 
+/**
+ * Toda consulta do acervo é restrita a `usuario_id`, o primeiro parâmetro de
+ * cada operação da Porta: nenhuma linha de outro Usuário é lida, alterada ou
+ * excluída, e o `id` de outro Usuário é indistinguível de um `id` que nunca
+ * existiu (FR-092, SC-030).
+ */
 const INSERIR_CARTAO = `
-INSERT INTO cartao (id, frente, verso) VALUES ($1, $2, $3);
+INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ($1, $2, $3, $4);
 `;
 
 const LISTAR_CARTOES = `
-SELECT id, frente, verso FROM cartao;
+SELECT id, frente, verso FROM cartao WHERE usuario_id = $1;
 `;
 
 const OBTER_CARTAO = `
-SELECT id, frente, verso FROM cartao WHERE id = $1;
+SELECT id, frente, verso FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
 const ATUALIZAR_CARTAO = `
-UPDATE cartao SET frente = $1, verso = $2 WHERE id = $3;
+UPDATE cartao SET frente = $1, verso = $2 WHERE id = $3 AND usuario_id = $4;
 `;
 
 const EXCLUIR_CARTAO = `
-DELETE FROM cartao WHERE id = $1;
+DELETE FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
 const INSERIR_BARALHO = `
-INSERT INTO baralho (id, nome) VALUES ($1, $2);
+INSERT INTO baralho (id, nome, usuario_id) VALUES ($1, $2, $3);
 `;
 
 const LISTAR_BARALHOS = `
-SELECT id, nome FROM baralho;
+SELECT id, nome FROM baralho WHERE usuario_id = $1;
 `;
 
 const OBTER_BARALHO = `
-SELECT id, nome FROM baralho WHERE id = $1;
+SELECT id, nome FROM baralho WHERE id = $1 AND usuario_id = $2;
 `;
 
 const ATUALIZAR_BARALHO = `
-UPDATE baralho SET nome = $1 WHERE id = $2;
+UPDATE baralho SET nome = $1 WHERE id = $2 AND usuario_id = $3;
 `;
 
 const EXCLUIR_BARALHO = `
-DELETE FROM baralho WHERE id = $1;
+DELETE FROM baralho WHERE id = $1 AND usuario_id = $2;
 `;
 
+/**
+ * A inserção só acontece quando **as duas extremidades estão no acervo do
+ * Usuário**: a extremidade de outro Usuário — ou inexistente — deixa a inserção
+ * sem linha alguma, e o Adapter a traduz em `nao_encontrado`, sem nunca
+ * revelar que ela existe (FR-093).
+ */
 const INSERIR_VINCULO = `
-INSERT INTO vinculo (cartao_id, baralho_id) VALUES ($1, $2);
+INSERT INTO vinculo (cartao_id, baralho_id)
+SELECT $1, $2
+ WHERE EXISTS (SELECT 1 FROM cartao  WHERE id = $1 AND usuario_id = $3)
+   AND EXISTS (SELECT 1 FROM baralho WHERE id = $2 AND usuario_id = $3);
 `;
 
+/**
+ * O Vínculo não tem coluna de dono: ele pertence ao Usuário dos dois extremos,
+ * e é por eles que o escopo chega aqui. Sem os dois `EXISTS`, um Cartão de
+ * outro Usuário poderia ser desvinculado por quem soubesse os dois `id`
+ * (FR-093).
+ */
 const REMOVER_VINCULO = `
-DELETE FROM vinculo WHERE cartao_id = $1 AND baralho_id = $2;
+DELETE FROM vinculo
+ WHERE cartao_id = $1
+   AND baralho_id = $2
+   AND EXISTS (SELECT 1 FROM cartao
+                WHERE cartao.id = vinculo.cartao_id
+                  AND cartao.usuario_id = $3)
+   AND EXISTS (SELECT 1 FROM baralho
+                WHERE baralho.id = vinculo.baralho_id
+                  AND baralho.usuario_id = $3);
 `;
 
 const LISTAR_BARALHOS_DO_CARTAO = `
 SELECT baralho.id, baralho.nome
   FROM vinculo
+  JOIN cartao ON cartao.id = vinculo.cartao_id
   JOIN baralho ON baralho.id = vinculo.baralho_id
- WHERE vinculo.cartao_id = $1;
+ WHERE vinculo.cartao_id = $1
+   AND cartao.usuario_id = $2;
 `;
 
 const LISTAR_CARTOES_DO_BARALHO = `
 SELECT cartao.id, cartao.frente, cartao.verso
   FROM vinculo
   JOIN cartao ON cartao.id = vinculo.cartao_id
- WHERE vinculo.baralho_id = $1;
+  JOIN baralho ON baralho.id = vinculo.baralho_id
+ WHERE vinculo.baralho_id = $1
+   AND baralho.usuario_id = $2;
 `;
 
 const CONTAR_CARTOES_POR_BARALHO = `
@@ -174,6 +207,7 @@ SELECT baralho.id AS "baralhoId",
        COUNT(vinculo.cartao_id) AS "quantidadeDeCartoes"
   FROM baralho
   LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
+ WHERE baralho.usuario_id = $1
  GROUP BY baralho.id;
 `;
 
@@ -327,27 +361,33 @@ export async function abrirArmazenamentoPostgresql(
   let encerrado = false;
 
   const armazenamento: ArmazenamentoDoAcervo = {
-    async inserirCartao(cartao) {
+    async inserirCartao(usuarioId, cartao) {
       return comDesfecho(async () => {
         await piscina.query(INSERIR_CARTAO, [
           cartao.id,
           cartao.frente,
           cartao.verso,
+          usuarioId,
         ]);
 
         return { ok: true, valor: cartao };
       });
     },
 
-    async listarCartoes() {
-      const { rows } = await piscina.query<LinhaDeCartao>(LISTAR_CARTOES);
+    async listarCartoes(usuarioId) {
+      const { rows } = await piscina.query<LinhaDeCartao>(LISTAR_CARTOES, [
+        usuarioId,
+      ]);
 
       return rows.map(cartaoDaLinha);
     },
 
-    async obterCartao(id) {
+    async obterCartao(usuarioId, id) {
       return comDesfecho(async () => {
-        const { rows } = await piscina.query<LinhaDeCartao>(OBTER_CARTAO, [id]);
+        const { rows } = await piscina.query<LinhaDeCartao>(OBTER_CARTAO, [
+          id,
+          usuarioId,
+        ]);
 
         return rows[0] === undefined
           ? NAO_ENCONTRADO
@@ -355,12 +395,13 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
-    async atualizarCartao(cartao) {
+    async atualizarCartao(usuarioId, cartao) {
       return comDesfecho(async () => {
         const { rowCount } = await piscina.query(ATUALIZAR_CARTAO, [
           cartao.frente,
           cartao.verso,
           cartao.id,
+          usuarioId,
         ]);
 
         return (rowCount ?? 0) === 0
@@ -369,32 +410,39 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
-    async excluirCartao(id) {
+    async excluirCartao(usuarioId, id) {
       return comDesfecho(async () =>
-        (await piscina.query(EXCLUIR_CARTAO, [id])).rowCount === 0
+        (await piscina.query(EXCLUIR_CARTAO, [id, usuarioId])).rowCount === 0
           ? NAO_ENCONTRADO
           : SEM_CARGA,
       );
     },
 
-    async inserirBaralho(baralho) {
+    async inserirBaralho(usuarioId, baralho) {
       return comDesfecho(async () => {
-        await piscina.query(INSERIR_BARALHO, [baralho.id, baralho.nome]);
+        await piscina.query(INSERIR_BARALHO, [
+          baralho.id,
+          baralho.nome,
+          usuarioId,
+        ]);
 
         return { ok: true, valor: baralho };
       });
     },
 
-    async listarBaralhos() {
-      const { rows } = await piscina.query<LinhaDeBaralho>(LISTAR_BARALHOS);
+    async listarBaralhos(usuarioId) {
+      const { rows } = await piscina.query<LinhaDeBaralho>(LISTAR_BARALHOS, [
+        usuarioId,
+      ]);
 
       return rows.map(baralhoDaLinha);
     },
 
-    async obterBaralho(id) {
+    async obterBaralho(usuarioId, id) {
       return comDesfecho(async () => {
         const { rows } = await piscina.query<LinhaDeBaralho>(OBTER_BARALHO, [
           id,
+          usuarioId,
         ]);
 
         return rows[0] === undefined
@@ -403,11 +451,12 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
-    async atualizarBaralho(baralho) {
+    async atualizarBaralho(usuarioId, baralho) {
       return comDesfecho(async () => {
         const { rowCount } = await piscina.query(ATUALIZAR_BARALHO, [
           baralho.nome,
           baralho.id,
+          usuarioId,
         ]);
 
         return (rowCount ?? 0) === 0
@@ -416,18 +465,28 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
-    async excluirBaralho(id) {
+    async excluirBaralho(usuarioId, id) {
       return comDesfecho(async () =>
-        (await piscina.query(EXCLUIR_BARALHO, [id])).rowCount === 0
+        (await piscina.query(EXCLUIR_BARALHO, [id, usuarioId])).rowCount === 0
           ? NAO_ENCONTRADO
           : SEM_CARGA,
       );
     },
 
-    async vincular(cartaoId, baralhoId) {
+    async vincular(usuarioId, cartaoId, baralhoId) {
       return comDesfecho(async () => {
         try {
-          await piscina.query(INSERIR_VINCULO, [cartaoId, baralhoId]);
+          const { rowCount } = await piscina.query(INSERIR_VINCULO, [
+            cartaoId,
+            baralhoId,
+            usuarioId,
+          ]);
+
+          /**
+           * Nenhuma linha inserida é extremidade ausente **no escopo do
+           * Usuário**, e não falha do armazenamento.
+           */
+          return (rowCount ?? 0) === 0 ? NAO_ENCONTRADO : SEM_CARGA;
         } catch (erro) {
           if (
             ehViolacao(erro, VIOLACAO_DE_UNICIDADE, CHAVE_PRIMARIA_DE_VINCULO)
@@ -437,41 +496,45 @@ export async function abrirArmazenamentoPostgresql(
 
           throw erro;
         }
-
-        return SEM_CARGA;
       });
     },
 
-    async desvincular(cartaoId, baralhoId) {
+    async desvincular(usuarioId, cartaoId, baralhoId) {
       return comDesfecho(async () =>
-        (await piscina.query(REMOVER_VINCULO, [cartaoId, baralhoId]))
-          .rowCount === 0
+        (
+          await piscina.query(REMOVER_VINCULO, [
+            cartaoId,
+            baralhoId,
+            usuarioId,
+          ])
+        ).rowCount === 0
           ? NAO_ENCONTRADO
           : SEM_CARGA,
       );
     },
 
-    async listarBaralhosDoCartao(cartaoId) {
+    async listarBaralhosDoCartao(usuarioId, cartaoId) {
       const { rows } = await piscina.query<LinhaDeBaralho>(
         LISTAR_BARALHOS_DO_CARTAO,
-        [cartaoId],
+        [cartaoId, usuarioId],
       );
 
       return rows.map(baralhoDaLinha);
     },
 
-    async listarCartoesDoBaralho(baralhoId) {
+    async listarCartoesDoBaralho(usuarioId, baralhoId) {
       const { rows } = await piscina.query<LinhaDeCartao>(
         LISTAR_CARTOES_DO_BARALHO,
-        [baralhoId],
+        [baralhoId, usuarioId],
       );
 
       return rows.map(cartaoDaLinha);
     },
 
-    async contarCartoesPorBaralho() {
+    async contarCartoesPorBaralho(usuarioId) {
       const { rows } = await piscina.query<LinhaDeContagem>(
         CONTAR_CARTOES_POR_BARALHO,
+        [usuarioId],
       );
 
       const contagens: ContagemPorBaralho[] = rows.map((linha) => ({

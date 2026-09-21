@@ -4731,3 +4731,56 @@ Verificado em `main`: backend 439, frontend 306, e2e 15 (duas vezes),
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-091
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: migração 5, autenticar, hook de Credencial, escopo por dono, PaginaDeEntrada, Sair, e2e
+
+- **Data/hora**: 2026-09-21 05:12 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 008-entrar / T701–T716 — concluídas (feature 008 completa)
+- **Commit anterior**: `041384d` (registra o hash do evento anterior)
+
+Dois workers no **mesmo worktree**, com integração num commit único, como mandam
+os blocos atômicos do EVT-075.
+
+- **Servidor (T701–T706)**:
+  - migração 5 nos dois dialetos (acervo sem dono descartado, `usuario_id`
+    obrigatório, `CHECK`s copiados literalmente);
+  - escopo por dono dentro da Port, com cenários de isolamento na bateria
+    compartilhada rodando contra SQLite e PostgreSQL;
+  - `autenticar` com recusa uniforme e derivação descartável;
+  - hook `onRequest` exigindo Basic, 401 sem `WWW-Authenticate` e
+    `POST /entrar`;
+  - suíte de contrato de 001 a 007 adaptada.
+
+  Desvios aceitos:
+  - `autenticar` tem também o desfecho `indisponivel` (503), para que uma base
+    fora do ar não seja confundida com Senha errada;
+  - o hook fica em `http/credencial.ts`;
+  - rota desconhecida sem Credencial responde 401.
+- **Cliente (T707–T716)**:
+  - Credencial só no estado React;
+  - `ClienteHttp` com o cabeçalho e `nao_autenticado`;
+  - `PaginaDeEntrada` como primeira tela;
+  - navegação principal e Sair só depois de Entrar;
+  - `guarda-de-credencial.ts` como ponto único do FR-091;
+  - harness E2E com Usuário de prova, e todas as E2E de 001 a 007 adaptadas.
+
+  Novas E2E: isolamento entre dois Usuários, recarga, Sair com Voltar,
+  ausência de Credencial no navegador e duas abas independentes.
+
+  Decisões aceitas:
+  - a Senha é apagada depois de recusa ou sucesso e preservada em
+    indisponibilidade, pelo FR-045;
+  - o foco da recusa vai para a Senha, porque a recusa não revela qual campo
+    falhou.
+
+Verificado em `main`: backend 514, frontend 337, e2e 18 (duas vezes),
+`typecheck`, `build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

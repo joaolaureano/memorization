@@ -6,7 +6,9 @@ import type { Page } from "@playwright/test";
 import {
   aguardarProntidao,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   listarCartoesPelaApi,
@@ -90,8 +92,14 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
       (resposta) => resposta.ok,
     );
 
-    // A UI real abre sobre um acervo vazio — o arquivo é novo, sem Cartões.
+    // O Usuário de prova é cadastrado antes de qualquer operação de acervo: a
+    // Credencial dele acompanha toda requisição (FR-090).
+    await criarUsuarioDeProva(enderecoDaApi);
+
+    // A UI real abre sobre um acervo vazio — o arquivo é novo, sem Cartões — e
+    // exige Entrar antes de mostrar qualquer coisa (FR-097).
     await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
@@ -148,9 +156,11 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
       (resposta) => resposta.ok,
     );
 
-    // Reabrir a UI: os dois Cartões persistem, cada um com a sua Frente e o
-    // seu Verso, e nada além deles.
+    // Reabrir a UI: a Credencial não sobreviveu ao recarregamento, então
+    // Entrar é exigido de novo (FR-089, SC-031); os dois Cartões persistem,
+    // cada um com a sua Frente e o seu Verso, e nada além deles.
     await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),

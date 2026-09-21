@@ -23,8 +23,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Fundação no servidor
 
-- [ ] T701 Migração 5 recria `cartao`, `baralho` e `vinculo` com dono e descarta o acervo sem dono
-- [ ] T702 [P] `Identidade.autenticar` confere a Credencial e recusa sempre com a mesma mensagem e a mesma duração
+- [X] T701 Migração 5 recria `cartao`, `baralho` e `vinculo` com dono e descarta o acervo sem dono
+- [X] T702 [P] `Identidade.autenticar` confere a Credencial e recusa sempre com a mesma mensagem e a mesma duração
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -39,10 +39,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Credencial e escopo no servidor
 
-- [ ] T703 Hook `onRequest` exige a Credencial antes de toda rota e responde `401` sem `WWW-Authenticate`
-- [ ] T704 `POST /entrar` verifica a Credencial e o CORS passa a permitir `authorization`
-- [ ] T705 Suíte de contrato de `001` a `006` apresenta a Credencial e continua verde
-- [ ] T706 `criarAcervo(banco, usuarioId)` restringe toda operação ao dono, e o acervo de outro Usuário se comporta como inexistente
+- [X] T703 Hook `onRequest` exige a Credencial antes de toda rota e responde `401` sem `WWW-Authenticate`
+- [X] T704 `POST /entrar` verifica a Credencial e o CORS passa a permitir `authorization`
+- [X] T705 Suíte de contrato de `001` a `006` apresenta a Credencial e continua verde
+- [X] T706 `criarAcervo(banco, usuarioId)` restringe toda operação ao dono, e o acervo de outro Usuário se comporta como inexistente
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -59,11 +59,11 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Cliente e telas
 
-- [ ] T707 `entrar` e `nao_autenticado` existem nos dois Adapters, com a Credencial na construção
-- [ ] T708 A tela "Entrar" é a primeira e única tela alcançável sem Credencial
-- [ ] T709 Navegação principal e "Sair" só aparecem depois de Entrar, e Sair volta a "Entrar"
-- [ ] T710 Recusa por Credencial descarta a Credencial e volta a "Entrar", sem concluir a operação
-- [ ] T711 Suíte de frontend de `001` a `006` entra antes de operar o acervo e continua verde
+- [X] T707 `entrar` e `nao_autenticado` existem nos dois Adapters, com a Credencial na construção
+- [X] T708 A tela "Entrar" é a primeira e única tela alcançável sem Credencial
+- [X] T709 Navegação principal e "Sair" só aparecem depois de Entrar, e Sair volta a "Entrar"
+- [X] T710 Recusa por Credencial descarta a Credencial e volta a "Entrar", sem concluir a operação
+- [X] T711 Suíte de frontend de `001` a `006` entra antes de operar o acervo e continua verde
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -81,11 +81,11 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 4 — Acessibilidade, responsividade e e2e
 
-- [ ] T712 Entrar, Sair e a recusa de Entrar são concluídos só por teclado, com o foco sempre identificável
-- [ ] T713 A recusa de Entrar e a conclusão de Sair são anunciadas por leitor de tela
-- [ ] T714 [P] A tela "Entrar" é utilizável em largura de telefone
-- [ ] T715 Harness e2e passa a cadastrar e a entrar, e a suíte de `001` a `007` continua verde
-- [ ] T716 e2e comprova isolamento entre dois Usuários, recarga, Sair e ausência da Credencial no navegador
+- [X] T712 Entrar, Sair e a recusa de Entrar são concluídos só por teclado, com o foco sempre identificável
+- [X] T713 A recusa de Entrar e a conclusão de Sair são anunciadas por leitor de tela
+- [X] T714 [P] A tela "Entrar" é utilizável em largura de telefone
+- [X] T715 Harness e2e passa a cadastrar e a entrar, e a suíte de `001` a `007` continua verde
+- [X] T716 e2e comprova isolamento entre dois Usuários, recarga, Sair e ausência da Credencial no navegador
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

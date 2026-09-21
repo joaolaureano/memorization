@@ -21,7 +21,9 @@ import type {
  * Invariantes garantidas pela Interface, que o caller nunca reproduz:
  * nenhuma resposta que não seja de sucesso é apresentada como operação
  * concluída (FR-044). Modos de erro: os do `Acervo` e os do `Identidade`, mais
- * `indisponivel` para falha de transporte.
+ * `indisponivel` para falha de transporte e `nao_autenticado` para a recusa
+ * por Credencial — dois modos distintos, porque a interface reage de forma
+ * distinta a cada um (FR-091).
  */
 
 /**
@@ -101,25 +103,89 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS =
   "Não foi possível acessar os Usuários. Tente novamente.";
 
 /**
+ * A Credencial desta feature (FR-089): Nome de usuário e Senha, e nada além.
+ *
+ * Ela existe apenas na memória da página aberta e acompanha cada operação. Não
+ * é token, sessão nem cookie — os `_Avoid_` de `CONTEXT.md` —, e por isso não
+ * há campo, cabeçalho de resposta ou armazenamento capaz de guardá-la entre
+ * operações: o `ClienteHttp` a recebe na construção e a apresenta de novo em
+ * cada chamada.
+ */
+export interface Credencial {
+  nomeDeUsuario: string;
+  senha: string;
+}
+
+/**
+ * Modo de erro da recusa por Credencial (FR-090, FR-091).
+ *
+ * É distinto de `indisponivel` de propósito: a Credencial recusada é
+ * descartada e devolve a pessoa a "Entrar" com mensagem explicativa (SC-035),
+ * enquanto a falha de transporte preserva o digitado e permite nova tentativa
+ * (FR-045). Confundir os dois faria a interface mentir sobre a causa.
+ */
+export const NAO_AUTENTICADO = "nao_autenticado" as const;
+
+/**
+ * A **única** mensagem da recusa de Entrar (FR-088): a mesma exista ou não o
+ * Nome de usuário informado, sem revelar qual parte da Credencial falhou.
+ * Idêntica à do contrato da API (contracts/api-entrar.md), e por isso os dois
+ * Adapters da Seam devolvem o mesmo texto.
+ */
+export const MENSAGEM_DE_CREDENCIAL_INVALIDA =
+  "Nome de usuário ou Senha incorretos.";
+
+/**
+ * Mensagem em português destinada ao usuário quando uma operação do acervo é
+ * recusada por Credencial (FR-046, FR-091). É a explicação que a tela "Entrar"
+ * apresenta depois de descartar a Credencial.
+ */
+export const MENSAGEM_DE_NAO_AUTENTICADO =
+  "A Credencial não é mais válida. Informe o Nome de usuário e a Senha para Entrar novamente.";
+
+/**
+ * Resultado de `entrar`. Sucesso traz exatamente o Usuário que Entrou — `id` e
+ * `nomeDeUsuario`, nunca a Senha nem qualquer derivação dela (FR-078, FR-086).
+ * A recusa é `nao_autenticado`, com a mensagem única; a falha de transporte
+ * continua sendo `indisponivel`.
+ */
+export type ResultadoDeEntrar =
+  | { ok: true; usuario: Usuario }
+  | {
+      ok: false;
+      erro: typeof NAO_AUTENTICADO | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
  * Resultado de `criarCartao`. Falha é resultado previsto, e não exceção: o
  * caller distingue `ok` e, na recusa, recebe o código estável e a mensagem
- * em português — os códigos de regra de Cartão, ou `indisponivel`.
+ * em português — os códigos de regra de Cartão, `indisponivel` para a falha
+ * de transporte ou `nao_autenticado` para a recusa por Credencial.
  */
 export type ResultadoDeCriacaoDeCartao =
   | { ok: true; cartao: Cartao }
   | {
       ok: false;
-      erro: CodigoDeErroDeCartao | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeCartao
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
 /**
- * Resultado de `listarCartoes`. A listagem não tem recusa de domínio: o único
- * modo de falha é `indisponivel`, e nenhuma lista é entregue sem sucesso.
+ * Resultado de `listarCartoes`. A listagem não tem recusa de domínio: as
+ * falhas são `indisponivel` e `nao_autenticado`, e nenhuma lista é entregue
+ * sem sucesso.
  */
 export type ResultadoDeListagemDeCartoes =
   | { ok: true; cartoes: CartaoListado[] }
-  | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
 
 /**
  * A única entidade desta feature: id opaco e nome, e nada além (FR-018).
@@ -166,23 +232,32 @@ export interface BaralhoComCartoes extends Baralho {
 /**
  * Resultado de `criarBaralho`. Falha é resultado previsto, e não exceção: o
  * caller distingue `ok` e, na recusa, recebe o código estável e a mensagem
- * em português — os códigos de regra de Baralho, ou `indisponivel`.
+ * em português — os códigos de regra de Baralho, `indisponivel` para a falha
+ * de transporte ou `nao_autenticado` para a recusa por Credencial.
  */
 export type ResultadoDeCriacaoDeBaralho =
   | { ok: true; baralho: Baralho }
   | {
       ok: false;
-      erro: CodigoDeErroDeBaralho | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeBaralho
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
 /**
- * Resultado de `listarBaralhos`. A listagem não tem recusa de domínio: o único
- * modo de falha é `indisponivel`, e nenhuma lista é entregue sem sucesso.
+ * Resultado de `listarBaralhos`. A listagem não tem recusa de domínio: as
+ * falhas são `indisponivel` e `nao_autenticado`, e nenhuma lista é entregue
+ * sem sucesso.
  */
 export type ResultadoDeListagemDeBaralhos =
   | { ok: true; baralhos: BaralhoListado[] }
-  | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
 
 /**
  * Resultado de `vincular`. Sucesso não tem carga; as recusas de domínio são
@@ -196,7 +271,8 @@ export type ResultadoDeVinculacao =
       erro:
         | "vinculo_duplicado"
         | CodigoDeErroDeNaoEncontrado
-        | typeof INDISPONIVEL;
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -208,7 +284,10 @@ export type ResultadoDeDesvinculacao =
   | { ok: true }
   | {
       ok: false;
-      erro: CodigoDeErroDeVinculo | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeVinculo
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -220,7 +299,10 @@ export type ResultadoDeObterBaralho =
   | { ok: true; baralho: BaralhoComCartoes }
   | {
       ok: false;
-      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -235,7 +317,8 @@ export type ResultadoDeEdicaoDeCartao =
       erro:
         | CodigoDeErroDeCartao
         | CodigoDeErroDeNaoEncontrado
-        | typeof INDISPONIVEL;
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -250,7 +333,8 @@ export type ResultadoDeRenomeacaoDeBaralho =
       erro:
         | CodigoDeErroDeBaralho
         | CodigoDeErroDeNaoEncontrado
-        | typeof INDISPONIVEL;
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -262,7 +346,10 @@ export type ResultadoDeExclusaoDeCartao =
   | { ok: true }
   | {
       ok: false;
-      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -274,7 +361,10 @@ export type ResultadoDeExclusaoDeBaralho =
   | { ok: true }
   | {
       ok: false;
-      erro: CodigoDeErroDeNaoEncontrado | typeof INDISPONIVEL;
+      erro:
+        | CodigoDeErroDeNaoEncontrado
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -326,6 +416,18 @@ export type ResultadoDeCriacaoDeUsuario =
  * com resultados idênticos.
  */
 export interface ClienteDoAcervo {
+  /**
+   * Apresenta a Credencial e devolve o Usuário que Entrou (FR-086). Espaços ao
+   * redor do Nome de usuário são descartados e a comparação não distingue
+   * maiúsculas de minúsculas, com as mesmas regras do Cadastro; a Senha é
+   * comparada exatamente, preservando espaços (FR-087).
+   *
+   * A recusa é **uma só** — Nome de usuário inexistente e Senha errada
+   * devolvem `nao_autenticado` com a mesma mensagem, sem revelar qual parte
+   * falhou (FR-088) —, e a Senha nunca aparece em nenhum retorno (FR-078).
+   */
+  entrar(credencial: Credencial): Promise<ResultadoDeEntrar>;
+
   criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
 
   /**

@@ -38,7 +38,12 @@ beforeAll(async () => {
 
   await aberto.encerrar();
 
-  acervo = criarAcervo(aberto.armazenamento);
+  /**
+   * O dono é um identificador qualquer: o armazenamento já está encerrado, e
+   * toda operação do acervo — de qualquer dono — recusa com `indisponivel`
+   * antes de alcançar registro algum (FR-044, FR-045).
+   */
+  acervo = criarAcervo(aberto.armazenamento, "dono-um");
 });
 
 afterAll(() => {
@@ -113,8 +118,8 @@ describe("armazenamento indisponível — recusa reportada, sem operação concl
     const reaberto = await abrirArmazenamentoSqlite(CAMINHO);
 
     try {
-      expect(await reaberto.armazenamento.listarCartoes()).toEqual([]);
-      expect(await reaberto.armazenamento.listarBaralhos()).toEqual([]);
+      expect(await reaberto.armazenamento.listarCartoes("dono-um")).toEqual([]);
+      expect(await reaberto.armazenamento.listarBaralhos("dono-um")).toEqual([]);
     } finally {
       await reaberto.encerrar();
     }

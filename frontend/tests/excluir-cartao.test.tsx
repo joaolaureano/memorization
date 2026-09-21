@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 
 /**
@@ -17,7 +18,7 @@ import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
  */
 
 async function criarCartaoVinculadoADoisBaralhos(): Promise<ClienteEmMemoria> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const cartao = await cliente.criarCartao({
     frente: "To walk",
     verso: "Caminhar",

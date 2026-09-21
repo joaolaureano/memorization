@@ -1,16 +1,21 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type {
   ArmazenamentoDeUsuarios,
   Usuario,
 } from "../armazenamento/porta.ts";
 import {
+  CREDENCIAL_INVALIDA,
   NOME_DE_USUARIO_EXISTENTE,
   validarNomeDeUsuario,
   validarSenha,
 } from "./invariantes.ts";
-import type { CodigoDeErroDeCadastro } from "./invariantes.ts";
-import { derivarDaSenha } from "./senha.ts";
+import type {
+  CodigoDeErroDeCadastro,
+  CodigoDeErroDeEntrada,
+} from "./invariantes.ts";
+import { derivarDaSenha, derivarDaSenhaCom } from "./senha.ts";
+import type { DerivacaoDaSenha } from "./senha.ts";
 
 /**
  * O Module `Identidade` — o Cadastro de Usuários (FR-071).
@@ -81,10 +86,38 @@ export type ResultadoDeCadastro =
     };
 
 /**
- * Interface profunda do Module `Identidade`: um verbo, `cadastrar`, que esconde
- * a validação das duas regras, a geração do sal, a derivação da chave com
- * parâmetros versionados e a tradução da violação de unicidade em recusa de
- * domínio. A `008-entrar` vai reusar este Module para verificar a Senha.
+ * O que `autenticar` recebe: a Credencial apresentada — Nome de usuário e
+ * Senha. Ela existe apenas na memória de quem a informou e atravessa a
+ * Interface sem deixar estado (FR-079, FR-089).
+ */
+export interface DadosDeEntrada {
+  nomeDeUsuario: string;
+  senha: string;
+}
+
+/**
+ * Resultado de `autenticar`. A recusa é resultado previsto, e não exceção:
+ * `credencial_invalida` é a **única** recusa possível de Credencial que não
+ * confere, com a mensagem única em português (FR-046, FR-088), e
+ * `indisponivel` é a falha do armazenamento — que **não** é Senha errada e não
+ * pode ser apresentada como recusa de Credencial (FR-044, FR-045).
+ */
+export type ResultadoDeEntrada =
+  | { ok: true; usuario: UsuarioCadastrado }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeEntrada | "indisponivel";
+      mensagem: string;
+    };
+
+/**
+ * Interface profunda do Module `Identidade`: dois verbos, `cadastrar` e
+ * `autenticar`. O primeiro esconde a validação das duas regras, a geração do
+ * sal, a derivação da chave com parâmetros versionados e a tradução da
+ * violação de unicidade em recusa de domínio; o segundo esconde a
+ * reconstrução da derivação, a comparação em tempo constante e a derivação
+ * descartável que torna indistinguível a recusa de um Nome de usuário
+ * inexistente (FR-088).
  */
 export interface Identidade {
   /**
@@ -97,7 +130,36 @@ export interface Identidade {
    * existe (FR-074, SC-025).
    */
   cadastrar(dados: DadosDeCadastro): Promise<ResultadoDeCadastro>;
+
+  /**
+   * Confere a Credencial apresentada e devolve o Usuário que entrou.
+   *
+   * Invariantes que a Interface garante: os espaços ao redor do Nome de
+   * usuário são descartados e a comparação ignora maiúsculas e minúsculas, com
+   * as mesmas regras do Cadastro, enquanto a Senha é comparada exatamente,
+   * preservando os espaços dela (FR-087, SC-036); a Senha é conferida
+   * **reconstruindo** a derivação com o `sal` e os `parametros` gravados e
+   * comparando as duas chaves em tempo constante, sem gravar nada (FR-089);
+   * Nome de usuário inexistente executa a **mesma** derivação, contra um `sal`
+   * e um `hash` descartáveis gerados uma única vez, de modo que o tempo de
+   * recusa não revele a existência do Nome de usuário (FR-088, SC-029); e a
+   * recusa é uma só, com a mensagem única `Nome de usuário ou Senha
+   * incorretos.`, que não revela qual parte da Credencial falhou.
+   *
+   * O sucesso devolve apenas `id` e `nomeDeUsuario`: **a Senha nunca aparece em
+   * nenhum retorno**, e nenhuma transformação dela atravessa a Interface
+   * (FR-078).
+   */
+  autenticar(dados: DadosDeEntrada): Promise<ResultadoDeEntrada>;
 }
+
+/**
+ * A recusa única de Entrar, re-exportada na Interface do Module: é ela que a
+ * verificação devolve quando a Credencial não confere e é ela que o Adapter
+ * HTTP responde quando o cabeçalho falta ou está malformado — a mesma
+ * mensagem, sem revelar qual parte da Credencial falhou (FR-088).
+ */
+export { CREDENCIAL_INVALIDA } from "./invariantes.ts";
 
 /**
  * Recusa por indisponibilidade do armazenamento: a mesma frase do `Acervo` — a
@@ -108,6 +170,21 @@ const ARMAZENAMENTO_INDISPONIVEL = {
   erro: "indisponivel",
   mensagem: "O armazenamento não está disponível. Tente novamente.",
 } as const;
+
+/** Bytes de aleatoriedade da Senha descartável que nunca é apresentada. */
+const TAMANHO_DO_DESCARTAVEL = 32;
+
+/**
+ * Compara duas chaves derivadas em tempo constante (FR-088). O comprimento é
+ * conferido antes porque `timingSafeEqual` recusa comprimentos diferentes; as
+ * duas chaves vêm da mesma derivação e têm o tamanho gravado nos parâmetros.
+ */
+function chavesIguais(gravada: Uint8Array, candidata: Uint8Array): boolean {
+  return (
+    gravada.length === candidata.length &&
+    timingSafeEqual(Buffer.from(gravada), Buffer.from(candidata))
+  );
+}
 
 /**
  * Cria o `Identidade` sobre a Porta de Usuários informada — o Adapter do
@@ -121,6 +198,24 @@ export function criarIdentidade(
   armazenamento: ArmazenamentoDeUsuarios,
   segredo: string,
 ): Identidade {
+  /**
+   * A derivação **descartável** da recusa uniforme (FR-088, SC-029): um `sal` e
+   * um `hash` que nenhuma Senha real produz, contra os quais a Senha informada
+   * é derivada quando o Nome de usuário não existe. Sem ela, o caso "Nome de
+   * usuário inexistente" responderia sem scrypt algum, e a duração da recusa
+   * revelaria se o Nome de usuário existe.
+   *
+   * Ela é gerada **na criação do Module**, e uma única vez: nenhuma requisição
+   * paga por ela, e a recusa por Nome de usuário inexistente custa exatamente o
+   * que custa a recusa por Senha errada — uma derivação. Nada dela depende do
+   * que chega na requisição nem é reutilizável como Credencial: não é cache de
+   * Credencial verificada, e não guarda estado de tentativa alguma (FR-079).
+   */
+  const descartavel: Promise<DerivacaoDaSenha> = derivarDaSenha(
+    segredo,
+    randomBytes(TAMANHO_DO_DESCARTAVEL).toString("base64url"),
+  );
+
   return {
     async cadastrar(dados) {
       /** O descarte dos espaços ao redor acontece **antes** da validação. */
@@ -153,6 +248,46 @@ export function criarIdentidade(
         usuario: {
           id: gravado.valor.id,
           nomeDeUsuario: gravado.valor.nomeDeUsuario,
+        },
+      };
+    },
+
+    async autenticar(dados) {
+      /** As mesmas regras do Cadastro no Nome de usuário (FR-087). */
+      const nomeDeUsuario = dados.nomeDeUsuario.trim();
+      const encontrado =
+        await armazenamento.obterUsuarioPorNomeDeUsuario(nomeDeUsuario);
+
+      if (!encontrado.ok && encontrado.erro === "indisponivel") {
+        /** A falha do armazenamento não é Senha errada (FR-044, FR-045). */
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      /**
+       * A Senha é comparada **reconstruindo** a derivação do hash guardado —
+       * ou a descartável, quando o Nome de usuário não existe, para que os dois
+       * casos percorram exatamente o mesmo caminho e custem o mesmo. A Senha
+       * informada é usada como veio, com os espaços preservados (FR-087), e
+       * nada é gravado (FR-089).
+       */
+      const referencia = encontrado.ok ? encontrado.valor : await descartavel;
+
+      const candidato = await derivarDaSenhaCom(
+        segredo,
+        dados.senha,
+        referencia.sal,
+        referencia.parametros,
+      );
+
+      if (!encontrado.ok || !chavesIguais(referencia.hash, candidato)) {
+        return { ok: false, ...CREDENCIAL_INVALIDA };
+      }
+
+      return {
+        ok: true,
+        usuario: {
+          id: encontrado.valor.id,
+          nomeDeUsuario: encontrado.valor.nomeDeUsuario,
         },
       };
     },

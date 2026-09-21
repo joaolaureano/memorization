@@ -126,3 +126,20 @@ export const NOME_DE_USUARIO_EXISTENTE = {
   erro: "nome_de_usuario_existente",
   mensagem: "Este nome de usuário já existe. Escolha outro.",
 } as const;
+
+/**
+ * Código estável da recusa de Entrar. É exaustivo nesta feature: uma só recusa,
+ * para Nome de usuário inexistente e para Senha errada (FR-088).
+ */
+export type CodigoDeErroDeEntrada = "credencial_invalida";
+
+/**
+ * A **única** recusa de Entrar (FR-088): a mesma mensagem, e o mesmo código,
+ * exista ou não o Nome de usuário informado. Ela não revela qual parte da
+ * Credencial falhou, e é a resposta tanto da verificação da Senha quanto do
+ * cabeçalho ausente ou malformado, no Adapter HTTP.
+ */
+export const CREDENCIAL_INVALIDA = {
+  erro: "credencial_invalida",
+  mensagem: "Nome de usuário ou Senha incorretos.",
+} as const;

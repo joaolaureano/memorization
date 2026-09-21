@@ -125,15 +125,18 @@ describe("PaginaDeCadastro por teclado", () => {
     const campoDaSenha = screen.getByLabelText("Senha");
     const campoDaConfirmacao = screen.getByLabelText("Confirmação da Senha");
     const botaoDeCadastro = screen.getByRole("button", { name: "Criar conta" });
+    const acessoAEntrada = screen.getByRole("link", { name: "Entrar" });
 
-    // Os únicos controles interativos são os três campos e a ação, nesta
-    // ordem — a mesma da disposição visual da coluna única.
+    // Os únicos controles interativos são os três campos, a ação e a volta a
+    // "Entrar" (FR-097), nesta ordem — a mesma da disposição visual da coluna
+    // única.
     const controles = controlesInterativos();
-    expect(controles).toHaveLength(4);
+    expect(controles).toHaveLength(5);
     expect(controles[0]).toBe(campoDoNome);
     expect(controles[1]).toBe(campoDaSenha);
     expect(controles[2]).toBe(campoDaConfirmacao);
     expect(controles[3]).toBe(botaoDeCadastro);
+    expect(controles[4]).toBe(acessoAEntrada);
 
     apertarTab();
     expect(document.activeElement).toBe(campoDoNome);

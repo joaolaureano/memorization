@@ -17,6 +17,7 @@ import {
   type Migracao,
 } from "../../../src/armazenamento/postgresql/migracoes.ts";
 import {
+  abrirArmazenamentoDaBase,
   abrirPiscinaDaBase,
   criarBaseMigrada,
   descartarBasesDeTeste,
@@ -27,9 +28,10 @@ import {
   servidorDeTeste,
   type FerramentasDoServidor,
 } from "./servidor-de-teste.ts";
+import { criarDonoDeTeste } from "../usuarios-de-teste.ts";
 
 /**
- * T903 — o Adapter traz o DDL de PostgreSQL das migrações 1 a 4 e o aplicador
+ * T903 — o Adapter traz o DDL de PostgreSQL das migrações 1 a 5 e o aplicador
  * com trava consultiva (FR-112, FR-116, SC-048).
  *
  * A verificação é da Seam interna do Adapter: base nova e vazia chega à versão
@@ -90,6 +92,21 @@ async function comBaseVazia<T>(
     );
   } finally {
     await piscina.end();
+  }
+}
+
+/**
+ * Grava um Usuário pela segunda Porta, sobre a base informada, e devolve o seu
+ * `id`: é o dono das linhas do acervo dos cenários de esquema (FR-092), que
+ * sem ele seriam recusadas pela chave estrangeira de `usuario_id`.
+ */
+async function criarDonoNaBase(nomeDaBase: string): Promise<string> {
+  const aberto = await abrirArmazenamentoDaBase(nomeDaBase);
+
+  try {
+    return await criarDonoDeTeste(aberto.usuarios);
+  } finally {
+    await aberto.encerrar();
   }
 }
 
@@ -202,19 +219,21 @@ describe("as mesmas regras de conteúdo do Adapter local", () => {
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
     try {
+      /** O dono é válido: a recusa precisa vir da CHECK de conteúdo. */
+      const dono = await criarDonoNaBase(nomeDaBase);
+
       await expect(
-        piscina.query("INSERT INTO cartao (id, frente, verso) VALUES ($1, $2, $3);", [
-          "c1",
-          "   ",
-          "Caminhar",
-        ]),
+        piscina.query(
+          "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ($1, $2, $3, $4);",
+          ["c1", "   ", "Caminhar", dono],
+        ),
       ).rejects.toThrow();
 
       await expect(
-        piscina.query("INSERT INTO baralho (id, nome) VALUES ($1, $2);", [
-          "b1",
-          "x".repeat(101),
-        ]),
+        piscina.query(
+          "INSERT INTO baralho (id, nome, usuario_id) VALUES ($1, $2, $3);",
+          ["b1", "x".repeat(101), dono],
+        ),
       ).rejects.toThrow();
     } finally {
       await piscina.end();
@@ -257,11 +276,16 @@ describe("as mesmas regras de conteúdo do Adapter local", () => {
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
     try {
+      /** Toda linha do acervo pertence a um Usuário (FR-092). */
+      const dono = await criarDonoNaBase(nomeDaBase);
+
       await piscina.query(
-        "INSERT INTO cartao (id, frente, verso) VALUES ('c1', 'To walk', 'Caminhar');",
+        "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ('c1', 'To walk', 'Caminhar', $1);",
+        [dono],
       );
       await piscina.query(
-        "INSERT INTO baralho (id, nome) VALUES ('b1', 'Inglês');",
+        "INSERT INTO baralho (id, nome, usuario_id) VALUES ('b1', 'Inglês', $1);",
+        [dono],
       );
       await piscina.query(
         "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
@@ -279,7 +303,8 @@ describe("as mesmas regras de conteúdo do Adapter local", () => {
       ).toEqual([{ id: "b1" }]);
 
       await piscina.query(
-        "INSERT INTO cartao (id, frente, verso) VALUES ('c2', 'To read', 'Ler');",
+        "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ('c2', 'To read', 'Ler', $1);",
+        [dono],
       );
       await piscina.query(
         "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c2', 'b1');",
@@ -379,10 +404,16 @@ describe("dois aplicadores ao mesmo tempo", () => {
 });
 
 describe("falha no meio da migração — sem estado parcial", () => {
+  /**
+   * A versão seguinte à última da lista: derivada, e não escrita à mão, porque
+   * uma migração de uma versão já aplicada seria ignorada e nada falharia.
+   */
+  const PROXIMA_VERSAO = ULTIMA_VERSAO_DO_ESQUEMA + 1;
+
   /** Cria uma tabela e só então falha: o DDL parcial é o que o ROLLBACK desfaz. */
   const migracaoQueFalha: readonly Migracao[] = [
     {
-      versao: 5,
+      versao: PROXIMA_VERSAO,
       sql:
         "CREATE TABLE parcial (id TEXT PRIMARY KEY); " +
         "INSERT INTO nao_existe (id) VALUES ('x');",
@@ -424,7 +455,10 @@ describe("falha no meio da migração — sem estado parcial", () => {
       await expect(aplicarMigracoes(piscina, migracaoQueFalha)).rejects.toThrow();
 
       await aplicarMigracoes(piscina, [
-        { versao: 5, sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);" },
+        {
+          versao: PROXIMA_VERSAO,
+          sql: "CREATE TABLE tabela_cinco (id TEXT PRIMARY KEY);",
+        },
       ]);
 
       const tabelas = await consultar<{ nome: string }>(
@@ -432,7 +466,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       );
 
       expect(tabelas).toEqual([{ nome: "tabela_cinco" }]);
-      expect(await versaoRegistrada(consultar)).toEqual([5]);
+      expect(await versaoRegistrada(consultar)).toEqual([PROXIMA_VERSAO]);
     });
   });
 });
@@ -538,7 +572,7 @@ describe("migração 4 — tabela usuario", () => {
     }
   });
 
-  it("leva uma base da feature 006 à versão corrente preservando Cartões, Baralhos e Vínculos", async () => {
+  it("leva uma base da feature 006 à versão corrente, preservando a tabela usuario e descartando o acervo sem dono", async () => {
     const apoio = await servidorDeTeste();
     const nomeDaBase = await apoio.criarBase("usuario-base-instalada");
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
@@ -572,14 +606,33 @@ describe("migração 4 — tabela usuario", () => {
         "vinculo",
       ]);
 
-      /** Nada do que existia foi perdido pela migração 4. */
-      const cartoes = await piscina.query("SELECT id FROM cartao ORDER BY id;");
-      const vinculos = await piscina.query(
-        "SELECT cartao_id, baralho_id FROM vinculo;",
+      /** A tabela `usuario` da migração 4 continua lá, com a mesma forma. */
+      const colunas = await piscina.query<{ nome: string }>(
+        `SELECT column_name AS nome
+           FROM information_schema.columns
+          WHERE table_name = 'usuario' ORDER BY column_name;`,
       );
 
-      expect(cartoes.rows).toEqual([{ id: "c1" }]);
-      expect(vinculos.rows).toEqual([{ cartao_id: "c1", baralho_id: "b1" }]);
+      expect(colunas.rows.map((linha) => linha.nome)).toEqual([
+        "hash",
+        "id",
+        "nome_de_usuario",
+        "parametros",
+        "sal",
+      ]);
+
+      /**
+       * O acervo da feature 006 não tem dono, e a migração 5 o descarta
+       * (FR-099, SC-037): a prova do descarte em PostgreSQL está em
+       * `migracao-dono.test.ts`, com uma base na versão 4.
+       */
+      const cartoes = await piscina.query("SELECT id FROM cartao;");
+      const baralhos = await piscina.query("SELECT id FROM baralho;");
+      const vinculos = await piscina.query("SELECT cartao_id FROM vinculo;");
+
+      expect(cartoes.rows).toEqual([]);
+      expect(baralhos.rows).toEqual([]);
+      expect(vinculos.rows).toEqual([]);
 
       const versoes = await piscina.query<{ versao: number }>(
         "SELECT versao FROM versao_do_esquema;",
@@ -747,10 +800,13 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect((await executarComando(ambiente(nomeDaBase))).codigo).toBe(0);
 
+    /** O conteúdo é de um Usuário: desde a migração 5, todo Cartão tem dono. */
+    const dono = await criarDonoNaBase(nomeDaBase);
+
     await servidor.consultar(
       nomeDaBase,
-      "INSERT INTO cartao (id, frente, verso) VALUES ($1, $2, $3);",
-      ["c1", "To walk", "Caminhar"],
+      "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ($1, $2, $3, $4);",
+      ["c1", "To walk", "Caminhar", dono],
     );
 
     const repeticao = await executarComando(ambiente(nomeDaBase));

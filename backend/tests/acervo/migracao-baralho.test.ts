@@ -9,6 +9,13 @@ import { criarAcervo, type Cartao } from "../../src/acervo/acervo.ts";
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { abrirBanco } from "../../src/armazenamento/sqlite/esquema.ts";
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
+import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
+import {
+  contarLinhas,
+  gravarBaralho,
+  gravarCartaoSemDono,
+  gravarDono,
+} from "./banco-de-teste.ts";
 
 /**
  * T102 — migração 2 cria a tabela `baralho` preservando os Cartões
@@ -66,32 +73,16 @@ function criarBaseLegadaDaFeature001(banco: DatabaseSync): void {
   `);
 }
 
-/**
- * Grava os Cartões da base legada. A gravação é direta porque o arquivo
- * anterior a esta feature não tem tabela de versão: quem grava é quem migra,
- * e o Adapter do armazenamento local só oferece a Porta depois de migrar — o
- * que é justamente o comportamento que este cenário prova.
- */
-function gravarCartoesLegados(banco: DatabaseSync, cartoes: Cartao[]): void {
-  const inserir = banco.prepare(
-    "INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)",
-  );
-
-  for (const cartao of cartoes) {
-    inserir.run(cartao.id, cartao.frente, cartao.verso);
-  }
-}
-
 describe("base legada da feature 001 com Cartões — migração até a versão corrente", () => {
-  it("cria baralho e vinculo preservando todos os Cartões intactos, e a reabertura não reaplica", async () => {
+  it("sobe da base legada da feature 001 até a versão corrente, descarta o acervo sem dono e serve a Interface", async () => {
     const diretorio = mkdtempSync(join(tmpdir(), "acervo-baralho-"));
 
     try {
       const caminho = join(diretorio, "banco.sqlite");
 
       // O que a feature 001 deixou em disco: cartao, sem versao_do_esquema,
-      // e Cartões reais.
-      const criados: Cartao[] = [
+      // e Cartões reais — todos sem dono.
+      const legados: Cartao[] = [
         { id: "legado-1", frente: "To walk", verso: "Caminhar" },
         { id: "legado-2", frente: "To read", verso: "Ler" },
         { id: "legado-3", frente: "To sleep", verso: "Dormir" },
@@ -101,26 +92,33 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
 
       try {
         criarBaseLegadaDaFeature001(anterior);
-        gravarCartoesLegados(anterior, criados);
+
+        for (const cartao of legados) {
+          gravarCartaoSemDono(anterior, cartao.id, cartao.frente, cartao.verso);
+        }
       } finally {
         anterior.close();
       }
 
       // A abertura pelo Adapter migra: adota o cartao existente (1), cria
-      // baralho (2), cria vinculo (3) e cria usuario (4).
+      // baralho (2), cria vinculo (3), cria usuario (4) e, na migração 5,
+      // recria as três tabelas do acervo com dono.
       const aberto = await abrirArmazenamentoSqlite(caminho);
 
       try {
-        const sobreviventes = await criarAcervo(
-          aberto.armazenamento,
-        ).listarCartoes();
+        const dono = await criarDonoDeTeste(aberto.usuarios);
+        const acervo = criarAcervo(aberto.armazenamento, dono);
 
-        expect(sobreviventes).toHaveLength(criados.length);
-        expect(sobreviventes).toEqual(
-          expect.arrayContaining(
-            criados.map((cartao) => ({ ...cartao, baralhos: [] })),
-          ),
-        );
+        /** O acervo da 001 não tem a quem pertencer: ele foi descartado. */
+        expect(await acervo.listarCartoes()).toEqual([]);
+
+        /** E a Interface serve o acervo novo do Usuário, com dono. */
+        const criado = await acervo.criarCartao({
+          frente: "To walk",
+          verso: "Caminhar",
+        });
+
+        expect(criado.ok).toBe(true);
       } finally {
         await aberto.encerrar();
       }
@@ -135,17 +133,19 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
         banco.close();
       }
 
-      // Reabrir de novo não reaplica as migrações: a versão permanece 4 e os
-      // Cartões continuam lá. Reaplicar falharia, pois as tabelas já existem.
+      // Reabrir de novo não reaplica as migrações: a versão permanece a
+      // corrente e o único Cartão é o do Usuário, criado depois da migração.
+      // Reaplicar falharia, pois as tabelas já existem.
       banco = abrirBanco(caminho);
 
       try {
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
+        expect(contarLinhas(banco, "cartao")).toBe(1);
         expect(
-          banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,
-        ).toBe(criados.length);
+          banco.prepare("SELECT id FROM cartao").get()?.id,
+        ).not.toBe("legado-1");
       } finally {
         banco.close();
       }
@@ -161,10 +161,9 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       const caminho = join(diretorio, "banco.sqlite");
 
       let banco = abrirBanco(caminho);
+      const dono = gravarDono(banco);
 
-      banco
-        .prepare("INSERT INTO baralho (id, nome) VALUES (?, ?)")
-        .run("b1", "Inglês");
+      gravarBaralho(banco, dono, "b1", "Inglês");
       banco.close();
 
       banco = abrirBanco(caminho);
@@ -188,8 +187,11 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
 
 let banco: DatabaseSync;
 
+/** O dono das linhas gravadas direto no banco (FR-092). */
+let dono: string;
+
 function inserirBaralho(id: string, nome: string): void {
-  banco.prepare("INSERT INTO baralho (id, nome) VALUES (?, ?)").run(id, nome);
+  gravarBaralho(banco, dono, id, nome);
 }
 
 /** Cria a mensagem de recusa esperada do SQLite para a CHECK de nome. */
@@ -201,6 +203,7 @@ function recusaPorCheckDoNome(): RegExp {
 
 beforeEach(() => {
   banco = abrirBanco(":memory:");
+  dono = gravarDono(banco);
 });
 
 afterEach(() => {
@@ -208,10 +211,10 @@ afterEach(() => {
 });
 
 describe("tabela baralho — forma do esquema", () => {
-  it("tem exatamente id e nome, sem coluna de elegibilidade, contagem ou vínculo", () => {
+  it("tem exatamente id, nome e usuario_id, sem coluna de elegibilidade, contagem ou vínculo", () => {
     const colunas = banco.prepare("PRAGMA table_info(baralho)").all();
 
-    expect(colunas).toHaveLength(2);
+    expect(colunas).toHaveLength(3);
     expect(colunas[0]).toMatchObject({
       name: "id",
       type: "TEXT",
@@ -224,7 +227,24 @@ describe("tabela baralho — forma do esquema", () => {
       notnull: 1,
       pk: 0,
     });
-    expect(colunas.map((coluna) => coluna.name)).toEqual(["id", "nome"]);
+    expect(colunas[2]).toMatchObject({
+      name: "usuario_id",
+      type: "TEXT",
+      notnull: 1,
+      pk: 0,
+    });
+    expect(colunas.map((coluna) => coluna.name)).toEqual([
+      "id",
+      "nome",
+      "usuario_id",
+    ]);
+
+    /** O dono é indexado: é por ele que toda leitura do acervo é restrita. */
+    const indices = banco.prepare("PRAGMA index_list(baralho)").all();
+
+    expect(indices.map((indice) => indice.name)).toContain(
+      "indice_baralho_por_usuario",
+    );
   });
 
   it("não declara UNIQUE sobre nome: o nome é rótulo, não identificador", () => {

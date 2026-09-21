@@ -27,6 +27,11 @@ import {
  * próprio cliente (FR-046) e a falha de gravação que reporta sem concluir e
  * preserva o conteúdo digitado (FR-044, FR-045, SC-012). As mensagens exibidas
  * são sempre as devolvidas pela Interface, nunca texto inventado pela tela.
+ *
+ * T708 (specs/008-entrar/tasks.md): a tela oferece a volta a "Entrar" — o
+ * caminho de quem já tem Usuário — e, concluído o Cadastro, oferece Entrar em
+ * seguida (FR-097). Depois de `008-entrar`, o Cadastro continua alcançável sem
+ * Credencial nenhuma, e é por isso que estas provas seguem sem ela.
  */
 
 const NOME_DE_USUARIO_VALIDO = "Ana.Silva";
@@ -68,6 +73,31 @@ function submeter(): void {
 }
 
 describe("PaginaDeCadastro", () => {
+  it("oferece a volta a Entrar e, concluído o Cadastro, oferece Entrar em seguida (FR-097)", async () => {
+    renderizarPaginaDeCadastro();
+
+    // A volta a "Entrar" é o caminho de quem já tem Usuário.
+    expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute(
+      "href",
+      "#/entrar",
+    );
+
+    preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
+    submeter();
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      `O Usuário ${NOME_DE_USUARIO_VALIDO} foi criado.`,
+    );
+
+    // E o próximo passo de quem acabou de criar o Usuário é Entrar: a oferta
+    // continua ali, uma só, agora como sequência da conclusão.
+    expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute(
+      "href",
+      "#/entrar",
+    );
+    expect(screen.getAllByRole("link", { name: "Entrar" })).toHaveLength(1);
+  });
+
   it("usa os termos canônicos em português e nenhum sinônimo proibido (FR-046)", () => {
     renderizarPaginaDeCadastro();
 

@@ -1,9 +1,12 @@
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
+  MENSAGEM_DE_NAO_AUTENTICADO,
+  NAO_AUTENTICADO,
 } from "./cliente";
 import type {
   Baralho,
@@ -12,6 +15,7 @@ import type {
   Cartao,
   CartaoListado,
   ClienteDoAcervo,
+  Credencial,
   DadosDeBaralho,
   DadosDeCartao,
   DadosDeUsuario,
@@ -20,6 +24,7 @@ import type {
   ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
+  ResultadoDeEntrar,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
   ResultadoDeListagemDeBaralhos,
@@ -47,13 +52,71 @@ import type {
  * como operação concluída (FR-044). Sucesso é, exatamente, o status e o corpo
  * previstos no contrato de cada rota. Qualquer outra resposta — outro status,
  * corpo ilegível, código de erro fora do contrato, falha de rede — vira
- * `indisponivel`.
+ * `indisponivel`; o `401` do contrato, e só ele, vira `nao_autenticado`
+ * (FR-090, FR-091).
+ *
+ * A Credencial chega pela **construção** e acompanha toda chamada, no
+ * cabeçalho `Authorization: Basic base64(nomeDeUsuario:senha)`
+ * (contracts/api-entrar.md). Ela não é guardada em lugar nenhum além deste
+ * campo — que vive apenas enquanto a página estiver aberta (FR-089) —, nunca
+ * aparece em URL, cookie ou armazenamento do navegador (SC-033), e é
+ * apresentada de novo em cada operação, porque o servidor não mantém sessão
+ * alguma (FR-079).
  */
 export class ClienteHttp implements ClienteDoAcervo {
   private readonly endereco: string;
 
-  constructor(enderecoDaApi: string) {
+  /**
+   * A Credencial apresentada em toda chamada, ou `null` enquanto a pessoa não
+   * tiver entrado: sem ela, as rotas de acervo respondem `401` e o Adapter
+   * traduz a recusa em `nao_autenticado`.
+   */
+  private readonly credencial: Credencial | null;
+
+  constructor(enderecoDaApi: string, credencial: Credencial | null = null) {
     this.endereco = enderecoDaApi.replace(/\/+$/, "");
+    this.credencial = credencial;
+  }
+
+  /**
+   * Apresenta a Credencial informada para Entrar (FR-086) e devolve quem
+   * entrou. A Credencial vem por parâmetro, e não da construção, porque é
+   * exatamente ela que ainda está sendo verificada: `POST /entrar` é o único
+   * verbo que roda sem Credencial verificada.
+   *
+   * A recusa é a do contrato — `401`, uma só mensagem, sem revelar se o Nome
+   * de usuário existe (FR-088) —, e nenhuma resposta carrega a Senha
+   * (FR-078).
+   */
+  async entrar(credencial: Credencial): Promise<ResultadoDeEntrar> {
+    try {
+      const resposta = await fetch(`${this.endereco}/entrar`, {
+        method: "POST",
+        headers: { authorization: cabecalhoDeCredencial(credencial) },
+      });
+
+      if (resposta.status === 200) {
+        const usuario = lerUsuario(await resposta.json());
+
+        if (usuario !== null) {
+          return { ok: true, usuario };
+        }
+
+        return this.falhaDeIndisponibilidadeDeUsuarios();
+      }
+
+      if (resposta.status === 401) {
+        return {
+          ok: false,
+          erro: NAO_AUTENTICADO,
+          mensagem: MENSAGEM_DE_CREDENCIAL_INVALIDA,
+        };
+      }
+
+      return this.falhaDeIndisponibilidadeDeUsuarios();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeUsuarios();
+    }
   }
 
   async criarCartao(
@@ -62,9 +125,13 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(`${this.endereco}/cartoes`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({ frente: dados.frente, verso: dados.verso }),
       });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 201) {
         const cartao = lerCartao(await resposta.json());
@@ -88,7 +155,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async listarCartoes(): Promise<ResultadoDeListagemDeCartoes> {
     try {
-      const resposta = await fetch(`${this.endereco}/cartoes`);
+      const resposta = await fetch(`${this.endereco}/cartoes`, {
+        headers: this.cabecalho(),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 200) {
         const cartoes = lerListaDeCartoesListados(await resposta.json());
@@ -112,9 +185,13 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(`${this.endereco}/baralhos`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({ nome: dados.nome }),
       });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 201) {
         const baralho = lerBaralho(await resposta.json());
@@ -138,7 +215,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async listarBaralhos(): Promise<ResultadoDeListagemDeBaralhos> {
     try {
-      const resposta = await fetch(`${this.endereco}/baralhos`);
+      const resposta = await fetch(`${this.endereco}/baralhos`, {
+        headers: this.cabecalho(),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 200) {
         const baralhos = lerListaDeBaralhosListados(await resposta.json());
@@ -160,7 +243,12 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
+        { headers: this.cabecalho() },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 200) {
         const baralho = lerBaralhoComCartoes(await resposta.json());
@@ -195,10 +283,14 @@ export class ClienteHttp implements ClienteDoAcervo {
         `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...this.cabecalho() },
           body: JSON.stringify({ cartaoId }),
         },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 201) {
         return { ok: true };
@@ -233,8 +325,12 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(
         `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos/${encodeURIComponent(cartaoId)}`,
-        { method: "DELETE" },
+        { method: "DELETE", headers: this.cabecalho() },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 204) {
         return { ok: true };
@@ -264,10 +360,14 @@ export class ClienteHttp implements ClienteDoAcervo {
         `${this.endereco}/cartoes/${encodeURIComponent(id)}`,
         {
           method: "PUT",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...this.cabecalho() },
           body: JSON.stringify({ frente, verso }),
         },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 200) {
         const cartao = lerCartao(await resposta.json());
@@ -306,10 +406,14 @@ export class ClienteHttp implements ClienteDoAcervo {
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
         {
           method: "PUT",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...this.cabecalho() },
           body: JSON.stringify({ nome }),
         },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 200) {
         const baralho = lerBaralho(await resposta.json());
@@ -343,8 +447,12 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(
         `${this.endereco}/cartoes/${encodeURIComponent(id)}`,
-        { method: "DELETE" },
+        { method: "DELETE", headers: this.cabecalho() },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 204) {
         return { ok: true };
@@ -368,8 +476,12 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
-        { method: "DELETE" },
+        { method: "DELETE", headers: this.cabecalho() },
       );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
 
       if (resposta.status === 204) {
         return { ok: true };
@@ -395,7 +507,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     try {
       const resposta = await fetch(`${this.endereco}/usuarios`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({
           nomeDeUsuario: dados.nomeDeUsuario,
           senha: dados.senha,
@@ -467,6 +579,32 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
 
     return this.falhaDeIndisponibilidadeDeBaralhos();
+  }
+
+  /**
+   * O cabeçalho da Credencial, em toda chamada do acervo. Enquanto não houver
+   * Credencial — a pessoa ainda não Entrou —, o cabeçalho não é enviado e a
+   * API recusa: é o servidor, e nunca a interface, quem decide o que a
+   * Credencial alcança.
+   */
+  private cabecalho(): Record<string, string> {
+    if (this.credencial === null) {
+      return {};
+    }
+
+    return { authorization: cabecalhoDeCredencial(this.credencial) };
+  }
+
+  private falhaDeNaoAutenticado(): {
+    ok: false;
+    erro: typeof NAO_AUTENTICADO;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: NAO_AUTENTICADO,
+      mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+    };
   }
 
   private falhaDeIndisponibilidade(): {
@@ -597,6 +735,31 @@ function ehCorpoDeRecusaComCodigo<Codigo extends string>(
   const campos = corpo as Record<string, unknown>;
 
   return campos.erro === codigo && typeof campos.mensagem === "string";
+}
+
+/**
+ * O valor do cabeçalho `Authorization`, no formato do contrato
+ * (`contracts/api-entrar.md`): `Basic base64(nomeDeUsuario:senha)`.
+ *
+ * A codificação é em UTF-8, como a do servidor — uma Senha com qualquer
+ * caractere chega intacta —, e o valor existe apenas na memória, no instante
+ * da requisição: ele não é guardado, nem nunca entra numa URL, onde ficaria
+ * registrado no histórico e no registro do servidor (FR-078, SC-033).
+ */
+function cabecalhoDeCredencial(credencial: Credencial): string {
+  return `Basic ${base64DeTexto(`${credencial.nomeDeUsuario}:${credencial.senha}`)}`;
+}
+
+/** Codifica texto em base64 preservando os caracteres fora do ASCII. */
+function base64DeTexto(texto: string): string {
+  const bytes = new TextEncoder().encode(texto);
+  let binario = "";
+
+  for (const byte of bytes) {
+    binario += String.fromCharCode(byte);
+  }
+
+  return btoa(binario);
 }
 
 function lerCartao(corpo: unknown): Cartao | null {

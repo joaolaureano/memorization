@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
-import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 
 /**
@@ -63,7 +63,7 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 ];
 
 function renderizarPaginaDeCartoes(): void {
-  render(<PaginaDeCartoes cliente={new ClienteEmMemoria()} />);
+  render(<PaginaDeCartoes cliente={clienteDeProva()} />);
 }
 
 /** Preenche um dos campos do formulário de criação pelo rótulo acessível. */
@@ -125,7 +125,7 @@ describe("PaginaDeCartoes para leitor de tela", () => {
   });
 
   it("a falha de listagem é um alerta assertivo nomeado, único na página (FR-056)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
     render(<PaginaDeCartoes cliente={cliente} />);
 
@@ -170,7 +170,7 @@ describe("PaginaDeCartoes para leitor de tela", () => {
   );
 
   it("falhas simultâneas de listagem e criação ficam em regiões nomeadas, uma por contexto (FR-056)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
     render(<PaginaDeCartoes cliente={cliente} />);
     await screen.findByRole("alert");

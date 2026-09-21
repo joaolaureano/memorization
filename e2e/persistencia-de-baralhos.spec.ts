@@ -8,7 +8,9 @@ import { MIGRACOES } from "../backend/src/armazenamento/sqlite/migracoes";
 import {
   aguardarProntidao,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   lerVersaoDoEsquema,
@@ -83,8 +85,13 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
       (resposta) => resposta.ok,
     );
 
+    // O Usuário de prova é cadastrado antes de qualquer operação de acervo
+    // (FR-090), e a UI real exige Entrar antes de mostrar a lista.
+    await criarUsuarioDeProva(enderecoDaApi);
+
     // A UI real abre a lista de Baralhos sobre um acervo vazio.
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Baralhos" }),
@@ -136,9 +143,12 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
       (resposta) => resposta.ok,
     );
 
-    // Reabrir a UI: os dois Baralhos persistem, cada um com o mesmo nome e a
-    // elegibilidade derivada comunicada por texto.
+    // Reabrir a UI: a Credencial não sobreviveu ao recarregamento, então
+    // Entrar é exigido de novo (FR-089, SC-031); os dois Baralhos persistem,
+    // cada um com o mesmo nome e a elegibilidade derivada comunicada por
+    // texto.
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Baralhos" }),

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
-import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { LIMITE_DE_CARACTERES_DE_BARALHO } from "../src/acervo-cliente/validacao";
 import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
 
@@ -25,7 +25,7 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  */
 
 function renderizarPaginaDeBaralhos(): void {
-  render(<PaginaDeBaralhos cliente={new ClienteEmMemoria()} />);
+  render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
 }
 
 /** Preenche o campo do formulário de criação pelo rótulo acessível. */
@@ -153,7 +153,7 @@ describe("PaginaDeBaralhos", () => {
   });
 
   it("criação com o cliente indisponível reporta a mensagem da Interface, não conclui e preserva o nome (FR-044, FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeBaralhos cliente={cliente} />);
 
     await screen.findByText(/ainda não há Baralhos/i);
@@ -177,7 +177,7 @@ describe("PaginaDeBaralhos", () => {
   });
 
   it("a nova tentativa reaproveita o conteúdo preservado e só então conclui a criação (FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     render(<PaginaDeBaralhos cliente={cliente} />);
 
     await screen.findByText(/ainda não há Baralhos/i);
@@ -200,7 +200,7 @@ describe("PaginaDeBaralhos", () => {
   });
 
   it("cliente indisponível desde o carregamento não apresenta a lista como concluída nem perde o conteúdo digitado (FR-044, FR-045)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
     render(<PaginaDeBaralhos cliente={cliente} />);
@@ -222,7 +222,7 @@ describe("PaginaDeBaralhos", () => {
   });
 
   it("depois da falha, o acervo volta e a criação preservada é concluída e visível (FR-044, FR-045, SC-012)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
     render(<PaginaDeBaralhos cliente={cliente} />);

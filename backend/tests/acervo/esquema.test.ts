@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { abrirBanco } from "../../src/armazenamento/sqlite/esquema.ts";
+import { gravarCartao, gravarDono } from "./banco-de-teste.ts";
 
 /**
  * T004 — o esquema criado na primeira execução. Os testes abrem o arquivo
@@ -18,10 +19,14 @@ const LIMITE = 1000;
 
 let banco: DatabaseSync;
 
+/**
+ * O dono das linhas gravadas direto no banco: todo Cartão pertence a um
+ * Usuário, e o esquema exige a linha de `usuario` (FR-092, FR-099).
+ */
+let dono: string;
+
 function inserir(id: string, frente: string, verso: string): void {
-  banco
-    .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
-    .run(id, frente, verso);
+  gravarCartao(banco, dono, id, frente, verso);
 }
 
 /** Cria a mensagem de recusa esperada do SQLite, qualquer que seja a coluna. */
@@ -33,6 +38,7 @@ function recusaPorCheck(coluna: string): RegExp {
 
 beforeEach(() => {
   banco = abrirBanco(":memory:");
+  dono = gravarDono(banco);
 });
 
 afterEach(() => {
@@ -46,6 +52,44 @@ describe("criação do esquema", () => {
       .get("cartao");
 
     expect(tabela).toEqual({ name: "cartao" });
+  });
+
+  it("tem exatamente id, frente, verso e usuario_id, com o dono obrigatório e indexado", () => {
+    const colunas = banco.prepare("PRAGMA table_info(cartao)").all();
+
+    expect(colunas.map((coluna) => coluna.name)).toEqual([
+      "id",
+      "frente",
+      "verso",
+      "usuario_id",
+    ]);
+    expect(colunas[3]).toMatchObject({
+      name: "usuario_id",
+      type: "TEXT",
+      notnull: 1,
+    });
+
+    /** O dono é indexado: é por ele que toda leitura do acervo é restrita. */
+    const indices = banco.prepare("PRAGMA index_list(cartao)").all();
+
+    expect(indices.map((indice) => indice.name)).toContain(
+      "indice_cartao_por_usuario",
+    );
+  });
+
+  it("recusa Cartão sem dono: não existe Cartão de ninguém (FR-099)", () => {
+    expect(() =>
+      banco
+        .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
+        .run("c1", FRENTE_VALIDA, VERSO_VALIDO),
+    ).toThrow();
+    expect(() =>
+      banco
+        .prepare(
+          "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES (?, ?, ?, ?)",
+        )
+        .run("c1", FRENTE_VALIDA, VERSO_VALIDO, "usuario-inexistente"),
+    ).toThrow();
   });
 
   it("liga PRAGMA foreign_keys na conexão", () => {

@@ -170,79 +170,115 @@ export interface ArmazenamentoDeUsuarios {
  * decide como perguntar, e o Module decide apenas o que perguntar. O que a
  * Interface esconde é esquema, dialeto, transação, tradução do erro do driver
  * e o próprio fato de haver banco.
+ *
+ * **Toda operação recebe o dono**, o `usuarioId` do Usuário que Entrou
+ * (FR-092): é o escopo do acervo, e não um dado da entidade. As duas
+ * Implementações restringem a ela toda linha que leem ou gravam, de modo que
+ * um Cartão ou um Baralho de outro Usuário responde como inexistente —
+ * `nao_encontrado`, o mesmo desfecho de um `id` que nunca existiu (SC-030) —, e
+ * nunca como um erro novo ou um 403 que revelasse a existência. Vincular exige
+ * as duas extremidades **no mesmo dono** (FR-093).
  */
 export interface ArmazenamentoDoAcervo {
   /**
-   * Guarda um Cartão já validado pelo Module. `id` é opaco e vem de quem
-   * chama, de modo que o Module continua dono da identidade (FR-009).
+   * Guarda um Cartão já validado pelo Module, como acervo do Usuário
+   * `usuarioId`. `id` é opaco e vem de quem chama, de modo que o Module
+   * continua dono da identidade (FR-009).
    */
-  inserirCartao(cartao: Cartao): Promise<Desfecho<Cartao>>;
+  inserirCartao(usuarioId: string, cartao: Cartao): Promise<Desfecho<Cartao>>;
 
-  /** Devolve todos os Cartões guardados, sem prometer ordem alguma. */
-  listarCartoes(): Promise<Cartao[]>;
-
-  /** Devolve o Cartão de `id`; ausente é `nao_encontrado`. */
-  obterCartao(id: string): Promise<Desfecho<Cartao>>;
+  /** Devolve os Cartões de `usuarioId`, sem prometer ordem alguma. */
+  listarCartoes(usuarioId: string): Promise<Cartao[]>;
 
   /**
-   * Grava Frente e Verso do Cartão de `cartao.id`, preservando os Vínculos.
-   * Ausente é `nao_encontrado`.
+   * Devolve o Cartão de `id` **no acervo de `usuarioId`**; ausente — inclusive
+   * quando o Cartão é de outro Usuário — é `nao_encontrado`.
    */
-  atualizarCartao(cartao: Cartao): Promise<Desfecho<Cartao>>;
+  obterCartao(usuarioId: string, id: string): Promise<Desfecho<Cartao>>;
 
   /**
-   * Exclui o Cartão de `id`; os Vínculos dele caem pela cascata do esquema e
-   * os Baralhos são preservados (FR-008). Ausente é `nao_encontrado`.
+   * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId`,
+   * preservando os Vínculos. Ausente é `nao_encontrado`.
    */
-  excluirCartao(id: string): Promise<Desfecho<void>>;
+  atualizarCartao(usuarioId: string, cartao: Cartao): Promise<Desfecho<Cartao>>;
 
   /**
-   * Guarda um Baralho já validado pelo Module. `id` é opaco e vem de quem
-   * chama; o nome é rótulo, e nomes repetidos são legítimos (FR-012).
+   * Exclui o Cartão de `id` do acervo de `usuarioId`; os Vínculos dele caem
+   * pela cascata do esquema e os Baralhos são preservados (FR-008). Ausente é
+   * `nao_encontrado`.
    */
-  inserirBaralho(baralho: Baralho): Promise<Desfecho<Baralho>>;
-
-  /** Devolve todos os Baralhos guardados, sem prometer ordem alguma. */
-  listarBaralhos(): Promise<Baralho[]>;
-
-  /** Devolve o Baralho de `id`; ausente é `nao_encontrado`. */
-  obterBaralho(id: string): Promise<Desfecho<Baralho>>;
+  excluirCartao(usuarioId: string, id: string): Promise<Desfecho<void>>;
 
   /**
-   * Grava o nome do Baralho de `baralho.id`, preservando os Vínculos e a
-   * elegibilidade derivada (FR-015). Ausente é `nao_encontrado`.
+   * Guarda um Baralho já validado pelo Module, como acervo do Usuário
+   * `usuarioId`. `id` é opaco e vem de quem chama; o nome é rótulo, e nomes
+   * repetidos são legítimos (FR-012).
    */
-  atualizarBaralho(baralho: Baralho): Promise<Desfecho<Baralho>>;
+  inserirBaralho(usuarioId: string, baralho: Baralho): Promise<Desfecho<Baralho>>;
+
+  /** Devolve os Baralhos de `usuarioId`, sem prometer ordem alguma. */
+  listarBaralhos(usuarioId: string): Promise<Baralho[]>;
 
   /**
-   * Exclui o Baralho de `id`; os Vínculos dele caem pela cascata do esquema e
-   * os Cartões são preservados (FR-017). Ausente é `nao_encontrado`.
+   * Devolve o Baralho de `id` no acervo de `usuarioId`; ausente — inclusive
+   * quando o Baralho é de outro Usuário — é `nao_encontrado`.
    */
-  excluirBaralho(id: string): Promise<Desfecho<void>>;
+  obterBaralho(usuarioId: string, id: string): Promise<Desfecho<Baralho>>;
 
   /**
-   * Associa um Cartão existente a um Baralho existente (FR-019). O par
-   * repetido é recusado como `vinculo_duplicado`, e extremidade inexistente
-   * como `nao_encontrado` — nenhum dos dois é falha do armazenamento.
+   * Grava o nome do Baralho de `baralho.id` no acervo de `usuarioId`,
+   * preservando os Vínculos e a elegibilidade derivada (FR-015). Ausente é
+   * `nao_encontrado`.
    */
-  vincular(cartaoId: string, baralhoId: string): Promise<Desfecho<void>>;
+  atualizarBaralho(usuarioId: string, baralho: Baralho): Promise<Desfecho<Baralho>>;
 
   /**
-   * Desfaz o Vínculo, preservando Cartão e Baralho (FR-021). Vínculo
-   * inexistente é recusado como `nao_encontrado`.
+   * Exclui o Baralho de `id` do acervo de `usuarioId`; os Vínculos dele caem
+   * pela cascata do esquema e os Cartões são preservados (FR-017). Ausente é
+   * `nao_encontrado`.
    */
-  desvincular(cartaoId: string, baralhoId: string): Promise<Desfecho<void>>;
-
-  /** Devolve os Baralhos a que o Cartão está vinculado, sem ordem prometida. */
-  listarBaralhosDoCartao(cartaoId: string): Promise<Baralho[]>;
-
-  /** Devolve os Cartões vinculados ao Baralho, sem ordem prometida. */
-  listarCartoesDoBaralho(baralhoId: string): Promise<Cartao[]>;
+  excluirBaralho(usuarioId: string, id: string): Promise<Desfecho<void>>;
 
   /**
-   * Devolve a quantidade de Cartões de cada Baralho, lida dos Vínculos. É o
-   * insumo da elegibilidade derivada, que o Module calcula como contagem maior
-   * que zero (FR-024).
+   * Associa um Cartão existente a um Baralho existente (FR-019), **os dois no
+   * acervo de `usuarioId`**: extremidade de outro Usuário é `nao_encontrado`,
+   * como se ela não existisse (FR-093). O par repetido é recusado como
+   * `vinculo_duplicado` — nenhum dos dois desfechos é falha do armazenamento.
    */
-  contarCartoesPorBaralho(): Promise<ContagemPorBaralho[]>;
+  vincular(
+    usuarioId: string,
+    cartaoId: string,
+    baralhoId: string,
+  ): Promise<Desfecho<void>>;
+
+  /**
+   * Desfaz o Vínculo no acervo de `usuarioId`, preservando Cartão e Baralho
+   * (FR-021). Vínculo inexistente é recusado como `nao_encontrado`.
+   */
+  desvincular(
+    usuarioId: string,
+    cartaoId: string,
+    baralhoId: string,
+  ): Promise<Desfecho<void>>;
+
+  /**
+   * Devolve os Baralhos a que o Cartão de `usuarioId` está vinculado, sem
+   * ordem prometida.
+   */
+  listarBaralhosDoCartao(usuarioId: string, cartaoId: string): Promise<Baralho[]>;
+
+  /**
+   * Devolve os Cartões vinculados ao Baralho de `usuarioId`, sem ordem
+   * prometida.
+   */
+  listarCartoesDoBaralho(usuarioId: string, baralhoId: string): Promise<Cartao[]>;
+
+  /**
+   * Devolve a quantidade de Cartões de cada Baralho **do Usuário
+   * `usuarioId`**, lida dos Vínculos. É o insumo da elegibilidade derivada, que
+   * o Module calcula como contagem maior que zero (FR-024).
+   */
+  contarCartoesPorBaralho(
+    usuarioId: string,
+  ): Promise<ContagemPorBaralho[]>;
 }

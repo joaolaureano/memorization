@@ -1,17 +1,17 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo } from "../../src/acervo/acervo.ts";
 import {
-  abrirArmazenamentoSqlite,
-  type ArmazenamentoSqliteAberto,
-} from "../../src/armazenamento/sqlite/armazenamento.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+  montarServidorDeContrato,
+  pedirComCredencial,
+  type ServidorDeContrato,
+} from "./apoio-de-contrato.ts";
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
 } from "../../src/http/rotas.ts";
+
 
 /**
  * T207 — contrato HTTP de Vínculos
@@ -28,27 +28,37 @@ const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 const NOME_VALIDO = "Inglês";
 
-let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-
-  const acervo = criarAcervo(aberto.armazenamento);
-
-  registrarRotasDeCartoes(servidor, acervo);
-  registrarRotasDeBaralhos(servidor, acervo);
+  /**
+   * O servidor é montado como na aplicação, com o hook que exige a Credencial:
+   * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
+   */
+  contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+  registrarRotasDeCartoes(servidor, acervoDe);
+  registrarRotasDeBaralhos(servidor, acervoDe);
+  });
+  servidor = contrato.servidor;
 });
 
 afterEach(async () => {
-  await servidor.close();
-  await aberto.encerrar();
+  await contrato.encerrar();
 });
+
+/**
+ * Envia a requisição com a Credencial do Usuário que entrou: sem ela, nenhuma
+ * rota de acervo roda (FR-090), e é assim que todas as chamadas deste arquivo
+ * a apresentam.
+ */
+function pedir(requisicao: InjectOptions) {
+  return pedirComCredencial(servidor, contrato.credencial, requisicao);
+}
 
 /** Cria um Cartão pela rota de criação; falha se a criação for recusada. */
 async function criarCartao(): Promise<{ id: string; frente: string; verso: string }> {
-  const resposta = await servidor.inject({
+  const resposta = await pedir({
     method: "POST",
     url: "/cartoes",
     payload: { frente: FRENTE_VALIDA, verso: VERSO_VALIDO },
@@ -65,7 +75,7 @@ async function criarCartao(): Promise<{ id: string; frente: string; verso: strin
 async function criarBaralho(
   nome = NOME_VALIDO,
 ): Promise<{ id: string; nome: string }> {
-  const resposta = await servidor.inject({
+  const resposta = await pedir({
     method: "POST",
     url: "/baralhos",
     payload: { nome },
@@ -83,7 +93,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: cartao.id },
@@ -91,7 +101,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
 
     expect(resposta.statusCode).toBe(201);
 
-    const leitura = await servidor.inject({
+    const leitura = await pedir({
       method: "GET",
       url: `/baralhos/${baralho.id}`,
     });
@@ -108,7 +118,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
   it("recusa Cartão inexistente com 404 e mensagem em português", async () => {
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: "cartao-inexistente" },
@@ -124,7 +134,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
   it("recusa Baralho inexistente com 404 e mensagem em português", async () => {
     const cartao = await criarCartao();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/baralhos/baralho-inexistente/vinculos",
       payload: { cartaoId: cartao.id },
@@ -141,7 +151,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 
-    const primeira = await servidor.inject({
+    const primeira = await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: cartao.id },
@@ -149,7 +159,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
 
     expect(primeira.statusCode).toBe(201);
 
-    const duplicada = await servidor.inject({
+    const duplicada = await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: cartao.id },
@@ -168,20 +178,20 @@ describe("DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}", () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 
-    await servidor.inject({
+    await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: cartao.id },
     });
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "DELETE",
       url: `/baralhos/${baralho.id}/vinculos/${cartao.id}`,
     });
 
     expect(resposta.statusCode).toBe(204);
 
-    const baralhoLido = await servidor.inject({
+    const baralhoLido = await pedir({
       method: "GET",
       url: `/baralhos/${baralho.id}`,
     });
@@ -194,7 +204,7 @@ describe("DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}", () => {
       cartoes: [],
     });
 
-    const cartoes = await servidor.inject({
+    const cartoes = await pedir({
       method: "GET",
       url: "/cartoes",
     });
@@ -206,7 +216,7 @@ describe("DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}", () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "DELETE",
       url: `/baralhos/${baralho.id}/vinculos/${cartao.id}`,
     });
@@ -224,13 +234,13 @@ describe("GET /baralhos/{id}", () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 
-    await servidor.inject({
+    await pedir({
       method: "POST",
       url: `/baralhos/${baralho.id}/vinculos`,
       payload: { cartaoId: cartao.id },
     });
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "GET",
       url: `/baralhos/${baralho.id}`,
     });
@@ -245,7 +255,7 @@ describe("GET /baralhos/{id}", () => {
   });
 
   it("recusa Baralho inexistente com 404 e mensagem em português", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "GET",
       url: "/baralhos/baralho-inexistente",
     });

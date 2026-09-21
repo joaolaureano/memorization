@@ -7,7 +7,9 @@ import {
   criarBaralhoPelaApi,
   criarCartaoPelaApi,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   obterBaralhoPelaApi,
@@ -70,6 +72,10 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       (resposta) => resposta.ok,
     );
 
+    // O Usuário de prova é cadastrado antes de o acervo ser preparado: o
+    // Baralho e os Cartões da Sessão são dele (FR-090, FR-092).
+    await criarUsuarioDeProva(enderecoDaApi);
+
     // Prepara o acervo direto pela API: um Baralho com cinco Cartões
     // vinculados — o cenário canônico da Sessão.
     const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
@@ -92,8 +98,10 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     expect(baralhoPreparado.elegivel).toBe(true);
     expect(baralhoPreparado.cartoes).toHaveLength(QUANTIDADE_DE_CARTOES);
 
-    // A tela real de Sessão comunica a quantidade disponível.
+    // A tela real de Sessão comunica a quantidade disponível, depois de Entrar
+    // (FR-097).
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
@@ -172,6 +180,11 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await expect(page.getByText("Item 1 de 3")).toBeVisible();
 
     await page.reload();
+
+    // Recarregar descarta a Credencial, e a Sessão em andamento com ela; a
+    // tela de estudo volta ao início depois de Entrar de novo (FR-089,
+    // SC-031).
+    await entrarSeNecessario(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),

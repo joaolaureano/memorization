@@ -5,10 +5,13 @@ import { expect, test } from "@playwright/test";
 import {
   aguardarApiPronta,
   aguardarProntidao,
+  cabecalhoDeCredencial,
   criarBaralhoPelaApi,
   criarCartaoPelaApi,
   criarPastaTemporaria,
+  criarUsuarioDeProva,
   encerrarProcesso,
+  entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
   listarCartoesComBaralhosPelaApi,
@@ -69,6 +72,10 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
       (resposta) => resposta.ok,
     );
 
+    // Depois de `008-entrar`, o acervo é por Usuário: o Usuário de prova é
+    // cadastrado antes de preparar o acervo, que é dele (FR-090, FR-092).
+    const credencial = await criarUsuarioDeProva(enderecoDaApi);
+
     // Prepara um Cartão vinculado a dois Baralhos: um será excluído para
     // provar que o Cartão sobrevive; o outro permanece para provar a
     // elegibilidade derivada quando o único Cartão vinculado é excluído.
@@ -100,8 +107,10 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     );
 
     // Cancelar a exclusão do Cartão: o diálogo declara a consequência e o
-    // cancelamento mantém o Cartão no acervo, sem alterar a API.
+    // cancelamento mantém o Cartão no acervo, sem alterar a API. A tela é
+    // alcançada depois de Entrar (FR-097).
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page, credencial);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
@@ -141,6 +150,7 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     // Exclui um dos Baralhos: o Cartão continua existindo e permanece
     // vinculado apenas ao Baralho restante.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralhoARemover.id}`);
+    await entrarSeNecessario(page, credencial);
 
     await expect(
       page.getByRole("heading", { level: 1, name: BARALHO_A_REMOVER }),
@@ -175,6 +185,7 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
 
     const respostaDoBaralhoRemovido = await fetch(
       `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoARemover.id)}`,
+      { headers: cabecalhoDeCredencial(credencial) },
     );
 
     expect(respostaDoBaralhoRemovido.status).toBe(404);
@@ -199,6 +210,7 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     // Exclui o único Cartão vinculado restante: o Baralho sobrevive e deixa
     // de ser elegível, derivado da ausência de Vínculos.
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page, credencial);
 
     const itemDoCartaoRestante = page
       .getByRole("listitem")
@@ -240,6 +252,7 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
 
     // A lista de Baralhos continua exibindo o Baralho, agora não elegível.
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
+    await entrarSeNecessario(page, credencial);
 
     const itemDoBaralhoRestante = page
       .getByRole("listitem")

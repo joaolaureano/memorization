@@ -194,11 +194,12 @@ if (
   const aberto = await abrirArmazenamentoDaNuvem(configuracao);
 
   if (aberto !== null) {
-    const acervo = criarAcervo(aberto.armazenamento);
     const identidade = criarIdentidade(aberto.usuarios, segredo);
 
     console.log(LINHA_DE_INICIO);
 
-    await iniciarServidor(process.env, acervo, identidade);
+    await iniciarServidor(process.env, identidade, (usuarioId) =>
+      criarAcervo(aberto.armazenamento, usuarioId),
+    );
   }
 }

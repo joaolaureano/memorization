@@ -188,53 +188,86 @@ export async function abrirArmazenamentoSqlite(
 ): Promise<ArmazenamentoSqliteAberto> {
   const banco: DatabaseSync = abrirBanco(caminho);
 
+  /**
+   * Toda consulta do acervo é restrita a `usuario_id`: o dono é o primeiro
+   * parâmetro das operações da Porta, e nenhuma linha de outro Usuário é lida,
+   * alterada ou excluída. Um `id` de outro Usuário não devolve linha alguma —
+   * ele é indistinguível de um `id` que nunca existiu (FR-092, SC-030).
+   */
   const inserirCartao = banco.prepare(
-    "INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)",
+    "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES (?, ?, ?, ?)",
   );
-  const listarCartoes = banco.prepare("SELECT id, frente, verso FROM cartao");
+  const listarCartoes = banco.prepare(
+    "SELECT id, frente, verso FROM cartao WHERE usuario_id = ?",
+  );
   const obterCartaoPorId = banco.prepare(
-    "SELECT id, frente, verso FROM cartao WHERE id = ?",
+    "SELECT id, frente, verso FROM cartao WHERE id = ? AND usuario_id = ?",
   );
   const atualizarCartao = banco.prepare(
-    "UPDATE cartao SET frente = ?, verso = ? WHERE id = ?",
+    "UPDATE cartao SET frente = ?, verso = ? WHERE id = ? AND usuario_id = ?",
   );
-  const excluirCartao = banco.prepare("DELETE FROM cartao WHERE id = ?");
+  const excluirCartao = banco.prepare(
+    "DELETE FROM cartao WHERE id = ? AND usuario_id = ?",
+  );
 
   const inserirBaralho = banco.prepare(
-    "INSERT INTO baralho (id, nome) VALUES (?, ?)",
+    "INSERT INTO baralho (id, nome, usuario_id) VALUES (?, ?, ?)",
   );
-  const listarBaralhos = banco.prepare("SELECT id, nome FROM baralho");
+  const listarBaralhos = banco.prepare(
+    "SELECT id, nome FROM baralho WHERE usuario_id = ?",
+  );
   const obterBaralhoPorId = banco.prepare(
-    "SELECT id, nome FROM baralho WHERE id = ?",
+    "SELECT id, nome FROM baralho WHERE id = ? AND usuario_id = ?",
   );
   const atualizarBaralho = banco.prepare(
-    "UPDATE baralho SET nome = ? WHERE id = ?",
+    "UPDATE baralho SET nome = ? WHERE id = ? AND usuario_id = ?",
   );
-  const excluirBaralho = banco.prepare("DELETE FROM baralho WHERE id = ?");
+  const excluirBaralho = banco.prepare(
+    "DELETE FROM baralho WHERE id = ? AND usuario_id = ?",
+  );
 
   const inserirVinculo = banco.prepare(
     "INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)",
   );
+  /**
+   * O Vínculo não tem coluna de dono: ele pertence ao Usuário dos dois
+   * extremos, e é por eles que o escopo chega aqui. Sem os dois `EXISTS`, um
+   * Cartão de outro Usuário poderia ser desvinculado por quem soubesse os dois
+   * `id` (FR-093).
+   */
   const removerVinculo = banco.prepare(
-    "DELETE FROM vinculo WHERE cartao_id = ? AND baralho_id = ?",
+    `DELETE FROM vinculo
+      WHERE cartao_id = ?
+        AND baralho_id = ?
+        AND EXISTS (SELECT 1 FROM cartao
+                     WHERE cartao.id = vinculo.cartao_id
+                       AND cartao.usuario_id = ?)
+        AND EXISTS (SELECT 1 FROM baralho
+                     WHERE baralho.id = vinculo.baralho_id
+                       AND baralho.usuario_id = ?)`,
   );
   const listarBaralhosDoCartao = banco.prepare(
     `SELECT baralho.id, baralho.nome
        FROM vinculo
+       JOIN cartao ON cartao.id = vinculo.cartao_id
        JOIN baralho ON baralho.id = vinculo.baralho_id
-      WHERE vinculo.cartao_id = ?`,
+      WHERE vinculo.cartao_id = ?
+        AND cartao.usuario_id = ?`,
   );
   const listarCartoesDoBaralho = banco.prepare(
     `SELECT cartao.id, cartao.frente, cartao.verso
        FROM vinculo
        JOIN cartao ON cartao.id = vinculo.cartao_id
-      WHERE vinculo.baralho_id = ?`,
+       JOIN baralho ON baralho.id = vinculo.baralho_id
+      WHERE vinculo.baralho_id = ?
+        AND baralho.usuario_id = ?`,
   );
   const contarCartoesPorBaralho = banco.prepare(
     `SELECT baralho.id AS baralhoId,
             COUNT(vinculo.cartao_id) AS quantidadeDeCartoes
        FROM baralho
        LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
+      WHERE baralho.usuario_id = ?
       GROUP BY baralho.id`,
   );
 
@@ -255,21 +288,21 @@ export async function abrirArmazenamentoSqlite(
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
-    async inserirCartao(cartao) {
+    async inserirCartao(usuarioId, cartao) {
       return comDesfecho(() => {
-        inserirCartao.run(cartao.id, cartao.frente, cartao.verso);
+        inserirCartao.run(cartao.id, cartao.frente, cartao.verso, usuarioId);
 
         return { ok: true, valor: cartao };
       });
     },
 
-    async listarCartoes() {
-      return listarCartoes.all().map(cartaoDaLinha);
+    async listarCartoes(usuarioId) {
+      return listarCartoes.all(usuarioId).map(cartaoDaLinha);
     },
 
-    async obterCartao(id) {
+    async obterCartao(usuarioId, id) {
       return comDesfecho(() => {
-        const linha = obterCartaoPorId.get(id);
+        const linha = obterCartaoPorId.get(id, usuarioId);
 
         return linha === undefined
           ? NAO_ENCONTRADO
@@ -277,12 +310,13 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
-    async atualizarCartao(cartao) {
+    async atualizarCartao(usuarioId, cartao) {
       return comDesfecho(() => {
         const alteradas = atualizarCartao.run(
           cartao.frente,
           cartao.verso,
           cartao.id,
+          usuarioId,
         );
 
         return Number(alteradas.changes) === 0
@@ -291,27 +325,29 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
-    async excluirCartao(id) {
+    async excluirCartao(usuarioId, id) {
       return comDesfecho(() =>
-        Number(excluirCartao.run(id).changes) === 0 ? NAO_ENCONTRADO : SEM_CARGA,
+        Number(excluirCartao.run(id, usuarioId).changes) === 0
+          ? NAO_ENCONTRADO
+          : SEM_CARGA,
       );
     },
 
-    async inserirBaralho(baralho) {
+    async inserirBaralho(usuarioId, baralho) {
       return comDesfecho(() => {
-        inserirBaralho.run(baralho.id, baralho.nome);
+        inserirBaralho.run(baralho.id, baralho.nome, usuarioId);
 
         return { ok: true, valor: baralho };
       });
     },
 
-    async listarBaralhos() {
-      return listarBaralhos.all().map(baralhoDaLinha);
+    async listarBaralhos(usuarioId) {
+      return listarBaralhos.all(usuarioId).map(baralhoDaLinha);
     },
 
-    async obterBaralho(id) {
+    async obterBaralho(usuarioId, id) {
       return comDesfecho(() => {
-        const linha = obterBaralhoPorId.get(id);
+        const linha = obterBaralhoPorId.get(id, usuarioId);
 
         return linha === undefined
           ? NAO_ENCONTRADO
@@ -319,9 +355,13 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
-    async atualizarBaralho(baralho) {
+    async atualizarBaralho(usuarioId, baralho) {
       return comDesfecho(() => {
-        const alteradas = atualizarBaralho.run(baralho.nome, baralho.id);
+        const alteradas = atualizarBaralho.run(
+          baralho.nome,
+          baralho.id,
+          usuarioId,
+        );
 
         return Number(alteradas.changes) === 0
           ? NAO_ENCONTRADO
@@ -329,22 +369,27 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
-    async excluirBaralho(id) {
+    async excluirBaralho(usuarioId, id) {
       return comDesfecho(() =>
-        Number(excluirBaralho.run(id).changes) === 0 ? NAO_ENCONTRADO : SEM_CARGA,
+        Number(excluirBaralho.run(id, usuarioId).changes) === 0
+          ? NAO_ENCONTRADO
+          : SEM_CARGA,
       );
     },
 
-    async vincular(cartaoId, baralhoId) {
+    async vincular(usuarioId, cartaoId, baralhoId) {
       return comDesfecho(() => {
         /**
          * Extremidade inexistente é ausência de linha, e não falha: é a mesma
-         * regra de `nao_encontrado` das outras operações. Sem esta conferência,
-         * a chave estrangeira do esquema apareceria como erro do driver.
+         * regra de `nao_encontrado` das outras operações. A conferência é
+         * feita **dentro do escopo**, de modo que a extremidade de outro
+         * Usuário é ausência — sem revelar que ela existe (FR-093). Sem esta
+         * conferência, a chave estrangeira do esquema apareceria como erro do
+         * driver.
          */
         if (
-          obterCartaoPorId.get(cartaoId) === undefined ||
-          obterBaralhoPorId.get(baralhoId) === undefined
+          obterCartaoPorId.get(cartaoId, usuarioId) === undefined ||
+          obterBaralhoPorId.get(baralhoId, usuarioId) === undefined
         ) {
           return NAO_ENCONTRADO;
         }
@@ -363,29 +408,38 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
-    async desvincular(cartaoId, baralhoId) {
-      return comDesfecho(() =>
-        Number(removerVinculo.run(cartaoId, baralhoId).changes) === 0
-          ? NAO_ENCONTRADO
-          : SEM_CARGA,
-      );
+    async desvincular(usuarioId, cartaoId, baralhoId) {
+      return comDesfecho(() => {
+        const removidos = removerVinculo.run(
+          cartaoId,
+          baralhoId,
+          usuarioId,
+          usuarioId,
+        );
+
+        return Number(removidos.changes) === 0 ? NAO_ENCONTRADO : SEM_CARGA;
+      });
     },
 
-    async listarBaralhosDoCartao(cartaoId) {
-      return listarBaralhosDoCartao.all(cartaoId).map(baralhoDaLinha);
+    async listarBaralhosDoCartao(usuarioId, cartaoId) {
+      return listarBaralhosDoCartao
+        .all(cartaoId, usuarioId)
+        .map(baralhoDaLinha);
     },
 
-    async listarCartoesDoBaralho(baralhoId) {
-      return listarCartoesDoBaralho.all(baralhoId).map(cartaoDaLinha);
+    async listarCartoesDoBaralho(usuarioId, baralhoId) {
+      return listarCartoesDoBaralho
+        .all(baralhoId, usuarioId)
+        .map(cartaoDaLinha);
     },
 
-    async contarCartoesPorBaralho() {
-      const contagens: ContagemPorBaralho[] = contarCartoesPorBaralho.all().map(
-        (linha) => ({
+    async contarCartoesPorBaralho(usuarioId) {
+      const contagens: ContagemPorBaralho[] = contarCartoesPorBaralho
+        .all(usuarioId)
+        .map((linha) => ({
           baralhoId: linha.baralhoId as string,
           quantidadeDeCartoes: Number(linha.quantidadeDeCartoes),
-        }),
-      );
+        }));
 
       return contagens;
     },

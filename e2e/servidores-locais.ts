@@ -10,6 +10,8 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
+import type { Page } from "@playwright/test";
+
 // T014 — suporte de execução para a prova E2E real de persistência
 // (FR-040, SC-003; specs/001-criar-cartao/tasks.md).
 //
@@ -29,6 +31,63 @@ const RAIZ_DO_REPOSITORIO = dirname(dirname(fileURLToPath(import.meta.url)));
  * o mesmo arquivo. Nenhum valor literal de segredo existe neste arquivo.
  */
 const SEGREDO_DAS_SENHAS = randomBytes(48).toString("base64url");
+
+/**
+ * Nome de usuário do Usuário de prova padrão (T715;
+ * specs/008-entrar/tasks.md). Depois de `008-entrar`, toda prova de acervo
+ * precisa de uma Credencial: este é o Usuário que os auxiliares cadastram
+ * quando a prova não pede um nome próprio. A Senha é gerada a cada execução.
+ */
+export const NOME_DE_USUARIO_DE_PROVA = "usuario.de.prova";
+
+/**
+ * A Credencial de prova: o par Nome de usuário e Senha que acompanha cada
+ * requisição, no cabeçalho `Authorization: Basic` (FR-090). Ela vive apenas no
+ * processo do teste — a aplicação não guarda Credencial em lugar nenhum
+ * (FR-079, SC-033).
+ */
+export interface CredencialDeProva {
+  nomeDeUsuario: string;
+  senha: string;
+}
+
+/** Uma Senha gerada agora: nenhum valor literal de Senha é versionado. */
+export function gerarSenhaDeProva(): string {
+  return randomBytes(12).toString("base64url");
+}
+
+/**
+ * O cabeçalho da Credencial, no formato do contrato
+ * (`specs/008-entrar/contracts/api-entrar.md`):
+ * `Basic base64(nomeDeUsuario:senha)`, codificado em UTF-8.
+ */
+export function cabecalhoDeCredencial(
+  credencial: CredencialDeProva,
+): Record<string, string> {
+  const valor = Buffer.from(
+    `${credencial.nomeDeUsuario}:${credencial.senha}`,
+    "utf8",
+  ).toString("base64");
+
+  return { authorization: `Basic ${valor}` };
+}
+
+/**
+ * A Credencial que os auxiliares apresentam quando a prova não informa outra: a
+ * do último Usuário de prova cadastrado por `criarUsuarioDeProva`.
+ */
+let credencialDeProvaAtual: CredencialDeProva | null = null;
+
+/** A Credencial de prova corrente do arquivo de prova. */
+export function credencialDeProva(): CredencialDeProva {
+  if (credencialDeProvaAtual === null) {
+    throw new Error(
+      "nenhum Usuário de prova foi cadastrado nesta prova: chame criarUsuarioDeProva antes",
+    );
+  }
+
+  return credencialDeProvaAtual;
+}
 
 /** Mantém apenas as últimas linhas da saída, para relatar falhas sem crescer sem limite. */
 const LIMITE_DE_LINHAS_DE_SAIDA = 200;
@@ -290,6 +349,7 @@ export async function encerrarProcesso(
 export async function obterBaralhoPelaApi(
   enderecoDaApi: string,
   id: string,
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<{
   id: string;
   nome: string;
@@ -298,6 +358,7 @@ export async function obterBaralhoPelaApi(
 }> {
   const resposta = await fetch(
     `${enderecoDaApi}/baralhos/${encodeURIComponent(id)}`,
+    { headers: cabecalhoDeCredencial(credencial) },
   );
 
   if (!resposta.ok) {
@@ -318,8 +379,11 @@ export async function obterBaralhoPelaApi(
  */
 export async function listarCartoesPelaApi(
   enderecoDaApi: string,
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<{ id: string; frente: string; verso: string }[]> {
-  const resposta = await fetch(`${enderecoDaApi}/cartoes`);
+  const resposta = await fetch(`${enderecoDaApi}/cartoes`, {
+    headers: cabecalhoDeCredencial(credencial),
+  });
 
   if (!resposta.ok) {
     throw new Error(`GET /cartoes respondeu ${resposta.status}`);
@@ -338,6 +402,7 @@ export async function listarCartoesPelaApi(
  */
 export async function listarBaralhosPelaApi(
   enderecoDaApi: string,
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<
   {
     id: string;
@@ -346,7 +411,9 @@ export async function listarBaralhosPelaApi(
     elegivel: boolean;
   }[]
 > {
-  const resposta = await fetch(`${enderecoDaApi}/baralhos`);
+  const resposta = await fetch(`${enderecoDaApi}/baralhos`, {
+    headers: cabecalhoDeCredencial(credencial),
+  });
 
   if (!resposta.ok) {
     throw new Error(`GET /baralhos respondeu ${resposta.status}`);
@@ -368,10 +435,14 @@ export async function listarBaralhosPelaApi(
 export async function criarCartaoPelaApi(
   enderecoDaApi: string,
   cartao: { frente: string; verso: string },
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<{ id: string; frente: string; verso: string }> {
   const resposta = await fetch(`${enderecoDaApi}/cartoes`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...cabecalhoDeCredencial(credencial),
+    },
     body: JSON.stringify(cartao),
   });
 
@@ -394,10 +465,14 @@ export async function criarCartaoPelaApi(
 export async function criarBaralhoPelaApi(
   enderecoDaApi: string,
   baralho: { nome: string },
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<{ id: string; nome: string }> {
   const resposta = await fetch(`${enderecoDaApi}/baralhos`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...cabecalhoDeCredencial(credencial),
+    },
     body: JSON.stringify(baralho),
   });
 
@@ -417,12 +492,16 @@ export async function vincularCartaoPelaApi(
   enderecoDaApi: string,
   cartaoId: string,
   baralhoId: string,
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<void> {
   const resposta = await fetch(
     `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...cabecalhoDeCredencial(credencial),
+      },
       body: JSON.stringify({ cartaoId }),
     },
   );
@@ -441,6 +520,7 @@ export async function vincularCartaoPelaApi(
  */
 export async function listarCartoesComBaralhosPelaApi(
   enderecoDaApi: string,
+  credencial: CredencialDeProva = credencialDeProva(),
 ): Promise<
   {
     id: string;
@@ -449,7 +529,9 @@ export async function listarCartoesComBaralhosPelaApi(
     baralhos: { id: string; nome: string }[];
   }[]
 > {
-  const resposta = await fetch(`${enderecoDaApi}/cartoes`);
+  const resposta = await fetch(`${enderecoDaApi}/cartoes`, {
+    headers: cabecalhoDeCredencial(credencial),
+  });
 
   if (!resposta.ok) {
     throw new Error(`GET /cartoes respondeu ${resposta.status}`);
@@ -481,6 +563,124 @@ export function lerVersaoDoEsquema(caminhoDoBanco: string): number {
   } finally {
     banco.close();
   }
+}
+
+/**
+ * Cadastra um Usuário de prova pela API real e devolve a Credencial dele.
+ *
+ * A Credencial devolvida passa a ser a que os auxiliares de acervo apresentam
+ * por padrão, de modo que cada prova existente precise apenas Entrar com ela
+ * (FR-090). O Cadastro é a única rota que dispensa Credencial (FR-097), e é por
+ * ele que a prova começa.
+ */
+export async function criarUsuarioDeProva(
+  enderecoDaApi: string,
+  nomeDeUsuario: string = NOME_DE_USUARIO_DE_PROVA,
+): Promise<CredencialDeProva> {
+  const credencial: CredencialDeProva = {
+    nomeDeUsuario,
+    senha: gerarSenhaDeProva(),
+  };
+
+  const resposta = await cadastrarUsuarioPelaApi(enderecoDaApi, credencial);
+
+  if (resposta.status !== 201) {
+    throw new Error(
+      `POST /usuarios de ${nomeDeUsuario} respondeu ${resposta.status}`,
+    );
+  }
+
+  credencialDeProvaAtual = credencial;
+
+  return credencial;
+}
+
+/**
+ * Entra pela tela "Entrar" do frontend real, com a Credencial informada.
+ *
+ * A tela é a primeira e única sem Credencial (FR-097); o `POST /entrar` que o
+ * botão dispara é o que a aplicação verifica antes de mostrar o acervo
+ * (FR-086). A espera é pela resposta do próprio Entrar, e não por um tempo
+ * fixo: sem Credencial válida, a navegação principal não aparece.
+ */
+export async function entrarPelaUi(
+  page: Page,
+  credencial: CredencialDeProva = credencialDeProva(),
+): Promise<void> {
+  await page
+    .getByLabel("Nome de usuário", { exact: true })
+    .fill(credencial.nomeDeUsuario);
+  await page.getByLabel("Senha", { exact: true }).fill(credencial.senha);
+
+  await Promise.all([
+    page.waitForResponse(
+      (candidata) =>
+        candidata.url().endsWith("/entrar") &&
+        candidata.request().method() === "POST",
+    ),
+    page.getByRole("button", { name: "Entrar" }).click(),
+  ]);
+
+  await page.getByRole("navigation", { name: "Principal" }).waitFor();
+}
+
+/**
+ * Entra pela tela "Entrar" quando ela estiver apresentada.
+ *
+ * Um `goto` que só muda o fragmento não recarrega o documento, e a Credencial
+ * mantida na memória da página continua valendo; quando o documento é
+ * recarregado — uma prova que reinicia os servidores —, a Credencial se foi e
+ * Entrar é exigido de novo (FR-089, SC-031). É esta a decisão que os arquivos
+ * de prova não precisam repetir.
+ */
+export async function entrarSeNecessario(
+  page: Page,
+  credencial: CredencialDeProva = credencialDeProva(),
+): Promise<void> {
+  await page.waitForFunction(
+    () => document.querySelector("main h1") !== null,
+  );
+
+  const telaDeEntrada = page.getByRole("heading", {
+    level: 1,
+    name: "Entrar",
+  });
+
+  if ((await telaDeEntrada.count()) === 0) {
+    return;
+  }
+
+  await entrarPelaUi(page, credencial);
+}
+
+/**
+ * Intercepta `POST /entrar` respondendo o Usuário de prova: é o caminho das
+ * provas que interceptam o transporte em vez de subir a API (FR-042). Devolve a
+ * Credencial que a tela "Entrar" deve receber.
+ */
+export async function prepararEntradaInterceptada(
+  page: Page,
+  nomeDeUsuario: string = NOME_DE_USUARIO_DE_PROVA,
+): Promise<CredencialDeProva> {
+  const credencial: CredencialDeProva = {
+    nomeDeUsuario,
+    senha: gerarSenhaDeProva(),
+  };
+
+  await page.route(/\/entrar$/, async (rota) => {
+    if (rota.request().method() === "POST") {
+      await rota.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "u-prova", nomeDeUsuario }),
+      });
+      return;
+    }
+
+    await rota.fallback();
+  });
+
+  return credencial;
 }
 
 /**

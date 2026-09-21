@@ -5,6 +5,7 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
 } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
 import {
   MENSAGEM_DE_BARALHO_INELEGIVEL,
@@ -34,7 +35,7 @@ interface AcervoDeTeste {
 async function criarAcervoElegivel(
   quantidadeDeCartoes: number,
 ): Promise<AcervoDeTeste> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
 
   for (let indice = 1; indice <= quantidadeDeCartoes; indice += 1) {
     const cartao = await cliente.criarCartao({
@@ -88,7 +89,7 @@ function iniciarCom(quantidade: string): void {
 
 describe("PaginaDeEstudo", () => {
   it("recusa Baralho inelegível e oferece o caminho de volta (FR-025)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
     if (!baralho.ok) {
@@ -208,7 +209,7 @@ describe("PaginaDeEstudo", () => {
   );
 
   it("Baralho inexistente mostra a mensagem em português com o link de volta", async () => {
-    renderizar(new ClienteEmMemoria(), "b-inexistente");
+    renderizar(clienteDeProva(), "b-inexistente");
 
     expect(
       await screen.findByRole("heading", {
@@ -223,7 +224,7 @@ describe("PaginaDeEstudo", () => {
   });
 
   it("com o cliente indisponível, comunica a falha de carregamento em português", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
     renderizar(cliente, "b1");
@@ -268,7 +269,7 @@ describe("PaginaDeEstudo", () => {
   });
 
   it("PaginaDoBaralho oferece o link para a Sessão de estudo", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
     if (!baralho.ok) {

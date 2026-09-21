@@ -1,14 +1,14 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo } from "../../src/acervo/acervo.ts";
 import {
-  abrirArmazenamentoSqlite,
-  type ArmazenamentoSqliteAberto,
-} from "../../src/armazenamento/sqlite/armazenamento.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+  montarServidorDeContrato,
+  pedirComCredencial,
+  type ServidorDeContrato,
+} from "./apoio-de-contrato.ts";
 import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
+
 
 /**
  * T403 (backend) — contrato HTTP de `PUT /cartoes/{id}`
@@ -31,23 +31,36 @@ const RECUSA_DE_CORPO_INVALIDO = {
   mensagem: "O corpo da requisição não é válido.",
 };
 
-let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
+  /**
+   * O servidor é montado como na aplicação, com o hook que exige a Credencial:
+   * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
+   */
+  contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+  registrarRotasDeCartoes(servidor, acervoDe);
+  });
+  servidor = contrato.servidor;
 });
 
 afterEach(async () => {
-  await servidor.close();
-  await aberto.encerrar();
+  await contrato.encerrar();
 });
+
+/**
+ * Envia a requisição com a Credencial do Usuário que entrou: sem ela, nenhuma
+ * rota de acervo roda (FR-090), e é assim que todas as chamadas deste arquivo
+ * a apresentam.
+ */
+function pedir(requisicao: InjectOptions) {
+  return pedirComCredencial(servidor, contrato.credencial, requisicao);
+}
 
 /** Cria um Cartão pela rota de criação; falha se a criação for recusada. */
 async function criarCartao(): Promise<{ id: string }> {
-  const resposta = await servidor.inject({
+  const resposta = await pedir({
     method: "POST",
     url: "/cartoes",
     payload: { frente: FRENTE_VALIDA, verso: VERSO_VALIDO },
@@ -64,7 +77,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
   it("responde 200 com o Cartão atualizado", async () => {
     const cartao = await criarCartao();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/cartoes/${cartao.id}`,
       payload: { frente: FRENTE_EDITADA, verso: VERSO_EDITADO },
@@ -77,7 +90,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
       verso: VERSO_EDITADO,
     });
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([
       {
         id: cartao.id,
@@ -91,7 +104,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
   it("recusa Frente vazia com 400 e a mesma mensagem da criação", async () => {
     const cartao = await criarCartao();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/cartoes/${cartao.id}`,
       payload: { frente: "", verso: VERSO_EDITADO },
@@ -105,7 +118,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
   });
 
   it("recusa Cartão inexistente com 404 e mensagem em português", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: "/cartoes/cartao-inexistente",
       payload: { frente: FRENTE_EDITADA, verso: VERSO_EDITADO },
@@ -121,7 +134,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
   it("recusa corpo sem Verso com 400 e não altera o Cartão", async () => {
     const cartao = await criarCartao();
 
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "PUT",
       url: `/cartoes/${cartao.id}`,
       payload: { frente: FRENTE_EDITADA },
@@ -130,7 +143,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
 
-    const leitura = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([
       {
         id: cartao.id,

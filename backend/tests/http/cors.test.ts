@@ -1,21 +1,19 @@
-import type { FastifyInstance } from "fastify";
-
-import { randomBytes } from "node:crypto";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo } from "../../src/acervo/acervo.ts";
-import {
-  abrirArmazenamentoSqlite,
-  type ArmazenamentoSqliteAberto,
-} from "../../src/armazenamento/sqlite/armazenamento.ts";
-import { criarServidor } from "../../src/http/servidor.ts";
+import { randomBytes } from "node:crypto";
+
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
   registrarRotasDeUsuarios,
 } from "../../src/http/rotas.ts";
-import { criarIdentidade } from "../../src/identidade/identidade.ts";
+import {
+  montarServidorDeContrato,
+  pedirComCredencial,
+  type ServidorDeContrato,
+} from "./apoio-de-contrato.ts";
 
 /**
  * T014 — CORS mínimo para o frontend local
@@ -31,42 +29,46 @@ import { criarIdentidade } from "../../src/identidade/identidade.ts";
 
 const ORIGEM_DO_FRONTEND = "http://127.0.0.1:5173";
 
-/** O segredo descartável desta execução: o Cadastro exige um (FR-077). */
-const SEGREDO = randomBytes(48).toString("base64url");
-
 /** Uma Senha gerada nesta execução, com 16 caracteres — nunca literal. */
 function senhaGerada(): string {
   return randomBytes(12).toString("base64url");
 }
 
-let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
+let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  aberto = await abrirArmazenamentoSqlite(":memory:");
-  servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
-  registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
-  registrarRotasDeUsuarios(
-    servidor,
-    criarIdentidade(aberto.usuarios, SEGREDO),
-  );
+  /**
+   * O servidor é montado como na aplicação, agora com o hook que exige a
+   * Credencial: o pré-voo e as rotas isentas continuam sem cabeçalho, e as
+   * demais chamadas apresentam a Credencial do Usuário que entrou.
+   */
+  contrato = await montarServidorDeContrato(({ servidor, acervoDe, identidade }) => {
+    registrarRotasDeCartoes(servidor, acervoDe);
+    registrarRotasDeBaralhos(servidor, acervoDe);
+    registrarRotasDeUsuarios(servidor, identidade);
+  });
+  servidor = contrato.servidor;
 });
 
 afterEach(async () => {
-  await servidor.close();
-  await aberto.encerrar();
+  await contrato.encerrar();
 });
+
+/** Envia a requisição com a Credencial do Usuário que entrou (FR-090). */
+function pedir(requisicao: InjectOptions) {
+  return pedirComCredencial(servidor, contrato.credencial, requisicao);
+}
 
 describe("CORS para o frontend local", () => {
   it("responde ao pré-voo de POST /cartoes com 204 e os cabeçalhos de permissão", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/cartoes",
       headers: {
         origin: ORIGEM_DO_FRONTEND,
         "access-control-request-method": "POST",
-        "access-control-request-headers": "content-type",
+        "access-control-request-headers": "content-type, authorization",
       },
     });
 
@@ -76,17 +78,47 @@ describe("CORS para o frontend local", () => {
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "content-type",
     );
+    /** Sem `authorization`, o navegador recusaria o `fetch` com Credencial. */
+    expect(resposta.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+  });
+
+  it("responde ao pré-voo de POST /entrar com 204, permitindo authorization e POST (FR-090)", async () => {
+    const resposta = await pedir({
+      method: "OPTIONS",
+      url: "/entrar",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
+    expect(resposta.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+  });
+
+  it("permite a leitura da recusa de Credencial: 401 sem Credencial devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({ method: "GET", url: "/cartoes" });
+
+    expect(resposta.statusCode).toBe(401);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
   });
 
   it("permite a leitura da listagem: GET /cartoes devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({ method: "GET", url: "/cartoes" });
+    const resposta = await pedir({ method: "GET", url: "/cartoes" });
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers["access-control-allow-origin"]).toBe("*");
   });
 
   it("permite a leitura da criação concluída: POST 201 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/cartoes",
       payload: { frente: "To walk", verso: "Caminhar" },
@@ -97,7 +129,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura até da recusa: POST 400 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/cartoes",
       payload: { frente: "", verso: "Caminhar" },
@@ -108,7 +140,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de POST /baralhos com 204 e os cabeçalhos de permissão", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos",
       headers: {
@@ -127,14 +159,14 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura da listagem: GET /baralhos devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({ method: "GET", url: "/baralhos" });
+    const resposta = await pedir({ method: "GET", url: "/baralhos" });
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers["access-control-allow-origin"]).toBe("*");
   });
 
   it("permite a leitura da criação concluída: POST /baralhos 201 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/baralhos",
       payload: { nome: "Inglês" },
@@ -145,7 +177,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura até da recusa: POST /baralhos 400 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/baralhos",
       payload: { nome: "" },
@@ -156,7 +188,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de PUT /cartoes/{id} com 204 e permissão de PUT", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/cartoes/c1",
       headers: {
@@ -175,7 +207,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de DELETE /cartoes/{id} com 204 e permissão de DELETE", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/cartoes/c1",
       headers: {
@@ -191,7 +223,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de PUT /baralhos/{id} com 204 e permissão de PUT", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos/b1",
       headers: {
@@ -207,7 +239,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de DELETE /baralhos/{id} com 204 e permissão de DELETE", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos/b1",
       headers: {
@@ -223,7 +255,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de POST /baralhos/{id}/vinculos com 204 e permissão de POST", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos/b1/vinculos",
       headers: {
@@ -239,7 +271,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de DELETE /baralhos/{id}/vinculos/{cartaoId} com 204 e permissão de DELETE", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos/b1/vinculos/c1",
       headers: {
@@ -255,7 +287,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura de caminho parametrizado: GET /baralhos/{id} devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "GET",
       url: "/baralhos/baralho-inexistente",
     });
@@ -265,7 +297,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("responde ao pré-voo de POST /usuarios com 204 e os cabeçalhos de permissão", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "OPTIONS",
       url: "/usuarios",
       headers: {
@@ -284,10 +316,10 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura do Cadastro concluído: POST /usuarios 201 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/usuarios",
-      payload: { nomeDeUsuario: "Ana.Silva", senha: senhaGerada() },
+      payload: { nomeDeUsuario: "Bruno.Souza", senha: senhaGerada() },
     });
 
     expect(resposta.statusCode).toBe(201);
@@ -295,7 +327,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("permite a leitura até da recusa: POST /usuarios 400 devolve access-control-allow-origin", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/usuarios",
       payload: { nomeDeUsuario: "ab", senha: senhaGerada() },
@@ -306,7 +338,7 @@ describe("CORS para o frontend local", () => {
   });
 
   it("não altera rotas alheias: GET /health segue sem cabeçalho de CORS", async () => {
-    const resposta = await servidor.inject({ method: "GET", url: "/health" });
+    const resposta = await pedir({ method: "GET", url: "/health" });
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();

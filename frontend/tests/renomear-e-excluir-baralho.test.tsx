@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
@@ -28,7 +29,7 @@ interface AcervoDeTeste {
 }
 
 async function criarBaralhoComDoisCartoes(): Promise<AcervoDeTeste> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
   if (!baralho.ok) {

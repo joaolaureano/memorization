@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { gerarSenhaDeProva } from './servidores-locais';
+
 // T613 — a tela "Criar conta" permanece utilizável em largura de telefone
 // (FR-042; specs/007-criar-usuario/tasks.md).
 //
@@ -59,8 +61,8 @@ test('a tela Criar conta permanece utilizável e sem rolagem horizontal em telef
   // A recusa de Confirmação divergente é exibida na própria tela, sem enviar
   // nada: o campo passa a dividir o espaço em coluna única com a mensagem.
   await campoDoNome.fill('Ana.Silva');
-  await campoDaSenha.fill('senha-de-prova');
-  await campoDaConfirmacao.fill('outra-senha');
+  await campoDaSenha.fill(gerarSenhaDeProva());
+  await campoDaConfirmacao.fill(gerarSenhaDeProva());
   await botaoDeCadastro.click();
 
   const recusa = page.getByRole('alert', { name: 'Falha no Cadastro' });

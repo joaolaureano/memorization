@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -10,17 +10,26 @@ import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
 } from "../../src/http/rotas.ts";
+import { criarIdentidade } from "../../src/identidade/identidade.ts";
+import {
+  cadastrarUsuarioDeTeste,
+  segredoGerado,
+  type CredencialDeTeste,
+} from "../armazenamento/usuarios-de-teste.ts";
 
 /**
  * T805 — a falha do armazenamento é respondida como indisponibilidade, e o
  * contrato HTTP não muda (FR-044, FR-045, FR-105, FR-107).
  *
  * O servidor é montado exatamente como na aplicação, com o `Acervo` sobre o
- * Adapter do armazenamento local — encerrado antes das requisições, para que a
- * indisponibilidade seja real. O que a asserção exige: resposta que não é de
- * sucesso, com o código estável e a mensagem em português do Module e **nada**
- * além disso — nenhum trecho do driver, caminho de arquivo, URL, senha ou
- * cadeia de conexão. As rotas continuam sendo as mesmas de `001` a `006`.
+ * Adapter do armazenamento local — **encerrado antes das requisições**, para
+ * que a indisponibilidade seja real. Os Usuários vivem em outro armazenamento,
+ * aberto: sem isso não haveria Credencial a verificar, e a recusa do hook
+ * chegaria antes de o handler tentar o acervo (FR-090). Com a Credencial
+ * válida, o que a asserção exige é a resposta do **acervo indisponível**: o
+ * código estável e a mensagem em português do Module, sem nada do driver,
+ * caminho de arquivo, URL, senha ou cadeia de conexão. As rotas continuam sendo
+ * as mesmas de `001` a `006`.
  */
 
 const INDISPONIVEL = {
@@ -29,27 +38,46 @@ const INDISPONIVEL = {
 };
 
 let servidor: FastifyInstance;
+let credencial: CredencialDeTeste;
 
 beforeAll(async () => {
-  const aberto = await abrirArmazenamentoSqlite(":memory:");
+  /** O acervo: aberto e imediatamente encerrado, para a falha ser real. */
+  const doAcervo = await abrirArmazenamentoSqlite(":memory:");
 
-  await aberto.encerrar();
+  await doAcervo.encerrar();
 
-  servidor = criarServidor();
+  /** Os Usuários: em armazenamento próprio, aberto, para haver Credencial. */
+  const dasCredenciais = await abrirArmazenamentoSqlite(":memory:");
+  const identidade = criarIdentidade(
+    dasCredenciais.usuarios,
+    segredoGerado(),
+  );
 
-  const acervo = criarAcervo(aberto.armazenamento);
+  servidor = criarServidor(identidade);
+  credencial = await cadastrarUsuarioDeTeste(identidade);
 
-  registrarRotasDeCartoes(servidor, acervo);
-  registrarRotasDeBaralhos(servidor, acervo);
+  const acervoDe = (usuarioId: string) =>
+    criarAcervo(doAcervo.armazenamento, usuarioId);
+
+  registrarRotasDeCartoes(servidor, acervoDe);
+  registrarRotasDeBaralhos(servidor, acervoDe);
 });
 
 afterAll(async () => {
   await servidor.close();
 });
 
+/** Envia a requisição com a Credencial do Usuário que entrou (FR-090). */
+function pedir(requisicao: InjectOptions) {
+  return servidor.inject({
+    ...requisicao,
+    headers: { ...credencial.cabecalho, ...requisicao.headers },
+  });
+}
+
 describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   it("responde 503 na criação de Cartão, com o código estável e a mensagem em português", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/cartoes",
       payload: { frente: "To walk", verso: "Caminhar" },
@@ -61,7 +89,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
 
   it("repete a mesma resposta enquanto o armazenamento estiver indisponível, sem nada por concluído", async () => {
     const requisicao = () =>
-      servidor.inject({
+      pedir({
         method: "POST",
         url: "/baralhos",
         payload: { nome: "Inglês" },
@@ -79,34 +107,34 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   });
 
   it("responde 503 nas demais rotas que reportam a falha", async () => {
-    const leituraDeBaralho = await servidor.inject({
+    const leituraDeBaralho = await pedir({
       method: "GET",
       url: "/baralhos/baralho-inexistente",
     });
-    const edicaoDeCartao = await servidor.inject({
+    const edicaoDeCartao = await pedir({
       method: "PUT",
       url: "/cartoes/cartao-inexistente",
       payload: { frente: "To walk", verso: "Caminhar" },
     });
-    const exclusaoDeCartao = await servidor.inject({
+    const exclusaoDeCartao = await pedir({
       method: "DELETE",
       url: "/cartoes/cartao-inexistente",
     });
-    const edicaoDeBaralho = await servidor.inject({
+    const edicaoDeBaralho = await pedir({
       method: "PUT",
       url: "/baralhos/baralho-inexistente",
       payload: { nome: "Inglês" },
     });
-    const exclusaoDeBaralho = await servidor.inject({
+    const exclusaoDeBaralho = await pedir({
       method: "DELETE",
       url: "/baralhos/baralho-inexistente",
     });
-    const criacaoDeVinculo = await servidor.inject({
+    const criacaoDeVinculo = await pedir({
       method: "POST",
       url: "/baralhos/baralho-inexistente/vinculos",
       payload: { cartaoId: "cartao-inexistente" },
     });
-    const remocaoDeVinculo = await servidor.inject({
+    const remocaoDeVinculo = await pedir({
       method: "DELETE",
       url: "/baralhos/baralho-inexistente/vinculos/cartao-inexistente",
     });
@@ -126,7 +154,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   });
 
   it("responde a falha sem texto do driver, caminho de arquivo, URL ou cadeia de conexão", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/cartoes",
       payload: { frente: "To walk", verso: "Caminhar" },
@@ -145,7 +173,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   });
 
   it("continua recusando a forma inválida na borda, antes do armazenamento", async () => {
-    const resposta = await servidor.inject({
+    const resposta = await pedir({
       method: "POST",
       url: "/cartoes",
       payload: { verso: "Caminhar" },
@@ -157,7 +185,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
 
   it("não registra rota nova: /health continua 200 e a rota desconhecida continua 404", async () => {
     const saude = await servidor.inject({ method: "GET", url: "/health" });
-    const desconhecida = await servidor.inject({
+    const desconhecida = await pedir({
       method: "GET",
       url: "/indisponivel",
     });
@@ -165,5 +193,19 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
     expect(saude.statusCode).toBe(200);
     expect(saude.json()).toEqual({ status: "ok" });
     expect(desconhecida.statusCode).toBe(404);
+  });
+
+  it("exige a Credencial antes de alcançar o acervo: sem cabeçalho a resposta é 401", async () => {
+    const resposta = await servidor.inject({
+      method: "POST",
+      url: "/cartoes",
+      payload: { frente: "To walk", verso: "Caminhar" },
+    });
+
+    expect(resposta.statusCode).toBe(401);
+    expect(resposta.json()).toEqual({
+      erro: "credencial_invalida",
+      mensagem: "Nome de usuário ou Senha incorretos.",
+    });
   });
 });

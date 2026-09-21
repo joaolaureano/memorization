@@ -5,6 +5,15 @@ import type { Acervo } from "../acervo/acervo.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 
 /**
+ * O construtor do `Acervo` de **um** Usuário. As rotas o chamam por
+ * requisição, com o `usuarioId` do Usuário que Entrou — decorado pelo hook da
+ * Credencial —, e nunca guardam o `Acervo` de ninguém entre requisições
+ * (FR-090, FR-092). A Interface do `Acervo` não muda: o que muda é o dono com
+ * que ele é criado.
+ */
+export type AcervoDeUsuario = (usuarioId: string) => Acervo;
+
+/**
  * Adapter HTTP do Module `Acervo` (T007, T207, T403, T503 e T805).
  *
  * As rotas são finas por construção: validam a **forma** do corpo na borda
@@ -102,15 +111,20 @@ function responderIndisponivel(
 }
 
 /**
- * Registra as rotas de Cartão do contrato sobre o `Acervo` informado:
- * `POST /cartoes`, `GET /cartoes`, `PUT /cartoes/{id}` e
- * `DELETE /cartoes/{id}`. Chamada na inicialização, com o `Acervo` real, e
- * nos testes de contrato, com o `Acervo` sobre o Adapter do armazenamento
- * local.
+ * Registra as rotas de Cartão do contrato sobre o `Acervo` do Usuário que
+ * Entrou: `POST /cartoes`, `GET /cartoes`, `PUT /cartoes/{id}` e
+ * `DELETE /cartoes/{id}`. Chamada na inicialização, com o construtor do
+ * `Acervo` real, e nos testes de contrato, com o `Acervo` sobre o Adapter do
+ * armazenamento local.
+ *
+ * O `Acervo` de quem Entrou é construído **dentro** de cada handler, a partir do
+ * dono decorado na requisição pelo hook da Credencial: nenhum `Acervo` é
+ * guardado entre requisições, e toda operação é, por construção, restrita ao
+ * acervo de quem Entrou (FR-090, FR-092).
  */
 export function registrarRotasDeCartoes(
   servidor: FastifyInstance,
-  acervo: Acervo,
+  acervoDe: AcervoDeUsuario,
 ): void {
   servidor.post("/cartoes", async (requisicao, resposta) => {
     const corpo = corpoDeCartao.safeParse(requisicao.body);
@@ -119,6 +133,7 @@ export function registrarRotasDeCartoes(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.criarCartao(corpo.data);
 
     if (!resultado.ok) {
@@ -135,7 +150,9 @@ export function registrarRotasDeCartoes(
     return resposta.status(201).send(resultado.cartao);
   });
 
-  servidor.get("/cartoes", async () => acervo.listarCartoes());
+  servidor.get("/cartoes", async (requisicao) =>
+    acervoDe(requisicao.usuarioQueEntrou.id).listarCartoes(),
+  );
 
   servidor.put("/cartoes/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
@@ -145,6 +162,7 @@ export function registrarRotasDeCartoes(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.editarCartao(id, corpo.data);
 
     if (!resultado.ok) {
@@ -170,6 +188,7 @@ export function registrarRotasDeCartoes(
 
   servidor.delete("/cartoes/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.excluirCartao(id);
 
     if (!resultado.ok) {
@@ -188,18 +207,20 @@ export function registrarRotasDeCartoes(
 }
 
 /**
- * Registra as rotas de Baralho e de Vínculo do contrato sobre o `Acervo`
- * informado: `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`,
+ * Registra as rotas de Baralho e de Vínculo do contrato sobre o `Acervo` de
+ * quem Entrou: `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`,
  * `PUT /baralhos/{id}`, `DELETE /baralhos/{id}`,
  * `POST /baralhos/{baralhoId}/vinculos` e
  * `DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}`. Mesma estrutura fina
- * das rotas de Cartão: forma validada na borda, regra de domínio julgada
- * exclusivamente pelo `Acervo`, e recusa de domínio repassada com o código
- * estável e a mensagem em português devolvidos pela Interface (FR-046).
+ * das rotas de Cartão: o `Acervo` é construído em cada handler, a partir do
+ * dono decorado na requisição pelo hook da Credencial (FR-090, FR-092), a
+ * forma é validada na borda, a regra de domínio é julgada exclusivamente pelo
+ * `Acervo`, e a recusa de domínio é repassada com o código estável e a
+ * mensagem em português devolvidos pela Interface (FR-046).
  */
 export function registrarRotasDeBaralhos(
   servidor: FastifyInstance,
-  acervo: Acervo,
+  acervoDe: AcervoDeUsuario,
 ): void {
   servidor.post("/baralhos", async (requisicao, resposta) => {
     const corpo = corpoDeBaralho.safeParse(requisicao.body);
@@ -208,6 +229,7 @@ export function registrarRotasDeBaralhos(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.criarBaralho(corpo.data);
 
     if (!resultado.ok) {
@@ -224,10 +246,13 @@ export function registrarRotasDeBaralhos(
     return resposta.status(201).send(resultado.baralho);
   });
 
-  servidor.get("/baralhos", async () => acervo.listarBaralhos());
+  servidor.get("/baralhos", async (requisicao) =>
+    acervoDe(requisicao.usuarioQueEntrou.id).listarBaralhos(),
+  );
 
   servidor.get("/baralhos/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.obterBaralho(id);
 
     if (!resultado.ok) {
@@ -252,6 +277,7 @@ export function registrarRotasDeBaralhos(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.renomearBaralho(id, corpo.data);
 
     if (!resultado.ok) {
@@ -277,6 +303,7 @@ export function registrarRotasDeBaralhos(
 
   servidor.delete("/baralhos/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.excluirBaralho(id);
 
     if (!resultado.ok) {
@@ -303,6 +330,7 @@ export function registrarRotasDeBaralhos(
         return resposta.status(400).send(CORPO_INVALIDO);
       }
 
+      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
       const resultado = await acervo.vincular(corpo.data.cartaoId, baralhoId);
 
       if (!resultado.ok) {
@@ -334,6 +362,7 @@ export function registrarRotasDeBaralhos(
         baralhoId: string;
         cartaoId: string;
       };
+      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
       const resultado = await acervo.desvincular(cartaoId, baralhoId);
 
       if (!resultado.ok) {
@@ -401,4 +430,28 @@ export function registrarRotasDeUsuarios(
 
     return resposta.status(201).send(resultado.usuario);
   });
+}
+
+/**
+ * Registra a rota de Entrar do contrato: `POST /entrar`
+ * (`specs/008-entrar/contracts/api-entrar.md`).
+ *
+ * A verificação da Credencial **já aconteceu** no hook `onRequest`, que é o
+ * ponto único onde ela é conferida (FR-090): quando este handler roda, a
+ * Credencial existe e confere, e a requisição carrega o Usuário que Entrou.
+ * Por isso a rota não tem corpo de requisição, não valida forma alguma e não
+ * tem caminho de recusa próprio — ela apenas **responde quem entrou**, com
+ * exatamente `id` e `nomeDeUsuario` (FR-086, FR-046).
+ *
+ * O `401` de Credencial que não confere, ausente ou malformada é do hook, com a
+ * mensagem única de recusa (FR-088), e nenhuma resposta desta rota carrega
+ * `Set-Cookie` ou valor reutilizável (FR-079).
+ */
+export function registrarRotaDeEntrada(servidor: FastifyInstance): void {
+  servidor.post("/entrar", async (requisicao, resposta) =>
+    resposta.status(200).send({
+      id: requisicao.usuarioQueEntrou.id,
+      nomeDeUsuario: requisicao.usuarioQueEntrou.nomeDeUsuario,
+    }),
+  );
 }

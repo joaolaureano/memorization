@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
@@ -26,7 +27,7 @@ interface AcervoDeTeste {
 }
 
 async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
-  const cliente = new ClienteEmMemoria();
+  const cliente = clienteDeProva();
   const primeiroCartao = await cliente.criarCartao({
     frente: "To walk",
     verso: "Caminhar",
@@ -156,7 +157,7 @@ describe("PaginaDoBaralho", () => {
   });
 
   it("comunica a ausência total de Cartões, distinguindo-a dos demais vazios (FR-062)", async () => {
-    const cliente = new ClienteEmMemoria();
+    const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
     if (!baralho.ok) {
@@ -205,7 +206,7 @@ describe("PaginaDoBaralho", () => {
   });
 
   it("Baralho inexistente mostra a mensagem em português com o link de volta", async () => {
-    renderizar(new ClienteEmMemoria(), "b-inexistente");
+    renderizar(clienteDeProva(), "b-inexistente");
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Baralho não encontrado" }),
