@@ -3299,3 +3299,28 @@ reinício real. T014 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-048
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: semântica acessível
+
+- **Data/hora**: 2026-09-20 23:14 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T012 — concluída
+
+O estado vazio passou a ser uma região `status` polida e atômica. Falhas de
+criação e listagem permanecem alertas assertivos, agora nomeados por contexto,
+inclusive quando a mesma mensagem aparece simultaneamente nos dois fluxos. A
+bateria consulta papel, nome e estado acessíveis e comprova reanúncio em nova
+tentativa, preservando o foco implementado em T011.
+
+O worker criou por engano um commit apenas dentro do worktree; o Arquiteto não
+o propagou como commit, aplicou somente o patch revisado e manteve a integração
+sob sua autoridade. As próximas delegações proíbem commit explicitamente.
+Passaram independentemente 59 testes, build e lint. T012 foi aceita [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

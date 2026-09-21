@@ -74,7 +74,7 @@ verificável isoladamente.
 ## Fase 3 — Acessibilidade, responsividade e validação final
 
 - [X] T011 Criar Cartão e navegar a lista apenas por teclado, com foco visível
-- [ ] T012 Erros e estado vazio perceptíveis por leitor de tela
+- [X] T012 Erros e estado vazio perceptíveis por leitor de tela
 - [X] T013 [P] As telas são utilizáveis em largura de telefone
 - [X] T014 Os Cartões sobrevivem a fechar e reabrir a aplicação
 

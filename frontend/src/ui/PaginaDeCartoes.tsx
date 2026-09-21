@@ -33,6 +33,17 @@ import {
  * recusa de regra de Cartão, o foco vai ao campo que precisa de correção — a
  * direção vem **somente** do código de erro devolvido pela Interface
  * (`CAMPO_PARA_CORRECAO`), nunca de validação replicada na tela.
+ *
+ * T012 (FR-056): o estado vazio e as falhas são perceptíveis por leitor de
+ * tela, não apenas visualmente. O estado vazio é uma região ativa polida
+ * (`role="status"`), inserida só depois de a listagem responder — é a
+ * inserção que dispara o anúncio. As falhas de listagem e de criação são
+ * regiões assertivas (`role="alert"`) **sem** `aria-live` explícito: o
+ * atributo redundaria o valor que o papel já implica e poderia duplicar o
+ * anúncio. Cada região tem `aria-label` próprio que a nomeia no seu contexto
+ * — o conteúdo continua sendo a mensagem anunciada, sem repetição — de modo
+ * que as duas falhas simultâneas de transporte (mesma mensagem em contextos
+ * distintos) permanecem inequívocas.
  */
 
 /**
@@ -205,7 +216,11 @@ export function PaginaDeCartoes({
           </div>
 
           {falhaDeCriacao !== null && (
-            <p className="erro" role="alert">
+            <p
+              className="erro"
+              role="alert"
+              aria-label="Falha na criação do Cartão"
+            >
               {falhaDeCriacao}
             </p>
           )}
@@ -226,11 +241,27 @@ export function PaginaDeCartoes({
         {carregando ? (
           <p className="carregando">Carregando Cartões…</p>
         ) : falhaDeListagem !== null ? (
-          <p className="erro" role="alert">
+          <p
+            className="erro"
+            role="alert"
+            aria-label="Falha na listagem de Cartões"
+          >
             {falhaDeListagem}
           </p>
         ) : cartoes.length === 0 ? (
-          <p className="estado-vazio">
+          // FR-056: o estado vazio é anunciado por região ativa polida — não
+          // apenas texto visual. O papel já implica `aria-live="polite"` e
+          // `aria-atomic="true"`; os atributos vêm explícitos com os mesmos
+          // valores para que a semântica seja asseverável por teste, sem
+          // mudar o que o leitor de tela anuncia. O `aria-label` nomeia a
+          // região; o conteúdo continua sendo a mensagem anunciada.
+          <p
+            className="estado-vazio"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label="Estado vazio da lista de Cartões"
+          >
             Ainda não há Cartões. Crie o primeiro Cartão para começar a
             memorizar.
           </p>
