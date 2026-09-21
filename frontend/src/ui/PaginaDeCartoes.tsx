@@ -15,6 +15,13 @@ import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../acervo-cliente/validacao";
  * de domínio usada aqui é o limite de caracteres, importada de `validacao.ts`,
  * e apenas para comunicar contagem e limite durante a digitação (FR-053) —
  * nunca para recusar conteúdo.
+ *
+ * T010 (FR-044, FR-045, SC-012): a recusa da criação é exibida com a mensagem
+ * da Interface, nunca é inserida na lista como concluída e deixa Frente e Verso
+ * intactos para nova tentativa. Como a listagem pode ter falhado antes, uma
+ * criação bem-sucedida reconcilia a lista com o acervo pela Interface — sem
+ * isso, o Cartão efetivamente persistido ficaria escondido atrás da falha de
+ * listagem, e a tela não retrataria a operação concluída.
  */
 
 /**
@@ -73,11 +80,32 @@ export function PaginaDeCartoes({
       setCartoes((atuais) => [...atuais, resultado.cartao]);
       setFrente("");
       setVerso("");
+
+      if (falhaDeListagem !== null) {
+        await reconciliarListagem();
+      }
     } else {
       setFalhaDeCriacao(resultado.mensagem);
     }
 
     setSubmetendo(false);
+  }
+
+  /**
+   * Relê a lista pela Interface quando ela já havia falhado (FR-044).
+   *
+   * O Cartão recém-criado foi persistido, e a tela deve retratá-lo: sem esta
+   * releitura, a falha de listagem anterior continuaria escondendo a lista
+   * inteira — inclusive a criação que acabou de ser concluída. Uma falha aqui
+   * apenas mantém a recusa de listagem vigente; nenhuma mensagem é inventada.
+   */
+  async function reconciliarListagem() {
+    const resultado = await cliente.listarCartoes();
+
+    if (resultado.ok) {
+      setCartoes(resultado.cartoes);
+      setFalhaDeListagem(null);
+    }
   }
 
   return (

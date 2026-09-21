@@ -3202,3 +3202,27 @@ T009 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-044
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: falha de criação
+
+- **Data/hora**: 2026-09-20 22:41 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T010 — concluída
+
+O worker comprovou o fluxo de indisponibilidade pela Interface: uma criação
+recusada exibe a mensagem recebida, não entra na lista e preserva integralmente
+Frente e Verso. A nova tentativa reutiliza o conteúdo e só aparece concluída
+depois de persistida. Se a listagem inicial falhou, uma criação posterior
+reconcilia a lista novamente por `ClienteDoAcervo`.
+
+O escopo permaneceu restrito à tela e aos seus testes. Worker e Arquiteto
+executaram independentemente 44 testes, build e lint do frontend, todos verdes.
+T010 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

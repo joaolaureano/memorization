@@ -53,7 +53,7 @@ verificável isoladamente.
 - [X] T007 Rotas `POST /cartoes` e `GET /cartoes` respondem conforme o contrato
 - [X] T008 `ClienteDoAcervo` funciona com dois Adapters
 - [X] T009 Telas de lista e criação, com estado vazio e aviso de limite
-- [ ] T010 Falha de gravação é reportada e o conteúdo digitado é preservado
+- [X] T010 Falha de gravação é reportada e o conteúdo digitado é preservado
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
