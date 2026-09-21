@@ -1,6 +1,6 @@
 # Pendências
 
-Estado verificado em **2026-09-21**, commit `5789c90`. **Produto concluído**: as 83
+Estado verificado em **2026-09-21**, commit `5789c90`. **Produto concluído**: as 63
 tarefas das seis features estão entregues e verificadas.
 
 Este arquivo lista o que falta. É um inventário de trabalho, não um registro de
