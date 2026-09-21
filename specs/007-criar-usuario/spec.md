@@ -162,7 +162,9 @@ feature:
 - **FR-083**: O sistema MUST confirmar a conclusão do Cadastro de forma
   explícita.
 - **FR-084**: O sistema MUST oferecer acesso à tela "Criar conta" pela
-  navegação principal.
+  navegação principal. **Substituído pelo FR-098 da `008-entrar`**, que move
+  esse acesso para a tela "Entrar". A substituição foi prevista no clarify das
+  duas features e registrada no analyze da `008` (L1).
 - **FR-085**: O sistema MUST NOT impor regras de composição à Senha (como exigir
   maiúscula, dígito ou símbolo) além do tamanho.
 

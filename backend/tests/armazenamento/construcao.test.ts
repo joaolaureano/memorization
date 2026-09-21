@@ -49,7 +49,8 @@ import {
  * carrega **um** armazenamento — o local não contém `pg` nem o Adapter da
  * nuvem, os da nuvem não contêm `node:sqlite` nem o Adapter local —, e a
  * primeira linha de cada início nomeia o tipo de armazenamento sem caminho de
- * arquivo, URL, senha ou cadeia de conexão.
+ * arquivo, URL, senha ou cadeia de conexão. O pacote local é ainda iniciado pelo
+ * script `start:local`, por um único comando (FR-101, FR-109, SC-041).
  */
 
 const RAIZ_DO_BACKEND = resolve(
@@ -210,6 +211,70 @@ async function encerrar(processo: ChildProcess): Promise<void> {
   await Promise.race([saiu, new Promise<void>((r) => setTimeout(r, 5_000))]);
 }
 
+interface ScriptEmExecucao {
+  saida: () => string;
+  encerrar: () => Promise<void>;
+}
+
+/**
+ * Encerra o grupo de processos do `npm`: o `npm` intermediário não repassa
+ * sinais ao filho, e é o grupo inteiro que é encerrado.
+ */
+async function encerrarGrupo(processo: ChildProcess): Promise<void> {
+  const grupo = processo.pid;
+
+  if (grupo === undefined) {
+    return;
+  }
+
+  const saiu = new Promise<void>((resolver) => {
+    if (processo.exitCode !== null || processo.signalCode !== null) {
+      resolver();
+      return;
+    }
+
+    processo.once("exit", () => resolver());
+  });
+
+  for (const sinal of ["SIGTERM", "SIGKILL"] as const) {
+    try {
+      process.kill(-grupo, sinal);
+    } catch {
+      // Já encerrado: nada a encerrar.
+    }
+
+    await Promise.race([saiu, new Promise<void>((r) => setTimeout(r, 3_000))]);
+  }
+
+  processo.stdout?.destroy();
+  processo.stderr?.destroy();
+}
+
+/** Sobe a aplicação por um script de `npm`, como quem o digita no terminal. */
+function iniciarPeloScriptDeNpm(
+  script: string,
+  ambiente: NodeJS.ProcessEnv,
+): ScriptEmExecucao {
+  const processo = spawn("npm", ["run", script], {
+    cwd: RAIZ_DO_BACKEND,
+    env: ambiente,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const capturado: string[] = [];
+
+  processo.stdout?.setEncoding("utf8");
+  processo.stdout?.on("data", (pedaco: string) => capturado.push(pedaco));
+  processo.stderr?.setEncoding("utf8");
+  processo.stderr?.on("data", (pedaco: string) => capturado.push(pedaco));
+
+  return {
+    saida: () => capturado.join(""),
+    encerrar: () => encerrarGrupo(processo),
+  };
+}
+
 describe("recusa da construção", () => {
   beforeEach(() => {
     rmSync(DIRETORIO_DE_SAIDA, { recursive: true, force: true });
@@ -258,7 +323,7 @@ describe("pacote do armazenamento local", () => {
     pacote = existsSync(PACOTE_LOCAL) ? readFileSync(PACOTE_LOCAL, "utf8") : "";
   });
 
-  it("conclui nomeando o armazenamento e produz um único arquivo", () => {
+  it("conclui nomeando o armazenamento e produz um único arquivo (FR-101)", () => {
     expect(resultado.status).toBe(0);
     expect(saidaDe(resultado)).toContain("sqlite");
     expect(readdirSync(DIRETORIO_DE_SAIDA)).toEqual(["sqlite"]);
@@ -267,7 +332,7 @@ describe("pacote do armazenamento local", () => {
     ]);
   });
 
-  it("carrega a entrada local do armazenamento escolhido", () => {
+  it("carrega a entrada local do armazenamento escolhido (FR-101)", () => {
     expect(pacote).toContain(LINHA_DE_INICIO);
   });
 
@@ -305,6 +370,31 @@ describe("pacote do armazenamento local", () => {
       especificadores.filter((modulo) => /sqlite/i.test(modulo)),
     ).toEqual(["node:sqlite"]);
   });
+
+  it("npm run start:local sobe esse pacote por um único comando (FR-101, FR-109, SC-041)", async () => {
+    const pasta = mkdtempSync(join(tmpdir(), "start-local-"));
+    const porta = await portaLivre();
+    const caminhoDoBanco = join(pasta, "memorizacao.sqlite");
+    const script = iniciarPeloScriptDeNpm("start:local", {
+      ...ambienteDeExecucao(),
+      PORTA: String(porta),
+      CAMINHO_DO_BANCO: caminhoDoBanco,
+    });
+
+    try {
+      await aguardarSaude(porta);
+
+      /** A linha de início é a do armazenamento local, e só ela (FR-108). */
+      expect(script.saida()).toContain(LINHA_DE_INICIO);
+      expect(script.saida()).not.toMatch(/postgres|SQLSTATE/i);
+
+      /** O caminho informado por `CAMINHO_DO_BANCO` é o arquivo usado. */
+      expect(existsSync(caminhoDoBanco)).toBe(true);
+    } finally {
+      await script.encerrar();
+      rmSync(pasta, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
 
 interface PacoteEmExecucao {
@@ -409,7 +499,7 @@ describe("linha de início do pacote local", () => {
     expect(saida).not.toMatch(/https?:\/\/|senha|password|secret|token/i);
   });
 
-  it("usa o caminho padrão memorizacao.sqlite quando nada é informado", async () => {
+  it("usa o caminho padrão memorizacao.sqlite quando nada é informado (FR-103)", async () => {
     const pasta = mkdtempSync(join(PASTA_TEMPORARIA, "padrao-"));
     const porta = await portaLivre();
     const ambiente: NodeJS.ProcessEnv = {
@@ -653,7 +743,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
     expect(existsSync(join(pasta, "memorizacao.sqlite"))).toBe(false);
   }, 60_000);
 
-  it("o início local usa o armazenamento local mesmo com DB_URL no ambiente", async () => {
+  it("o início local usa o armazenamento local mesmo com DB_URL no ambiente (FR-103)", async () => {
     const nomeDaBase = await criarBaseMigrada("local-nao-usa-pg", servidor);
     const pasta = mkdtempSync(join(PASTA_TEMPORARIA, "local-"));
     const porta = await portaLivre();

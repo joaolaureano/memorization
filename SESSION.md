@@ -4784,3 +4784,40 @@ Verificado em `main`: backend 514, frontend 337, e2e 18 (duas vezes),
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-092
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: specs/007-criar-usuario/spec.md, backend/tests (construcao, sqlite, meta-teste SC-038)
+
+- **Data/hora**: 2026-09-21 05:22 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: converge — features 007 a 010
+- **Commit anterior**: `f1c6b24` (registra o hash do evento anterior)
+
+> Comando Spec Kit: converge (sobre 007, 008, 009 e 010).
+
+Com todas as tarefas marcadas, o converge mediu a rastreabilidade: 171
+requisitos, 166 com teste.
+- **FR-084** (007, link "Criar conta" na navegação) foi **substituído** pelo
+  FR-098 da 008, que moveu o link para a tela Entrar. A substituição foi
+  registrada na spec da 007; não cabe teste para um comportamento que deixou de
+  existir.
+- **FR-101, FR-103, FR-109 e SC-038** (009): o worker etiquetou os testes que
+  já os comprovavam e escreveu dois: `npm run start:local` sobe o pacote com um
+  único comando, e um meta-teste do SC-038 roda as suítes de 001 a 006 do
+  backend sobre o Adapter SQLite.
+- **Defeito pego na revisão**: a primeira versão do meta-teste disparava a
+  suíte do frontend a partir do backend. Isso acoplava os projetos e exigia o
+  frontend instalado para testar o backend. Um worker de reparo restringiu o
+  meta-teste ao backend; o frontend continua coberto pelo próprio portão e
+  pelas E2E.
+
+Resultado: 170 de 170 requisitos vigentes citados em testes que os verificam.
+Verificado em `main`: backend 521, frontend 337, e2e 18, `typecheck`,
+`build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

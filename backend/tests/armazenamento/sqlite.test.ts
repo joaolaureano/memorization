@@ -71,7 +71,7 @@ bateriaDaPortaDeUsuarios(
 );
 
 describe("arquivo local", () => {
-  it("cria o arquivo inexistente com o esquema aplicado", async () => {
+  it("cria o arquivo inexistente com o esquema aplicado (FR-103)", async () => {
     const caminho = join(DIRETORIO_TEMPORARIO, "novo.sqlite");
 
     expect(existsSync(caminho)).toBe(false);
