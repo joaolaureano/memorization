@@ -3016,3 +3016,70 @@ checklist 21 de 21, `AVAILABLE_DOCS` com os quatro artefatos.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-038
+
+> **SPEC KIT** — Comando: implement | Invocação: revisão do Arquiteto após
+> workers DeepSeek | Integração: claude | Artefatos: frontend/, esquema do Acervo
+> e tasks da feature 001
+
+- **Data/hora**: 2026-09-20 21:40 -03
+- **Ator**: ARCHITECT
+- **Fase**: implement
+- **Feature / Task**: 001-criar-cartao / T002 e T004 — concluídas
+
+T002 e T004 foram aceitas após a revisão do Arquiteto; a reprovação anterior
+decorreu exclusivamente do worktree compartilhado, não de defeito material.
+
+- T002: frontend TypeScript/React/Vite com página neutra, 2 testes, build e lint.
+- T004: tabela cartao SQLite, CHECKs de conteúdo e limites, PRAGMA de chaves
+  estrangeiras, 12 testes de esquema.
+- Verificação integrada: backend 20 testes, build e lint; frontend 2 testes,
+  build e lint. O bind em loopback passou fora do sandbox.
+
+As caixas de T002 e T004 foram marcadas [X]. Próximas fundações: T003 e T005.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado.
+
+---
+
+## EVT-037
+
+> **SPEC KIT** — Comando: implement | Invocação: dois workers DeepSeek |
+> Integração: claude | Artefatos: frontend/, backend/src/acervo/ e
+> backend/tests/acervo/
+
+- **Data/hora**: 2026-09-20 21:38 -03
+- **Ator**: USER → ARCHITECT → WORKER
+- **Fase**: implement
+- **Feature / Task**: 001-criar-cartao / T002 e T004
+- **Tipo**: falha de isolamento de workers e alteração de processo
+
+### Resultado verificável
+
+T002 e T004 foram iniciadas em paralelo no mesmo diretório. Embora cada worker
+tenha produzido apenas sua parte material, o verificador de escopo viu o diff
+compartilhado e reprovou ambos por arquivos fora de suas permissões. Nenhum
+resultado foi aceito ou marcado concluído nesse momento.
+
+O Arquiteto revisou os arquivos: frontend em T002 e esquema/testes de SQLite em
+T004. As verificações independentes passaram: backend 20 testes, build e lint;
+frontend 2 testes, build e lint. O teste de loopback exigiu ambiente fora do
+sandbox, onde passou.
+
+### Determinação do Product Owner
+
+Cada Worker precisa existir num próprio worktree.
+
+### Decisão de processo
+
+Toda delegação DeepSeek futura terá worktree exclusivo, baseline fixado e área
+de escrita limitada. Workers não fazem commit. O Arquiteto revisa o diff no
+worktree, executa verificações e integra no worktree principal somente após
+aceite. A decisão corrige o defeito de processo observado acima.
+
+- **Commit**: pendente de integração de T002/T004.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

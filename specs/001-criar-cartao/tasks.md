@@ -25,9 +25,9 @@ Os metadados exigidos pelo processo ficam na tabela recolhida de cada fase.
 ## Fase 1 — Fundação
 
 - [X] T001 [P] Projeto backend executa e responde a um comando de verificação
-- [ ] T002 [P] Projeto frontend executa e responde a um comando de verificação
+- [X] T002 [P] Projeto frontend executa e responde a um comando de verificação
 - [ ] T003 [P] Harness e2e abre navegador real
-- [ ] T004 Tabela `cartao` criada na primeira execução, com as restrições de conteúdo
+- [X] T004 Tabela `cartao` criada na primeira execução, com as restrições de conteúdo
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
