@@ -3775,3 +3775,52 @@ O grafo do graphify foi atualizado depois das mudanças de código.
 - **Commit**: o deste evento; o próximo evento registra o hash.
 - **Sanitização**: Confirmada. A chave da API DeepSeek só foi usada por variável
   de ambiente e nunca foi escrita.
+
+---
+
+## EVT-065
+
+> **SPEC KIT** — Comando: nenhum (encerramento) | Invocação: worker DeepSeek
+> (deepseek-v4-pro) em worktree exclusivo para D-2 | Integração: claude | Artefatos: servidor.ts, escuta.test.ts, pendencias.md (removido)
+
+- **Data/hora**: 2026-09-21 01:39 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: fechamento de `pendencias.md` e commit final da aplicação
+- **Commit anterior**: `8f0e6b8` (registra o hash de EVT-064)
+
+### Prompt sanitizado
+
+"Limpe tudo que temos em pendencias.md, e tire o arquivo fora. Faça um commit
+final da aplicação."
+
+### Fechamento de cada pendência
+
+- **D-1** (testes fora do typecheck): encerrado por verificação. `tests` está no
+  `include` de `backend/tsconfig.json`, e `npm run build` verifica tipos de 171
+  testes.
+- **D-2** (`PORTA` sem validação): corrigido pelo worker. Sem `PORTA`, usa 3001.
+  Caso contrário exige inteiro de 1 a 65535; valor inválido lança
+  `PortaInvalidaError` com mensagem em português antes de qualquer `listen`. Seis
+  casos inválidos são testados. O harness E2E nunca usa a porta 0.
+- **D-3** (`@types/node@^24` com runtime 26): encerrado por decisão. Os tipos
+  seguem a versão mínima suportada (`engines >=24`), o que impede usar APIs que
+  só existem no Node 25 ou 26.
+- **D-4** (compatibilidade de migrações): encerrado por verificação. A migração 3
+  foi entregue sobre as versões 1 e 2, com testes de base legada preservada e
+  sem reaplicação (`migracao-baralho`, `migracao-vinculo`, e as E2E de
+  persistência).
+- **Worktrees antigos** de T003–T104: os 16 foram verificados e removidos. Todos
+  continham só diffs já integrados; o da T012 entrou em `main` como `4acfb7c`.
+- **`pendencias.md`**: removido por decisão do Product Owner. Não há outra
+  referência a ele fora deste log.
+
+Continua preservado e fora dos commits: `backend/src/hello-world.ts` (não
+rastreado, de origem externa).
+
+### Verificação final
+
+Backend 171 testes, frontend 240, e2e 13 em Chromium contra API e SQLite
+reais; build e lint verdes nos dois projetos.
+
+- **Commit**: commit final da aplicação.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

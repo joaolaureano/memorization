@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import {
   HOST_LOCAL,
+  PortaInvalidaError,
   criarServidor,
   opcoesDeEscuta,
   portaConfigurada,
@@ -32,6 +33,18 @@ describe("constantes e configuração de escuta", () => {
   it('portaConfigurada({ PORTA: "4000" }) devolve 4000', () => {
     expect(portaConfigurada({ PORTA: "4000" })).toBe(4000);
   });
+
+  it.each(["", "abc", "0", "65536", "3.5", "-1"])(
+    "portaConfigurada({ PORTA: %j }) lança PortaInvalidaError",
+    (valor) => {
+      expect(() => portaConfigurada({ PORTA: valor })).toThrowError(
+        PortaInvalidaError,
+      );
+      expect(() => portaConfigurada({ PORTA: valor })).toThrow(
+        `PORTA inválida: ${JSON.stringify(valor)}. Informe um número inteiro entre 1 e 65535.`,
+      );
+    },
+  );
 
   it("opcoesDeEscuta({}) devolve loopback na porta 3001", () => {
     expect(opcoesDeEscuta({})).toEqual({ host: "127.0.0.1", port: 3001 });

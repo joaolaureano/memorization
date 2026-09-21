@@ -39,8 +39,37 @@ export const CAMINHO_DOS_BARALHOS = "/baralhos";
  */
 export class EscutaInseguraError extends Error {}
 
+/**
+ * Erro lançado quando `PORTA` está presente, mas não é uma porta TCP válida.
+ *
+ * A variável precisa ser um número inteiro entre 1 e 65535, sem sinais,
+ * espaços ou casas decimais; qualquer outro valor deve abortar a inicialização
+ * com uma mensagem clara, em vez de deixar o Fastify falhar com erro obscuro.
+ */
+export class PortaInvalidaError extends Error {}
+
 export function portaConfigurada(env: NodeJS.ProcessEnv = process.env): number {
-  return Number(env.PORTA ?? 3001);
+  const bruto = env.PORTA;
+
+  if (bruto === undefined) {
+    return 3001;
+  }
+
+  const porta = bruto.trim();
+  const numero = Number(porta);
+
+  if (
+    !/^[0-9]+$/.test(porta) ||
+    !Number.isInteger(numero) ||
+    numero < 1 ||
+    numero > 65535
+  ) {
+    throw new PortaInvalidaError(
+      `PORTA inválida: ${JSON.stringify(bruto)}. Informe um número inteiro entre 1 e 65535.`,
+    );
+  }
+
+  return numero;
 }
 
 export function opcoesDeEscuta(env: NodeJS.ProcessEnv = process.env): {
@@ -160,11 +189,12 @@ export async function iniciarServidor(
   env: NodeJS.ProcessEnv = process.env,
   acervo: Acervo,
 ): Promise<FastifyInstance> {
+  const opcoes = opcoesDeEscuta(env);
   const servidor = criarServidor();
   registrarRotasDeCartoes(servidor, acervo);
   registrarRotasDeBaralhos(servidor, acervo);
 
-  await servidor.listen(opcoesDeEscuta(env));
+  await servidor.listen(opcoes);
 
   try {
     assegurarEscutaLocal(servidor);
