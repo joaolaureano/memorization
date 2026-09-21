@@ -4497,3 +4497,35 @@ marcadores).
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-084
+
+> **SPEC KIT** — Comando: analyze | Invocação: skill `speckit-analyze` e
+> `check-prerequisites.sh --json --require-spec --require-tasks --include-tasks`
+> nas duas features | Integração: claude | Artefatos: nenhum alterado (somente leitura)
+
+- **Data/hora**: 2026-09-21 02:38 -03
+- **Ator**: ARCHITECT
+- **Feature / Task**: 009 e 010 / analyze
+- **Commit anterior**: `d8e50c7` (registra o hash de EVT-083)
+
+- Sete artefatos presentes nas duas features.
+- **009**: 19 requisitos (13 FRs e 6 SCs), todos na matriz; nenhum fantasma;
+  14 tarefas coerentes com os metadados.
+- **010**: 20 requisitos (13 FRs e 7 SCs), todos na matriz; nenhum fantasma;
+  13 tarefas coerentes.
+- Nenhum problema CRITICAL, HIGH ou MEDIUM.
+- **L1 (LOW)**: os plans e as tasks de 007 e 008 descrevem Interfaces síncronas
+  e migrações em `acervo/migracoes.ts`. Resolvido pela T814 antes de
+  implementar 007 e 008, na ordem 009 → 010 → 007 → 008 decidida no clarify.
+- **L2 (LOW)**: o PostgreSQL embarcado nos testes baixa um binário por
+  plataforma na instalação. Custo aceito em troca de verificação real sem
+  Docker.
+
+**Fim do planejamento das specs 009 e 010.** O backlog planejado agora cobre
+007 a 010. A implementação depende de autorização do PO.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
