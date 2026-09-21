@@ -50,6 +50,23 @@ export function opcoesDeEscuta(env: NodeJS.ProcessEnv = process.env): {
   return { host: HOST_LOCAL, port: portaConfigurada(env) };
 }
 
+/**
+ * Registra o pré-voo de CORS para um caminho. O conjunto de métodos cobre as
+ * operações de leitura e escrita do Acervo; os cabeçalhos pedidos pelo
+ * frontend são exatamente `content-type`, único exigido pelos `fetch` de JSON.
+ */
+function permitirPreVoo(servidor: FastifyInstance, caminho: string): void {
+  servidor.options(caminho, async (_requisicao, resposta) => {
+    resposta
+      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
+      .header("access-control-allow-headers", "content-type")
+      .header("access-control-max-age", "86400");
+
+    return resposta.code(204).send();
+  });
+}
+
 export function criarServidor(): FastifyInstance {
   const servidor = Fastify();
   servidor.get("/health", async () => ({ status: "ok" }));
@@ -75,39 +92,33 @@ export function criarServidor(): FastifyInstance {
    *
    * O frontend real roda em outra porta do mesmo loopback, e o navegador
    * trata a diferença de porta como outra origem: sem estes cabeçalhos, o
-   * `fetch` do navegador recusa o pré-voo dos `POST` de Cartões e de Baralhos
-   * (o content-type application/json torna a requisição não simples) e impede
-   * a leitura das respostas de listagem e de criação. Como a aplicação não
-   * possui autenticação e escuta exclusivamente em 127.0.0.1, permitir
-   * qualquer origem é a configuração mínima segura — o serviço não é
+   * `fetch` do navegador recusa o pré-voo dos `POST`, `PUT` e `DELETE` — o
+   * content-type application/json torna as requisições com corpo não simples —
+   * e impede a leitura das respostas. Os caminhos parametrizados de edição,
+   * exclusão e Vínculo recebem o mesmo tratamento das rotas de coleção. Como
+   * a aplicação não possui autenticação e escuta exclusivamente em 127.0.0.1,
+   * permitir qualquer origem é a configuração mínima segura — o serviço não é
    * alcançável pela rede.
    */
-  servidor.options(CAMINHO_DOS_CARTOES, async (_requisicao, resposta) => {
-    resposta
-      .header("access-control-allow-origin", "*")
-      .header("access-control-allow-methods", "GET, POST, OPTIONS")
-      .header("access-control-allow-headers", "content-type")
-      .header("access-control-max-age", "86400");
-
-    return resposta.code(204).send();
-  });
-
-  servidor.options(CAMINHO_DOS_BARALHOS, async (_requisicao, resposta) => {
-    resposta
-      .header("access-control-allow-origin", "*")
-      .header("access-control-allow-methods", "GET, POST, OPTIONS")
-      .header("access-control-allow-headers", "content-type")
-      .header("access-control-max-age", "86400");
-
-    return resposta.code(204).send();
-  });
+  for (const caminho of [
+    CAMINHO_DOS_CARTOES,
+    "/cartoes/:id",
+    CAMINHO_DOS_BARALHOS,
+    "/baralhos/:id",
+    "/baralhos/:baralhoId/vinculos",
+    "/baralhos/:baralhoId/vinculos/:cartaoId",
+  ]) {
+    permitirPreVoo(servidor, caminho);
+  }
 
   servidor.addHook("onSend", async (requisicao, resposta, carga) => {
     const caminho = requisicao.url.split("?")[0];
 
     if (
       caminho === CAMINHO_DOS_CARTOES ||
-      caminho === CAMINHO_DOS_BARALHOS
+      caminho.startsWith("/cartoes/") ||
+      caminho === CAMINHO_DOS_BARALHOS ||
+      caminho.startsWith("/baralhos/")
     ) {
       resposta.header("access-control-allow-origin", "*");
     }

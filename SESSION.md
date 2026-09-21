@@ -3542,3 +3542,29 @@ frontend 115, e2e 5, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-057
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: rotas de Vínculo, edição e exclusão; Interface do Acervo; CORS
+
+- **Data/hora**: 2026-09-21 00:23 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 003/T207, 005/T401–T402 (+ metade backend de T403), 006/T501–T502 (+ metade backend de T503)
+- **Commit anterior**: `a4a1802`
+
+Um único worker concluiu todo o backend restante, por ter área de escrita
+disjunta dos workers de frontend que rodaram em paralelo. Interface do `Acervo`:
+`editarCartao`, `renomearBaralho`, `excluirCartao`, `excluirBaralho`, com as
+mesmas regras da criação e exclusão apoiada na cascata do esquema. Rotas
+conforme `api-vinculos.md`, `api-edicao.md` e `api-exclusao.md`; CORS estendido
+a PUT, DELETE e caminhos parametrizados.
+
+T403 e T503 permanecem abertas até a metade cliente (`ClienteDoAcervo`) ser
+integrada. Arquiteto verificou aderência de status aos três contratos e repetiu
+em `main`: backend 164, frontend 115, e2e 5, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

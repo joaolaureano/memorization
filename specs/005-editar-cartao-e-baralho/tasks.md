@@ -4,8 +4,8 @@
 
 ## Fase 1 — Acervo e contrato
 
-- [ ] T401 Interface do Acervo atualiza Cartão, reaplicando regras e preservando Vínculos
-- [ ] T402 Interface do Acervo renomeia Baralho, preservando Vínculos e elegibilidade
+- [X] T401 Interface do Acervo atualiza Cartão, reaplicando regras e preservando Vínculos
+- [X] T402 Interface do Acervo renomeia Baralho, preservando Vínculos e elegibilidade
 - [ ] T403 Rotas PUT e ClienteDoAcervo passam nos dois Adapters
 
 | ID | Requisitos | Depende | Testes |

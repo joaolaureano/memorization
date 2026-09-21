@@ -135,6 +135,51 @@ export type ResultadoDeObterBaralho =
   | { ok: false; erro: CodigoDeErroDeVinculo; mensagem: string };
 
 /**
+ * Resultado de `editarCartao`. Falha de domínio é resultado previsto, não
+ * exceção: o caller distingue `ok` e, na recusa, recebe o código estável e a
+ * mensagem em português (FR-046). As regras de conteúdo são exatamente as da
+ * criação; Cartão inexistente é recusado como `nao_encontrado`.
+ */
+export type ResultadoDeEdicaoDeCartao =
+  | { ok: true; cartao: Cartao }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeCartao | "nao_encontrado";
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `renomearBaralho`. Mesma forma de `editarCartao`: sucesso
+ * devolve o Baralho renomeado; recusa carrega código estável e mensagem em
+ * português. As regras de nome são exatamente as da criação; Baralho
+ * inexistente é recusado como `nao_encontrado`.
+ */
+export type ResultadoDeEdicaoDeBaralho =
+  | { ok: true; baralho: Baralho }
+  | {
+      ok: false;
+      erro: CodigoDeErroDeBaralho | "nao_encontrado";
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `excluirCartao`. Sucesso não carrega entidade: o Cartão deixa
+ * de existir. Cartão inexistente é recusado como `nao_encontrado`, para que a
+ * interface não confirme uma exclusão que não ocorreu.
+ */
+export type ResultadoDeExclusaoDeCartao =
+  | { ok: true }
+  | { ok: false; erro: "nao_encontrado"; mensagem: string };
+
+/**
+ * Resultado de `excluirBaralho`. Mesma forma de `excluirCartao`: sucesso sem
+ * carga, ou recusa `nao_encontrado` quando o Baralho não existe.
+ */
+export type ResultadoDeExclusaoDeBaralho =
+  | { ok: true }
+  | { ok: false; erro: "nao_encontrado"; mensagem: string };
+
+/**
  * Interface profunda do Module `Acervo` (Princípio IV).
  *
  * As operações escondem esquema, transação e as regras de conteúdo de Cartão,
@@ -197,6 +242,41 @@ export interface Acervo {
    * inexistente é recusado como `vinculo_nao_encontrado`.
    */
   desvincular(cartaoId: string, baralhoId: string): ResultadoDeDesvinculacao;
+
+  /**
+   * Edita a Frente e o Verso de um Cartão existente, reaplicando exatamente
+   * as regras da criação (FR-002, FR-051, FR-052) e preservando todos os
+   * Vínculos do Cartão (FR-005). Cartão inexistente é recusado como
+   * `nao_encontrado`.
+   */
+  editarCartao(id: string, dados: DadosDeCartao): ResultadoDeEdicaoDeCartao;
+
+  /**
+   * Renomeia um Baralho existente, reaplicando exatamente as regras de nome
+   * da criação (FR-011, FR-061) e preservando todos os Vínculos e a
+   * elegibilidade derivada do Baralho (FR-015). Baralho inexistente é
+   * recusado como `nao_encontrado`.
+   */
+  renomearBaralho(
+    id: string,
+    dados: DadosDeBaralho,
+  ): ResultadoDeEdicaoDeBaralho;
+
+  /**
+   * Exclui um Cartão existente (FR-007). Os Vínculos do Cartão são removidos
+   * pela cascata do esquema e todos os Baralhos são preservados (FR-008);
+   * Baralhos que dependiam do Cartão deixam de ser elegíveis na leitura
+   * seguinte. Cartão inexistente é recusado como `nao_encontrado`.
+   */
+  excluirCartao(id: string): ResultadoDeExclusaoDeCartao;
+
+  /**
+   * Exclui um Baralho existente (FR-016). Os Vínculos do Baralho são
+   * removidos pela cascata do esquema e todos os Cartões são preservados
+   * (FR-017), inclusive os que ficarem sem Baralho. Baralho inexistente é
+   * recusado como `nao_encontrado`.
+   */
+  excluirBaralho(id: string): ResultadoDeExclusaoDeBaralho;
 }
 
 /**
@@ -252,6 +332,14 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
   const listar = banco.prepare("SELECT id, frente, verso FROM cartao");
   const cartaoExiste = banco.prepare("SELECT id FROM cartao WHERE id = ?");
 
+  /** Prepared com o `Acervo`, pois `cartao` existe em toda base legada. */
+  const atualizarCartao = banco.prepare(
+    "UPDATE cartao SET frente = ?, verso = ? WHERE id = ?",
+  );
+  const excluirCartaoStatement = banco.prepare(
+    "DELETE FROM cartao WHERE id = ?",
+  );
+
   /**
    * Prepared na primeira criação de Baralho, e não na construção do `Acervo`:
    * uma base legada da feature `001` ainda sem a tabela `baralho` continua
@@ -269,6 +357,10 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
 
   /** Prepared na primeira consulta de existência de Baralho. */
   let baralhoExiste: StatementSync | undefined;
+
+  /** Prepared na primeira edição ou exclusão de Baralho. */
+  let atualizarBaralho: StatementSync | undefined;
+  let excluirBaralhoStatement: StatementSync | undefined;
 
   /** Prepared na primeira operação de Vínculo. */
   let inserirVinculo: StatementSync | undefined;
@@ -464,6 +556,77 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
       if (Number(resultado.changes) === 0) {
         return { ok: false, ...VINCULO_NAO_ENCONTRADO };
       }
+
+      return { ok: true };
+    },
+
+    editarCartao(id, dados) {
+      const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
+
+      if (falha !== null) {
+        return { ok: false, ...falha };
+      }
+
+      if (cartaoExiste.get(id) === undefined) {
+        return { ok: false, ...CARTAO_NAO_ENCONTRADO };
+      }
+
+      atualizarCartao.run(dados.frente, dados.verso, id);
+
+      return {
+        ok: true,
+        cartao: { id, frente: dados.frente, verso: dados.verso },
+      };
+    },
+
+    renomearBaralho(id, dados) {
+      const falha = validarNomeDeBaralho(dados.nome);
+
+      if (falha !== null) {
+        return { ok: false, ...falha };
+      }
+
+      baralhoExiste ??= banco.prepare(
+        "SELECT id FROM baralho WHERE id = ?",
+      );
+
+      if (baralhoExiste.get(id) === undefined) {
+        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+      }
+
+      atualizarBaralho ??= banco.prepare(
+        "UPDATE baralho SET nome = ? WHERE id = ?",
+      );
+
+      atualizarBaralho.run(dados.nome, id);
+
+      return { ok: true, baralho: { id, nome: dados.nome } };
+    },
+
+    excluirCartao(id) {
+      if (cartaoExiste.get(id) === undefined) {
+        return { ok: false, ...CARTAO_NAO_ENCONTRADO };
+      }
+
+      excluirCartaoStatement.run(id);
+
+      return { ok: true };
+    },
+
+    excluirBaralho(id) {
+      baralhoExiste ??= banco.prepare(
+        "SELECT id FROM baralho WHERE id = ?",
+      );
+
+      if (baralhoExiste.get(id) === undefined) {
+        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+      }
+
+      excluirBaralhoStatement ??= banco.prepare(
+        "DELETE FROM baralho WHERE id = ?",
+      );
+
+      excluirBaralhoStatement.run(id);
 
       return { ok: true };
     },

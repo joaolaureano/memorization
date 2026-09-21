@@ -4,27 +4,48 @@ import { z } from "zod";
 import type { Acervo } from "../acervo/acervo.ts";
 
 /**
- * Adapter HTTP do Module `Acervo` (T007).
+ * Adapter HTTP do Module `Acervo` (T007, T207, T403 e T503).
  *
  * As rotas são finas por construção: validam a **forma** do corpo na borda
  * com Zod, chamam a Interface do `Acervo` e traduzem o resultado em código de
  * status. Nenhuma regra de domínio é reproduzida aqui — vazio, conteúdo só de
- * espaços e limite de tamanho continuam sendo julgados exclusivamente pelo
- * `Acervo` (FR-002, FR-051, FR-052). Na recusa de domínio, o adapter apenas
- * repassa o código estável e a mensagem em português que o `Acervo` devolveu
- * (FR-046), sem inventar texto próprio.
+ * espaços, limite de tamanho, unicidade de Vínculo e cascata de exclusão
+ * continuam sendo julgados exclusivamente pelo `Acervo`. Na recusa de domínio,
+ * o adapter apenas repassa o código estável e a mensagem em português que o
+ * `Acervo` devolveu (FR-046), sem inventar texto próprio.
  */
 
 /**
- * Forma do corpo de `POST /cartoes`: exatamente Frente e Verso, ambos texto
- * (FR-001). O esquema **não é estrito**: propriedade extra é descartada na
- * borda e nunca alcança o `Acervo` nem as leituras — a verificação de FR-009.
- * Forma inválida (corpo ausente, campo ausente, tipo errado, JSON malformado)
- * é recusada aqui, antes de qualquer chamada ao `Acervo`.
+ * Forma do corpo de `POST /cartoes` e `PUT /cartoes/{id}`: exatamente Frente
+ * e Verso, ambos texto (FR-001). O esquema **não é estrito**: propriedade
+ * extra é descartada na borda e nunca alcança o `Acervo` nem as leituras — a
+ * verificação de FR-009. Forma inválida (corpo ausente, campo ausente, tipo
+ * errado, JSON malformado) é recusada aqui, antes de qualquer chamada ao
+ * `Acervo`.
  */
 const corpoDeCartao = z.object({
   frente: z.string(),
   verso: z.string(),
+});
+
+/**
+ * Forma do corpo de `POST /baralhos` e `PUT /baralhos/{id}`: exatamente o
+ * nome, texto (FR-010). O esquema **não é estrito**: propriedade extra é
+ * descartada na borda e nunca alcança o `Acervo` nem as leituras — a
+ * verificação de FR-018. Forma inválida é recusada aqui, antes de qualquer
+ * chamada ao `Acervo`.
+ */
+const corpoDeBaralho = z.object({
+  nome: z.string(),
+});
+
+/**
+ * Forma do corpo de `POST /baralhos/{baralhoId}/vinculos`: exatamente o id do
+ * Cartão a vincular, texto. Forma inválida é recusada na borda; a existência
+ * do Cartão e a unicidade do par são julgadas pelo `Acervo`.
+ */
+const corpoDeVinculo = z.object({
+  cartaoId: z.string(),
 });
 
 /**
@@ -39,20 +60,10 @@ export const CORPO_INVALIDO = {
 } as const;
 
 /**
- * Forma do corpo de `POST /baralhos`: exatamente o nome, texto (FR-010). O
- * esquema **não é estrito**: propriedade extra é descartada na borda e nunca
- * alcança o `Acervo` nem as leituras — a verificação de FR-018. Forma inválida
- * (corpo ausente, campo ausente, tipo errado, JSON malformado) é recusada
- * aqui, antes de qualquer chamada ao `Acervo`.
- */
-const corpoDeBaralho = z.object({
-  nome: z.string(),
-});
-
-/**
- * Registra as duas rotas de Cartão do contrato sobre o `Acervo` informado.
- * Chamada na inicialização, com o `Acervo` real, e nos testes de contrato,
- * com o `Acervo` sobre SQLite em memória.
+ * Registra as rotas de Cartão do contrato sobre o `Acervo` informado:
+ * `POST /cartoes`, `GET /cartoes`, `PUT /cartoes/{id}` e
+ * `DELETE /cartoes/{id}`. Chamada na inicialização, com o `Acervo` real, e
+ * nos testes de contrato, com o `Acervo` sobre SQLite em memória.
  */
 export function registrarRotasDeCartoes(
   servidor: FastifyInstance,
@@ -78,15 +89,58 @@ export function registrarRotasDeCartoes(
   });
 
   servidor.get("/cartoes", async () => acervo.listarCartoes());
+
+  servidor.put("/cartoes/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const corpo = corpoDeCartao.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    const resultado = acervo.editarCartao(id, corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "nao_encontrado") {
+        return resposta.status(404).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(400).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(200).send(resultado.cartao);
+  });
+
+  servidor.delete("/cartoes/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const resultado = acervo.excluirCartao(id);
+
+    if (!resultado.ok) {
+      return resposta.status(404).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(204).send();
+  });
 }
 
 /**
- * Registra as duas rotas de Baralho do contrato sobre o `Acervo` informado.
- * Mesma estrutura fina das rotas de Cartão: forma validada na borda, regra de
- * domínio julgada exclusivamente pelo `Acervo`, e recusa de domínio repassada
- * com o código estável e a mensagem em português devolvidos pela Interface
- * (FR-046). Nome repetido é criação válida: o contrato não prevê `409` para
- * Baralho (FR-012).
+ * Registra as rotas de Baralho e de Vínculo do contrato sobre o `Acervo`
+ * informado: `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`,
+ * `PUT /baralhos/{id}`, `DELETE /baralhos/{id}`,
+ * `POST /baralhos/{baralhoId}/vinculos` e
+ * `DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}`. Mesma estrutura fina
+ * das rotas de Cartão: forma validada na borda, regra de domínio julgada
+ * exclusivamente pelo `Acervo`, e recusa de domínio repassada com o código
+ * estável e a mensagem em português devolvidos pela Interface (FR-046).
  */
 export function registrarRotasDeBaralhos(
   servidor: FastifyInstance,
@@ -112,4 +166,109 @@ export function registrarRotasDeBaralhos(
   });
 
   servidor.get("/baralhos", async () => acervo.listarBaralhos());
+
+  servidor.get("/baralhos/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const resultado = acervo.obterBaralho(id);
+
+    if (!resultado.ok) {
+      return resposta.status(404).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(200).send(resultado.baralho);
+  });
+
+  servidor.put("/baralhos/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const corpo = corpoDeBaralho.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    const resultado = acervo.renomearBaralho(id, corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "nao_encontrado") {
+        return resposta.status(404).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(400).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(200).send(resultado.baralho);
+  });
+
+  servidor.delete("/baralhos/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const resultado = acervo.excluirBaralho(id);
+
+    if (!resultado.ok) {
+      return resposta.status(404).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(204).send();
+  });
+
+  servidor.post(
+    "/baralhos/:baralhoId/vinculos",
+    async (requisicao, resposta) => {
+      const { baralhoId } = requisicao.params as { baralhoId: string };
+      const corpo = corpoDeVinculo.safeParse(requisicao.body);
+
+      if (!corpo.success) {
+        return resposta.status(400).send(CORPO_INVALIDO);
+      }
+
+      const resultado = acervo.vincular(corpo.data.cartaoId, baralhoId);
+
+      if (!resultado.ok) {
+        if (resultado.erro === "vinculo_duplicado") {
+          return resposta.status(409).send({
+            erro: resultado.erro,
+            mensagem: resultado.mensagem,
+          });
+        }
+
+        return resposta.status(404).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(201).send();
+    },
+  );
+
+  servidor.delete(
+    "/baralhos/:baralhoId/vinculos/:cartaoId",
+    async (requisicao, resposta) => {
+      const { baralhoId, cartaoId } = requisicao.params as {
+        baralhoId: string;
+        cartaoId: string;
+      };
+      const resultado = acervo.desvincular(cartaoId, baralhoId);
+
+      if (!resultado.ok) {
+        return resposta.status(404).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(204).send();
+    },
+  );
 }

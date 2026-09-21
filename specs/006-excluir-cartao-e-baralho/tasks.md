@@ -4,8 +4,8 @@
 
 ## Fase 1 — Acervo e contrato
 
-- [ ] T501 Interface exclui Cartão, preservando Baralhos e removendo Vínculos
-- [ ] T502 Interface exclui Baralho, preservando Cartões e removendo Vínculos
+- [X] T501 Interface exclui Cartão, preservando Baralhos e removendo Vínculos
+- [X] T502 Interface exclui Baralho, preservando Cartões e removendo Vínculos
 - [ ] T503 Rotas DELETE e ClienteDoAcervo passam nos dois Adapters
 
 | ID | Requisitos | Depende | Testes |

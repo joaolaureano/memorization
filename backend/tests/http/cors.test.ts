@@ -137,6 +137,115 @@ describe("CORS para o frontend local", () => {
     expect(resposta.headers["access-control-allow-origin"]).toBe("*");
   });
 
+  it("responde ao pré-voo de PUT /cartoes/{id} com 204 e permissão de PUT", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/cartoes/c1",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("PUT");
+    expect(resposta.headers["access-control-allow-headers"]).toContain(
+      "content-type",
+    );
+  });
+
+  it("responde ao pré-voo de DELETE /cartoes/{id} com 204 e permissão de DELETE", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/cartoes/c1",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
+  });
+
+  it("responde ao pré-voo de PUT /baralhos/{id} com 204 e permissão de PUT", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/baralhos/b1",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("PUT");
+  });
+
+  it("responde ao pré-voo de DELETE /baralhos/{id} com 204 e permissão de DELETE", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/baralhos/b1",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
+  });
+
+  it("responde ao pré-voo de POST /baralhos/{id}/vinculos com 204 e permissão de POST", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/baralhos/b1/vinculos",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
+  });
+
+  it("responde ao pré-voo de DELETE /baralhos/{id}/vinculos/{cartaoId} com 204 e permissão de DELETE", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/baralhos/b1/vinculos/c1",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
+  });
+
+  it("permite a leitura de caminho parametrizado: GET /baralhos/{id} devolve access-control-allow-origin", async () => {
+    const resposta = await servidor.inject({
+      method: "GET",
+      url: "/baralhos/baralho-inexistente",
+    });
+
+    expect(resposta.statusCode).toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
   it("não altera rotas alheias: GET /health segue sem cabeçalho de CORS", async () => {
     const resposta = await servidor.inject({ method: "GET", url: "/health" });
 
