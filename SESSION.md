@@ -3824,3 +3824,60 @@ reais; build e lint verdes nos dois projetos.
 
 - **Commit**: commit final da aplicação.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-066
+
+> **SPEC KIT** — Comando: specify | Invocação: skill `speckit-specify` e
+> `create-new-feature.sh --short-name criar-usuario` | Integração: claude |
+> Artefatos: specs/007-criar-usuario/spec.md, checklists/requirements.md, CONTEXT.md
+
+- **Data/hora**: 2026-09-21 01:49 -03
+- **Ator**: PRODUCT OWNER → ARCHITECT → WORKER (rascunho)
+- **Feature / Task**: 007-criar-usuario / specify
+- **Commit anterior**: `9d43e9b` (registra o hash de EVT-065)
+
+### Prompt sanitizado
+
+Criar spec de autenticação: login básico com usuário e senha; senha cadastrada
+com salt e hash com segredo, de modo que um vazamento de dados não permita
+capturá-la; tela inicial, primeira da aplicação, para entrar; nenhuma sessão,
+cookie ou equivalente. Planejamento integralmente pelo Spec Kit.
+
+### Decisões do Product Owner
+
+- Credencial enviada em toda requisição, mantida só em memória no cliente.
+- Cadastro por tela de interface.
+- **Acervo por usuário**: substitui a decisão B1 ("não tem usuário, por ora").
+- Plano inicial com uma única spec **rejeitado**: "Quebre em 2 specs. 1 para
+  criação de usuário, e outro para login". Resultado: `007-criar-usuario` e
+  `008-entrar`.
+- **Delegação apenas ao modelo flash**: "Não use [pro]. A ideia é reduzir custo.
+  Use sempre o flash. Você faz o papel de Pro." O rascunho desta spec ainda foi
+  gerado com `deepseek-v4-pro`, antes da determinação. O roteamento do delegator
+  e o loop de workers passaram a usar exclusivamente o flash.
+
+### Specify da 007
+
+- Numeração: FR-070 a FR-083 e SC-020 a SC-026. O plano previa SC-017, que já
+  existia; a correção foi feita antes de escrever.
+- FRs transversais reutilizados: FR-040, FR-042, FR-044, FR-045 e FR-046.
+- Glossário: nova seção **Acesso** com Usuário, Nome de usuário, Senha e
+  Cadastro. "Criar conta" é aceito apenas como rótulo da ação na interface.
+
+### Revisão do rascunho do worker
+
+Corrigidos:
+- Clarifications que davam como decididos limites ainda não confirmados pelo
+  PO; foram movidos para Assumptions, "a confirmar no clarify";
+- lacuna na numeração de SC;
+- linha Input que atribuía a origem à decomposição do MVP;
+- termos em `_Avoid_` que colidiam com termos canônicos;
+- entidade HTML no título.
+
+Checklist: 21 de 21.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhuma senha, segredo ou cabeçalho real
+  registrado.

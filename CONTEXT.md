@@ -59,3 +59,23 @@ _Avoid_: nota, correção, avaliação, score, métrica
 Consolidação final de quantos itens foram estudados, quantos acertos e quantos
 erros. Exibido ao fim da sessão e descartado com ela.
 _Avoid_: relatório, estatística, placar, histórico
+
+### Acesso
+
+**Usuário**:
+Quem se cadastra na aplicação, identificado pelo nome de usuário.
+_Avoid_: user, conta, perfil, account, cliente
+
+**Nome de usuário**:
+Identificador único do usuário, sem distinção entre maiúsculas e minúsculas.
+_Avoid_: login, username, nick, apelido, identificação
+
+**Senha**:
+Segredo conhecido apenas pelo usuário. O sistema guarda somente uma
+transformação irreversível dela, nunca a senha em si.
+_Avoid_: password, palavra-passe, chave, código
+
+**Cadastro**:
+O ato de criar um usuário com nome de usuário e senha. Na interface, a ação é
+rotulada "Criar conta".
+_Avoid_: registro, signup, inscrição
