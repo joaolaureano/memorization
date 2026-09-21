@@ -4465,3 +4465,35 @@ marcadores).
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-083
+
+> **SPEC KIT** — Comando: tasks | Invocação: skill `speckit-tasks` e
+> `setup-tasks.sh --json` nas duas features; redação por dois workers
+> `deepseek-flash` em worktrees exclusivos, em paralelo | Integração: claude |
+> Artefatos: specs/009-porta-de-persistencia/tasks.md, specs/010-postgresql-na-nuvem/tasks.md
+
+- **Data/hora**: 2026-09-21 02:38 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 009 e 010 / tasks
+- **Commit anterior**: `63fb908` (registra o hash de EVT-082)
+
+- **009**: T801–T814. Três blocos de integração atômicos:
+  1. Port, Adapter e Modules;
+  2. entrada e E2E;
+  3. construção e scripts.
+
+  A T814 é documental e fica com o Arquiteto: atualiza os quickstarts e os
+  comandos dos plans de 001, 002, 003, 007 e 008 (`npm run build` passa a
+  significar empacotamento) e marca que 007 e 008 são construídas sobre a Port
+  assíncrona.
+- **010**: T901–T913, em blocos de integração:
+  1. verificação real;
+  2. Adapter;
+  3. configuração e nuvem;
+  4. conteúdo dos pacotes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
