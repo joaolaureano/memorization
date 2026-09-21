@@ -3972,3 +3972,43 @@ quickstart.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. O quickstart mostra apenas o comando de geração
   do segredo, nunca um valor.
+
+---
+
+## EVT-069
+
+> **SPEC KIT** — Comando: tasks | Invocação: skill `speckit-tasks` e
+> `setup-tasks.sh --json`; redação por worker `deepseek-flash` em worktree
+> exclusivo, com escrita limitada a `specs/007-criar-usuario/` | Integração:
+> claude | Artefatos: specs/007-criar-usuario/tasks.md
+
+- **Data/hora**: 2026-09-21 01:57 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 007-criar-usuario / tasks
+- **Commit anterior**: `0757093` (registra o hash de EVT-068)
+
+### Mudança de mecanismo
+
+Para reduzir custo, o worker passou a gravar os documentos diretamente num
+worktree, e o Arquiteto revisa o diff, em vez de retransmitir o texto gerado.
+Modelo: `deepseek-flash`. A escrita de cada worker é limitada por
+configuração.
+
+### tasks.md
+
+Quatorze tarefas (T601–T614) em quatro fases:
+1. Fundação: migração 4 e segredo;
+2. Cadastro no servidor: `Identidade`, verificação negativa, rota e harness E2E;
+3. Cliente e tela;
+4. Acessibilidade e validação.
+
+Formato idêntico ao de 002 e 003: caixas de seleção, metadados em `<details>`
+e matriz de rastreabilidade.
+
+Revisão do Arquiteto: áreas conferidas contra o plan; T606 (harness E2E com
+segredo aleatório) garante que a suíte existente continue verde; nenhum id
+fantasma e nenhum id ausente (verificação do worker repetida na etapa
+`analyze`).
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
