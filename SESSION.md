@@ -4063,3 +4063,39 @@ Análise reexecutada: 21/21 FRs, 8/8 SCs, nenhum fantasma.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-072
+
+> **SPEC KIT** — Comando: specify | Invocação: skill `speckit-specify` e
+> `create-new-feature.sh --short-name entrar`; redação por worker
+> `deepseek-flash` em worktree exclusivo | Integração: claude | Artefatos:
+> specs/008-entrar/spec.md, checklists/requirements.md, CONTEXT.md
+
+- **Data/hora**: 2026-09-21 02:02 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 008-entrar / specify
+- **Commit anterior**: `f1d20ef` (registra o hash de EVT-071)
+
+Spec da segunda feature de acesso:
+- FRs específicos FR-086 a FR-098;
+- reutilizados FR-042, FR-044, FR-045, FR-046, FR-078 e FR-079, com o mesmo
+  enunciado;
+- SC-027 a SC-036. O SC-012 foi omitido porque a feature não grava nada.
+
+Decisões do PO registradas como Clarifications:
+- Credencial só na memória da página aberta, verificada a cada operação;
+- acervo por usuário (substitui a premissa "usuário único");
+- tela inicial "Entrar";
+- mensagem única de recusa.
+
+Glossário: Credencial, Entrar e Sair acrescentados à seção Acesso.
+
+Revisão do Arquiteto: os enunciados reutilizados conferem com os originais,
+sem lacunas de numeração e sem marcadores pendentes. Duas redações foram
+corrigidas no SC-033 e em Assumptions. Ficam para o clarify: o destino do
+acervo existente sem dono e o bloqueio por tentativas. Checklist: 21 de 21.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

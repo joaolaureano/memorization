@@ -79,3 +79,16 @@ _Avoid_: password, palavra-passe, chave, código
 O ato de criar um usuário com nome de usuário e senha. Na interface, a ação é
 rotulada "Criar conta".
 _Avoid_: registro, signup, inscrição
+
+**Credencial**:
+Nome de usuário e Senha mantidos apenas na memória da página aberta,
+apresentados a cada operação.
+_Avoid_: token, sessão, cookie, login, crachá
+
+**Entrar**:
+O ato de apresentar a Credencial para acessar o próprio acervo.
+_Avoid_: login, logar, autenticar-se, sign in
+
+**Sair**:
+Descartar a Credencial da memória.
+_Avoid_: logout, deslogar, sign out
