@@ -14,6 +14,9 @@ Cada funcionalidade nasceu de uma especificação e percorreu o fluxo do Spec Ki
 só foi escrito depois de a spec, o plano e as tarefas estarem aprovados, e todo
 requisito vigente é citado por pelo menos um teste que o verifica.
 
+A apresentação do trabalho está em
+**<https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>**.
+
 ## Stack
 
 | Camada | Tecnologia |
