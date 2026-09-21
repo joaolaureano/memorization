@@ -3591,3 +3591,28 @@ contratos e repetiu em `main`: backend 164, frontend 171, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-059
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: Module SessaoDeEstudo e Seam Aleatoriedade
+
+- **Data/hora**: 2026-09-21 00:42 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 004-sessao-de-estudo / T301–T303 — concluídas
+- **Commit anterior**: `66bce1c`
+
+Module `SessaoDeEstudo` no cliente, em processo e sem persistência: `iniciar`,
+`revelar`, `registrarResultado` e `estadoAtual`, conforme `contracts/sessao-de-estudo.md`.
+Seleção sem repetição (Fisher–Yates) sobre a Seam `Aleatoriedade` (Adapter real
+e determinístico), limite ao disponível com aviso, Revelação obrigatória antes
+do Resultado, Resultado imutável e Resumo coerente. Falha é valor discriminado
+por `ok`, no idioma do código. T303: nenhuma rota, tabela ou armazenamento do
+navegador; o Module importa apenas o tipo `Cartao`. Worker em paralelo com os
+de backend e cliente (áreas disjuntas). Arquiteto repetiu em `main`: frontend
+verde, build e lint.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

@@ -7,9 +7,9 @@ DeepSeek.
 
 ## Fase 1 — Module efêmero
 
-- [ ] T301 `SessaoDeEstudo` inicia com seleção sem repetição e limite ao disponível
-- [ ] T302 Revelação, Resultado imutável e Resumo coerente são garantidos pela Interface
-- [ ] T303 Interrupção descarta todo o estado e nenhuma rota/tabela de Sessão existe
+- [X] T301 `SessaoDeEstudo` inicia com seleção sem repetição e limite ao disponível
+- [X] T302 Revelação, Resultado imutável e Resumo coerente são garantidos pela Interface
+- [X] T303 Interrupção descarta todo o estado e nenhuma rota/tabela de Sessão existe
 
 | ID | Requisitos | Depende | Áreas | Testes |
 |---|---|---|---|---|
