@@ -24,6 +24,17 @@ em `CONTEXT.md`.
 - Q: Esta feature inclui entrar, sair ou acervo por usuário? → A: Não. Esses
   pertencem a `008-entrar`. Nesta feature, o restante da aplicação continua como
   está.
+- Q: Quais regras o Nome de usuário deve seguir? → A: 3 a 50 caracteres; letras,
+  dígitos, `.`, `_` e `-`; espaços ao redor descartados; único sem distinção
+  entre maiúsculas e minúsculas.
+- Q: Qual o tamanho permitido da Senha? → A: 8 a 128 caracteres, qualquer
+  caractere, espaços preservados, sem regras de composição.
+- Q: A recusa de Nome de usuário repetido pode dizer abertamente que ele já
+  existe? → A: Sim, com mensagem clara. A feature `008-entrar` continua sem
+  revelar nada ao recusar a entrada.
+- Q: Antes de existir o Entrar, como a pessoa chega à tela "Criar conta"? → A:
+  Por um link "Criar conta" na navegação principal. Na `008`, o acesso passa a
+  ficar na tela inicial.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -77,6 +88,9 @@ nenhuma leitura devolve a Senha e que nenhuma sessão, cookie ou token foi criad
     **Then** todos continuam existindo.
 12. **Given** um Cadastro concluído, **When** qualquer leitura de Usuário é
     feita, **Then** nenhum retorno contém a Senha.
+13. **Given** qualquer tela da aplicação, **When** a pessoa usa a navegação
+    principal, **Then** encontra o link "Criar conta", que leva à tela de
+    Cadastro.
 
 ### Edge Cases
 
@@ -144,6 +158,10 @@ feature:
   perceptíveis por leitor de tela, e não apenas visualmente.
 - **FR-083**: O sistema MUST confirmar a conclusão do Cadastro de forma
   explícita.
+- **FR-084**: O sistema MUST oferecer acesso à tela "Criar conta" pela
+  navegação principal.
+- **FR-085**: O sistema MUST NOT impor regras de composição à Senha (como exigir
+  maiúscula, dígito ou símbolo) além do tamanho.
 
 ### Verificação dos Requisitos Negativos
 
@@ -206,10 +224,9 @@ feature:
 
 ## Assumptions
 
-- **A confirmar no clarify**: os limites do Nome de usuário (3 a 50 caracteres,
-  letras, dígitos, `.`, `_`, `-`) e da Senha (8 a 128 caracteres), e o fato de a
-  recusa de Nome de usuário duplicado revelar que ele existe. A revelação é
-  inevitável num Cadastro aberto e é aceita nesta proposta.
+- Os limites de Nome de usuário e Senha e a revelação de Nome de usuário
+  repetido foram confirmados no clarify de 2026-09-21. A revelação é inevitável
+  num Cadastro aberto.
 - O segredo do servidor é fornecido pelo ambiente de execução, nunca por arquivo
   versionado (Princípio VIII).
 - As premissas de `001-criar-cartao` valem: execução local, texto simples,

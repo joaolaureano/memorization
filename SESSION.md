@@ -3881,3 +3881,37 @@ Checklist: 21 de 21.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhuma senha, segredo ou cabeçalho real
   registrado.
+
+---
+
+## EVT-067
+
+> **SPEC KIT** — Comando: clarify | Invocação: skill `speckit-clarify` e
+> `check-prerequisites.sh --json --paths-only` | Integração: claude |
+> Artefatos: specs/007-criar-usuario/spec.md, checklists/requirements.md
+
+- **Data/hora**: 2026-09-21 01:51 -03
+- **Ator**: PRODUCT OWNER ↔ ARCHITECT
+- **Feature / Task**: 007-criar-usuario / clarify
+- **Commit anterior**: `11cae6f` (registra o hash de EVT-066)
+
+Quatro perguntas, uma por vez, todas respondidas com a recomendação do
+Arquiteto:
+
+1. Nome de usuário: 3 a 50 caracteres; letras, dígitos, `.`, `_` e `-`;
+   espaços ao redor descartados; único sem distinção de maiúsculas.
+2. Senha: 8 a 128 caracteres, qualquer caractere, sem regras de composição
+   (origem do FR-085).
+3. Nome de usuário repetido é recusado com mensagem clara. A `008` continua
+   sem revelar nada no Entrar.
+4. Acesso à tela por um link "Criar conta" na navegação principal (origem do
+   FR-084 e do cenário 13).
+
+As premissas "a confirmar" foram eliminadas. Checklist: 21 de 21 mantida; a
+contagem passou a 21 FRs. Cobertura: escopo, domínio, UX, segurança e
+terminologia Clear. Desempenho e limitação de tentativas não se aplicam ao
+Cadastro local; o bloqueio por tentativas está entre as Funcionalidades
+Adiadas.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
