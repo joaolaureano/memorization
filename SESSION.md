@@ -3132,6 +3132,27 @@ restrito ao Acervo e aos testes. T006 foi aceita e marcada [X].
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
 
+---
+
+## EVT-053
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek T105 | Integração: não integrada
+
+- **Data/hora**: 2026-09-21 00:46 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T105 — cancelada antes da revisão
+
+O job `dsw_muan1ax2_y8xf5n` ficou preso no streaming do modelo, reportou
+`unrecognized_model` e continuou emitindo alterações após o pedido de
+cancelamento. O processo foi encerrado pelo PID exato e o worktree exclusivo
+`/private/tmp/memorization-t105` foi removido. As alterações parciais (seis
+arquivos, sem checks executados e com política de revisão pendente) não foram
+integradas nem consideradas como implementação. T105 permanece pendente.
+
+- **Commit**: nenhuma alteração de código integrada.
+- **Sanitização**: Confirmada; worktree do job removido e alterações locais do
+  Product Owner preservadas.
+
 ## EVT-041
 
 > **SPEC KIT** — Comando: implement | Invocação: dois workers DeepSeek em
