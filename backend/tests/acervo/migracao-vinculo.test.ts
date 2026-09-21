@@ -5,8 +5,11 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { abrirBanco, aplicarMigracoes } from "../../src/acervo/esquema.ts";
-import { MIGRACOES } from "../../src/acervo/migracoes.ts";
+import {
+  abrirBanco,
+  aplicarMigracoes,
+} from "../../src/armazenamento/sqlite/esquema.ts";
+import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
 
 /**
  * T201 e T202 — a migração 3 cria a tabela `vinculo` com chave primária

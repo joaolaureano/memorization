@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +8,10 @@ import {
   type ResultadoDeCriacaoDeBaralho,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
  * T104 — `Acervo` lista Baralhos pela sua Interface; e T205 — a contagem e a
@@ -22,23 +23,24 @@ import { abrirBanco } from "../../src/acervo/esquema.ts";
  * separadamente. A elegibilidade é `quantidadeDeCartoes > 0` (FR-024).
  *
  * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao`,
- * `vincular` e `listarBaralhos`) sobre SQLite em memória; nenhum teste
- * inspeciona a tabela. A ordem não é pré-condição da Interface, portanto as
- * asserções comparam conjuntos de Baralhos, nunca posições na lista.
+ * `vincular` e `listarBaralhos`) sobre o Adapter do armazenamento local em
+ * memória; nenhum teste inspeciona a tabela. A ordem não é pré-condição da
+ * Interface, portanto as asserções comparam conjuntos de Baralhos, nunca
+ * posições na lista.
  */
 
 const NOME_VALIDO = "Inglês";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  acervo = criarAcervo(banco);
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
+  acervo = criarAcervo(aberto.armazenamento);
 });
 
-afterEach(() => {
-  banco.close();
+afterEach(async () => {
+  await aberto.encerrar();
 });
 
 /** Desembrulha o Baralho de uma criação aceita; falha se foi recusada. */
@@ -60,24 +62,24 @@ function cartaoDo(resultado: ResultadoDeCriacaoDeCartao): Cartao {
 }
 
 /** Cria um Baralho válido pela Interface e devolve o Baralho criado. */
-function criar(nome: string): Baralho {
-  return baralhoDo(acervo.criarBaralho({ nome }));
+async function criar(nome: string): Promise<Baralho> {
+  return baralhoDo(await acervo.criarBaralho({ nome }));
 }
 
 /** Cria um Cartão válido pela Interface e devolve o Cartão criado. */
-function criarCartao(frente: string, verso: string): Cartao {
-  return cartaoDo(acervo.criarCartao({ frente, verso }));
+async function criarCartao(frente: string, verso: string): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao({ frente, verso }));
 }
 
 describe("listarBaralhos — leitura pela Interface", () => {
-  it("devolve lista vazia quando nenhum Baralho existe", () => {
-    expect(acervo.listarBaralhos()).toEqual([]);
+  it("devolve lista vazia quando nenhum Baralho existe", async () => {
+    expect(await acervo.listarBaralhos()).toEqual([]);
   });
 
-  it("devolve cada Baralho com exatamente id, nome, quantidadeDeCartoes e elegivel", () => {
-    const criado = criar(NOME_VALIDO);
+  it("devolve cada Baralho com exatamente id, nome, quantidadeDeCartoes e elegivel", async () => {
+    const criado = await criar(NOME_VALIDO);
 
-    expect(acervo.listarBaralhos()).toEqual([
+    expect(await acervo.listarBaralhos()).toEqual([
       {
         id: criado.id,
         nome: NOME_VALIDO,
@@ -87,21 +89,21 @@ describe("listarBaralhos — leitura pela Interface", () => {
     ]);
   });
 
-  it("deriva quantidadeDeCartoes como 0 e elegivel como contagem > 0 para Baralho sem Vínculo", () => {
-    criar(NOME_VALIDO);
+  it("deriva quantidadeDeCartoes como 0 e elegivel como contagem > 0 para Baralho sem Vínculo", async () => {
+    await criar(NOME_VALIDO);
 
-    const [listado] = acervo.listarBaralhos();
+    const [listado] = await acervo.listarBaralhos();
 
     expect(listado.quantidadeDeCartoes).toBe(0);
     expect(listado.elegivel).toBe(listado.quantidadeDeCartoes > 0);
     expect(listado.elegivel).toBe(false);
   });
 
-  it("devolve os dois Baralhos de nome idêntico, ambos presentes, sem deduplicação", () => {
-    const primeiro = criar(NOME_VALIDO);
-    const segundo = criar(NOME_VALIDO);
+  it("devolve os dois Baralhos de nome idêntico, ambos presentes, sem deduplicação", async () => {
+    const primeiro = await criar(NOME_VALIDO);
+    const segundo = await criar(NOME_VALIDO);
 
-    const listados = acervo.listarBaralhos();
+    const listados = await acervo.listarBaralhos();
 
     expect(listados).toHaveLength(2);
     expect(listados).toEqual(
@@ -123,22 +125,22 @@ describe("listarBaralhos — leitura pela Interface", () => {
     expect(new Set(listados.map((baralho) => baralho.id)).size).toBe(2);
   });
 
-  it("deriva quantidadeDeCartoes e elegivel da contagem de Vínculos para 0, 1 e 3 Cartões", () => {
-    const vazio = criar("Vazio");
-    const comUm = criar("Com um");
-    const comTres = criar("Com três");
+  it("deriva quantidadeDeCartoes e elegivel da contagem de Vínculos para 0, 1 e 3 Cartões", async () => {
+    const vazio = await criar("Vazio");
+    const comUm = await criar("Com um");
+    const comTres = await criar("Com três");
 
-    acervo.vincular(criarCartao("To walk", "Caminhar").id, comUm.id);
+    await acervo.vincular((await criarCartao("To walk", "Caminhar")).id, comUm.id);
 
     for (const cartao of [
-      criarCartao("To run", "Correr"),
-      criarCartao("To sleep", "Dormir"),
-      criarCartao("To read", "Ler"),
+      await criarCartao("To run", "Correr"),
+      await criarCartao("To sleep", "Dormir"),
+      await criarCartao("To read", "Ler"),
     ]) {
-      acervo.vincular(cartao.id, comTres.id);
+      await acervo.vincular(cartao.id, comTres.id);
     }
 
-    const listados = acervo.listarBaralhos();
+    const listados = await acervo.listarBaralhos();
 
     expect(listados).toEqual(
       expect.arrayContaining([

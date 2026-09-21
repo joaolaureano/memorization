@@ -4529,3 +4529,34 @@ marcadores).
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-085
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: Port ArmazenamentoDoAcervo, Adapter SQLite, bateria compartilhada, Acervo assíncrono
+
+- **Data/hora**: 2026-09-21 02:56 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 009-porta-de-persistencia / Bloco 1: T801–T807 — concluídas
+- **Commit anterior**: `7d84f2d` (registra o hash do evento anterior)
+
+Port de domínio assíncrona com 15 operações e desfechos tipados. O Adapter SQLite
+é dono do esquema e das migrações, movidos byte a byte, com as versões
+inalteradas; um arquivo criado antes da mudança abre na mesma versão. Bateria
+compartilhada com 22 cenários, rodada em memória e em arquivo. `criarAcervo`
+recebe a Port e todos os verbos passaram a ser assíncronos. As rotas aguardam o
+`Acervo` e respondem 503 sem detalhe do driver. Uma varredura de imports
+comprova que nenhum Module depende de armazenamento concreto.
+
+Revisão do Arquiteto:
+- nenhum teste removido; os `expect` subiram de 370 para 378;
+- desvio aceito: as listagens não têm desfecho tipado, então uma falha nelas
+  vira exceção e resposta 500, nunca uma lista apresentada como sucesso;
+- dois imports de E2E foram atualizados para o novo caminho das migrações.
+
+Verificado em `main`: backend 240, frontend 240, e2e 13, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

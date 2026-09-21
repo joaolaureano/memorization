@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import {
   registrarRotasDeBaralhos,
@@ -15,24 +17,24 @@ import {
  * T503 (backend) — contrato HTTP de `DELETE /cartoes/{id}`
  * (specs/006-excluir-cartao-e-baralho/contracts/api-exclusao.md).
  *
- * O servidor é montado com o `Acervo` sobre SQLite em memória e os dois
- * Adapters HTTP registrados sobre a sua Interface; toda asserção atravessa
- * `inject`. A rota devolve 204 sem conteúdo e remove somente o Cartão e seus
- * Vínculos, preservando os Baralhos; Cartão inexistente devolve 404 com
- * mensagem em português.
+ * O servidor é montado com o `Acervo` sobre o Adapter do armazenamento local
+ * em memória e os dois Adapters HTTP registrados sobre a sua Interface; toda
+ * asserção atravessa `inject`. A rota devolve 204 sem conteúdo e remove somente
+ * o Cartão e seus Vínculos, preservando os Baralhos; Cartão inexistente devolve
+ * 404 com mensagem em português.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
 
-  const acervo = criarAcervo(banco);
+  const acervo = criarAcervo(aberto.armazenamento);
 
   registrarRotasDeCartoes(servidor, acervo);
   registrarRotasDeBaralhos(servidor, acervo);
@@ -40,7 +42,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /** Cria um Cartão pela rota de criação; falha se a criação for recusada. */

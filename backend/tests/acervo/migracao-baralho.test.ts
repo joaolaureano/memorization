@@ -5,12 +5,9 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  criarAcervo,
-  type Cartao,
-  type ResultadoDeCriacaoDeCartao,
-} from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import { criarAcervo, type Cartao } from "../../src/acervo/acervo.ts";
+import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
+import { abrirBanco } from "../../src/armazenamento/sqlite/esquema.ts";
 
 /**
  * T102 — migração 2 cria a tabela `baralho` preservando os Cartões
@@ -18,10 +15,9 @@ import { abrirBanco } from "../../src/acervo/esquema.ts";
  *
  * O cenário central reconstrói o que a feature `001` deixou instalado: um
  * arquivo SQLite com a tabela `cartao` criada na primeira execução, sem
- * `versao_do_esquema`, e Cartões reais — criados pela Interface do `Acervo`,
- * como o usuário os criou. Migrar essa base até a versão corrente deve adotar
- * o `cartao` existente, criar `baralho` e `vinculo` e devolver todos os
- * Cartões intactos.
+ * `versao_do_esquema`, e Cartões reais. A abertura pelo Adapter do
+ * armazenamento local adota o `cartao` existente, cria `baralho` e `vinculo` e
+ * devolve todos os Cartões intactos pela Interface do `Acervo`.
  *
  * As restrições da tabela são verificadas diretamente no SQLite em memória,
  * porque é a rede de segurança do banco que está sob verificação: a `CHECK`
@@ -31,15 +27,6 @@ import { abrirBanco } from "../../src/acervo/esquema.ts";
  */
 
 const LIMITE_DO_NOME = 100;
-
-/** Desembrulha o Cartão de uma criação aceita; falha se foi recusada. */
-function cartaoDo(resultado: ResultadoDeCriacaoDeCartao): Cartao {
-  if (!resultado.ok) {
-    throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);
-  }
-
-  return resultado.cartao;
-}
 
 /** Versão registrada na tabela de controle; 0 quando a base não tem linha. */
 function versaoAtual(banco: DatabaseSync): number {
@@ -68,42 +55,54 @@ function criarBaseLegadaDaFeature001(banco: DatabaseSync): void {
   `);
 }
 
+/**
+ * Grava os Cartões da base legada. A gravação é direta porque o arquivo
+ * anterior a esta feature não tem tabela de versão: quem grava é quem migra,
+ * e o Adapter do armazenamento local só oferece a Porta depois de migrar — o
+ * que é justamente o comportamento que este cenário prova.
+ */
+function gravarCartoesLegados(banco: DatabaseSync, cartoes: Cartao[]): void {
+  const inserir = banco.prepare(
+    "INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)",
+  );
+
+  for (const cartao of cartoes) {
+    inserir.run(cartao.id, cartao.frente, cartao.verso);
+  }
+}
+
 describe("base legada da feature 001 com Cartões — migração até a versão corrente", () => {
-  it("cria baralho e vinculo preservando todos os Cartões intactos, e a reabertura não reaplica", () => {
+  it("cria baralho e vinculo preservando todos os Cartões intactos, e a reabertura não reaplica", async () => {
     const diretorio = mkdtempSync(join(tmpdir(), "acervo-baralho-"));
 
     try {
       const caminho = join(diretorio, "banco.sqlite");
 
       // O que a feature 001 deixou em disco: cartao, sem versao_do_esquema,
-      // e Cartões reais criados pela Interface do Acervo.
-      let banco = new DatabaseSync(caminho);
-      let criados: Cartao[];
+      // e Cartões reais.
+      const criados: Cartao[] = [
+        { id: "legado-1", frente: "To walk", verso: "Caminhar" },
+        { id: "legado-2", frente: "To read", verso: "Ler" },
+        { id: "legado-3", frente: "To sleep", verso: "Dormir" },
+      ];
+
+      const anterior = new DatabaseSync(caminho);
 
       try {
-        criarBaseLegadaDaFeature001(banco);
-
-        const acervo = criarAcervo(banco);
-
-        criados = [
-          cartaoDo(acervo.criarCartao({ frente: "To walk", verso: "Caminhar" })),
-          cartaoDo(acervo.criarCartao({ frente: "To read", verso: "Ler" })),
-          cartaoDo(acervo.criarCartao({ frente: "To sleep", verso: "Dormir" })),
-        ];
+        criarBaseLegadaDaFeature001(anterior);
+        gravarCartoesLegados(anterior, criados);
       } finally {
-        banco.close();
+        anterior.close();
       }
 
-      // A reabertura migra: adota o cartao existente (1), cria baralho (2) e
-      // cria vinculo (3).
-      banco = abrirBanco(caminho);
+      // A abertura pelo Adapter migra: adota o cartao existente (1), cria
+      // baralho (2) e cria vinculo (3).
+      const aberto = await abrirArmazenamentoSqlite(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(3);
-        expect(existeTabela(banco, "baralho")).toBe(true);
-        expect(existeTabela(banco, "vinculo")).toBe(true);
-
-        const sobreviventes = criarAcervo(banco).listarCartoes();
+        const sobreviventes = await criarAcervo(
+          aberto.armazenamento,
+        ).listarCartoes();
 
         expect(sobreviventes).toHaveLength(criados.length);
         expect(sobreviventes).toEqual(
@@ -111,6 +110,16 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
             criados.map((cartao) => ({ ...cartao, baralhos: [] })),
           ),
         );
+      } finally {
+        await aberto.encerrar();
+      }
+
+      let banco = abrirBanco(caminho);
+
+      try {
+        expect(versaoAtual(banco)).toBe(3);
+        expect(existeTabela(banco, "baralho")).toBe(true);
+        expect(existeTabela(banco, "vinculo")).toBe(true);
       } finally {
         banco.close();
       }
@@ -123,7 +132,9 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
         expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
-        expect(criarAcervo(banco).listarCartoes()).toHaveLength(criados.length);
+        expect(
+          banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,
+        ).toBe(criados.length);
       } finally {
         banco.close();
       }

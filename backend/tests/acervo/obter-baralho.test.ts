@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,32 +8,36 @@ import {
   type ResultadoDeCriacaoDeBaralho,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
  * T205 — `obterBaralho` devolve o Baralho com a elegibilidade derivada e os
  * Cartões vinculados, conforme o contrato de `GET /baralhos/{id}` (FR-014).
  *
  * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao`,
- * `vincular` e `obterBaralho`) sobre SQLite em memória; nenhum teste
- * inspeciona a tabela. A ordem dos Cartões não é pré-condição do contrato,
- * portanto as asserções comparam conjuntos, nunca posições.
+ * `vincular` e `obterBaralho`) sobre o Adapter do armazenamento local em
+ * memória; nenhum teste inspeciona a tabela. A ordem dos Cartões não é
+ * pré-condição do contrato, portanto as asserções comparam conjuntos, nunca
+ * posições.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 const NOME_VALIDO = "Inglês";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  acervo = criarAcervo(banco);
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
+  acervo = criarAcervo(aberto.armazenamento);
 });
 
-afterEach(() => {
-  banco.close();
+afterEach(async () => {
+  await aberto.encerrar();
 });
 
 /** Desembrulha o Baralho de uma criação aceita; falha se foi recusada. */
@@ -56,27 +58,27 @@ function cartaoDo(resultado: ResultadoDeCriacaoDeCartao): Cartao {
   return resultado.cartao;
 }
 
-function criarBaralho(nome = NOME_VALIDO): Baralho {
-  return baralhoDo(acervo.criarBaralho({ nome }));
+async function criarBaralho(nome = NOME_VALIDO): Promise<Baralho> {
+  return baralhoDo(await acervo.criarBaralho({ nome }));
 }
 
-function criarCartao(frente: string, verso: string): Cartao {
-  return cartaoDo(acervo.criarCartao({ frente, verso }));
+async function criarCartao(frente: string, verso: string): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao({ frente, verso }));
 }
 
 describe("obterBaralho — leitura pela Interface", () => {
-  it("recusa Baralho inexistente com código nao_encontrado e mensagem em português", () => {
-    expect(acervo.obterBaralho("baralho-inexistente")).toEqual({
+  it("recusa Baralho inexistente com código nao_encontrado e mensagem em português", async () => {
+    expect(await acervo.obterBaralho("baralho-inexistente")).toEqual({
       ok: false,
       erro: "nao_encontrado",
       mensagem: "Baralho não encontrado.",
     });
   });
 
-  it("devolve Baralho sem Cartões como não elegível, com cartoes vazio", () => {
-    const baralho = criarBaralho();
+  it("devolve Baralho sem Cartões como não elegível, com cartoes vazio", async () => {
+    const baralho = await criarBaralho();
 
-    expect(acervo.obterBaralho(baralho.id)).toEqual({
+    expect(await acervo.obterBaralho(baralho.id)).toEqual({
       ok: true,
       baralho: {
         id: baralho.id,
@@ -87,17 +89,17 @@ describe("obterBaralho — leitura pela Interface", () => {
     });
   });
 
-  it("devolve Baralho elegível com os três Cartões vinculados", () => {
-    const baralho = criarBaralho();
-    const primeiro = criarCartao("To walk", "Caminhar");
-    const segundo = criarCartao("To run", "Correr");
-    const terceiro = criarCartao("To sleep", "Dormir");
+  it("devolve Baralho elegível com os três Cartões vinculados", async () => {
+    const baralho = await criarBaralho();
+    const primeiro = await criarCartao("To walk", "Caminhar");
+    const segundo = await criarCartao("To run", "Correr");
+    const terceiro = await criarCartao("To sleep", "Dormir");
 
     for (const cartao of [primeiro, segundo, terceiro]) {
-      acervo.vincular(cartao.id, baralho.id);
+      await acervo.vincular(cartao.id, baralho.id);
     }
 
-    const resultado = acervo.obterBaralho(baralho.id);
+    const resultado = await acervo.obterBaralho(baralho.id);
 
     expect(resultado).toEqual({
       ok: true,
@@ -111,11 +113,11 @@ describe("obterBaralho — leitura pela Interface", () => {
     expect(resultado.ok ? resultado.baralho.cartoes : []).toHaveLength(3);
   });
 
-  it("deriva a elegibilidade da presença de Cartões, nunca de coluna", () => {
-    const baralho = criarBaralho();
-    const cartao = criarCartao(FRENTE_VALIDA, VERSO_VALIDO);
+  it("deriva a elegibilidade da presença de Cartões, nunca de coluna", async () => {
+    const baralho = await criarBaralho();
+    const cartao = await criarCartao(FRENTE_VALIDA, VERSO_VALIDO);
 
-    const antes = acervo.obterBaralho(baralho.id);
+    const antes = await acervo.obterBaralho(baralho.id);
 
     expect(antes).toEqual({
       ok: true,
@@ -127,9 +129,9 @@ describe("obterBaralho — leitura pela Interface", () => {
       },
     });
 
-    acervo.vincular(cartao.id, baralho.id);
+    await acervo.vincular(cartao.id, baralho.id);
 
-    expect(acervo.obterBaralho(baralho.id)).toEqual({
+    expect(await acervo.obterBaralho(baralho.id)).toEqual({
       ok: true,
       baralho: {
         id: baralho.id,
@@ -139,9 +141,9 @@ describe("obterBaralho — leitura pela Interface", () => {
       },
     });
 
-    acervo.desvincular(cartao.id, baralho.id);
+    await acervo.desvincular(cartao.id, baralho.id);
 
-    expect(acervo.obterBaralho(baralho.id)).toEqual({
+    expect(await acervo.obterBaralho(baralho.id)).toEqual({
       ok: true,
       baralho: {
         id: baralho.id,

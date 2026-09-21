@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import {
   registrarRotasDeBaralhos,
@@ -19,25 +21,25 @@ import {
  * trata como outra origem porque ele roda em outra porta do loopback, e o
  * `fetch` só atravessa origens com os cabeçalhos de CORS. O servidor é
  * montado exatamente como na aplicação — `criarServidor` mais o Adapter HTTP
- * — e toda asserção atravessa `inject`, a mesma superfície que um cliente
- * HTTP usa.
+ * sobre o `Acervo` do Adapter do armazenamento local em memória — e toda
+ * asserção atravessa `inject`, a mesma superfície que um cliente HTTP usa.
  */
 
 const ORIGEM_DO_FRONTEND = "http://127.0.0.1:5173";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(banco));
-  registrarRotasDeBaralhos(servidor, criarAcervo(banco));
+  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
+  registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
 });
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 describe("CORS para o frontend local", () => {

@@ -25,9 +25,9 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Porta e Adapter do armazenamento local
 
-- [ ] T801 A Porta `ArmazenamentoDoAcervo` existe no domínio, assíncrona e com desfechos tipados
-- [ ] T802 O Adapter local é dono do esquema e das migrações movidas, e um arquivo criado antes desta feature continua abrindo na mesma versão
-- [ ] T803 A bateria compartilhada da Porta passa integralmente contra o Adapter local, inclusive entre duas aberturas do mesmo arquivo
+- [X] T801 A Porta `ArmazenamentoDoAcervo` existe no domínio, assíncrona e com desfechos tipados
+- [X] T802 O Adapter local é dono do esquema e das migrações movidas, e um arquivo criado antes desta feature continua abrindo na mesma versão
+- [X] T803 A bateria compartilhada da Porta passa integralmente contra o Adapter local, inclusive entre duas aberturas do mesmo arquivo
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -43,10 +43,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Modules sobre a Porta
 
-- [ ] T804 `criarAcervo(armazenamento)` monta o `Acervo` sobre a Porta, com os verbos assíncronos e nenhuma regra alterada
-- [ ] T805 As rotas aguardam o `Acervo` e o contrato HTTP não muda, com a falha do armazenamento respondida sem detalhe do driver
-- [ ] T806 Toda a suíte existente de `001` a `006` do backend passa com o mesmo significado, sem asserção enfraquecida
-- [ ] T807 [P] Nenhum Module importa armazenamento concreto, comprovado pela leitura dos seus imports
+- [X] T804 `criarAcervo(armazenamento)` monta o `Acervo` sobre a Porta, com os verbos assíncronos e nenhuma regra alterada
+- [X] T805 As rotas aguardam o `Acervo` e o contrato HTTP não muda, com a falha do armazenamento respondida sem detalhe do driver
+- [X] T806 Toda a suíte existente de `001` a `006` do backend passa com o mesmo significado, sem asserção enfraquecida
+- [X] T807 [P] Nenhum Module importa armazenamento concreto, comprovado pela leitura dos seus imports
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

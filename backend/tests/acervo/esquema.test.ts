@@ -2,13 +2,14 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import { abrirBanco } from "../../src/armazenamento/sqlite/esquema.ts";
 
 /**
- * T004 — o esquema criado na primeira execução. Os testes abrem SQLite em
- * memória e exercitam as restrições diretamente, porque é a rede de segurança
- * do banco que está sob verificação; as operações `criarCartao`/`listarCartoes`
- * são de T005 e não são usadas aqui.
+ * T004 — o esquema criado na primeira execução. Os testes abrem o arquivo
+ * SQLite em memória pelo Adapter do armazenamento local e exercitam as
+ * restrições diretamente, porque é a rede de segurança do banco que está sob
+ * verificação; as operações `criarCartao`/`listarCartoes` são de T005 e não são
+ * usadas aqui.
  */
 
 const FRENTE_VALIDA = "To walk";

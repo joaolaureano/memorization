@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
 
@@ -12,11 +14,11 @@ import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
  * T007 — contrato HTTP de `POST /cartoes`
  * (specs/001-criar-cartao/contracts/api-cartoes.md).
  *
- * O servidor é montado com o `Acervo` sobre SQLite em memória e o Adapter
- * HTTP registrado sobre a sua Interface; toda asserção atravessa `inject`, a
- * mesma superfície que um cliente HTTP usa. Os quatro códigos de erro do
- * contrato são cobertos com mensagem exata em português, e a forma inválida
- * é recusada na borda, antes de alcançar o `Acervo`.
+ * O servidor é montado com o `Acervo` sobre o Adapter do armazenamento local
+ * em memória e o Adapter HTTP registrado sobre a sua Interface; toda asserção
+ * atravessa `inject`, a mesma superfície que um cliente HTTP usa. Os quatro
+ * códigos de erro do contrato são cobertos com mensagem exata em português, e a
+ * forma inválida é recusada na borda, antes de alcançar o `Acervo`.
  */
 
 const FRENTE_VALIDA = "To walk";
@@ -27,18 +29,18 @@ const RECUSA_DE_CORPO_INVALIDO = {
   mensagem: "O corpo da requisição não é válido.",
 };
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(banco));
+  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
 });
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /**

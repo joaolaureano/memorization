@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import {
   registrarRotasDeBaralhos,
@@ -15,25 +17,25 @@ import {
  * T207 — contrato HTTP de Vínculos
  * (specs/003-vincular-cartao-baralho/contracts/api-vinculos.md).
  *
- * O servidor é montado com o `Acervo` sobre SQLite em memória e os dois
- * Adapters HTTP registrados sobre a sua Interface; toda asserção atravessa
- * `inject`. Os códigos 201, 204, 404 e 409 são cobertos com mensagem exata em
- * português, e `GET /baralhos/{id}` devolve o Baralho com os Cartões
- * vinculados.
+ * O servidor é montado com o `Acervo` sobre o Adapter do armazenamento local
+ * em memória e os dois Adapters HTTP registrados sobre a sua Interface; toda
+ * asserção atravessa `inject`. Os códigos 201, 204, 404 e 409 são cobertos com
+ * mensagem exata em português, e `GET /baralhos/{id}` devolve o Baralho com os
+ * Cartões vinculados.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 const NOME_VALIDO = "Inglês";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
 
-  const acervo = criarAcervo(banco);
+  const acervo = criarAcervo(aberto.armazenamento);
 
   registrarRotasDeCartoes(servidor, acervo);
   registrarRotasDeBaralhos(servidor, acervo);
@@ -41,7 +43,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /** Cria um Cartão pela rota de criação; falha se a criação for recusada. */

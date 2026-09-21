@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +8,10 @@ import {
   type ResultadoDeCriacaoDeBaralho,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
  * T501 — `Acervo` exclui Cartão pela sua Interface, preservando Baralhos e
@@ -18,25 +19,26 @@ import { abrirBanco } from "../../src/acervo/esquema.ts";
  *
  * Toda asserção atravessa a Interface (`criarCartao`, `criarBaralho`,
  * `vincular`, `excluirCartao`, `listarCartoes`, `listarBaralhos` e
- * `obterBaralho`) sobre SQLite em memória; nenhum teste inspeciona a tabela.
- * Excluir um Cartão remove apenas o Cartão e os seus Vínculos — nenhum Baralho
- * é destruído (FR-008) — e a elegibilidade dos Baralhos restantes é reavaliada
- * na leitura (FR-024). Cartão inexistente é recusado como `nao_encontrado`.
+ * `obterBaralho`) sobre o Adapter do armazenamento local em memória; nenhum
+ * teste inspeciona a tabela. Excluir um Cartão remove apenas o Cartão e os seus
+ * Vínculos — nenhum Baralho é destruído (FR-008) — e a elegibilidade dos
+ * Baralhos restantes é reavaliada na leitura (FR-024). Cartão inexistente é
+ * recusado como `nao_encontrado`.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  acervo = criarAcervo(banco);
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
+  acervo = criarAcervo(aberto.armazenamento);
 });
 
-afterEach(() => {
-  banco.close();
+afterEach(async () => {
+  await aberto.encerrar();
 });
 
 /** Desembrulha o Cartão de uma criação aceita; falha se foi recusada. */
@@ -58,31 +60,31 @@ function baralhoDo(resultado: ResultadoDeCriacaoDeBaralho): Baralho {
 }
 
 /** Cria um Cartão válido pela Interface. */
-function criarCartao(): Cartao {
+async function criarCartao(): Promise<Cartao> {
   return cartaoDo(
-    acervo.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
+    await acervo.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
   );
 }
 
 /** Cria um Baralho válido pela Interface. */
-function criarBaralho(nome: string): Baralho {
-  return baralhoDo(acervo.criarBaralho({ nome }));
+async function criarBaralho(nome: string): Promise<Baralho> {
+  return baralhoDo(await acervo.criarBaralho({ nome }));
 }
 
 describe("excluirCartao — exclusão pela Interface", () => {
-  it("exclui o Cartão e preserva os dois Baralhos, que deixam de ser elegíveis", () => {
-    const cartao = criarCartao();
-    const primeiroBaralho = criarBaralho("Inglês");
-    const segundoBaralho = criarBaralho("Espanhol");
+  it("exclui o Cartão e preserva os dois Baralhos, que deixam de ser elegíveis", async () => {
+    const cartao = await criarCartao();
+    const primeiroBaralho = await criarBaralho("Inglês");
+    const segundoBaralho = await criarBaralho("Espanhol");
 
     for (const baralho of [primeiroBaralho, segundoBaralho]) {
-      acervo.vincular(cartao.id, baralho.id);
+      await acervo.vincular(cartao.id, baralho.id);
     }
 
-    expect(acervo.excluirCartao(cartao.id)).toEqual({ ok: true });
+    expect(await acervo.excluirCartao(cartao.id)).toEqual({ ok: true });
 
-    expect(acervo.listarCartoes()).toEqual([]);
-    expect(acervo.listarBaralhos()).toEqual(
+    expect(await acervo.listarCartoes()).toEqual([]);
+    expect(await acervo.listarBaralhos()).toEqual(
       expect.arrayContaining([
         {
           id: primeiroBaralho.id,
@@ -100,7 +102,7 @@ describe("excluirCartao — exclusão pela Interface", () => {
     );
 
     for (const baralho of [primeiroBaralho, segundoBaralho]) {
-      expect(acervo.obterBaralho(baralho.id)).toEqual({
+      expect(await acervo.obterBaralho(baralho.id)).toEqual({
         ok: true,
         baralho: {
           id: baralho.id,
@@ -112,15 +114,15 @@ describe("excluirCartao — exclusão pela Interface", () => {
     }
   });
 
-  it("faz o Baralho do último Cartão sobreviver e perder a elegibilidade", () => {
-    const baralho = criarBaralho("Inglês");
-    const cartao = criarCartao();
+  it("faz o Baralho do último Cartão sobreviver e perder a elegibilidade", async () => {
+    const baralho = await criarBaralho("Inglês");
+    const cartao = await criarCartao();
 
-    acervo.vincular(cartao.id, baralho.id);
+    await acervo.vincular(cartao.id, baralho.id);
 
-    expect(acervo.excluirCartao(cartao.id)).toEqual({ ok: true });
+    expect(await acervo.excluirCartao(cartao.id)).toEqual({ ok: true });
 
-    const [listado] = acervo.listarBaralhos();
+    const [listado] = await acervo.listarBaralhos();
 
     expect(listado).toEqual({
       id: baralho.id,
@@ -130,20 +132,20 @@ describe("excluirCartao — exclusão pela Interface", () => {
     });
   });
 
-  it("não destrói Cartões alheios nem seus Vínculos com outros Baralhos", () => {
-    const excluido = criarCartao();
-    const preservado = criarCartao();
-    const baralho = criarBaralho("Inglês");
+  it("não destrói Cartões alheios nem seus Vínculos com outros Baralhos", async () => {
+    const excluido = await criarCartao();
+    const preservado = await criarCartao();
+    const baralho = await criarBaralho("Inglês");
 
-    acervo.vincular(excluido.id, baralho.id);
-    acervo.vincular(preservado.id, baralho.id);
+    await acervo.vincular(excluido.id, baralho.id);
+    await acervo.vincular(preservado.id, baralho.id);
 
-    expect(acervo.excluirCartao(excluido.id)).toEqual({ ok: true });
+    expect(await acervo.excluirCartao(excluido.id)).toEqual({ ok: true });
 
-    expect(acervo.listarCartoes()).toEqual([
+    expect(await acervo.listarCartoes()).toEqual([
       { ...preservado, baralhos: [baralho] },
     ]);
-    expect(acervo.obterBaralho(baralho.id)).toEqual({
+    expect(await acervo.obterBaralho(baralho.id)).toEqual({
       ok: true,
       baralho: {
         id: baralho.id,
@@ -154,8 +156,8 @@ describe("excluirCartao — exclusão pela Interface", () => {
     });
   });
 
-  it("recusa Cartão inexistente como nao_encontrado", () => {
-    expect(acervo.excluirCartao("cartao-inexistente")).toEqual({
+  it("recusa Cartão inexistente como nao_encontrado", async () => {
+    expect(await acervo.excluirCartao("cartao-inexistente")).toEqual({
       ok: false,
       erro: "nao_encontrado",
       mensagem: "Cartão não encontrado.",

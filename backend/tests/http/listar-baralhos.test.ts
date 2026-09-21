@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
 
@@ -13,26 +15,27 @@ import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
  * (specs/002-criar-baralho/contracts/api-baralhos.md).
  *
  * Toda asserção atravessa `inject` sobre o Adapter HTTP registrado com o
- * `Acervo` em memória. O nome é rótulo, não identificador: dois Baralhos com
- * o mesmo nome são ambos devolvidos (FR-012). `quantidadeDeCartoes` e
- * `elegivel` são derivados na leitura — nesta feature, sempre `0` e `false`,
- * porque ainda não existe Vínculo (FR-024).
+ * `Acervo` sobre o Adapter do armazenamento local em memória. O nome é rótulo,
+ * não identificador: dois Baralhos com o mesmo nome são ambos devolvidos
+ * (FR-012). `quantidadeDeCartoes` e `elegivel` são derivados na leitura —
+ * nesta feature, sempre `0` e `false`, porque ainda não existe Vínculo
+ * (FR-024).
  */
 
 const NOME_REPETIDO = "Inglês";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
-  registrarRotasDeBaralhos(servidor, criarAcervo(banco));
+  registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
 });
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /** Cria um Baralho pela rota de criação; falha se a criação for recusada. */

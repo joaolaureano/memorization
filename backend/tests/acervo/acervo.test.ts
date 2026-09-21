@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -8,27 +6,30 @@ import {
   type Cartao,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
  * T005 — `Acervo` cria Cartão pela sua Interface, recusando conteúdo
- * inválido. Toda asserção passa pela Interface, com SQLite em memória;
- * nenhum teste inspeciona a tabela.
+ * inválido. Toda asserção passa pela Interface, com o Adapter do armazenamento
+ * local em memória; nenhum teste inspeciona a tabela.
  */
 
 const FRENTE_VALIDA = "To walk";
 const VERSO_VALIDO = "Caminhar";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  acervo = criarAcervo(banco);
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
+  acervo = criarAcervo(aberto.armazenamento);
 });
 
-afterEach(() => {
-  banco.close();
+afterEach(async () => {
+  await aberto.encerrar();
 });
 
 /** Desembrulha o Cartão de uma criação aceita; falha se foi recusada. */
@@ -41,9 +42,9 @@ function cartaoDo(resultado: ResultadoDeCriacaoDeCartao): Cartao {
 }
 
 describe("criarCartao — criação pela Interface", () => {
-  it("cria um Cartão válido com Frente e Verso, sem nenhum Baralho", () => {
+  it("cria um Cartão válido com Frente e Verso, sem nenhum Baralho", async () => {
     const cartao = cartaoDo(
-      acervo.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
+      await acervo.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
     );
 
     expect(cartao).toEqual({
@@ -53,25 +54,29 @@ describe("criarCartao — criação pela Interface", () => {
     });
   });
 
-  it("recusa Frente vazia, com mensagem em português", () => {
-    expect(acervo.criarCartao({ frente: "", verso: VERSO_VALIDO })).toEqual({
-      ok: false,
-      erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
-    });
+  it("recusa Frente vazia, com mensagem em português", async () => {
+    expect(await acervo.criarCartao({ frente: "", verso: VERSO_VALIDO })).toEqual(
+      {
+        ok: false,
+        erro: "frente_vazia",
+        mensagem: "A frente do cartão não pode ficar vazia.",
+      },
+    );
   });
 
-  it("recusa Verso vazio, com mensagem em português", () => {
-    expect(acervo.criarCartao({ frente: FRENTE_VALIDA, verso: "" })).toEqual({
+  it("recusa Verso vazio, com mensagem em português", async () => {
+    expect(
+      await acervo.criarCartao({ frente: FRENTE_VALIDA, verso: "" }),
+    ).toEqual({
       ok: false,
       erro: "verso_vazio",
       mensagem: "O verso do cartão não pode ficar vazio.",
     });
   });
 
-  it("trata Frente composta só de espaços como vazia", () => {
+  it("trata Frente composta só de espaços como vazia", async () => {
     expect(
-      acervo.criarCartao({ frente: "   ", verso: VERSO_VALIDO }),
+      await acervo.criarCartao({ frente: "   ", verso: VERSO_VALIDO }),
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
@@ -79,9 +84,12 @@ describe("criarCartao — criação pela Interface", () => {
     });
   });
 
-  it("recusa Frente com 1001 caracteres, informando limite e tamanho atual", () => {
+  it("recusa Frente com 1001 caracteres, informando limite e tamanho atual", async () => {
     expect(
-      acervo.criarCartao({ frente: "a".repeat(1001), verso: VERSO_VALIDO }),
+      await acervo.criarCartao({
+        frente: "a".repeat(1001),
+        verso: VERSO_VALIDO,
+      }),
     ).toEqual({
       ok: false,
       erro: "frente_muito_longa",
@@ -90,20 +98,20 @@ describe("criarCartao — criação pela Interface", () => {
     });
   });
 
-  it("ignora propriedade extra e não a devolve nas leituras", () => {
+  it("ignora propriedade extra e não a devolve nas leituras", async () => {
     const entrada = {
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
       titulo: "propriedade que não existe em Cartão",
     };
 
-    const cartao = cartaoDo(acervo.criarCartao(entrada));
+    const cartao = cartaoDo(await acervo.criarCartao(entrada));
 
     expect(cartao).toEqual({
       id: expect.any(String),
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
     });
-    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 });

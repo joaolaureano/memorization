@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import { MIGRACOES } from "../backend/src/acervo/migracoes";
+import { MIGRACOES } from "../backend/src/armazenamento/sqlite/migracoes";
 
 import {
   aguardarProntidao,

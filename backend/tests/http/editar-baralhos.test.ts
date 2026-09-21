@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
 
@@ -12,11 +14,11 @@ import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
  * T403 (backend) — contrato HTTP de `PUT /baralhos/{id}`
  * (specs/005-editar-cartao-e-baralho/contracts/api-edicao.md).
  *
- * O servidor é montado com o `Acervo` sobre SQLite em memória e o Adapter
- * HTTP registrado sobre a sua Interface; toda asserção atravessa `inject`. A
- * rota devolve 200 com o Baralho renomeado, 400 para nome inválido — as
- * mesmas recusas da criação — e 404 para Baralho inexistente, sempre com
- * mensagem em português.
+ * O servidor é montado com o `Acervo` sobre o Adapter do armazenamento local
+ * em memória e o Adapter HTTP registrado sobre a sua Interface; toda asserção
+ * atravessa `inject`. A rota devolve 200 com o Baralho renomeado, 400 para nome
+ * inválido — as mesmas recusas da criação — e 404 para Baralho inexistente,
+ * sempre com mensagem em português.
  */
 
 const NOME_VALIDO = "Inglês";
@@ -27,18 +29,18 @@ const RECUSA_DE_CORPO_INVALIDO = {
   mensagem: "O corpo da requisição não é válido.",
 };
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
-  registrarRotasDeBaralhos(servidor, criarAcervo(banco));
+  registrarRotasDeBaralhos(servidor, criarAcervo(aberto.armazenamento));
 });
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /** Cria um Baralho pela rota de criação; falha se a criação for recusada. */

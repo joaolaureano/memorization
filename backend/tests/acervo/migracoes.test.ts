@@ -9,18 +9,23 @@ import {
   abrirBanco,
   aplicarEsquema,
   aplicarMigracoes,
-} from "../../src/acervo/esquema.ts";
-import { MIGRACOES, type Migracao } from "../../src/acervo/migracoes.ts";
+} from "../../src/armazenamento/sqlite/esquema.ts";
+import {
+  MIGRACOES,
+  type Migracao,
+} from "../../src/armazenamento/sqlite/migracoes.ts";
+import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
- * T101 — infraestrutura de migração versionada do `Acervo`.
+ * T101 — infraestrutura de migração versionada, agora do Adapter do
+ * armazenamento local.
  *
  * Os três grupos de verificação exigidos: base nova recebe todas as migrações
  * em ordem; base já migrada não reaplica; falha no meio de uma migração não
  * deixa estado parcial. Um quarto grupo prova a adoção de arquivos legados da
  * feature `001`, que têm `cartao` sem a tabela de versão.
  *
- * A infraestrutura é a Seam interna do `Acervo`: as asserções inspecionam as
+ * A infraestrutura é a Seam interna do Adapter: as asserções inspecionam as
  * tabelas do SQLite em memória, porque é o comportamento do aplicador de
  * migrações que está sob verificação — nenhuma operação da Interface do
  * `Acervo` é exercitada aqui.
@@ -253,5 +258,71 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
   it("mantém IF NOT EXISTS na migração 1 para adotar a tabela pré-existente", () => {
     expect(MIGRACOES[0]?.versao).toBe(1);
     expect(MIGRACOES[0]?.sql).toContain("CREATE TABLE IF NOT EXISTS cartao");
+  });
+});
+
+describe("arquivo criado antes desta feature — mesma versão, mesmos dados", () => {
+  it("abre na versão registrada, sem reaplicar migração, e serve o mesmo conteúdo pela Porta", async () => {
+    const diretorio = mkdtempSync(join(tmpdir(), "acervo-antes-da-porta-"));
+
+    try {
+      const caminho = join(diretorio, "memorizacao.sqlite");
+
+      // O que uma execução anterior a esta feature deixava em disco: as três
+      // migrações aplicadas, a versão 3 registrada e conteúdo real.
+      const anterior = new DatabaseSync(caminho);
+
+      try {
+        aplicarEsquema(anterior);
+        anterior
+          .prepare("INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)")
+          .run("c1", "To walk", "Caminhar");
+        anterior
+          .prepare("INSERT INTO baralho (id, nome) VALUES (?, ?)")
+          .run("b1", "Inglês");
+        anterior
+          .prepare("INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)")
+          .run("c1", "b1");
+      } finally {
+        anterior.close();
+      }
+
+      // A abertura pelo Adapter aplica apenas o que estivesse pendente — nada,
+      // neste caso — e o conteúdo anterior continua servindo à Interface.
+      const aberto = await abrirArmazenamentoSqlite(caminho);
+
+      try {
+        expect(await aberto.armazenamento.listarCartoes()).toEqual([
+          { id: "c1", frente: "To walk", verso: "Caminhar" },
+        ]);
+        expect(await aberto.armazenamento.listarBaralhosDoCartao("c1")).toEqual([
+          { id: "b1", nome: "Inglês" },
+        ]);
+        expect(
+          await aberto.armazenamento.contarCartoesPorBaralho(),
+        ).toContainEqual({ baralhoId: "b1", quantidadeDeCartoes: 1 });
+      } finally {
+        await aberto.encerrar();
+      }
+
+      // A versão registrada é a mesma de antes, e migração já aplicada nunca
+      // rodou de novo: reaplicar a 2 ou a 3 falharia, pois as tabelas existem.
+      const reaberto = new DatabaseSync(caminho);
+
+      try {
+        expect(versaoAtual(reaberto)).toBe(3);
+        expect(existeTabela(reaberto, "cartao")).toBe(true);
+        expect(existeTabela(reaberto, "baralho")).toBe(true);
+        expect(existeTabela(reaberto, "vinculo")).toBe(true);
+        expect(
+          reaberto.prepare("SELECT frente FROM cartao WHERE id = ?").get("c1")
+            ?.frente,
+        ).toBe("To walk");
+      } finally {
+        reaberto.close();
+      }
+    } finally {
+      rmSync(diretorio, { recursive: true, force: true });
+    }
   });
 });

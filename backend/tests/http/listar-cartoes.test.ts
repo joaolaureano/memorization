@@ -1,10 +1,12 @@
-import type { DatabaseSync } from "node:sqlite";
 import type { FastifyInstance } from "fastify";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { criarAcervo } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { criarServidor } from "../../src/http/servidor.ts";
 import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
 
@@ -15,28 +17,28 @@ import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
  * cada Cartão agora traz também `baralhos`.
  *
  * Toda asserção atravessa `inject` sobre o Adapter HTTP registrado com o
- * `Acervo` em memória. A Frente não é identificador: dois Cartões com a
- * mesma Frente são ambos devolvidos (FR-003; invariante 2 de `spec.md`), e a
- * ordem não é pré-condição do contrato, então as asserções comparam
- * conjuntos de Cartões, nunca posições.
+ * `Acervo` sobre o Adapter do armazenamento local em memória. A Frente não é
+ * identificador: dois Cartões com a mesma Frente são ambos devolvidos (FR-003;
+ * invariante 2 de `spec.md`), e a ordem não é pré-condição do contrato, então
+ * as asserções comparam conjuntos de Cartões, nunca posições.
  */
 
 const FRENTE_REPETIDA = "To walk";
 const VERSO_UM = "Caminhar";
 const VERSO_OUTRO = "Andar";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let servidor: FastifyInstance;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
   servidor = criarServidor();
-  registrarRotasDeCartoes(servidor, criarAcervo(banco));
+  registrarRotasDeCartoes(servidor, criarAcervo(aberto.armazenamento));
 });
 
 afterEach(async () => {
   await servidor.close();
-  banco.close();
+  await aberto.encerrar();
 });
 
 /** Cria um Cartão pela rota de criação; falha se a criação for recusada. */

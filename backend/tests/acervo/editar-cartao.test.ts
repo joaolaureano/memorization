@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,19 +8,22 @@ import {
   type ResultadoDeCriacaoDeBaralho,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
-import { abrirBanco } from "../../src/acervo/esquema.ts";
+import {
+  abrirArmazenamentoSqlite,
+  type ArmazenamentoSqliteAberto,
+} from "../../src/armazenamento/sqlite/armazenamento.ts";
 
 /**
  * T401 — `Acervo` edita Cartão pela sua Interface, reaplicando as regras da
  * criação e preservando Vínculos.
  *
  * Toda asserção atravessa a Interface (`criarCartao`, `criarBaralho`,
- * `vincular`, `editarCartao`, `listarCartoes` e `obterBaralho`) sobre SQLite
- * em memória; nenhum teste inspeciona a tabela. A edição altera o Cartão, não
- * cópias: a Frente e o Verso novos valem em todos os Baralhos a que ele está
- * vinculado (FR-005). As regras de conteúdo são as mesmas da criação
- * (FR-002, FR-051, FR-052) e Cartão inexistente é recusado como
- * `nao_encontrado`.
+ * `vincular`, `editarCartao`, `listarCartoes` e `obterBaralho`) sobre o Adapter
+ * do armazenamento local em memória; nenhum teste inspeciona a tabela. A edição
+ * altera o Cartão, não cópias: a Frente e o Verso novos valem em todos os
+ * Baralhos a que ele está vinculado (FR-005). As regras de conteúdo são as
+ * mesmas da criação (FR-002, FR-051, FR-052) e Cartão inexistente é recusado
+ * como `nao_encontrado`.
  */
 
 const FRENTE_VALIDA = "To walk";
@@ -30,16 +31,16 @@ const VERSO_VALIDO = "Caminhar";
 const FRENTE_EDITADA = "To stroll";
 const VERSO_EDITADO = "Passear";
 
-let banco: DatabaseSync;
+let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
 
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  acervo = criarAcervo(banco);
+beforeEach(async () => {
+  aberto = await abrirArmazenamentoSqlite(":memory:");
+  acervo = criarAcervo(aberto.armazenamento);
 });
 
-afterEach(() => {
-  banco.close();
+afterEach(async () => {
+  await aberto.encerrar();
 });
 
 /** Desembrulha o Cartão de uma criação aceita; falha se foi recusada. */
@@ -61,21 +62,24 @@ function baralhoDo(resultado: ResultadoDeCriacaoDeBaralho): Baralho {
 }
 
 /** Cria um Cartão válido pela Interface. */
-function criarCartao(frente = FRENTE_VALIDA, verso = VERSO_VALIDO): Cartao {
-  return cartaoDo(acervo.criarCartao({ frente, verso }));
+async function criarCartao(
+  frente = FRENTE_VALIDA,
+  verso = VERSO_VALIDO,
+): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao({ frente, verso }));
 }
 
 /** Cria um Baralho válido pela Interface. */
-function criarBaralho(nome: string): Baralho {
-  return baralhoDo(acervo.criarBaralho({ nome }));
+async function criarBaralho(nome: string): Promise<Baralho> {
+  return baralhoDo(await acervo.criarBaralho({ nome }));
 }
 
 describe("editarCartao — edição pela Interface", () => {
-  it("edita Frente e Verso e devolve o Cartão atualizado", () => {
-    const cartao = criarCartao();
+  it("edita Frente e Verso e devolve o Cartão atualizado", async () => {
+    const cartao = await criarCartao();
 
     expect(
-      acervo.editarCartao(cartao.id, {
+      await acervo.editarCartao(cartao.id, {
         frente: FRENTE_EDITADA,
         verso: VERSO_EDITADO,
       }),
@@ -88,20 +92,22 @@ describe("editarCartao — edição pela Interface", () => {
       },
     });
 
-    expect(acervo.listarCartoes()).toEqual([
+    expect(await acervo.listarCartoes()).toEqual([
       { ...cartao, frente: FRENTE_EDITADA, verso: VERSO_EDITADO, baralhos: [] },
     ]);
   });
 
-  it("propaga a edição a todos os Baralhos a que o Cartão está vinculado", () => {
-    const cartao = criarCartao();
-    const baralhos = ["Inglês", "Espanhol", "Francês"].map(criarBaralho);
+  it("propaga a edição a todos os Baralhos a que o Cartão está vinculado", async () => {
+    const cartao = await criarCartao();
+    const baralhos = await Promise.all(
+      ["Inglês", "Espanhol", "Francês"].map(criarBaralho),
+    );
 
     for (const baralho of baralhos) {
-      expect(acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
+      expect(await acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
     }
 
-    const resultado = acervo.editarCartao(cartao.id, {
+    const resultado = await acervo.editarCartao(cartao.id, {
       frente: FRENTE_EDITADA,
       verso: VERSO_EDITADO,
     });
@@ -116,7 +122,7 @@ describe("editarCartao — edição pela Interface", () => {
     });
 
     for (const baralho of baralhos) {
-      const obtido = acervo.obterBaralho(baralho.id);
+      const obtido = await acervo.obterBaralho(baralho.id);
 
       expect(obtido).toEqual({
         ok: true,
@@ -135,7 +141,7 @@ describe("editarCartao — edição pela Interface", () => {
       });
     }
 
-    expect(acervo.listarCartoes()).toEqual([
+    expect(await acervo.listarCartoes()).toEqual([
       {
         id: cartao.id,
         frente: FRENTE_EDITADA,
@@ -145,23 +151,31 @@ describe("editarCartao — edição pela Interface", () => {
     ]);
   });
 
-  it("recusa Frente vazia com a mesma mensagem da criação", () => {
-    const cartao = criarCartao();
+  it("recusa Frente vazia com a mesma mensagem da criação", async () => {
+    const cartao = await criarCartao();
 
-    expect(acervo.editarCartao(cartao.id, { frente: "", verso: VERSO_EDITADO })).toEqual({
+    expect(
+      await acervo.editarCartao(cartao.id, {
+        frente: "",
+        verso: VERSO_EDITADO,
+      }),
+    ).toEqual({
       ok: false,
       erro: "frente_vazia",
       mensagem: "A frente do cartão não pode ficar vazia.",
     });
 
-    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 
-  it("trata Frente composta só de espaços como vazia", () => {
-    const cartao = criarCartao();
+  it("trata Frente composta só de espaços como vazia", async () => {
+    const cartao = await criarCartao();
 
     expect(
-      acervo.editarCartao(cartao.id, { frente: "   ", verso: VERSO_EDITADO }),
+      await acervo.editarCartao(cartao.id, {
+        frente: "   ",
+        verso: VERSO_EDITADO,
+      }),
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
@@ -169,11 +183,11 @@ describe("editarCartao — edição pela Interface", () => {
     });
   });
 
-  it("recusa Frente acima de 1000 caracteres com a mesma mensagem da criação (SC-016)", () => {
-    const cartao = criarCartao();
+  it("recusa Frente acima de 1000 caracteres com a mesma mensagem da criação (SC-016)", async () => {
+    const cartao = await criarCartao();
 
     expect(
-      acervo.editarCartao(cartao.id, {
+      await acervo.editarCartao(cartao.id, {
         frente: "a".repeat(1001),
         verso: VERSO_EDITADO,
       }),
@@ -184,14 +198,14 @@ describe("editarCartao — edição pela Interface", () => {
         "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
     });
 
-    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 
-  it("recusa Verso acima de 1000 caracteres na edição e não altera o Cartão (SC-016)", () => {
-    const cartao = criarCartao();
+  it("recusa Verso acima de 1000 caracteres na edição e não altera o Cartão (SC-016)", async () => {
+    const cartao = await criarCartao();
 
     expect(
-      acervo.editarCartao(cartao.id, {
+      await acervo.editarCartao(cartao.id, {
         frente: FRENTE_EDITADA,
         verso: "a".repeat(1001),
       }),
@@ -202,12 +216,12 @@ describe("editarCartao — edição pela Interface", () => {
         "O verso do cartão deve ter no máximo 1000 caracteres; o informado tem 1001.",
     });
 
-    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 
-  it("recusa Cartão inexistente como nao_encontrado", () => {
+  it("recusa Cartão inexistente como nao_encontrado", async () => {
     expect(
-      acervo.editarCartao("cartao-inexistente", {
+      await acervo.editarCartao("cartao-inexistente", {
         frente: FRENTE_EDITADA,
         verso: VERSO_EDITADO,
       }),

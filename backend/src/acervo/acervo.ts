@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync, StatementSync } from "node:sqlite";
 
+import type {
+  ArmazenamentoDoAcervo,
+  Baralho,
+  Cartao,
+} from "../armazenamento/porta.ts";
 import {
   validarFrente,
   validarNomeDeBaralho,
@@ -13,16 +17,14 @@ import type {
 } from "./invariantes.ts";
 
 /**
- * A única entidade desta feature: Frente e Verso, e nada além (FR-009).
+ * As formas que atravessam a Porta são declaradas por ela, e o `Acervo` as
+ * re-exporta na sua Interface: nenhum caller muda ao trocar de Adapter.
  *
- * O `id` é um identificador opaco gerado pelo sistema. A Frente **não** é
- * identificador: dois Cartões podem ter a mesma Frente.
+ * `Cartao` é `{ id, frente, verso }` — a Frente **não** é identificador: dois
+ * Cartões podem ter a mesma Frente (FR-009). `Baralho` é `{ id, nome }` — o
+ * nome é rótulo, não identificador (FR-012).
  */
-export interface Cartao {
-  id: string;
-  frente: string;
-  verso: string;
-}
+export type { Baralho, Cartao };
 
 /**
  * O que `criarCartao` recebe: exatamente Frente e Verso (FR-001).
@@ -40,22 +42,17 @@ export interface DadosDeCartao {
 /**
  * Resultado de `criarCartao`. Falha de regra de domínio é resultado previsto,
  * e não exceção genérica: o caller distingue `ok` e, na recusa, recebe o
- * código estável e a mensagem em português (FR-046).
+ * código estável e a mensagem em português (FR-046). `indisponivel` é a recusa
+ * que vem do armazenamento: a operação não foi concluída e o conteúdo
+ * informado continua disponível para nova tentativa (FR-044, FR-045).
  */
 export type ResultadoDeCriacaoDeCartao =
   | { ok: true; cartao: Cartao }
-  | { ok: false; erro: CodigoDeErroDeCartao; mensagem: string };
-
-/**
- * A única entidade desta etapa: id opaco e nome, e nada além (FR-018).
- *
- * O `id` é um identificador opaco gerado pelo sistema. O nome **não** é
- * identificador: dois Baralhos podem ter o mesmo nome (FR-012).
- */
-export interface Baralho {
-  id: string;
-  nome: string;
-}
+  | {
+      ok: false;
+      erro: CodigoDeErroDeCartao | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * O que `criarBaralho` recebe: exatamente o nome.
@@ -70,13 +67,17 @@ export interface DadosDeBaralho {
 }
 
 /**
- * Resultado de `criarBaralho`. Falha de regra de domínio é resultado previsto,
- * e não exceção genérica: o caller distingue `ok` e, na recusa, recebe o
- * código estável e a mensagem em português (FR-046).
+ * Resultado de `criarBaralho`. Mesma forma de `criarCartao`: recusa de regra
+ * com código estável e mensagem em português, ou `indisponivel` quando o
+ * armazenamento falhou (FR-046, FR-107).
  */
 export type ResultadoDeCriacaoDeBaralho =
   | { ok: true; baralho: Baralho }
-  | { ok: false; erro: CodigoDeErroDeBaralho; mensagem: string };
+  | {
+      ok: false;
+      erro: CodigoDeErroDeBaralho | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
@@ -116,7 +117,11 @@ export interface BaralhoComCartoes extends Baralho {
  */
 export type ResultadoDeVinculacao =
   | { ok: true }
-  | { ok: false; erro: CodigoDeErroDeVinculo; mensagem: string };
+  | {
+      ok: false;
+      erro: CodigoDeErroDeVinculo | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Resultado de `desvincular`. Mesma forma de `vincular`: sucesso sem carga, ou
@@ -124,7 +129,11 @@ export type ResultadoDeVinculacao =
  */
 export type ResultadoDeDesvinculacao =
   | { ok: true }
-  | { ok: false; erro: CodigoDeErroDeVinculo; mensagem: string };
+  | {
+      ok: false;
+      erro: CodigoDeErroDeVinculo | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Resultado de `obterBaralho`. Sucesso devolve o Baralho com seus Cartões;
@@ -132,7 +141,11 @@ export type ResultadoDeDesvinculacao =
  */
 export type ResultadoDeObterBaralho =
   | { ok: true; baralho: BaralhoComCartoes }
-  | { ok: false; erro: CodigoDeErroDeVinculo; mensagem: string };
+  | {
+      ok: false;
+      erro: CodigoDeErroDeVinculo | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Resultado de `editarCartao`. Falha de domínio é resultado previsto, não
@@ -144,7 +157,7 @@ export type ResultadoDeEdicaoDeCartao =
   | { ok: true; cartao: Cartao }
   | {
       ok: false;
-      erro: CodigoDeErroDeCartao | "nao_encontrado";
+      erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
       mensagem: string;
     };
 
@@ -158,18 +171,23 @@ export type ResultadoDeEdicaoDeBaralho =
   | { ok: true; baralho: Baralho }
   | {
       ok: false;
-      erro: CodigoDeErroDeBaralho | "nao_encontrado";
+      erro: CodigoDeErroDeBaralho | "nao_encontrado" | "indisponivel";
       mensagem: string;
     };
 
 /**
  * Resultado de `excluirCartao`. Sucesso não carrega entidade: o Cartão deixa
  * de existir. Cartão inexistente é recusado como `nao_encontrado`, para que a
- * interface não confirme uma exclusão que não ocorreu.
+ * interface não confirme uma exclusão que não ocorreu; falha do armazenamento é
+ * recusada como `indisponivel` (FR-044, FR-107).
  */
 export type ResultadoDeExclusaoDeCartao =
   | { ok: true }
-  | { ok: false; erro: "nao_encontrado"; mensagem: string };
+  | {
+      ok: false;
+      erro: "nao_encontrado" | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Resultado de `excluirBaralho`. Mesma forma de `excluirCartao`: sucesso sem
@@ -177,14 +195,20 @@ export type ResultadoDeExclusaoDeCartao =
  */
 export type ResultadoDeExclusaoDeBaralho =
   | { ok: true }
-  | { ok: false; erro: "nao_encontrado"; mensagem: string };
+  | {
+      ok: false;
+      erro: "nao_encontrado" | "indisponivel";
+      mensagem: string;
+    };
 
 /**
  * Interface profunda do Module `Acervo` (Princípio IV).
  *
- * As operações escondem esquema, transação e as regras de conteúdo de Cartão,
- * de Baralho e de Vínculo. Invariantes garantidas pela Interface, que o caller
- * nunca reproduz: Frente e Verso não vazios após descartar espaços nas
+ * As operações escondem as regras de conteúdo de Cartão, de Baralho e de
+ * Vínculo, e todo o acesso a dados persistidos: o `Acervo` recebe a Porta
+ * `ArmazenamentoDoAcervo` na sua construção e nunca conhece, nomeia ou importa
+ * armazenamento concreto (FR-100). Invariantes garantidas pela Interface, que o
+ * caller nunca reproduz: Frente e Verso não vazios após descartar espaços nas
  * extremidades (FR-002, FR-051); no máximo 1000 caracteres cada (FR-052);
  * nenhuma propriedade além de Frente e Verso (FR-009). Para Baralho: nome não
  * vazio após descartar espaços nas extremidades (FR-011); no máximo 100
@@ -194,10 +218,15 @@ export type ResultadoDeExclusaoDeBaralho =
  * e Baralho (FR-021); não há limite superior de Vínculos (FR-022); a
  * elegibilidade é derivada por contagem, nunca armazenada (FR-024).
  *
- * As operações são síncronas e a escrita é atômica.
+ * **Todas as operações devolvem `Promise`**, porque a Porta é assíncrona e
+ * manter um caminho síncrono dentro do Module faria duas Interfaces para o
+ * mesmo Module. Nenhuma operação recebe escolha de armazenamento, e nenhuma
+ * delas deixa uma falha do armazenamento passar por concluída: a Porta reporta
+ * `indisponivel` e o Module a traduz para a sua recusa em português
+ * (FR-044, FR-045, FR-107).
  */
 export interface Acervo {
-  criarCartao(dados: DadosDeCartao): ResultadoDeCriacaoDeCartao;
+  criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
 
   /**
    * Cria um Baralho com o nome informado. Nome vazio ou composto só de
@@ -205,7 +234,7 @@ export interface Acervo {
    * como `nome_muito_longo` (FR-061). O nome é rótulo, não identificador:
    * dois Baralhos de mesmo nome são ambos aceitos (FR-012).
    */
-  criarBaralho(dados: DadosDeBaralho): ResultadoDeCriacaoDeBaralho;
+  criarBaralho(dados: DadosDeBaralho): Promise<ResultadoDeCriacaoDeBaralho>;
 
   /**
    * Lista todos os Cartões existentes, cada um com sua Frente, seu Verso e
@@ -213,7 +242,7 @@ export interface Acervo {
    * devolve `baralhos: []`. A Frente não é identificador: dois Cartões de
    * Frente idêntica são ambos devolvidos, sem deduplicação.
    */
-  listarCartoes(): CartaoListado[];
+  listarCartoes(): Promise<CartaoListado[]>;
 
   /**
    * Lista todos os Baralhos existentes, cada um com id, nome, contagem de
@@ -221,27 +250,34 @@ export interface Acervo {
    * nome é rótulo, não identificador: dois Baralhos de nome idêntico são
    * ambos devolvidos, sem deduplicação.
    */
-  listarBaralhos(): BaralhoListado[];
+  listarBaralhos(): Promise<BaralhoListado[]>;
 
   /**
    * Devolve um Baralho com a elegibilidade derivada e os Cartões vinculados
    * (FR-014). Baralho inexistente é recusado como `nao_encontrado`.
    */
-  obterBaralho(id: string): ResultadoDeObterBaralho;
+  obterBaralho(id: string): Promise<ResultadoDeObterBaralho>;
 
   /**
    * Vincula um Cartão existente a um Baralho existente (FR-019). O par
-   * repetido é recusado como `vinculo_duplicado` pela chave primária composta
-   * do esquema — o erro do driver é traduzido aqui, nunca vaza para o caller.
-   * Cartão ou Baralho inexistente é recusado como `nao_encontrado`.
+   * repetido é recusado como `vinculo_duplicado` pela unicidade do esquema do
+   * Adapter — o desfecho chega à Porta como `vinculo_duplicado` e é traduzido
+   * aqui, nunca vazando para o caller. Cartão ou Baralho inexistente é
+   * recusado como `nao_encontrado`.
    */
-  vincular(cartaoId: string, baralhoId: string): ResultadoDeVinculacao;
+  vincular(
+    cartaoId: string,
+    baralhoId: string,
+  ): Promise<ResultadoDeVinculacao>;
 
   /**
    * Desfaz o Vínculo, preservando Cartão e Baralho (FR-021). Vínculo
    * inexistente é recusado como `vinculo_nao_encontrado`.
    */
-  desvincular(cartaoId: string, baralhoId: string): ResultadoDeDesvinculacao;
+  desvincular(
+    cartaoId: string,
+    baralhoId: string,
+  ): Promise<ResultadoDeDesvinculacao>;
 
   /**
    * Edita a Frente e o Verso de um Cartão existente, reaplicando exatamente
@@ -249,7 +285,10 @@ export interface Acervo {
    * Vínculos do Cartão (FR-005). Cartão inexistente é recusado como
    * `nao_encontrado`.
    */
-  editarCartao(id: string, dados: DadosDeCartao): ResultadoDeEdicaoDeCartao;
+  editarCartao(
+    id: string,
+    dados: DadosDeCartao,
+  ): Promise<ResultadoDeEdicaoDeCartao>;
 
   /**
    * Renomeia um Baralho existente, reaplicando exatamente as regras de nome
@@ -260,7 +299,7 @@ export interface Acervo {
   renomearBaralho(
     id: string,
     dados: DadosDeBaralho,
-  ): ResultadoDeEdicaoDeBaralho;
+  ): Promise<ResultadoDeEdicaoDeBaralho>;
 
   /**
    * Exclui um Cartão existente (FR-007). Os Vínculos do Cartão são removidos
@@ -268,7 +307,7 @@ export interface Acervo {
    * Baralhos que dependiam do Cartão deixam de ser elegíveis na leitura
    * seguinte. Cartão inexistente é recusado como `nao_encontrado`.
    */
-  excluirCartao(id: string): ResultadoDeExclusaoDeCartao;
+  excluirCartao(id: string): Promise<ResultadoDeExclusaoDeCartao>;
 
   /**
    * Exclui um Baralho existente (FR-016). Os Vínculos do Baralho são
@@ -276,7 +315,7 @@ export interface Acervo {
    * (FR-017), inclusive os que ficarem sem Baralho. Baralho inexistente é
    * recusado como `nao_encontrado`.
    */
-  excluirBaralho(id: string): ResultadoDeExclusaoDeBaralho;
+  excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
 }
 
 /**
@@ -305,90 +344,30 @@ const VINCULO_NAO_ENCONTRADO = {
 } as const;
 
 /**
- * Reconhece a violação de chave primária composta da tabela `vinculo`. O
- * SQLite entrega `errcode` 1555 (SQLITE_CONSTRAINT_PRIMARYKEY) quando o par
- * repetido é inserido; qualquer outro erro é relançado, para que falha de
- * programação ou de banco não vire recusa de domínio.
+ * Recusa por indisponibilidade do armazenamento.
+ *
+ * A Porta reporta a falha como `indisponivel`, sem texto algum; a frase que o
+ * usuário lê é do Module, que é o dono da regra de domínio. A operação **não**
+ * passou por concluída, e o conteúdo informado continua disponível para nova
+ * tentativa (FR-044, FR-045, FR-107).
  */
-function ehVinculoDuplicado(erro: unknown): boolean {
-  if (typeof erro !== "object" || erro === null) {
-    return false;
-  }
-
-  const candidato = erro as { code?: unknown; errcode?: unknown };
-
-  return candidato.code === "ERR_SQLITE_ERROR" && candidato.errcode === 1555;
-}
+const ARMAZENAMENTO_INDISPONIVEL = {
+  erro: "indisponivel",
+  mensagem: "O armazenamento não está disponível. Tente novamente.",
+} as const;
 
 /**
- * Cria o `Acervo` sobre um banco já aberto — em memória nos testes, em
- * arquivo na aplicação. O esquema é responsabilidade de `esquema.ts`; aqui
- * vive apenas o comportamento do Module.
+ * Cria o `Acervo` sobre a Porta de armazenamento informada — o Adapter do
+ * armazenamento local na execução local, o de PostgreSQL na nuvem.
+ *
+ * O esquema e as migrações são responsabilidade do Adapter, e nenhum SQL
+ * atravessa este Module (FR-100); aqui vive apenas o comportamento do Module,
+ * com as mesmas regras, os mesmos códigos estáveis e as mesmas mensagens em
+ * português de sempre, agora assíncronos.
  */
-export function criarAcervo(banco: DatabaseSync): Acervo {
-  const inserirCartao = banco.prepare(
-    "INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)",
-  );
-  const listar = banco.prepare("SELECT id, frente, verso FROM cartao");
-  const cartaoExiste = banco.prepare("SELECT id FROM cartao WHERE id = ?");
-
-  /** Prepared com o `Acervo`, pois `cartao` existe em toda base legada. */
-  const atualizarCartao = banco.prepare(
-    "UPDATE cartao SET frente = ?, verso = ? WHERE id = ?",
-  );
-  const excluirCartaoStatement = banco.prepare(
-    "DELETE FROM cartao WHERE id = ?",
-  );
-
-  /**
-   * Prepared na primeira criação de Baralho, e não na construção do `Acervo`:
-   * uma base legada da feature `001` ainda sem a tabela `baralho` continua
-   * servindo `criarCartao`/`listarCartoes` até ser migrada. Em base migrada —
-   * o único cenário em que `criarBaralho` é chamado — a preparação acontece
-   * uma única vez e a escrita permanece atômica.
-   */
-  let inserirBaralho: StatementSync | undefined;
-
-  /** Prepared na primeira listagem, pelo mesmo motivo de `inserirBaralho`. */
-  let listarBaralhosStatement: StatementSync | undefined;
-
-  /** Prepared na primeira consulta por id, pelo mesmo motivo. */
-  let obterBaralhoPorId: StatementSync | undefined;
-
-  /** Prepared na primeira consulta de existência de Baralho. */
-  let baralhoExiste: StatementSync | undefined;
-
-  /** Prepared na primeira edição ou exclusão de Baralho. */
-  let atualizarBaralho: StatementSync | undefined;
-  let excluirBaralhoStatement: StatementSync | undefined;
-
-  /** Prepared na primeira operação de Vínculo. */
-  let inserirVinculo: StatementSync | undefined;
-  let removerVinculo: StatementSync | undefined;
-  let listarBaralhosDoCartao: StatementSync | undefined;
-  let listarCartoesDoBaralho: StatementSync | undefined;
-
-  /**
-   * Diz se a base já tem a tabela `vinculo`. Bases legadas da feature `001`
-   * ou `002` continuam servindo `criarCartao`/`listarCartoes` antes de serem
-   * migradas; nesse caso a listagem devolve `baralhos: []` sem preparar a
-   * consulta de Vínculos, que falharia por tabela ausente.
-   */
-  let temTabelaDeVinculo: boolean | undefined;
-
-  function baseTemVinculo(): boolean {
-    temTabelaDeVinculo ??=
-      banco
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vinculo'",
-        )
-        .get() !== undefined;
-
-    return temTabelaDeVinculo;
-  }
-
+export function criarAcervo(armazenamento: ArmazenamentoDoAcervo): Acervo {
   return {
-    criarCartao(dados) {
+    async criarCartao(dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
 
       if (falha !== null) {
@@ -401,232 +380,204 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
         verso: dados.verso,
       };
 
-      inserirCartao.run(cartao.id, cartao.frente, cartao.verso);
+      const gravado = await armazenamento.inserirCartao(cartao);
 
-      return { ok: true, cartao };
+      if (!gravado.ok) {
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return { ok: true, cartao: gravado.valor };
     },
 
-    criarBaralho(dados) {
+    async criarBaralho(dados) {
       const falha = validarNomeDeBaralho(dados.nome);
 
       if (falha !== null) {
         return { ok: false, ...falha };
       }
-
-      inserirBaralho ??= banco.prepare(
-        "INSERT INTO baralho (id, nome) VALUES (?, ?)",
-      );
 
       const baralho: Baralho = {
         id: randomUUID(),
         nome: dados.nome,
       };
 
-      inserirBaralho.run(baralho.id, baralho.nome);
+      const gravado = await armazenamento.inserirBaralho(baralho);
 
-      return { ok: true, baralho };
-    },
-
-    listarCartoes() {
-      const cartoes: CartaoListado[] = listar.all().map((linha) => ({
-        id: linha.id as string,
-        frente: linha.frente as string,
-        verso: linha.verso as string,
-        baralhos: [],
-      }));
-
-      if (!baseTemVinculo()) {
-        return cartoes;
+      if (!gravado.ok) {
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      listarBaralhosDoCartao ??= banco.prepare(
-        `SELECT baralho.id, baralho.nome
-           FROM vinculo
-           JOIN baralho ON baralho.id = vinculo.baralho_id
-          WHERE vinculo.cartao_id = ?`,
-      );
+      return { ok: true, baralho: gravado.valor };
+    },
+
+    async listarCartoes() {
+      const cartoes: CartaoListado[] = (
+        await armazenamento.listarCartoes()
+      ).map((cartao) => ({ ...cartao, baralhos: [] }));
 
       for (const cartao of cartoes) {
-        cartao.baralhos = listarBaralhosDoCartao.all(cartao.id).map((linha) => ({
-          id: linha.id as string,
-          nome: linha.nome as string,
-        }));
+        cartao.baralhos = await armazenamento.listarBaralhosDoCartao(cartao.id);
       }
 
       return cartoes;
     },
 
-    listarBaralhos() {
-      listarBaralhosStatement ??= banco.prepare(
-        `SELECT baralho.id,
-                baralho.nome,
-                COUNT(vinculo.cartao_id) AS quantidadeDeCartoes
-           FROM baralho
-           LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
-          GROUP BY baralho.id`,
+    async listarBaralhos() {
+      const baralhos = await armazenamento.listarBaralhos();
+      const contagens = await armazenamento.contarCartoesPorBaralho();
+
+      const quantidadePorBaralho = new Map(
+        contagens.map((contagem) => [
+          contagem.baralhoId,
+          contagem.quantidadeDeCartoes,
+        ]),
       );
 
-      return listarBaralhosStatement.all().map((linha) => {
+      return baralhos.map((baralho) => {
         // Derivada na leitura, nunca armazenada (FR-024): a contagem vem da
-        // tabela de Vínculos e a elegibilidade é contagem maior que zero.
-        const quantidadeDeCartoes = Number(linha.quantidadeDeCartoes);
+        // Porta, que a lê dos Vínculos, e a elegibilidade é contagem maior que
+        // zero — regra que permanece no Module.
+        const quantidadeDeCartoes = quantidadePorBaralho.get(baralho.id) ?? 0;
 
         return {
-          id: linha.id as string,
-          nome: linha.nome as string,
+          ...baralho,
           quantidadeDeCartoes,
           elegivel: quantidadeDeCartoes > 0,
         };
       });
     },
 
-    obterBaralho(id) {
-      obterBaralhoPorId ??= banco.prepare(
-        "SELECT id, nome FROM baralho WHERE id = ?",
-      );
+    async obterBaralho(id) {
+      const encontrado = await armazenamento.obterBaralho(id);
 
-      const linha = obterBaralhoPorId.get(id);
+      if (!encontrado.ok) {
+        if (encontrado.erro === "nao_encontrado") {
+          return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+        }
 
-      if (linha === undefined) {
-        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      listarCartoesDoBaralho ??= banco.prepare(
-        `SELECT cartao.id, cartao.frente, cartao.verso
-           FROM vinculo
-           JOIN cartao ON cartao.id = vinculo.cartao_id
-          WHERE vinculo.baralho_id = ?
-          ORDER BY cartao.id`,
-      );
-
-      const cartoes: Cartao[] = listarCartoesDoBaralho.all(id).map((cartao) => ({
-        id: cartao.id as string,
-        frente: cartao.frente as string,
-        verso: cartao.verso as string,
-      }));
+      const cartoes = await armazenamento.listarCartoesDoBaralho(id);
 
       return {
         ok: true,
         baralho: {
-          id: linha.id as string,
-          nome: linha.nome as string,
+          ...encontrado.valor,
           elegivel: cartoes.length > 0,
           cartoes,
         },
       };
     },
 
-    vincular(cartaoId, baralhoId) {
-      if (cartaoExiste.get(cartaoId) === undefined) {
-        return { ok: false, ...CARTAO_NAO_ENCONTRADO };
+    async vincular(cartaoId, baralhoId) {
+      /**
+       * A existência dos dois lados é conferida aqui, e não deixada para o
+       * esquema: só o Module sabe dizer ao usuário **qual** extremidade não
+       * existe, e a Porta reporta a ausência sem distinguir as duas.
+       */
+      const cartao = await armazenamento.obterCartao(cartaoId);
+
+      if (!cartao.ok) {
+        return cartao.erro === "nao_encontrado"
+          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      baralhoExiste ??= banco.prepare(
-        "SELECT id FROM baralho WHERE id = ?",
-      );
+      const baralho = await armazenamento.obterBaralho(baralhoId);
 
-      if (baralhoExiste.get(baralhoId) === undefined) {
-        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+      if (!baralho.ok) {
+        return baralho.erro === "nao_encontrado"
+          ? { ok: false, ...BARALHO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      inserirVinculo ??= banco.prepare(
-        "INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)",
-      );
+      const vinculado = await armazenamento.vincular(cartaoId, baralhoId);
 
-      try {
-        inserirVinculo.run(cartaoId, baralhoId);
-      } catch (erro) {
-        if (ehVinculoDuplicado(erro)) {
-          return { ok: false, ...VINCULO_DUPLICADO };
-        }
-
-        throw erro;
-      }
-
-      return { ok: true };
-    },
-
-    desvincular(cartaoId, baralhoId) {
-      removerVinculo ??= banco.prepare(
-        "DELETE FROM vinculo WHERE cartao_id = ? AND baralho_id = ?",
-      );
-
-      const resultado = removerVinculo.run(cartaoId, baralhoId);
-
-      if (Number(resultado.changes) === 0) {
-        return { ok: false, ...VINCULO_NAO_ENCONTRADO };
+      if (!vinculado.ok) {
+        return vinculado.erro === "vinculo_duplicado"
+          ? { ok: false, ...VINCULO_DUPLICADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
       return { ok: true };
     },
 
-    editarCartao(id, dados) {
+    async desvincular(cartaoId, baralhoId) {
+      const removido = await armazenamento.desvincular(cartaoId, baralhoId);
+
+      if (!removido.ok) {
+        return removido.erro === "nao_encontrado"
+          ? { ok: false, ...VINCULO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return { ok: true };
+    },
+
+    async editarCartao(id, dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
 
       if (falha !== null) {
         return { ok: false, ...falha };
       }
 
-      if (cartaoExiste.get(id) === undefined) {
-        return { ok: false, ...CARTAO_NAO_ENCONTRADO };
+      const gravado = await armazenamento.atualizarCartao({
+        id,
+        frente: dados.frente,
+        verso: dados.verso,
+      });
+
+      if (!gravado.ok) {
+        return gravado.erro === "nao_encontrado"
+          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      atualizarCartao.run(dados.frente, dados.verso, id);
-
-      return {
-        ok: true,
-        cartao: { id, frente: dados.frente, verso: dados.verso },
-      };
+      return { ok: true, cartao: gravado.valor };
     },
 
-    renomearBaralho(id, dados) {
+    async renomearBaralho(id, dados) {
       const falha = validarNomeDeBaralho(dados.nome);
 
       if (falha !== null) {
         return { ok: false, ...falha };
       }
 
-      baralhoExiste ??= banco.prepare(
-        "SELECT id FROM baralho WHERE id = ?",
-      );
+      const gravado = await armazenamento.atualizarBaralho({
+        id,
+        nome: dados.nome,
+      });
 
-      if (baralhoExiste.get(id) === undefined) {
-        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+      if (!gravado.ok) {
+        return gravado.erro === "nao_encontrado"
+          ? { ok: false, ...BARALHO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      atualizarBaralho ??= banco.prepare(
-        "UPDATE baralho SET nome = ? WHERE id = ?",
-      );
-
-      atualizarBaralho.run(dados.nome, id);
-
-      return { ok: true, baralho: { id, nome: dados.nome } };
+      return { ok: true, baralho: gravado.valor };
     },
 
-    excluirCartao(id) {
-      if (cartaoExiste.get(id) === undefined) {
-        return { ok: false, ...CARTAO_NAO_ENCONTRADO };
-      }
+    async excluirCartao(id) {
+      const excluido = await armazenamento.excluirCartao(id);
 
-      excluirCartaoStatement.run(id);
+      if (!excluido.ok) {
+        return excluido.erro === "nao_encontrado"
+          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
 
       return { ok: true };
     },
 
-    excluirBaralho(id) {
-      baralhoExiste ??= banco.prepare(
-        "SELECT id FROM baralho WHERE id = ?",
-      );
+    async excluirBaralho(id) {
+      const excluido = await armazenamento.excluirBaralho(id);
 
-      if (baralhoExiste.get(id) === undefined) {
-        return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+      if (!excluido.ok) {
+        return excluido.erro === "nao_encontrado"
+          ? { ok: false, ...BARALHO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
-
-      excluirBaralhoStatement ??= banco.prepare(
-        "DELETE FROM baralho WHERE id = ?",
-      );
-
-      excluirBaralhoStatement.run(id);
 
       return { ok: true };
     },

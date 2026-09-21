@@ -1,18 +1,25 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
 import type { Acervo } from "../acervo/acervo.ts";
 
 /**
- * Adapter HTTP do Module `Acervo` (T007, T207, T403 e T503).
+ * Adapter HTTP do Module `Acervo` (T007, T207, T403, T503 e T805).
  *
  * As rotas são finas por construção: validam a **forma** do corpo na borda
- * com Zod, chamam a Interface do `Acervo` e traduzem o resultado em código de
- * status. Nenhuma regra de domínio é reproduzida aqui — vazio, conteúdo só de
- * espaços, limite de tamanho, unicidade de Vínculo e cascata de exclusão
- * continuam sendo julgados exclusivamente pelo `Acervo`. Na recusa de domínio,
- * o adapter apenas repassa o código estável e a mensagem em português que o
- * `Acervo` devolveu (FR-046), sem inventar texto próprio.
+ * com Zod, **aguardam** a Interface do `Acervo` — que passou a ser assíncrona
+ * porque a Porta de armazenamento é assíncrona — e traduzem o resultado em
+ * código de status. Nenhuma regra de domínio é reproduzida aqui — vazio,
+ * conteúdo só de espaços, limite de tamanho, unicidade de Vínculo e cascata de
+ * exclusão continuam sendo julgados exclusivamente pelo `Acervo`. Na recusa de
+ * domínio, o adapter apenas repassa o código estável e a mensagem em português
+ * que o `Acervo` devolveu (FR-046), sem inventar texto próprio.
+ *
+ * O contrato HTTP não muda: 201, 200, 204, 400, 404 e 409 continuam sendo os
+ * mesmos de `001` a `006`. O único acréscimo é o status da falha do
+ * armazenamento, que FR-044 e FR-107 exigem reportar em vez de deixar a
+ * operação passar por concluída — e que o Adapter do cliente já trata como
+ * indisponibilidade.
  */
 
 /**
@@ -60,10 +67,33 @@ export const CORPO_INVALIDO = {
 } as const;
 
 /**
+ * Status da falha do armazenamento: o serviço não conseguiu ler nem gravar, e
+ * a operação **não** foi concluída (FR-044, FR-045).
+ */
+const INDISPONIVEL = 503;
+
+/**
+ * Responde a falha do armazenamento com o código estável e a mensagem em
+ * português que o `Acervo` produziu, e com nada mais: nenhum detalhe do
+ * driver, caminho de arquivo, URL, senha ou cadeia de conexão atravessa a
+ * resposta (FR-107, FR-108).
+ */
+function responderIndisponivel(
+  resposta: FastifyReply,
+  recusa: { erro: string; mensagem: string },
+) {
+  return resposta.status(INDISPONIVEL).send({
+    erro: recusa.erro,
+    mensagem: recusa.mensagem,
+  });
+}
+
+/**
  * Registra as rotas de Cartão do contrato sobre o `Acervo` informado:
  * `POST /cartoes`, `GET /cartoes`, `PUT /cartoes/{id}` e
  * `DELETE /cartoes/{id}`. Chamada na inicialização, com o `Acervo` real, e
- * nos testes de contrato, com o `Acervo` sobre SQLite em memória.
+ * nos testes de contrato, com o `Acervo` sobre o Adapter do armazenamento
+ * local.
  */
 export function registrarRotasDeCartoes(
   servidor: FastifyInstance,
@@ -76,9 +106,13 @@ export function registrarRotasDeCartoes(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
-    const resultado = acervo.criarCartao(corpo.data);
+    const resultado = await acervo.criarCartao(corpo.data);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       return resposta.status(400).send({
         erro: resultado.erro,
         mensagem: resultado.mensagem,
@@ -98,9 +132,13 @@ export function registrarRotasDeCartoes(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
-    const resultado = acervo.editarCartao(id, corpo.data);
+    const resultado = await acervo.editarCartao(id, corpo.data);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       if (resultado.erro === "nao_encontrado") {
         return resposta.status(404).send({
           erro: resultado.erro,
@@ -119,9 +157,13 @@ export function registrarRotasDeCartoes(
 
   servidor.delete("/cartoes/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
-    const resultado = acervo.excluirCartao(id);
+    const resultado = await acervo.excluirCartao(id);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       return resposta.status(404).send({
         erro: resultado.erro,
         mensagem: resultado.mensagem,
@@ -153,9 +195,13 @@ export function registrarRotasDeBaralhos(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
-    const resultado = acervo.criarBaralho(corpo.data);
+    const resultado = await acervo.criarBaralho(corpo.data);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       return resposta.status(400).send({
         erro: resultado.erro,
         mensagem: resultado.mensagem,
@@ -169,9 +215,13 @@ export function registrarRotasDeBaralhos(
 
   servidor.get("/baralhos/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
-    const resultado = acervo.obterBaralho(id);
+    const resultado = await acervo.obterBaralho(id);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       return resposta.status(404).send({
         erro: resultado.erro,
         mensagem: resultado.mensagem,
@@ -189,9 +239,13 @@ export function registrarRotasDeBaralhos(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
-    const resultado = acervo.renomearBaralho(id, corpo.data);
+    const resultado = await acervo.renomearBaralho(id, corpo.data);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       if (resultado.erro === "nao_encontrado") {
         return resposta.status(404).send({
           erro: resultado.erro,
@@ -210,9 +264,13 @@ export function registrarRotasDeBaralhos(
 
   servidor.delete("/baralhos/:id", async (requisicao, resposta) => {
     const { id } = requisicao.params as { id: string };
-    const resultado = acervo.excluirBaralho(id);
+    const resultado = await acervo.excluirBaralho(id);
 
     if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
       return resposta.status(404).send({
         erro: resultado.erro,
         mensagem: resultado.mensagem,
@@ -232,9 +290,13 @@ export function registrarRotasDeBaralhos(
         return resposta.status(400).send(CORPO_INVALIDO);
       }
 
-      const resultado = acervo.vincular(corpo.data.cartaoId, baralhoId);
+      const resultado = await acervo.vincular(corpo.data.cartaoId, baralhoId);
 
       if (!resultado.ok) {
+        if (resultado.erro === "indisponivel") {
+          return responderIndisponivel(resposta, resultado);
+        }
+
         if (resultado.erro === "vinculo_duplicado") {
           return resposta.status(409).send({
             erro: resultado.erro,
@@ -259,9 +321,13 @@ export function registrarRotasDeBaralhos(
         baralhoId: string;
         cartaoId: string;
       };
-      const resultado = acervo.desvincular(cartaoId, baralhoId);
+      const resultado = await acervo.desvincular(cartaoId, baralhoId);
 
       if (!resultado.ok) {
+        if (resultado.erro === "indisponivel") {
+          return responderIndisponivel(resposta, resultado);
+        }
+
         return resposta.status(404).send({
           erro: resultado.erro,
           mensagem: resultado.mensagem,
