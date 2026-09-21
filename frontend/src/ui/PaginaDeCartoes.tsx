@@ -162,7 +162,7 @@ export function PaginaDeCartoes({
   }
 
   return (
-    <main className="pagina">
+    <div className="pagina">
       <h1>Cartões</h1>
 
       <section>
@@ -280,7 +280,7 @@ export function PaginaDeCartoes({
           </ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }
 

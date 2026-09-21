@@ -40,8 +40,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 - [X] T104 `Acervo` lista Baralhos com elegibilidade derivada
 - [X] T105 Rotas `POST /baralhos` e `GET /baralhos` conforme o contrato
 - [X] T106 `ClienteDoAcervo` cobre as rotas de Baralho nos dois Adapters
-- [ ] T107 Telas de lista e criação de Baralho, com estado vazio e aviso de limite
-- [ ] T108 Falha de gravação reportada, com o conteúdo digitado preservado
+- [X] T107 Telas de lista e criação de Baralho, com estado vazio e aviso de limite
+- [X] T108 Falha de gravação reportada, com o conteúdo digitado preservado
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -60,10 +60,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 3 — Acessibilidade, responsividade e validação
 
-- [ ] T109 Criar Baralho e navegar a lista apenas por teclado, com foco visível
-- [ ] T110 Erros e estado vazio perceptíveis por leitor de tela
-- [ ] T111 [P] Telas utilizáveis em largura de telefone, com 10 Baralhos
-- [ ] T112 Baralhos sobrevivem a fechar e reabrir, e a migração não reaplica
+- [X] T109 Criar Baralho e navegar a lista apenas por teclado, com foco visível
+- [X] T110 Erros e estado vazio perceptíveis por leitor de tela
+- [X] T111 [P] Telas utilizáveis em largura de telefone, com 10 Baralhos
+- [X] T112 Baralhos sobrevivem a fechar e reabrir, e a migração não reaplica
 
 <details><summary>Metadados das tarefas desta fase</summary>
 

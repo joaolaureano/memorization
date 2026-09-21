@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClienteHttp } from "./acervo-cliente/cliente-http";
-import { PaginaDeCartoes } from "./ui/PaginaDeCartoes";
+import { Aplicacao } from "./ui/Aplicacao";
 import "./estilos.css";
 
 /**
@@ -22,6 +22,6 @@ if (raiz === null) {
 
 createRoot(raiz).render(
   <StrictMode>
-    <PaginaDeCartoes cliente={new ClienteHttp(enderecoDaApi)} />
+    <Aplicacao cliente={new ClienteHttp(enderecoDaApi)} />
   </StrictMode>,
 );

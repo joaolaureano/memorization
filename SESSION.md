@@ -3504,3 +3504,41 @@ repetiu em `main`: backend 119 testes, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-056
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: casca de navegação, tela de Baralhos, testes de acessibilidade, e2e
+
+- **Data/hora**: 2026-09-21 00:20 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T107–T112 — concluídas (feature 002 completa)
+- **Commit anterior**: `56a9005`
+
+### Decisão de arquitetura (Arquiteto)
+
+A aplicação passa a ter uma casca `Aplicacao` com `nav` principal e navegação
+por hash (`#/cartoes`, `#/baralhos`), sem dependência de roteador. A
+interpretação de rota fica concentrada numa única função, que as features
+seguintes estendem com `#/baralhos/<id>` (Vínculos) e `#/baralhos/<id>/estudo`
+(Sessão de estudo). Na troca de rota o foco vai ao título da tela.
+
+### T107–T112
+
+Tela de Baralhos com estado vazio, aviso de limite durante a digitação,
+elegibilidade comunicada por texto, falha de gravação preservando o nome,
+teclado, leitor de tela, telefone com 10 Baralhos e persistência após
+reinício. `PaginaDeCartoes` trocou sua raiz `main` por `div` para que a casca
+detenha o único `main`.
+
+### Defeito encontrado na revisão
+
+A E2E de persistência fixava a versão do esquema em 2 e falhou em `main`, que já
+tem a migração 3. Um worker de reparo passou a derivar a versão mais recente da
+lista de migrações do backend. Arquiteto repetiu em `main`: backend 119,
+frontend 115, e2e 5, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

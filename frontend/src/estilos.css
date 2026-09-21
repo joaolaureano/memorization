@@ -9,13 +9,36 @@ body {
   margin: 0;
 }
 
+.navegacao-principal {
+  display: flex;
+  gap: 1.25rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #dcdcdc;
+  background-color: #ffffff;
+}
+
+.navegacao-principal a {
+  color: #1a1a1a;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.navegacao-principal a[aria-current="page"] {
+  color: #1a5fb4;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .pagina {
   max-width: 40rem;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
 
-.formulario-de-cartao {
+.formulario-de-cartao,
+.formulario-de-baralho {
   display: grid;
   gap: 1rem;
 }
@@ -36,6 +59,13 @@ body {
   padding: 0.5rem;
   font: inherit;
   resize: vertical;
+}
+
+.campo input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
 }
 
 .contador {
@@ -87,6 +117,34 @@ body {
 
 .cartao p {
   margin: 0.25rem 0;
+}
+
+.lista-de-baralhos {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.baralho {
+  padding: 0.75rem 1rem;
+  border: 1px solid #dcdcdc;
+  border-radius: 0.375rem;
+  background-color: #ffffff;
+}
+
+.baralho p {
+  margin: 0.25rem 0;
+}
+
+.nome-do-baralho {
+  font-weight: 600;
+}
+
+.elegibilidade-do-baralho {
+  font-size: 0.9rem;
+  color: #444444;
 }
 
 .rotulo {

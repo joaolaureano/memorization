@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 // T014 — suporte de execução para a prova E2E real de persistência
@@ -258,6 +259,54 @@ export async function listarCartoesPelaApi(
     frente: string;
     verso: string;
   }[];
+}
+
+/**
+ * Lê os Baralhos direto da API — a conferência de persistência exata (os
+ * mesmos ids, nomes e elegibilidade derivada), além da conferência pela UI.
+ */
+export async function listarBaralhosPelaApi(
+  enderecoDaApi: string,
+): Promise<
+  {
+    id: string;
+    nome: string;
+    quantidadeDeCartoes: number;
+    elegivel: boolean;
+  }[]
+> {
+  const resposta = await fetch(`${enderecoDaApi}/baralhos`);
+
+  if (!resposta.ok) {
+    throw new Error(`GET /baralhos respondeu ${resposta.status}`);
+  }
+
+  return (await resposta.json()) as {
+    id: string;
+    nome: string;
+    quantidadeDeCartoes: number;
+    elegivel: boolean;
+  }[];
+}
+
+/**
+ * Lê a versão do esquema diretamente do arquivo SQLite — a prova de que a
+ * migração de Baralhos rodou uma única vez. A API não expõe essa informação;
+ * abrir o arquivo aqui é a forma observável de conferir a versão sem depender
+ * de rota. Síncrona como o próprio driver `node:sqlite`.
+ */
+export function lerVersaoDoEsquema(caminhoDoBanco: string): number {
+  const banco = new DatabaseSync(caminhoDoBanco);
+
+  try {
+    const linha = banco
+      .prepare("SELECT versao FROM versao_do_esquema")
+      .get() as { versao: number } | undefined;
+
+    return linha === undefined ? 0 : Number(linha.versao);
+  } finally {
+    banco.close();
+  }
 }
 
 /** Pasta temporária exclusiva para o arquivo SQLite do teste (os.tmpdir). */
