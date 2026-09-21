@@ -3476,3 +3476,31 @@ build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-055
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: migração 3, vincular, desvincular, obterBaralho, leituras derivadas
+
+- **Data/hora**: 2026-09-21 00:14 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 003-vincular-cartao-baralho / T201–T206 — concluídas
+- **Commit anterior**: `ff56eab`
+
+Migração 3 cria `vinculo` com chave composta e `ON DELETE CASCADE` nas duas
+chaves estrangeiras; a cascata foi comprovada nos dois sentidos sem destruir a
+outra entidade. A Interface do `Acervo` ganhou `vincular`, `desvincular` e
+`obterBaralho`; duplicata é traduzida da violação de chave primária em
+`vinculo_duplicado`, sem vazar erro do driver. `listarBaralhos` deriva
+contagem e elegibilidade por contagem na leitura; `listarCartoes` traz os
+Baralhos de cada Cartão (mudança aditiva de contrato).
+
+Desvio declarado pelo worker e aceito pelo Arquiteto: asserções exatas de dois
+testes HTTP de Cartão foram atualizadas para o campo aditivo `baralhos`.
+Worker em paralelo com T105 (áreas disjuntas). Após integração, o Arquiteto
+repetiu em `main`: backend 119 testes, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

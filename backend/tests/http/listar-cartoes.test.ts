@@ -10,7 +10,9 @@ import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
 
 /**
  * T007 — contrato HTTP de `GET /cartoes`
- * (specs/001-criar-cartao/contracts/api-cartoes.md).
+ * (specs/001-criar-cartao/contracts/api-cartoes.md), com a adição aditiva da
+ * feature `003` (specs/003-vincular-cartao-baralho/contracts/api-vinculos.md):
+ * cada Cartão agora traz também `baralhos`.
  *
  * Toda asserção atravessa `inject` sobre o Adapter HTTP registrado com o
  * `Acervo` em memória. A Frente não é identificador: dois Cartões com a
@@ -71,11 +73,14 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.json()).toEqual(
-      expect.arrayContaining([primeiro, segundo]),
+      expect.arrayContaining([
+        { ...primeiro, baralhos: [] },
+        { ...segundo, baralhos: [] },
+      ]),
     );
   });
 
-  it("devolve cada Cartão com exatamente id, Frente e Verso (FR-004)", async () => {
+  it("devolve cada Cartão com id, Frente, Verso e baralhos vazios (FR-003, FR-004)", async () => {
     await criar(FRENTE_REPETIDA, VERSO_UM);
     await criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
@@ -84,13 +89,20 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
       id: string;
       frente: string;
       verso: string;
+      baralhos: unknown[];
     }[];
 
     expect(listados).toHaveLength(2);
     for (const cartao of listados) {
-      expect(Object.keys(cartao).sort()).toEqual(["frente", "id", "verso"]);
+      expect(Object.keys(cartao).sort()).toEqual([
+        "baralhos",
+        "frente",
+        "id",
+        "verso",
+      ]);
       expect(cartao.id).toEqual(expect.any(String));
       expect(cartao.frente).toBe(FRENTE_REPETIDA);
+      expect(cartao.baralhos).toEqual([]);
     }
   });
 });

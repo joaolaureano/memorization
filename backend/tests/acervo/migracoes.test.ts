@@ -54,13 +54,14 @@ function comBanco(corpo: (banco: DatabaseSync) => void): void {
 }
 
 describe("base nova — todas as migrações, em ordem", () => {
-  it("cria cartao e baralho e registra a versão 2, com controle de versão de um único inteiro", () => {
+  it("cria cartao, baralho e vinculo e registra a versão 3, com controle de versão de um único inteiro", () => {
     const banco = abrirBanco(":memory:");
 
     try {
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(versaoAtual(banco)).toBe(2);
+      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(versaoAtual(banco)).toBe(3);
 
       const colunas = banco
         .prepare("PRAGMA table_info(versao_do_esquema)")
@@ -127,8 +128,9 @@ describe("base já migrada — migração não reaplica", () => {
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(2);
+        expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "baralho")).toBe(true);
+        expect(existeTabela(banco, "vinculo")).toBe(true);
 
         const lido = banco
           .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")
@@ -166,7 +168,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
   /** Cria uma tabela e só então falha: o DDL parcial é o que o ROLLBACK desfaz. */
   const migracaoQueFalha: readonly Migracao[] = [
     {
-      versao: 3,
+      versao: 4,
       sql:
         "CREATE TABLE parcial (id TEXT PRIMARY KEY); " +
         "INSERT INTO nao_existe (id) VALUES ('x');",
@@ -177,14 +179,15 @@ describe("falha no meio da migração — sem estado parcial", () => {
     const banco = abrirBanco(":memory:");
 
     try {
-      expect(versaoAtual(banco)).toBe(2);
+      expect(versaoAtual(banco)).toBe(3);
 
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
       expect(existeTabela(banco, "parcial")).toBe(false);
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(versaoAtual(banco)).toBe(2);
+      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(versaoAtual(banco)).toBe(3);
     } finally {
       banco.close();
     }
@@ -197,11 +200,11 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(() => aplicarMigracoes(banco, migracaoQueFalha)).toThrow();
 
       aplicarMigracoes(banco, [
-        { versao: 3, sql: "CREATE TABLE tabela_tres (id TEXT PRIMARY KEY);" },
+        { versao: 4, sql: "CREATE TABLE tabela_quatro (id TEXT PRIMARY KEY);" },
       ]);
 
-      expect(existeTabela(banco, "tabela_tres")).toBe(true);
-      expect(versaoAtual(banco)).toBe(3);
+      expect(existeTabela(banco, "tabela_quatro")).toBe(true);
+      expect(versaoAtual(banco)).toBe(4);
     } finally {
       banco.close();
     }
@@ -209,7 +212,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
 });
 
 describe("arquivo legado da feature 001 — cartao sem tabela de versão", () => {
-  it("adota o cartao existente como migração 1 e aplica a 2, preservando os Cartões guardados", () => {
+  it("adota o cartao existente como migração 1 e aplica as seguintes, preservando os Cartões guardados", () => {
     comBanco((banco) => {
       // O que a feature 001 deixou em disco: cartao, sem versao_do_esquema.
       banco.exec(`
@@ -227,7 +230,8 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
 
       expect(existeTabela(banco, "versao_do_esquema")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(versaoAtual(banco)).toBe(2);
+      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(versaoAtual(banco)).toBe(3);
 
       const lido = banco
         .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")

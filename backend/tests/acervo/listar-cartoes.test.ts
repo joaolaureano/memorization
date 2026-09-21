@@ -5,18 +5,23 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   criarAcervo,
   type Acervo,
+  type Baralho,
   type Cartao,
+  type ResultadoDeCriacaoDeBaralho,
   type ResultadoDeCriacaoDeCartao,
 } from "../../src/acervo/acervo.ts";
 import { abrirBanco } from "../../src/acervo/esquema.ts";
 
 /**
- * T006 — `Acervo` lista Cartões, inclusive dois com a mesma Frente.
+ * T006 — `Acervo` lista Cartões, inclusive dois com a mesma Frente; e T206 —
+ * cada Cartão passa a trazer os Baralhos a que está vinculado.
  *
- * Toda asserção atravessa a Interface (`criarCartao` e `listarCartoes`) sobre
- * SQLite em memória; nenhum teste inspeciona a tabela. A Frente não é
- * identificador: dois Cartões podem compartilhá-la e ambos devem aparecer
- * (FR-003, FR-004; invariante 2 de `spec.md`).
+ * Toda asserção atravessa a Interface (`criarCartao`, `criarBaralho`,
+ * `vincular` e `listarCartoes`) sobre SQLite em memória; nenhum teste
+ * inspeciona a tabela. A Frente não é identificador: dois Cartões podem
+ * compartilhá-la e ambos devem aparecer (FR-003, FR-004; invariante 2 de
+ * `spec.md`). Um Cartão sem Baralho devolve `baralhos: []` — estado legítimo
+ * que garante SC-006.
  *
  * A ordem não é pré-condição da Interface, portanto as asserções comparam
  * conjuntos de Cartões, nunca posições na lista.
@@ -48,9 +53,23 @@ function cartaoDo(resultado: ResultadoDeCriacaoDeCartao): Cartao {
   return resultado.cartao;
 }
 
+/** Desembrulha o Baralho de uma criação aceita; falha se foi recusada. */
+function baralhoDo(resultado: ResultadoDeCriacaoDeBaralho): Baralho {
+  if (!resultado.ok) {
+    throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);
+  }
+
+  return resultado.baralho;
+}
+
 /** Cria um Cartão válido pela Interface e devolve o Cartão criado. */
 function criar(frente: string, verso: string): Cartao {
   return cartaoDo(acervo.criarCartao({ frente, verso }));
+}
+
+/** Cria um Baralho válido pela Interface e devolve o Baralho criado. */
+function criarBaralho(nome: string): Baralho {
+  return baralhoDo(acervo.criarBaralho({ nome }));
 }
 
 describe("listarCartoes — leitura pela Interface", () => {
@@ -58,14 +77,19 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(acervo.listarCartoes()).toEqual([]);
   });
 
-  it("devolve os dois Cartões de Frente idêntica, ambos presentes", () => {
+  it("devolve os dois Cartões de Frente idêntica, ambos presentes, sem Baralhos", () => {
     const primeiro = criar(FRENTE_REPETIDA, VERSO_UM);
     const segundo = criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
     const listados = acervo.listarCartoes();
 
     expect(listados).toHaveLength(2);
-    expect(listados).toEqual(expect.arrayContaining([primeiro, segundo]));
+    expect(listados).toEqual(
+      expect.arrayContaining([
+        { ...primeiro, baralhos: [] },
+        { ...segundo, baralhos: [] },
+      ]),
+    );
   });
 
   it("não trata a Frente como identificador: cada Cartão mantém id e Verso próprios", () => {
@@ -81,9 +105,12 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(deMesmaFrente.map((cartao) => cartao.verso).sort()).toEqual(
       [VERSO_UM, VERSO_OUTRO].sort(),
     );
+    expect(deMesmaFrente.every((cartao) => cartao.baralhos.length === 0)).toBe(
+      true,
+    );
   });
 
-  it("devolve todos os Cartões existentes, cada um com sua Frente e seu Verso", () => {
+  it("devolve todos os Cartões existentes, cada um com sua Frente, seu Verso e baralhos vazios", () => {
     const primeiro = criar(FRENTE_REPETIDA, VERSO_UM);
     const segundo = criar(FRENTE_REPETIDA, VERSO_OUTRO);
     const terceiro = criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
@@ -92,7 +119,45 @@ describe("listarCartoes — leitura pela Interface", () => {
 
     expect(listados).toHaveLength(3);
     expect(listados).toEqual(
-      expect.arrayContaining([primeiro, segundo, terceiro]),
+      expect.arrayContaining([
+        { ...primeiro, baralhos: [] },
+        { ...segundo, baralhos: [] },
+        { ...terceiro, baralhos: [] },
+      ]),
     );
+  });
+
+  it("devolve um Cartão em três Baralhos uma única vez, com os três Baralhos", () => {
+    const cartao = criar(FRENTE_REPETIDA, VERSO_UM);
+    const primeiroBaralho = criarBaralho("Inglês");
+    const segundoBaralho = criarBaralho("Espanhol");
+    const terceiroBaralho = criarBaralho("Francês");
+
+    for (const baralho of [primeiroBaralho, segundoBaralho, terceiroBaralho]) {
+      expect(acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
+    }
+
+    const listados = acervo.listarCartoes();
+
+    expect(listados).toHaveLength(1);
+    expect(listados[0].id).toBe(cartao.id);
+    expect(listados[0].frente).toBe(FRENTE_REPETIDA);
+    expect(listados[0].verso).toBe(VERSO_UM);
+    expect(listados[0].baralhos).toEqual(
+      expect.arrayContaining([
+        primeiroBaralho,
+        segundoBaralho,
+        terceiroBaralho,
+      ]),
+    );
+  });
+
+  it("mantém o Cartão órfão presente, com baralhos: []", () => {
+    const cartao = criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
+    criarBaralho("Inglês");
+
+    expect(acervo.listarCartoes()).toEqual([
+      { ...cartao, baralhos: [] },
+    ]);
   });
 });

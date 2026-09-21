@@ -19,8 +19,8 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 1 — Esquema e cascata
 
-- [ ] T201 Migração 3 cria `vinculo` com chave composta e cascata
-- [ ] T202 Cascata comprovada nos dois sentidos, sem destruir a outra entidade
+- [X] T201 Migração 3 cria `vinculo` com chave composta e cascata
+- [X] T202 Cascata comprovada nos dois sentidos, sem destruir a outra entidade
 
 <details><summary>Metadados das tarefas desta fase</summary>
 
@@ -35,10 +35,10 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Vincular e desvincular
 
-- [ ] T203 `Acervo` vincula, recusando duplicata e entidade inexistente
-- [ ] T204 `Acervo` desvincula, preservando Cartão e Baralho
-- [ ] T205 Elegibilidade passa a variar, derivada por contagem
-- [ ] T206 `listarCartoes` estendido com os Baralhos de cada Cartão
+- [X] T203 `Acervo` vincula, recusando duplicata e entidade inexistente
+- [X] T204 `Acervo` desvincula, preservando Cartão e Baralho
+- [X] T205 Elegibilidade passa a variar, derivada por contagem
+- [X] T206 `listarCartoes` estendido com os Baralhos de cada Cartão
 - [ ] T207 Rotas de Vínculo e `GET /baralhos/{id}` conforme o contrato
 - [ ] T208 `ClienteDoAcervo` cobre as rotas de Vínculo nos dois Adapters
 

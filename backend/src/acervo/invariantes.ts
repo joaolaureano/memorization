@@ -135,3 +135,14 @@ export function validarNomeDeBaralho(
 
   return null;
 }
+
+/**
+ * Código estável de erro de Vínculo, consumido pelo cliente. Exaustivo nesta
+ * feature: `nao_encontrado` cobre Cartão ou Baralho inexistente;
+ * `vinculo_duplicado`, a recusa do par repetido imposta pelo esquema; e
+ * `vinculo_nao_encontrado`, a desvinculação de um Vínculo que não existe.
+ */
+export type CodigoDeErroDeVinculo =
+  | "vinculo_duplicado"
+  | "vinculo_nao_encontrado"
+  | "nao_encontrado";

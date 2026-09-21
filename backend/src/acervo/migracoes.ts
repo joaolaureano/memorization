@@ -66,6 +66,30 @@ CREATE TABLE baralho (
 `;
 
 /**
+ * A migração 3 cria a tabela `vinculo` — a associação entre Cartão e Baralho.
+ * Não tem `IF NOT EXISTS`: como a versão 3 é registrada na mesma transação
+ * que cria a tabela, a migração nunca roda duas vezes, e o `CREATE TABLE`
+ * simples falharia ruidosamente se uma base corrompida já tivesse a tabela
+ * sem a versão.
+ *
+ * A chave primária composta `(cartao_id, baralho_id)` implementa FR-020 no
+ * próprio esquema: a duplicata é impossível, não apenas verificada em código.
+ * As duas chaves estrangeiras usam `ON DELETE CASCADE` para que a exclusão de
+ * um Cartão ou de um Baralho alcance apenas os Vínculos — nunca a entidade do
+ * outro lado. Como não há chave estrangeira ligando `cartao` a `baralho`, não
+ * existe caminho pelo qual uma exclusão possa cascatear de uma entidade para a
+ * outra. Sem `PRAGMA foreign_keys = ON`, o SQLite ignora essas cascatas em
+ * silêncio; o pragma é ligado por conexão em `esquema.ts`.
+ */
+const ESQUEMA_VINCULO = `
+CREATE TABLE vinculo (
+  cartao_id  TEXT NOT NULL REFERENCES cartao(id)  ON DELETE CASCADE,
+  baralho_id TEXT NOT NULL REFERENCES baralho(id) ON DELETE CASCADE,
+  PRIMARY KEY (cartao_id, baralho_id)
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -73,4 +97,5 @@ CREATE TABLE baralho (
 export const MIGRACOES: readonly Migracao[] = [
   { versao: 1, sql: ESQUEMA_CARTAO },
   { versao: 2, sql: ESQUEMA_BARALHO },
+  { versao: 3, sql: ESQUEMA_VINCULO },
 ];

@@ -104,6 +104,6 @@ describe("criarCartao — criação pela Interface", () => {
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
     });
-    expect(acervo.listarCartoes()).toEqual([cartao]);
+    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 });

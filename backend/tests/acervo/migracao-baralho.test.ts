@@ -19,8 +19,9 @@ import { abrirBanco } from "../../src/acervo/esquema.ts";
  * O cenário central reconstrói o que a feature `001` deixou instalado: um
  * arquivo SQLite com a tabela `cartao` criada na primeira execução, sem
  * `versao_do_esquema`, e Cartões reais — criados pela Interface do `Acervo`,
- * como o usuário os criou. Migrar essa base até a versão 2 deve adotar o
- * `cartao` existente, criar `baralho` e devolver todos os Cartões intactos.
+ * como o usuário os criou. Migrar essa base até a versão corrente deve adotar
+ * o `cartao` existente, criar `baralho` e `vinculo` e devolver todos os
+ * Cartões intactos.
  *
  * As restrições da tabela são verificadas diretamente no SQLite em memória,
  * porque é a rede de segurança do banco que está sob verificação: a `CHECK`
@@ -67,8 +68,8 @@ function criarBaseLegadaDaFeature001(banco: DatabaseSync): void {
   `);
 }
 
-describe("base legada da feature 001 com Cartões — migração até a versão 2", () => {
-  it("cria baralho preservando todos os Cartões intactos, e a reabertura não reaplica a migração 2", () => {
+describe("base legada da feature 001 com Cartões — migração até a versão corrente", () => {
+  it("cria baralho e vinculo preservando todos os Cartões intactos, e a reabertura não reaplica", () => {
     const diretorio = mkdtempSync(join(tmpdir(), "acervo-baralho-"));
 
     try {
@@ -93,28 +94,35 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
         banco.close();
       }
 
-      // A reabertura migra: adota o cartao existente (1) e cria baralho (2).
+      // A reabertura migra: adota o cartao existente (1), cria baralho (2) e
+      // cria vinculo (3).
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(2);
+        expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "baralho")).toBe(true);
+        expect(existeTabela(banco, "vinculo")).toBe(true);
 
         const sobreviventes = criarAcervo(banco).listarCartoes();
 
         expect(sobreviventes).toHaveLength(criados.length);
-        expect(sobreviventes).toEqual(expect.arrayContaining(criados));
+        expect(sobreviventes).toEqual(
+          expect.arrayContaining(
+            criados.map((cartao) => ({ ...cartao, baralhos: [] })),
+          ),
+        );
       } finally {
         banco.close();
       }
 
-      // Reabrir de novo não reaplica a migração 2: a versão permanece 2 e os
-      // Cartões continuam lá. Reaplicar falharia, pois a tabela já existe.
+      // Reabrir de novo não reaplica as migrações: a versão permanece 3 e os
+      // Cartões continuam lá. Reaplicar falharia, pois as tabelas já existem.
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(2);
+        expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "baralho")).toBe(true);
+        expect(existeTabela(banco, "vinculo")).toBe(true);
         expect(criarAcervo(banco).listarCartoes()).toHaveLength(criados.length);
       } finally {
         banco.close();
@@ -124,7 +132,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
     }
   });
 
-  it("base já migrada reaberta conserva a versão 2 e o Baralho gravado", () => {
+  it("base já migrada reaberta conserva a versão corrente e o Baralho gravado", () => {
     const diretorio = mkdtempSync(join(tmpdir(), "acervo-baralho-"));
 
     try {
@@ -140,7 +148,7 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       banco = abrirBanco(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(2);
+        expect(versaoAtual(banco)).toBe(3);
 
         const lido = banco
           .prepare("SELECT id, nome FROM baralho WHERE id = ?")
