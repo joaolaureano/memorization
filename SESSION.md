@@ -4179,3 +4179,30 @@ Checklist: 21 de 21.
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. O quickstart usa só marcadores nos comandos
   `curl`, nunca uma credencial.
+
+---
+
+## EVT-075
+
+> **SPEC KIT** — Comando: tasks | Invocação: skill `speckit-tasks` e
+> `setup-tasks.sh --json`; redação por worker `deepseek-flash` em worktree
+> exclusivo | Integração: claude | Artefatos: specs/008-entrar/tasks.md
+
+- **Data/hora**: 2026-09-21 02:11 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 008-entrar / tasks
+- **Commit anterior**: `0f342c4` (registra o hash de EVT-074)
+
+Dezesseis tarefas (T701–T716) em quatro fases, no formato de 007. As tarefas
+de adaptação das suítes existentes são explícitas: T705 para o contrato do
+backend, T711 para o frontend e T715 para a E2E de 001 a 007.
+
+**Defeito corrigido na revisão**: a nota de integração do worker juntava apenas
+T703 e T705. Faltava considerar que T701, ao tornar o dono obrigatório, impede
+o `Acervo` atual de gravar até T706 entrar, e que T707 muda o construtor do
+`ClienteHttp`. A nota foi refeita em dois blocos atômicos:
+- servidor: T701, T703, T705 e T706;
+- cliente: T707, T708, T711 e T715.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
