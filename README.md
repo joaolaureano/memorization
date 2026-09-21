@@ -25,6 +25,8 @@ requisito vigente é citado por pelo menos um teste que o verifica.
 | Segurança | Senha com sal por Usuário, HMAC-SHA256 com segredo do servidor e scrypt; Credencial enviada em toda requisição, sem sessão nem cookie |
 | Testes | Vitest e Testing Library; E2E com Playwright em navegador real, contra API e banco reais |
 | Infraestrutura | AWS provisionada com OpenTofu; banco PostgreSQL no Neon |
+| Desenvolvimento com IA | [Claude Code](https://claude.com/claude-code) como Arquiteto e orquestrador: conduz o Spec Kit, decide a arquitetura, revisa e integra. O código é escrito por **workers DeepSeek flash**, cada um em worktree isolado |
+| Prompts | [`prompts.md`](prompts.md) reúne todos os prompts usados pelo Product Owner para conduzir o projeto |
 
 Scripts principais do backend:
 
