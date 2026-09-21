@@ -19,11 +19,11 @@ DeepSeek.
 
 ## Fase 2 — Telas e qualidade
 
-- [ ] T304 Tela de início e de Item comunica elegibilidade, limite e progresso
-- [ ] T305 Revelação e Resultado são percorridos por teclado, com foco preservado
-- [ ] T306 Mudanças são anunciadas por leitor de tela
-- [ ] T307 [P] Sessão é utilizável em telefone e em português
-- [ ] T308 Fluxo e2e encerra no Resumo e confirma descarte ao interromper
+- [X] T304 Tela de início e de Item comunica elegibilidade, limite e progresso
+- [X] T305 Revelação e Resultado são percorridos por teclado, com foco preservado
+- [X] T306 Mudanças são anunciadas por leitor de tela
+- [X] T307 [P] Sessão é utilizável em telefone e em português
+- [X] T308 Fluxo e2e encerra no Resumo e confirma descarte ao interromper
 
 | ID | Requisitos | Depende | Áreas | Testes |
 |---|---|---|---|---|

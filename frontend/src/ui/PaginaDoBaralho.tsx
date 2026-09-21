@@ -356,6 +356,10 @@ export function PaginaDoBaralho({
               </section>
             </>
           )}
+
+          <p className="estudar-baralho">
+            <a href={`#/baralhos/${id}/estudo`}>Estudar este Baralho</a>
+          </p>
         </>
       ) : null}
     </div>

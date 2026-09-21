@@ -3640,3 +3640,31 @@ frontend 205, e2e 7, build e lint verdes.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-061
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek (deepseek-v4-pro,
+> loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: tela de estudo, testes de acessibilidade, e2e
+
+- **Data/hora**: 2026-09-21 01:08 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 004-sessao-de-estudo / T304–T308 — concluídas (feature 004 completa)
+- **Commit anterior**: `a68da26`
+
+Rota `#/baralhos/<id>/estudo` com `PaginaDeEstudo` sobre a Interface do Module
+`SessaoDeEstudo`: início com quantidade e aviso de limite, Item com progresso,
+Revelação, Resultado e Resumo; interromper descarta a Sessão ao sair da rota.
+Nenhuma chamada de rede depois de carregar o Baralho. Foco movido a cada
+transição e anúncios polidos. Rótulos visíveis "Acertei"/"Errei" com valores
+canônicos acertou/errou — escolha do worker, aceita pelo Arquiteto. E2E de
+Sessão completa até o Resumo, descarte ao recarregar e telefone.
+
+Defeito de processo evitado: dois workers executariam E2E nas mesmas portas fixas
+com `reuseExistingServer`, e um testaria o código do outro. O worker de
+edição/exclusão foi reiniciado com portas próprias e `CI=1`. Arquiteto repetiu
+em `main`: backend 164, frontend 222, e2e 9, build e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.

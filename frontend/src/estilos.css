@@ -176,6 +176,50 @@ body {
   color: #444444;
 }
 
+.estudar-baralho a {
+  color: #1a5fb4;
+  font-weight: 600;
+}
+
+.formulario-de-estudo {
+  display: grid;
+  gap: 1rem;
+}
+
+.botao-de-sessao,
+.botao-de-revelacao,
+.botao-de-resultado {
+  justify-self: start;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+}
+
+.botoes-de-resultado {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sessao-de-estudo,
+.resumo-da-sessao {
+  display: grid;
+  gap: 1rem;
+}
+
+.progresso-da-sessao {
+  margin: 0;
+  font-weight: 600;
+}
+
+.frente-da-sessao,
+.verso-da-sessao {
+  margin: 0.25rem 0;
+}
+
+.anuncio-de-sessao {
+  color: #155724;
+}
+
 .rotulo {
   font-weight: 600;
 }

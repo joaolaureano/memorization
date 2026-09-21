@@ -320,6 +320,78 @@ export async function listarBaralhosPelaApi(
 }
 
 /**
+ * Cria um Cartão direto pela API — usado quando a prova não quer depender da
+ * UI para preparar o acervo. Mantém o mesmo corpo do contrato `POST /cartoes`
+ * e confere o status de sucesso esperado.
+ */
+export async function criarCartaoPelaApi(
+  enderecoDaApi: string,
+  dados: { frente: string; verso: string },
+): Promise<{ id: string; frente: string; verso: string }> {
+  const resposta = await fetch(`${enderecoDaApi}/cartoes`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+
+  if (resposta.status !== 201) {
+    throw new Error(`POST /cartoes respondeu ${resposta.status}`);
+  }
+
+  return (await resposta.json()) as {
+    id: string;
+    frente: string;
+    verso: string;
+  };
+}
+
+/**
+ * Cria um Baralho direto pela API — usado quando a prova não quer depender da
+ * UI para preparar o acervo. Mantém o corpo do contrato `POST /baralhos` e
+ * confere o status de sucesso esperado.
+ */
+export async function criarBaralhoPelaApi(
+  enderecoDaApi: string,
+  nome: string,
+): Promise<{ id: string; nome: string }> {
+  const resposta = await fetch(`${enderecoDaApi}/baralhos`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ nome }),
+  });
+
+  if (resposta.status !== 201) {
+    throw new Error(`POST /baralhos respondeu ${resposta.status}`);
+  }
+
+  return (await resposta.json()) as { id: string; nome: string };
+}
+
+/**
+ * Cria um Vínculo direto pela API — usado quando a prova não quer depender da
+ * UI para preparar o acervo. Mantém o corpo do contrato
+ * `POST /baralhos/{baralhoId}/vinculos` e confere o status de sucesso.
+ */
+export async function vincularCartaoPelaApi(
+  enderecoDaApi: string,
+  baralhoId: string,
+  cartaoId: string,
+): Promise<void> {
+  const resposta = await fetch(
+    `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cartaoId }),
+    },
+  );
+
+  if (resposta.status !== 201) {
+    throw new Error(`POST /baralhos/${baralhoId}/vinculos respondeu ${resposta.status}`);
+  }
+}
+
+/**
  * Lê a versão do esquema diretamente do arquivo SQLite — a prova de que a
  * migração de Baralhos rodou uma única vez. A API não expõe essa informação;
  * abrir o arquivo aqui é a forma observável de conferir a versão sem depender

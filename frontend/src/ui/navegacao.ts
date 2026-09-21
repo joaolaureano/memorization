@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
  *
  * `useRota` devolve a rota corrente lida de `location.hash`, com a rota padrão
  * `#/cartoes` para hash vazio. A interpretação fica concentrada em
- * `interpretarRota` de propósito: as rotas futuras
- * (`#/baralhos/<id>` e `#/baralhos/<id>/estudo`) serão acrescentadas apenas
- * nesta função, sem tocar no hook nem nos consumidores.
+ * `interpretarRota` de propósito: novas rotas — como `#/baralhos/<id>` e
+ * `#/baralhos/<id>/estudo` — são acrescentadas apenas nesta função, sem tocar
+ * no hook nem nos consumidores.
  */
 
 /** Rota padrão da aplicação: a lista de Cartões. */
@@ -21,7 +21,8 @@ export const ROTA_PADRAO = "#/cartoes";
 export type Rota =
   | { nome: "cartoes" }
   | { nome: "baralhos" }
-  | { nome: "baralho"; id: string };
+  | { nome: "baralho"; id: string }
+  | { nome: "estudo"; id: string };
 
 /**
  * Interpreta o hash corrente como uma `Rota`.
@@ -53,15 +54,13 @@ export function interpretarRota(hash: string): Rota {
     return { nome: "baralho", id: segmentos[1] };
   }
 
-  // Features futuras estendem apenas este bloco:
-  //
-  // if (
-  //   segmentos.length === 3 &&
-  //   segmentos[0] === "baralhos" &&
-  //   segmentos[2] === "estudo"
-  // ) {
-  //   return { nome: "estudo", id: segmentos[1] };
-  // }
+  if (
+    segmentos.length === 3 &&
+    segmentos[0] === "baralhos" &&
+    segmentos[2] === "estudo"
+  ) {
+    return { nome: "estudo", id: segmentos[1] };
+  }
 
   return { nome: "cartoes" };
 }
