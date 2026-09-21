@@ -4044,3 +4044,22 @@ fantasma e nenhum id ausente (verificação do worker repetida na etapa
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-071
+
+> **SPEC KIT** — Comando: analyze (remediação) | Invocação: edição manual
+> aprovada pelo PO | Integração: claude | Artefatos: specs/007-criar-usuario/tasks.md
+
+- **Data/hora**: 2026-09-21 01:59 -03
+- **Ator**: PRODUCT OWNER → ARCHITECT
+- **Feature / Task**: 007-criar-usuario / remediação M1
+- **Commit anterior**: `700ee0b` (registra o hash de EVT-070)
+
+O PO aprovou ("Sim") a remediação do M1 e o avanço para a `008`. Nas Notas de
+tasks.md: T602 e T606 são integradas no mesmo commit. O L1 continua aceito.
+Análise reexecutada: 21/21 FRs, 8/8 SCs, nenhum fantasma.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

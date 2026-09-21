@@ -167,3 +167,6 @@ teclado exige a recusa com o foco já movido, implementada em T609.
   Exige asserção sobre a posição do foco em cada passo, não inspeção visual.
 - Nenhum valor de segredo, de Senha ou de hash aparece em arquivo versionado, em
   teste ou nesta lista de tarefas.
+- **T602 e T606 são integradas no mesmo commit** (remediação M1 do `analyze`).
+  T602 faz a API exigir o segredo; integrada sozinha, quebraria toda a suíte e2e
+  existente até o harness de T606 passar a fornecê-lo.
