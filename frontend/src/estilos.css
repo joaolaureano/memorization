@@ -268,6 +268,10 @@ dialog::backdrop {
   font-weight: 600;
 }
 
+.andamento-da-sessao {
+  margin: 0;
+}
+
 .frente-da-sessao,
 .verso-da-sessao {
   margin: 0.25rem 0;

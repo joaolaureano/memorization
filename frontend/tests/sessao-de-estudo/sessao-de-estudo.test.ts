@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { Cartao } from "../../src/acervo-cliente/cliente";
-import { AleatoriedadeDeterministica } from "../../src/sessao-de-estudo/aleatoriedade";
+import {
+  AleatoriedadeDeterministica,
+  AleatoriedadeReal,
+} from "../../src/sessao-de-estudo/aleatoriedade";
 import {
   MENSAGEM_DE_BARALHO_INELEGIVEL,
   MENSAGEM_DE_QUANTIDADE_INVALIDA,
@@ -111,6 +114,34 @@ describe("SessaoDeEstudo — início (T301)", () => {
       "c4",
     ]);
     expect(new Set(estado.itens.map((item) => item.cartaoId)).size).toBe(3);
+  });
+
+  it("em cem Sessões de um Baralho com dez Cartões, nenhum se repete e a ordem varia (SC-002)", () => {
+    const ids = Array.from({ length: 10 }, (_, indice) => `c${indice + 1}`);
+    const ordens = new Set<string>();
+
+    for (let sessao = 0; sessao < 100; sessao += 1) {
+      const resultado = SessaoDeEstudo.iniciar(
+        BARALHO_ID,
+        ids.length,
+        cartoes(ids),
+        new AleatoriedadeReal(),
+      );
+
+      if (!resultado.ok) {
+        throw new Error(`a Sessão deveria iniciar: ${resultado.mensagem}`);
+      }
+
+      const ordem = resultado.sessao
+        .estadoAtual()
+        .itens.map((item) => item.cartaoId);
+
+      expect(ordem).toHaveLength(ids.length);
+      expect(new Set(ordem).size).toBe(ids.length);
+      ordens.add(ordem.join(","));
+    }
+
+    expect(ordens.size).toBeGreaterThan(1);
   });
 
   it("limita ao disponível e avisa antes do primeiro Item (FR-029)", () => {

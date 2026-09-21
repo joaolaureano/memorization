@@ -169,7 +169,7 @@ describe("editarCartao — edição pela Interface", () => {
     });
   });
 
-  it("recusa Frente acima de 1000 caracteres com a mesma mensagem da criação", () => {
+  it("recusa Frente acima de 1000 caracteres com a mesma mensagem da criação (SC-016)", () => {
     const cartao = criarCartao();
 
     expect(
@@ -183,6 +183,26 @@ describe("editarCartao — edição pela Interface", () => {
       mensagem:
         "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
     });
+
+    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+  });
+
+  it("recusa Verso acima de 1000 caracteres na edição e não altera o Cartão (SC-016)", () => {
+    const cartao = criarCartao();
+
+    expect(
+      acervo.editarCartao(cartao.id, {
+        frente: FRENTE_EDITADA,
+        verso: "a".repeat(1001),
+      }),
+    ).toEqual({
+      ok: false,
+      erro: "verso_muito_longo",
+      mensagem:
+        "O verso do cartão deve ter no máximo 1000 caracteres; o informado tem 1001.",
+    });
+
+    expect(acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
   });
 
   it("recusa Cartão inexistente como nao_encontrado", () => {

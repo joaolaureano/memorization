@@ -44,7 +44,7 @@ const SEGUNDO_CARTAO = {
 
 test.setTimeout(120_000);
 
-test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040, SC-003)", async ({ page, browserName }) => {
+test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040, SC-001, SC-003)", async ({ page, browserName }) => {
   // Navegador real: Chromium, sem DOM simulado.
   expect(browserName).toBe("chromium");
 

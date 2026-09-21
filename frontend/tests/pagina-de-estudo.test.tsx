@@ -140,6 +140,31 @@ describe("PaginaDeEstudo", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("informa a qualquer momento quantos Itens já foram respondidos e quantos faltam (SC-015)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(3);
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Estudar Inglês",
+    });
+
+    iniciarCom("3");
+
+    expect(await screen.findByText("Item 1 de 3")).toBeInTheDocument();
+    expect(
+      screen.getByText("0 Itens respondidos; 3 Itens faltando."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+
+    expect(await screen.findByText("Item 2 de 3")).toBeInTheDocument();
+    expect(
+      screen.getByText("1 Item respondido; 2 Itens faltando."),
+    ).toBeInTheDocument();
+  });
+
   it("solicitar mais que o disponível inicia com todos e avisa antes do primeiro Item (FR-029)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(5);
     renderizar(cliente, idDoBaralho);

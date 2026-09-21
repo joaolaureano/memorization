@@ -353,6 +353,10 @@ export function PaginaDeEstudo({
             Item {estado.posicao} de {estado.total}
           </p>
 
+          <p className="andamento-da-sessao">
+            {descricaoDeAndamento(estado.posicao, estado.total)}
+          </p>
+
           <section
             className="item-de-estudo"
             aria-label={`Item ${estado.posicao} de ${estado.total}`}
@@ -398,5 +402,15 @@ export function PaginaDeEstudo({
         </section>
       )}
     </div>
+  );
+}
+
+function descricaoDeAndamento(posicao: number, total: number): string {
+  const respondidos = posicao - 1;
+  const faltam = total - respondidos;
+
+  return (
+    `${respondidos} ${respondidos === 1 ? "Item respondido" : "Itens respondidos"}; ` +
+    `${faltam} ${faltam === 1 ? "Item faltando" : "Itens faltando"}.`
   );
 }

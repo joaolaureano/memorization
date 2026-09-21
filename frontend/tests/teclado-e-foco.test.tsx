@@ -216,7 +216,7 @@ describe("PaginaDeCartoes por teclado", () => {
     expect(screen.getByLabelText("Verso")).toHaveValue("Caminhar");
   });
 
-  it("o indicador de foco é um contorno geométrico e não depende apenas de cor (FR-055)", () => {
+  it("o indicador de foco é um contorno geométrico e não depende apenas de cor (FR-055, SC-013)", () => {
     // O Vitest esvazia imports de CSS; o arquivo de estilos é lido como
     // texto — o mesmo arquivo que o `main.tsx` carrega na aplicação.
     const estilos = readFileSync(

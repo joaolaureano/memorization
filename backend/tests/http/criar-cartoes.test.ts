@@ -130,7 +130,7 @@ describe("POST /cartoes — criação conforme o contrato", () => {
     });
   });
 
-  it("recusa Frente acima de 1000 caracteres com 400, frente_muito_longa, informando limite e tamanho (FR-052)", async () => {
+  it("recusa Frente acima de 1000 caracteres com 400, frente_muito_longa, informando limite e tamanho (FR-052, SC-016)", async () => {
     const resposta = await postarCartao({
       frente: "a".repeat(1001),
       verso: VERSO_VALIDO,
@@ -144,7 +144,7 @@ describe("POST /cartoes — criação conforme o contrato", () => {
     });
   });
 
-  it("recusa Verso acima de 1000 caracteres com 400, verso_muito_longo, informando limite e tamanho (FR-052)", async () => {
+  it("recusa Verso acima de 1000 caracteres com 400, verso_muito_longo, informando limite e tamanho (FR-052, SC-016)", async () => {
     const resposta = await postarCartao({
       frente: FRENTE_VALIDA,
       verso: "a".repeat(1001),

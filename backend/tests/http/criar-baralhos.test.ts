@@ -131,7 +131,7 @@ describe("POST /baralhos — criação conforme o contrato", () => {
     });
   });
 
-  it("recusa nome acima de 100 caracteres com 400, nome_muito_longo, informando limite e tamanho (FR-061)", async () => {
+  it("recusa nome acima de 100 caracteres com 400, nome_muito_longo, informando limite e tamanho (FR-061, SC-016)", async () => {
     const resposta = await postarBaralho({ nome: "a".repeat(101) });
 
     expect(resposta.statusCode).toBe(400);

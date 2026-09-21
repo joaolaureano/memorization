@@ -135,7 +135,7 @@ describe("POST /baralhos/{baralhoId}/vinculos", () => {
     });
   });
 
-  it("recusa Vínculo duplicado com 409 e mensagem em português", async () => {
+  it("recusa Vínculo duplicado com 409 e mensagem em português (SC-009)", async () => {
     const cartao = await criarCartao();
     const baralho = await criarBaralho();
 

@@ -90,7 +90,7 @@ describe("vincular — criação de Vínculo pela Interface", () => {
     ]);
   });
 
-  it("recusa Vínculo duplicado com código estável e mensagem em português", () => {
+  it("recusa Vínculo duplicado com código estável e mensagem em português (FR-023, SC-009)", () => {
     const cartao = criarCartao();
     const baralho = criarBaralho();
 

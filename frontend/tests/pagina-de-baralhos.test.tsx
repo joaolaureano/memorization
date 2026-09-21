@@ -88,7 +88,7 @@ describe("PaginaDeBaralhos", () => {
     ).toBeInTheDocument();
   });
 
-  it("criação válida aparece na lista sem recarregar, não elegível e com a razão (FR-010, FR-013)", async () => {
+  it("criação válida aparece na lista sem recarregar, não elegível e com a razão (FR-010, FR-013, FR-026)", async () => {
     renderizarPaginaDeBaralhos();
 
     await screen.findByText(/ainda não há Baralhos/i);

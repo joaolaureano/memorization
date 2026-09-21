@@ -131,7 +131,7 @@ describe("renomearBaralho — edição pela Interface", () => {
     ]);
   });
 
-  it("recusa nome acima de 100 caracteres com a mesma mensagem da criação", () => {
+  it("recusa nome acima de 100 caracteres com a mesma mensagem da criação (SC-016)", () => {
     const baralho = criarBaralho();
 
     expect(

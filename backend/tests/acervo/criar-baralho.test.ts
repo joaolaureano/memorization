@@ -51,7 +51,7 @@ describe("criarBaralho — criação pela Interface", () => {
     });
   });
 
-  it("recusa nome vazio, com mensagem em português", () => {
+  it("recusa nome vazio, com mensagem em português (FR-023)", () => {
     expect(acervo.criarBaralho({ nome: "" })).toEqual({
       ok: false,
       erro: "nome_vazio",
@@ -67,7 +67,7 @@ describe("criarBaralho — criação pela Interface", () => {
     });
   });
 
-  it("recusa nome com 101 caracteres, informando limite e tamanho atual", () => {
+  it("recusa nome com 101 caracteres, informando limite e tamanho atual (FR-023, SC-016)", () => {
     expect(
       acervo.criarBaralho({ nome: "a".repeat(LIMITE_DO_NOME + 1) }),
     ).toEqual({
