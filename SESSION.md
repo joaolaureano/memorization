@@ -5105,3 +5105,38 @@ Verificado em `main`: backend 576, frontend 340, e2e 18, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-100
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek-flash`
+> (loop agêntico com ferramentas confinadas) em worktree exclusivo | Integração: claude | Artefatos: backend/tests/infra/*
+
+- **Data/hora**: 2026-09-21 07:56 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: converge — features 001 a 011 (final)
+- **Commit anterior**: `059393e` (registra o hash do evento anterior)
+
+> Comando Spec Kit: converge (todas as features, 001 a 011).
+
+Medição: 195 requisitos, 189 com teste. FR-084 continua substituído pelo FR-098.
+Para FR-124, FR-132, SC-059, FR-134 e SC-061, um worker escreveu 20 testes
+estáticos em `backend/tests/infra/`:
+- o terceiro segredo no `ssm.tf`, coberto pela policy;
+- a memória por variável, com padrão de pelo menos 1769 MB, e os parâmetros do
+  hash não enfraquecidos;
+- o registro da medição do p95 na research;
+- a ordem do manual de operação, sem segredo real.
+
+Os limites de uma prova estática estão declarados nos próprios testes. O p95
+real e o SC-061 ("cem por cento das implantações seguem a ordem") ficam
+evidenciados pela publicação registrada no EVT-099.
+
+Resultado: 194 de 194 requisitos vigentes citados em testes que os verificam.
+Nenhuma tarefa aberta nas 11 features.
+Verificado em `main`: backend 596, frontend 340, e2e 18, `typecheck`,
+`build:local` e lint verdes.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
