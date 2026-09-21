@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 
-import { validarFrente, validarVerso } from "./invariantes.ts";
-import type { CodigoDeErroDeCartao } from "./invariantes.ts";
+import {
+  validarFrente,
+  validarNomeDeBaralho,
+  validarVerso,
+} from "./invariantes.ts";
+import type {
+  CodigoDeErroDeBaralho,
+  CodigoDeErroDeCartao,
+} from "./invariantes.ts";
 
 /**
  * A única entidade desta feature: Frente e Verso, e nada além (FR-009).
@@ -39,18 +46,61 @@ export type ResultadoDeCriacaoDeCartao =
   | { ok: false; erro: CodigoDeErroDeCartao; mensagem: string };
 
 /**
+ * A única entidade desta etapa: id opaco e nome, e nada além (FR-018).
+ *
+ * O `id` é um identificador opaco gerado pelo sistema. O nome **não** é
+ * identificador: dois Baralhos podem ter o mesmo nome (FR-012).
+ */
+export interface Baralho {
+  id: string;
+  nome: string;
+}
+
+/**
+ * O que `criarBaralho` recebe: exatamente o nome.
+ *
+ * O objeto pode carregar propriedades além dessa: elas são ignoradas, porque
+ * a Interface lê apenas os campos canônicos e constrói o `Baralho` a partir
+ * deles — é assim que a Interface garante FR-018 sem que o caller reproduza a
+ * regra.
+ */
+export interface DadosDeBaralho {
+  nome: string;
+}
+
+/**
+ * Resultado de `criarBaralho`. Falha de regra de domínio é resultado previsto,
+ * e não exceção genérica: o caller distingue `ok` e, na recusa, recebe o
+ * código estável e a mensagem em português (FR-046).
+ */
+export type ResultadoDeCriacaoDeBaralho =
+  | { ok: true; baralho: Baralho }
+  | { ok: false; erro: CodigoDeErroDeBaralho; mensagem: string };
+
+/**
  * Interface profunda do Module `Acervo` (Princípio IV).
  *
- * Duas operações escondem esquema, transação e as regras de conteúdo de
- * Cartão. Invariantes garantidas pela Interface, que o caller nunca
+ * As operações escondem esquema, transação e as regras de conteúdo de Cartão
+ * e de Baralho. Invariantes garantidas pela Interface, que o caller nunca
  * reproduz: Frente e Verso não vazios após descartar espaços nas extremidades
  * (FR-002, FR-051); no máximo 1000 caracteres cada (FR-052); nenhuma
- * propriedade além de Frente e Verso (FR-009).
+ * propriedade além de Frente e Verso (FR-009). Para Baralho: nome não vazio
+ * após descartar espaços nas extremidades (FR-011); no máximo 100 caracteres
+ * (FR-061); nome é rótulo, não identificador (FR-012); nenhuma propriedade
+ * além do nome (FR-018).
  *
  * As operações são síncronas e a escrita é atômica.
  */
 export interface Acervo {
   criarCartao(dados: DadosDeCartao): ResultadoDeCriacaoDeCartao;
+
+  /**
+   * Cria um Baralho com o nome informado. Nome vazio ou composto só de
+   * espaços é recusado como `nome_vazio` (FR-011); mais de 100 caracteres,
+   * como `nome_muito_longo` (FR-061). O nome é rótulo, não identificador:
+   * dois Baralhos de mesmo nome são ambos aceitos (FR-012).
+   */
+  criarBaralho(dados: DadosDeBaralho): ResultadoDeCriacaoDeBaralho;
 
   /**
    * Lista todos os Cartões existentes, cada um com sua Frente e seu Verso
@@ -66,10 +116,19 @@ export interface Acervo {
  * vive apenas o comportamento do Module.
  */
 export function criarAcervo(banco: DatabaseSync): Acervo {
-  const inserir = banco.prepare(
+  const inserirCartao = banco.prepare(
     "INSERT INTO cartao (id, frente, verso) VALUES (?, ?, ?)",
   );
   const listar = banco.prepare("SELECT id, frente, verso FROM cartao");
+
+  /**
+   * Prepared na primeira criação de Baralho, e não na construção do `Acervo`:
+   * uma base legada da feature `001` ainda sem a tabela `baralho` continua
+   * servindo `criarCartao`/`listarCartoes` até ser migrada. Em base migrada —
+   * o único cenário em que `criarBaralho` é chamado — a preparação acontece
+   * uma única vez e a escrita permanece atômica.
+   */
+  let inserirBaralho: StatementSync | undefined;
 
   return {
     criarCartao(dados) {
@@ -85,9 +144,30 @@ export function criarAcervo(banco: DatabaseSync): Acervo {
         verso: dados.verso,
       };
 
-      inserir.run(cartao.id, cartao.frente, cartao.verso);
+      inserirCartao.run(cartao.id, cartao.frente, cartao.verso);
 
       return { ok: true, cartao };
+    },
+
+    criarBaralho(dados) {
+      const falha = validarNomeDeBaralho(dados.nome);
+
+      if (falha !== null) {
+        return { ok: false, ...falha };
+      }
+
+      inserirBaralho ??= banco.prepare(
+        "INSERT INTO baralho (id, nome) VALUES (?, ?)",
+      );
+
+      const baralho: Baralho = {
+        id: randomUUID(),
+        nome: dados.nome,
+      };
+
+      inserirBaralho.run(baralho.id, baralho.nome);
+
+      return { ok: true, baralho };
     },
 
     listarCartoes() {

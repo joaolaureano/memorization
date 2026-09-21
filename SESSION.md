@@ -3371,3 +3371,27 @@ verdes. T102 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-051
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: criação de Baralho
+
+- **Data/hora**: 2026-09-20 23:36 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 002-criar-baralho / T103 — concluída
+
+A Interface do `Acervo` agora cria Baralho com id opaco e nome, escondendo SQL
+parametrizado e validação autoritativa. Nome vazio ou só de espaços produz
+`nome_vazio`; 101 caracteres produz `nome_muito_longo` com limite e tamanho;
+100 e nomes repetidos são aceitos. Propriedades extras não atravessam a
+Interface.
+
+Toda a bateria usa SQLite em memória pela Interface, sem consultar tabela.
+Worker e Arquiteto repetiram 74 testes backend, build e lint, todos verdes.
+T103 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.

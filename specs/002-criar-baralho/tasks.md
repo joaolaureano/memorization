@@ -36,7 +36,7 @@ exigidos pelo processo ficam na tabela recolhida de cada fase.
 
 ## Fase 2 — Criar e listar Baralho
 
-- [ ] T103 `Acervo` cria Baralho, recusando nome inválido
+- [X] T103 `Acervo` cria Baralho, recusando nome inválido
 - [ ] T104 `Acervo` lista Baralhos com elegibilidade derivada
 - [ ] T105 Rotas `POST /baralhos` e `GET /baralhos` conforme o contrato
 - [ ] T106 `ClienteDoAcervo` cobre as rotas de Baralho nos dois Adapters
