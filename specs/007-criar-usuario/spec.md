@@ -100,6 +100,9 @@ nenhuma leitura devolve a Senha e que nenhuma sessão, cookie ou token foi criad
 - **Dois Usuários com a mesma Senha**: é permitido, e os dados armazenados não
   revelam que as Senhas coincidem.
 - **Segredo do servidor ausente**: a aplicação recusa iniciar.
+- **Letras acentuadas no Nome de usuário**: são recusadas. Só assim a
+  comparação sem distinção de maiúsculas e minúsculas é confiável (refinamento
+  do plan, `research.md`, Decisão 5).
 - **Requisição que não parte da interface**: as mesmas regras são aplicadas.
 
 ## Requirements *(mandatory)*
@@ -131,8 +134,8 @@ feature:
 - **FR-072**: O sistema MUST recusar o Cadastro quando a Senha e sua
   Confirmação forem diferentes, sem enviá-lo.
 - **FR-073**: O sistema MUST descartar os espaços ao redor do Nome de usuário e
-  MUST aceitar somente Nome de usuário de 3 a 50 caracteres, composto de letras,
-  dígitos, `.`, `_` e `-`.
+  MUST aceitar somente Nome de usuário de 3 a 50 caracteres, composto de letras
+  de A a Z sem acento, dígitos, `.`, `_` e `-`.
 - **FR-074**: O sistema MUST recusar Nome de usuário já existente,
   desconsiderando a diferença entre maiúsculas e minúsculas, com mensagem clara
   de que ele já existe.
@@ -205,7 +208,7 @@ feature:
 ## Invariantes de Domínio
 
 1. O Nome de usuário é único sem distinção entre maiúsculas e minúsculas, tem de
-   3 a 50 caracteres e usa apenas letras, dígitos, `.`, `_` e `-`.
+   3 a 50 caracteres e usa apenas letras de A a Z, dígitos, `.`, `_` e `-`.
 2. A Senha tem de 8 a 128 caracteres e é guardada apenas transformada de forma
    irreversível.
 3. Os dados armazenados não revelam a Senha nem a coincidência de Senhas.

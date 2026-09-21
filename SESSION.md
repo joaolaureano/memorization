@@ -3915,3 +3915,60 @@ Adiadas.
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-068
+
+> **SPEC KIT** — Comando: plan | Invocação: skill `speckit-plan` e
+> `setup-plan.sh --json` | Integração: claude | Artefatos: plan.md,
+> research.md, data-model.md, contracts/api-usuarios.md, quickstart.md
+> (specs/007-criar-usuario)
+
+- **Data/hora**: 2026-09-21 01:54 -03
+- **Ator**: ARCHITECT → WORKER (rascunho, `deepseek-v4-flash`)
+- **Feature / Task**: 007-criar-usuario / plan
+- **Commit anterior**: `febc228` (registra o hash de EVT-067)
+
+### Decisões de arquitetura (Arquiteto)
+
+- Novo Module `Identidade` (`backend/src/identidade/`), separado do `Acervo`
+  por Locality. Interface: `criarIdentidade(banco, segredo).cadastrar`. Nenhuma
+  Seam nova e nenhuma dependência nova.
+- Senha: `HMAC-SHA256(segredo, senha)` seguido de scrypt (N=32768, r=8, p=1,
+  64 bytes), com sal aleatório de 16 bytes por Usuário e parâmetros gravados em
+  JSON.
+- Segredo: `SEGREDO_DAS_SENHAS`, obrigatório, com no mínimo 32 caracteres.
+  `SegredoAusenteError` impede o início e nunca exibe o valor. O segredo deve
+  ser o mesmo para uma mesma base.
+- Migração 4: tabela `usuario` com `UNIQUE COLLATE NOCASE` e `CHECK`s. A
+  duplicata vem da tradução da violação de `UNIQUE`. Nenhuma coluna consegue
+  guardar a Senha.
+- `POST /usuarios`: 201, 400 ou 409. Sem `Set-Cookie`. A Confirmação não é
+  enviada à API. O logger continua desabilitado.
+- Frontend: `criarUsuario` nos dois Adapters, rota `#/criar-conta` e link na
+  navegação.
+
+### Refinamento da spec
+
+FR-073: "letras" passa a significar **A–Z, sem acento**. O `NOCASE` do SQLite
+só iguala maiúsculas e minúsculas em ASCII, e com acentos a unicidade do FR-074
+falharia. Um caso-limite correspondente foi acrescentado. O PO pode reverter
+isso, ao custo de normalização Unicode própria.
+
+### Revisão do rascunho do worker
+
+Corrigidos:
+- a contagem de FRs (16 para 21);
+- a localização da migração 4 (lista única em `acervo/migracoes.ts`, não em
+  `identidade/`);
+- no quickstart, a frase de que o `export` "imprimiria" o segredo;
+- a atribuição prematura do bloqueio por tentativas à `008`;
+- uma omissão espúria no research.
+
+`check-prerequisites.sh --json` lista research, data-model, contracts e
+quickstart.
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada. O quickstart mostra apenas o comando de geração
+  do segredo, nunca um valor.
