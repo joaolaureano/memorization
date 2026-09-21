@@ -3132,8 +3132,6 @@ restrito ao Acervo e aos testes. T006 foi aceita e marcada [X].
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
 
----
-
 ## EVT-041
 
 > **SPEC KIT** — Comando: implement | Invocação: dois workers DeepSeek em
@@ -3152,6 +3150,31 @@ validar baseline, delegar, repetir checks pelo worker e repetir pelo Arquiteto.
 Um novo worktree e um novo worker aplicaram o reparo. Resultado final: 45
 testes, build e lint verdes, escopo restrito às rotas HTTP, composição e testes
 de contrato. T007 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
+
+---
+
+## EVT-042
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: ClienteDoAcervo
+
+- **Data/hora**: 2026-09-20 22:28 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T008 — concluída
+
+O worktree exclusivo de T008 foi criado sobre o commit integrado mais recente,
+teve as dependências instaladas e passou pelo portão de baseline antes da
+delegação. O worker implementou a Seam assíncrona `ClienteDoAcervo`, seus
+Adapters `ClienteHttp` e `ClienteEmMemoria`, os quatro erros de domínio e o
+modo `indisponivel`, com bateria de contrato comum aos dois Adapters.
+
+O worker encerrou com testes, build e lint verdes e sem alteração fora do
+escopo permitido. O Arquiteto inspecionou o resultado e repetiu de modo
+independente: 37 testes de frontend, build e lint, todos verdes. T008 foi
+aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.

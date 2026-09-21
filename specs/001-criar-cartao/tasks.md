@@ -51,7 +51,7 @@ verificável isoladamente.
 - [X] T005 `Acervo` cria Cartão pela sua Interface, recusando conteúdo inválido
 - [X] T006 `Acervo` lista Cartões, inclusive dois com a mesma Frente
 - [X] T007 Rotas `POST /cartoes` e `GET /cartoes` respondem conforme o contrato
-- [ ] T008 `ClienteDoAcervo` funciona com dois Adapters
+- [X] T008 `ClienteDoAcervo` funciona com dois Adapters
 - [ ] T009 Telas de lista e criação, com estado vazio e aviso de limite
 - [ ] T010 Falha de gravação é reportada e o conteúdo digitado é preservado
 
