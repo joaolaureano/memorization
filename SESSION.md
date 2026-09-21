@@ -3226,3 +3226,27 @@ T010 foi aceita e marcada [X].
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada.
+
+---
+
+## EVT-045
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> preparado e exclusivo | Integração: claude | Artefatos: E2E responsivo
+
+- **Data/hora**: 2026-09-20 22:53 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T013 — concluída
+
+T013 foi executada em paralelo seguro com T011, cada worker em seu próprio
+worktree. O worker estendeu o harness para servir também o frontend React real
+e criou teste Chromium em viewport de telefone. O transporte foi interceptado
+para devolver 50 Cartões determinísticos; a prova verifica ausência de rolagem
+horizontal no topo e no fim e localização visual de um Cartão conhecido.
+
+O worker e o Arquiteto repetiram 44 testes de frontend, build, lint e os dois
+cenários Playwright; tudo passou. O smoke original permaneceu verde, não houve
+mudança de CSS porque a tela já satisfez a prova real. T013 foi aceita [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
