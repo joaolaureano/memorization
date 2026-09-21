@@ -49,7 +49,7 @@ verificável isoladamente.
 ## Fase 2 — Criar e listar Cartão
 
 - [X] T005 `Acervo` cria Cartão pela sua Interface, recusando conteúdo inválido
-- [ ] T006 `Acervo` lista Cartões, inclusive dois com a mesma Frente
+- [X] T006 `Acervo` lista Cartões, inclusive dois com a mesma Frente
 - [ ] T007 Rotas `POST /cartoes` e `GET /cartoes` respondem conforme o contrato
 - [ ] T008 `ClienteDoAcervo` funciona com dois Adapters
 - [ ] T009 Telas de lista e criação, com estado vazio e aviso de limite

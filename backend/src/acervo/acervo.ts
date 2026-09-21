@@ -51,6 +51,12 @@ export type ResultadoDeCriacaoDeCartao =
  */
 export interface Acervo {
   criarCartao(dados: DadosDeCartao): ResultadoDeCriacaoDeCartao;
+
+  /**
+   * Lista todos os Cartões existentes, cada um com sua Frente e seu Verso
+   * (FR-003, FR-004). A Frente não é identificador: dois Cartões de Frente
+   * idêntica são ambos devolvidos, sem deduplicação.
+   */
   listarCartoes(): Cartao[];
 }
 

@@ -3102,3 +3102,32 @@ aceite. A decisão corrige o defeito de processo observado acima.
 
 - **Commit**: pendente de integração de T002/T004.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+---
+
+## EVT-040
+
+> **SPEC KIT** — Comando: implement | Invocação: worker DeepSeek em worktree
+> isolado | Integração: claude | Artefatos: Acervo, testes e SESSION.md
+
+- **Data/hora**: 2026-09-20 22:01 -03
+- **Ator**: ARCHITECT → WORKER
+- **Feature / Task**: 001-criar-cartao / T006 — concluída
+
+### Correção de auditoria sem reescrita
+
+EVT-039 foi materialmente inserido após EVT-003, e os eventos EVT-038 e EVT-037
+ficaram em ordem visual inversa. A causa foi uso de contexto não exclusivo em
+aplicações de patch. Em respeito ao histórico append-only, os eventos não foram
+movidos ou reescritos. A ordem cronológica canônica é EVT-037, EVT-038, EVT-039
+e este EVT-040. Eventos futuros serão anexados usando contexto terminal único.
+
+### T006
+
+O worker executou em worktree exclusivo. Seus checks iniciais falharam com
+exit 127 porque o worktree não possuía node_modules. Após npm install, o
+Arquiteto executou 30 testes, build e lint, todos verdes. O diff permaneceu
+restrito ao Acervo e aos testes. T006 foi aceita e marcada [X].
+
+- **Commit**: hash registrado no próximo evento auditável.
+- **Sanitização**: Confirmada.
