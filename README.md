@@ -1,5 +1,7 @@
 # Memorization
 
+**[Read this in English / Leia em inglês](README.en.md)**
+
 Trabalho da cadeira **AGL11091 - Tendências em Engenharia de Software**.
 
 O objetivo principal é **estudar e aplicar Spec-Driven Development (SDD)** com o
