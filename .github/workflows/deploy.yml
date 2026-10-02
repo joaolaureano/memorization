@@ -1,0 +1,97 @@
+# CD: publica o app depois que a CI passa na main (spec 014).
+# Só o app: migração do Neon, código da Lambda, SPA no S3 e invalidação do
+# CloudFront. A infraestrutura continua aplicada à mão pelo operador (tofu).
+# Credenciais AWS de curta duração por OIDC; nenhuma chave guardada no GitHub.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publicar em produção
+    # Só com CI verde, e só depois de configurado o environment (vars.AWS_ROLE_ARN).
+    if: >-
+      vars.AWS_ROLE_ARN != '' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      AWS_REGION: us-east-1
+      FUNCAO: memorization-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Construir backend (migração e pacote da Lambda)
+        working-directory: backend
+        run: |
+          npm ci
+          npm run build:cloud
+          npm run build:lambda
+          test -f dist-lambda.zip
+
+      - name: Construir o SPA
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:aws
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # A função recusa servir com esquema atrasado: migra antes de trocar o código.
+      # DB_URL é o endpoint DIRETO do Neon (sem -pooler); a saída nunca o imprime.
+      - name: Migrar o esquema do Neon
+        working-directory: backend
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: npm run migrate:cloud
+
+      - name: Publicar o código da Lambda
+        working-directory: backend
+        run: |
+          aws lambda update-function-code --function-name "$FUNCAO" \
+            --zip-file fileb://dist-lambda.zip --output text --query LastUpdateStatus
+          aws lambda wait function-updated-v2 --function-name "$FUNCAO"
+
+      - name: Publicar o SPA
+        run: |
+          aws s3 sync frontend/dist "s3://${{ vars.SITE_BUCKET }}" --delete \
+            --exclude index.html --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp frontend/dist/index.html "s3://${{ vars.SITE_BUCKET }}/index.html" \
+            --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "${{ vars.DISTRIBUTION_ID }}" \
+            --paths "/index.html" "/" --output text --query Invalidation.Id
+
+      - name: Conferir a saúde
+        run: |
+          for tentativa in 1 2 3 4 5 6; do
+            if curl -fsS "${{ vars.HEALTH_URL }}"; then exit 0; fi
+            sleep 10
+          done
+          exit 1

@@ -37,3 +37,8 @@ output "deploy_frontend_command" {
   description = "Builda o SPA com a API em /api, publica no bucket e invalida o cache"
   value       = "./scripts/deploy-frontend.sh"
 }
+
+output "ci_role_arn" {
+  description = "Role assumida pelo GitHub Actions via OIDC; vai na variavel AWS_ROLE_ARN do ambiente production"
+  value       = aws_iam_role.ci_deploy.arn
+}

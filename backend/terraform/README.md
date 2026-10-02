@@ -84,6 +84,32 @@ inteiro. Medição em 2026-09-21, pelo CloudFront, a partir do Brasil:
 
 O remédio para latência é memória, nunca enfraquecer o hash.
 
+## Publicação contínua (GitHub Actions)
+
+O deploy não é mais manual: um workflow do GitHub Actions compila o backend,
+publica o pacote na Lambda (`aws lambda update-function-code`), sincroniza o
+SPA no bucket e invalida o cache. Ele assume a role `${project_name}-deploy-ci`
+por OIDC, sem chave de acesso e sem segredo de longa duração. A role e a policy
+do robot continuam sendo criadas pelo operador: **aplicar IAM é `tofu apply`**,
+nunca o workflow.
+
+No GitHub, o ambiente `production` (aceito apenas a partir da `main`) guarda:
+
+- secret `DB_URL`: connection string do Neon pelo endpoint **direto** (sem
+  `-pooler`), usada só pelas migrações;
+- variables `AWS_ROLE_ARN` (`tofu output -raw ci_role_arn`), `SITE_BUCKET`
+  (`tofu output -raw site_bucket`), `DISTRIBUTION_ID`
+  (`tofu output -raw distribution_id`) e `HEALTH_URL`
+  (`tofu output -raw health_url`), além de `AWS_REGION` quando a região não for
+  a padrão.
+
+Se a permissions boundary (`ci_permissions_boundary_name`) bloquear a
+publicação, refaça o apply com ela desligada, num perfil admin:
+
+```bash
+tofu apply -var ci_permissions_boundary_name=""
+```
+
 ## Operação do Neon
 
 - **Runtime**: o endpoint pooled (`-pooler`) em `db_conn_string`.

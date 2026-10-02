@@ -60,3 +60,23 @@ variable "secrets_version" {
   type        = number
   default     = 1
 }
+
+# Descubra o valor com `gh api repos/OWNER/REPO/actions/oidc/customization/sub`,
+# que devolve o prefixo do subject do token OIDC. O padrao traz os ids imutaveis
+# do dono e do repositorio em vez dos nomes: o GitHub mantem o id estavel quando
+# alguem renomeia o usuario ou o repositorio, mas nao reaproveita o id para outro
+# dono - por isso o acesso nao se transfere junto com um nome liberado.
+variable "github_subject_prefix" {
+  description = "Prefixo do subject do token OIDC do GitHub, sem o sufixo do ambiente (o ci.tf acrescenta :environment:production)."
+  type        = string
+  default     = "repo:joaolaureano@42150235/memorization@1378691316"
+}
+
+# A role de CI nasce com boundary porque o robot so cria roles assim. O valor
+# vazio remove a boundary: use num apply de admin quando ela bloquear a
+# publicacao (ver README).
+variable "ci_permissions_boundary_name" {
+  description = "Nome da policy usada como permissions boundary da role de publicacao continua. Vazio desliga a boundary."
+  type        = string
+  default     = "robot-ec2-boundary"
+}

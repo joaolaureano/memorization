@@ -103,7 +103,7 @@ describe("recusa por Credencial", () => {
     expect(screen.queryByRole("heading", { level: 1, name: "Baralhos" })).toBeNull();
     expect(screen.queryByRole("navigation", { name: "Principal" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sair" })).toBeNull();
-    expect(window.location.hash).toBe("#/entrar");
+    await waitFor(() => expect(window.location.hash).toBe("#/entrar"));
   });
 
   it("uma criação recusada não aparece como concluída e não altera o acervo (FR-044, FR-090)", async () => {
@@ -147,7 +147,7 @@ describe("recusa por Credencial", () => {
     // Interface `ClienteDoAcervo` (cliente.test.ts, T707).
     expect(screen.queryByText("To run")).toBeNull();
     expect(screen.queryByText(/cartão criado/i)).toBeNull();
-    expect(window.location.hash).toBe("#/entrar");
+    await waitFor(() => expect(window.location.hash).toBe("#/entrar"));
   });
 
   it("não deixa a Credencial em armazenamento, cookie nem endereço, nem antes nem depois da recusa (FR-078, FR-079, SC-033)", async () => {
@@ -241,6 +241,6 @@ describe("recusa por Credencial", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/entrar");
+    await waitFor(() => expect(window.location.hash).toBe("#/entrar"));
   });
 });

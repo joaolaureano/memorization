@@ -101,6 +101,14 @@ resource "aws_lambda_function" "api" {
     aws_iam_role_policy.lambda_read_secrets,
     aws_iam_role_policy.lambda_logs,
   ]
+
+  # A partir do CD, o codigo da funcao e publicado pelo workflow
+  # (aws lambda update-function-code), e nao pelo Tofu. O Tofu continua dono da
+  # configuracao - memoria, ambiente, role, handler -, e sem este ignore um
+  # apply posterior devolveria o codigo ao ultimo pacote aplicado aqui.
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
 }
 
 # NONE, e nao AWS_IAM: com AWS_IAM o acesso so vem assinado, e o OAC que assina
