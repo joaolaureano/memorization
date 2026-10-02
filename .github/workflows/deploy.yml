@@ -66,6 +66,16 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Pré-voo: a migração é irreversível na prática e a função antiga recusa
+      # o esquema novo, então confirma as permissões ANTES de tocar no Neon.
+      # O dry-run valida acesso sem alterar o código da função.
+      - name: Conferir permissões antes de migrar
+        working-directory: backend
+        run: |
+          aws lambda update-function-code --function-name "$FUNCAO" \
+            --zip-file fileb://dist-lambda.zip --dry-run --output text --query FunctionName
+          aws s3 ls "s3://${{ vars.SITE_BUCKET }}/index.html"
+
       # A função recusa servir com esquema atrasado: migra antes de trocar o código.
       # DB_URL é o endpoint DIRETO do Neon (sem -pooler); a saída nunca o imprime.
       - name: Migrar o esquema do Neon

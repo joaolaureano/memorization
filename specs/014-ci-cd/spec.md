@@ -13,6 +13,12 @@
 - **FR-184**: Segredos (URL do Neon) MUST ficar só como secret do environment `production` e MUST NOT aparecer em logs.
 - **FR-185**: Enquanto a variável de repositório `DEPLOY_HABILITADO` não for `true`, o workflow de deploy MUST ser ignorado, sem falhar.
 
+- **FR-186**: Antes de migrar, o deploy MUST confirmar as permissões de publicação (dry-run da Lambda e leitura do bucket); sem elas, MUST parar sem tocar no banco.
+
+## Incidente de 2026-10-02 (primeiro deploy)
+
+A role com a boundary `robot-ec2-boundary` migrou o Neon (esquema 6), mas foi barrada em `lambda:UpdateFunctionCode`; a função antiga recusou o esquema novo e a produção ficou em 503 por alguns minutos. Restaurado publicando o código pelo operador (`robot`). Ações: FR-186 (pré-voo) e role da CI reaplicada sem boundary por perfil admin.
+
 ## Configuração única do operador
 
 1. `tofu -chdir=backend/terraform apply` (cria a role; toca IAM, então é o operador quem roda). Se a boundary `robot-ec2-boundary` barrar o deploy: aplicar com perfil admin e `-var ci_permissions_boundary_name=""`.
