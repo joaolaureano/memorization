@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
 import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
 
@@ -107,11 +107,13 @@ async function criarAcervoElegivel(): Promise<{
 
 function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
   render(
-    <PaginaDeEstudo
-      cliente={cliente}
-      id={idDoBaralho}
-      aleatoriedade={new AleatoriedadeDeterministica([0, 0])}
-    />,
+    comProtecaoDeSaida(
+      <PaginaDeEstudo
+        cliente={cliente}
+        id={idDoBaralho}
+        aleatoriedade={new AleatoriedadeDeterministica([0, 0])}
+      />,
+    ),
   );
 }
 
@@ -151,15 +153,16 @@ describe("PaginaDeEstudo por teclado", () => {
     expect(document.activeElement).toBe(primeiraFrente);
     expect(screen.getByText("Item 1 de 2")).toBeInTheDocument();
 
-    // Interromper e Revelar são os próximos controles na ordem de tabulação.
+    // Interromper e Revelar verso são os próximos controles na ordem de
+    // tabulação.
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Interromper" }),
+      screen.getByRole("button", { name: "Interromper" }),
     );
 
     apertarTab();
     const botaoDeRevelacao = screen.getByRole("button", {
-      name: "Revelar",
+      name: "Revelar verso",
     });
     expect(document.activeElement).toBe(botaoDeRevelacao);
     apertarEnter(botaoDeRevelacao);
@@ -173,7 +176,7 @@ describe("PaginaDeEstudo por teclado", () => {
     // Depois do Verso, os dois Resultados são os próximos controles.
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Interromper" }),
+      screen.getByRole("button", { name: "Interromper" }),
     );
 
     apertarTab();
@@ -190,12 +193,12 @@ describe("PaginaDeEstudo por teclado", () => {
 
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Interromper" }),
+      screen.getByRole("button", { name: "Interromper" }),
     );
 
     apertarTab();
     const segundaRevelacao = screen.getByRole("button", {
-      name: "Revelar",
+      name: "Revelar verso",
     });
     expect(document.activeElement).toBe(segundaRevelacao);
     apertarEnter(segundaRevelacao);
@@ -204,7 +207,7 @@ describe("PaginaDeEstudo por teclado", () => {
 
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Interromper" }),
+      screen.getByRole("button", { name: "Interromper" }),
     );
 
     apertarTab();
@@ -217,8 +220,13 @@ describe("PaginaDeEstudo por teclado", () => {
       name: "Resumo da Sessão",
     });
     expect(document.activeElement).toBe(resumo);
-    expect(screen.getByText("Itens estudados: 2")).toBeInTheDocument();
-    expect(screen.getByText("Acertos: 2")).toBeInTheDocument();
-    expect(screen.getByText("Erros: 0")).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("2 de 2 Itens")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Acertos (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Erros (0)" }),
+    ).toBeInTheDocument();
   });
 });

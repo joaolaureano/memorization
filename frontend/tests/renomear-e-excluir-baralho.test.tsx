@@ -9,18 +9,19 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
- * T404, T405, T504, T505, T506 — renomeação e exclusão de Baralho
- * (specs/005-editar-cartao-e-baralho/tasks.md e
- * specs/006-excluir-cartao-e-baralho/tasks.md).
+ * T1110 — exclusão de Baralho
+ * (specs/012-interface-visual-navegavel/tasks.md; regras preservadas de
+ * specs/006-excluir-cartao-e-baralho: FR-016, FR-017, FR-068, FR-069).
  *
- * A tela é exercitada com o `ClienteEmMemoria`, sem servidor. As asserções
- * cobrem o alcance da renomeação, a preservação de Vínculos, a confirmação de
- * descarte, a consequência declarada na exclusão e as falhas que mantêm a
- * entidade exibida.
+ * A renomeação inline saiu desta tela na 012: ela agora pertence à página de
+ * formulário (`#/baralhos/<id>/editar`, T1108) e é provada em
+ * `formulario-de-baralho.test.tsx`. O que permanece aqui é a exclusão: o
+ * diálogo declara a consequência real (quantos Cartões continuarão existindo e
+ * que nenhum Cartão será destruído) e as falhas mantêm o Baralho exibido.
  */
 
 interface AcervoDeTeste {
@@ -53,110 +54,16 @@ async function criarBaralhoComDoisCartoes(): Promise<AcervoDeTeste> {
 }
 
 function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
-  render(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />);
+  render(
+    comProtecaoDeSaida(
+      <PaginaDoBaralho cliente={cliente} id={idDoBaralho} />,
+      true,
+    ),
+  );
 }
 
-describe("renomeação de Baralho", () => {
-  it("renomeia o Baralho informando o alcance e preserva Vínculos e elegibilidade (FR-015)", async () => {
-    const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
-
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
-    fireEvent.click(screen.getByRole("button", { name: "Renomear" }));
-
-    expect(
-      screen.getByText("Este Baralho tem 2 Cartões vinculados."),
-    ).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText("Nome"), {
-      target: { value: "Idiomas" },
-    });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Idiomas" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Baralho renomeado.")).toBeInTheDocument();
-    expect(screen.getByText("Elegível para estudo.")).toBeInTheDocument();
-
-    const detalhe = await cliente.obterBaralho(idDoBaralho);
-
-    expect(detalhe.ok).toBe(true);
-
-    if (detalhe.ok) {
-      expect(detalhe.baralho.nome).toBe("Idiomas");
-      expect(detalhe.baralho.elegivel).toBe(true);
-      expect(detalhe.baralho.cartoes).toHaveLength(2);
-    }
-  });
-
-  it("cancelar renomeação suja pede confirmação; recusar preserva e confirmar descarta (FR-050, SC-014)", async () => {
-    const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
-
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
-    fireEvent.click(screen.getByRole("button", { name: "Renomear" }));
-
-    fireEvent.change(screen.getByLabelText("Nome"), {
-      target: { value: "Idiomas" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-
-    const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent(
-      /alterações não salvas neste Baralho/i,
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continuar editando" }),
-    );
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Nome")).toHaveValue("Idiomas");
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Descartar alterações" }),
-    );
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Inglês" }),
-    ).toBeInTheDocument();
-  });
-
-  it("com o cliente indisponível, renomear falha e o conteúdo digitado permanece (FR-044, FR-045)", async () => {
-    const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
-
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
-    fireEvent.click(screen.getByRole("button", { name: "Renomear" }));
-
-    fireEvent.change(screen.getByLabelText("Nome"), {
-      target: { value: "Idiomas" },
-    });
-
-    cliente.simularIndisponibilidade();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
-
-    expect(
-      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Baralho renomeado.")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Nome")).toHaveValue("Idiomas");
-  });
-});
-
 describe("exclusão de Baralho", () => {
-  it("o diálogo informa quantos Cartões continuarão existindo e o cancelamento não altera o estado (FR-016, FR-017, FR-068)", async () => {
+  it("o diálogo nomeia o Baralho, informa quantos Cartões continuarão existindo e o cancelamento foca o botão de excluir (FR-016, FR-017, FR-068)", async () => {
     const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
 
     renderizar(cliente, idDoBaralho);
@@ -169,13 +76,12 @@ describe("exclusão de Baralho", () => {
     fireEvent.click(botaoDeExcluir);
 
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveAccessibleName("Excluir Baralho");
+    expect(dialogo).toHaveAccessibleName("Excluir “Inglês”?");
+    expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus();
     expect(dialogo).toHaveTextContent(
       "Este Baralho tem 2 Cartões vinculados.",
     );
-    expect(dialogo).toHaveTextContent(
-      /os 2 Cartões continuarão existindo/i,
-    );
+    expect(dialogo).toHaveTextContent(/os 2 Cartões continuarão existindo/i);
     expect(dialogo).toHaveTextContent(/nenhum Cartão será excluído/i);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -194,6 +100,25 @@ describe("exclusão de Baralho", () => {
       expect(baralhos.baralhos).toHaveLength(1);
       expect(baralhos.baralhos[0].quantidadeDeCartoes).toBe(2);
     }
+  });
+
+  it("Escape cancela a exclusão e devolve o foco ao botão de excluir (FR-068)", async () => {
+    const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", { level: 1, name: "Inglês" });
+    const botaoDeExcluir = screen.getByRole("button", {
+      name: "Excluir Baralho",
+    });
+
+    fireEvent.click(botaoDeExcluir);
+    const dialogo = await screen.findByRole("dialog");
+
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(botaoDeExcluir).toHaveFocus();
   });
 
   it("confirmar exclui o Baralho, navega para a lista e preserva os Cartões (FR-016, FR-017)", async () => {

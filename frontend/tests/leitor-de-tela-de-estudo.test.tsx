@@ -2,11 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
-import {
-  MENSAGEM_DE_QUANTIDADE_INVALIDA,
-} from "../src/sessao-de-estudo/sessao-de-estudo";
+import { MENSAGEM_DE_QUANTIDADE_INVALIDA } from "../src/sessao-de-estudo/sessao-de-estudo";
 import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
 
 /**
@@ -61,11 +59,13 @@ async function criarAcervoElegivel(
 
 function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
   render(
-    <PaginaDeEstudo
-      cliente={cliente}
-      id={idDoBaralho}
-      aleatoriedade={new AleatoriedadeDeterministica([0, 0])}
-    />,
+    comProtecaoDeSaida(
+      <PaginaDeEstudo
+        cliente={cliente}
+        id={idDoBaralho}
+        aleatoriedade={new AleatoriedadeDeterministica([0, 0])}
+      />,
+    ),
   );
 }
 
@@ -91,9 +91,11 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
     await iniciarSessao(cliente, idDoBaralho, "2");
 
-    fireEvent.click(screen.getByRole("button", { name: "Revelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
 
-    const anuncio = await screen.findByRole("status");
+    const anuncio = await screen.findByRole("status", {
+      name: "Mudança de estado da Sessão",
+    });
 
     expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
     expect(anuncio).toHaveAttribute("aria-live", "polite");
@@ -106,12 +108,14 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
     await iniciarSessao(cliente, idDoBaralho, "2");
 
-    fireEvent.click(screen.getByRole("button", { name: "Revelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByText(/Verso revelado\./);
 
     fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
 
-    const anuncio = await screen.findByRole("status");
+    const anuncio = await screen.findByRole("status", {
+      name: "Mudança de estado da Sessão",
+    });
 
     expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
     expect(anuncio).toHaveAttribute("aria-live", "polite");
@@ -124,21 +128,29 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(1);
     await iniciarSessao(cliente, idDoBaralho, "1");
 
-    fireEvent.click(screen.getByRole("button", { name: "Revelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByText(/Verso revelado\./);
 
     fireEvent.click(screen.getByRole("button", { name: "Errei" }));
 
-    const anuncio = await screen.findByRole("status");
+    const anuncio = await screen.findByRole("status", {
+      name: "Mudança de estado da Sessão",
+    });
 
     expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
     expect(anuncio).toHaveTextContent(/Sessão concluída\./);
     expect(
       await screen.findByRole("heading", { name: "Resumo da Sessão" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Itens estudados: 1")).toBeInTheDocument();
-    expect(screen.getByText("Acertos: 0")).toBeInTheDocument();
-    expect(screen.getByText("Erros: 1")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect(screen.getByText("de acertos")).toBeInTheDocument();
+    expect(screen.getByText("0 de 1 Itens")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Acertos (0)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Erros (1)" }),
+    ).toBeInTheDocument();
   });
 
   it("a recusa de início é um alerta assertivo nomeado, sem duplicar anúncios (FR-049, FR-028)", async () => {
@@ -159,6 +171,8 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     expect(alerta).toHaveAccessibleName("Falha ao iniciar a Sessão");
     expect(alerta).toHaveTextContent(MENSAGEM_DE_QUANTIDADE_INVALIDA);
     expect(alerta).not.toHaveAttribute("aria-live");
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Mudança de estado da Sessão" }),
+    ).not.toBeInTheDocument();
   });
 });

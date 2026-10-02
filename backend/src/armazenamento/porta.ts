@@ -61,16 +61,79 @@ export interface ContagemPorBaralho {
 }
 
 /**
+ * Resultado de um Item dentro de um Registro de sessão (FR-161): o que a
+ * pessoa respondeu naquele Item, no instante da conclusão.
+ *
+ * É vocabulário de domínio gravado como texto e restrito pelo `CHECK` do
+ * esquema, para que nenhum outro valor entre por engano — a Porta não valida,
+ * apenas guarda o que o Module já aceitou.
+ */
+export type ResultadoDoItemRegistrado = "acertou" | "errou";
+
+/**
+ * Item estudado como o Registro de sessão o guarda (FR-161): a posição na
+ * ordem apresentada, a Frente e o Verso que o Cartão tinha naquele momento e o
+ * Resultado declarado.
+ *
+ * A Frente e o Verso são **cópias**, não referências ao Cartão: editar ou
+ * excluir o Cartão depois não muda o Registro (FR-165), e o Resumo de um
+ * registro antigo continua mostrando o que foi estudado (FR-178).
+ */
+export interface ItemRegistrado {
+  /** Posição na ordem apresentada: `0..n-1`, derivada pelo Module. */
+  readonly posicao: number;
+  readonly frente: string;
+  readonly verso: string;
+  readonly resultado: ResultadoDoItemRegistrado;
+}
+
+/**
+ * Registro de sessão: a Sessão **concluída** como ela fica no Histórico de um
+ * Usuário (FR-161). É imutável para o Usuário (FR-165) e persistido nos dois
+ * armazenamentos suportados (FR-167).
+ *
+ * `id` é gerado pelo **cliente** e é a chave da idempotência: reenviar o mesmo
+ * registro não o duplica, e `concluidaEm` permanece o da primeira inserção
+ * (FR-163). `baralhoId` é guardado **sem chave estrangeira**, porque o Baralho
+ * pode ser excluído depois sem que o registro se perca (FR-165, FR-178); o
+ * `nomeDoBaralho` é o nome como era ao concluir. Os totais e a `posicao` de
+ * cada Item são derivados dos Itens pelo Module, nunca informados pelo cliente.
+ */
+export interface RegistroDeSessao {
+  readonly id: string;
+  readonly baralhoId: string;
+  readonly nomeDoBaralho: string;
+  /** ISO-8601 UTC, definido pelo Module na primeira inserção. */
+  readonly concluidaEm: string;
+  readonly estudados: number;
+  readonly acertos: number;
+  readonly erros: number;
+  readonly itens: readonly ItemRegistrado[];
+}
+
+/**
+ * Linha de listagem do Histórico: o Registro **sem os Itens**.
+ *
+ * Início só precisa dos totais e do instante de cada Sessão, e o Histórico
+ * grande continua respondendo porque a listagem não carrega os Itens
+ * (FR-169, SC-077).
+ */
+export type RegistroResumido = Omit<RegistroDeSessao, "itens">;
+
+/**
  * Códigos de falha tipada da Porta. São vocabulário de armazenamento, nunca
  * mensagem: `nao_encontrado` é a ausência de linha a ler, a alterar ou a
  * excluir; `vinculo_duplicado` é o par (Cartão, Baralho) repetido, reconhecido
- * pela unicidade do esquema; `indisponivel` é a falha do armazenamento —
+ * pela unicidade do esquema; `conflito` é o identificador de um Registro de
+ * sessão já usado **por outro Usuário**, reconhecido pela chave primária do
+ * registro (FR-163, FR-166); `indisponivel` é a falha do armazenamento —
  * arquivo, conexão, transação ou consulta —, e jamais significa concluído
  * (FR-044, FR-107).
  */
 export type CodigoDeFalhaDeArmazenamento =
   | "nao_encontrado"
   | "vinculo_duplicado"
+  | "conflito"
   | "indisponivel";
 
 /**
@@ -165,11 +228,11 @@ export interface ArmazenamentoDeUsuarios {
 /**
  * A Interface única por onde o acervo lê e grava dados persistidos.
  *
- * As operações são de armazenamento **do domínio** — Cartão, Baralho, Vínculo
- * e as contagens da elegibilidade —, e não um executor de SQL: o Adapter
- * decide como perguntar, e o Module decide apenas o que perguntar. O que a
- * Interface esconde é esquema, dialeto, transação, tradução do erro do driver
- * e o próprio fato de haver banco.
+ * As operações são de armazenamento **do domínio** — Cartão, Baralho, Vínculo,
+ * as contagens da elegibilidade e o Registro de sessão do Histórico —, e não
+ * um executor de SQL: o Adapter decide como perguntar, e o Module decide
+ * apenas o que perguntar. O que a Interface esconde é esquema, dialeto,
+ * transação, tradução do erro do driver e o próprio fato de haver banco.
  *
  * **Toda operação recebe o dono**, o `usuarioId` do Usuário que Entrou
  * (FR-092): é o escopo do acervo, e não um dado da entidade. As duas
@@ -281,4 +344,53 @@ export interface ArmazenamentoDoAcervo {
   contarCartoesPorBaralho(
     usuarioId: string,
   ): Promise<ContagemPorBaralho[]>;
+
+  /**
+   * Guarda um Registro de sessão concluída (FR-161) no Histórico de
+   * `usuarioId`. Registro e Itens entram **numa única transação** (FR-167), de
+   * modo que não existe Histórico pela metade.
+   *
+   * `id` vem de quem chama e é a chave da idempotência: reinserir o mesmo `id`
+   * **do mesmo Usuário** devolve o registro já guardado, sem alterá-lo — a
+   * primeira `concluidaEm` é a que vale, e o reenvio após falha nunca duplica
+   * (FR-163). O mesmo `id` de **outro** Usuário é recusado como `conflito`,
+   * porque Históricos não se misturam entre donos (FR-166). A falha do
+   * armazenamento chega como `indisponivel`, jamais como concluído (FR-164).
+   */
+  inserirRegistroDeSessao(
+    usuarioId: string,
+    registro: RegistroDeSessao,
+  ): Promise<Desfecho<RegistroDeSessao>>;
+
+  /**
+   * Devolve os registros de `usuarioId` com `concluidaEm >= desde` (ISO-8601),
+   * **do mais recente ao mais antigo** — a janela das Estatísticas de Início
+   * (FR-169). A lista vem sem os Itens, para que o Histórico grande continue
+   * respondendo (SC-077).
+   */
+  listarRegistrosDesde(
+    usuarioId: string,
+    desde: string,
+  ): Promise<RegistroResumido[]>;
+
+  /**
+   * Devolve os `limite` registros mais recentes de `usuarioId`, **do mais
+   * recente ao mais antigo** — as Sessões recentes de Início (FR-169, FR-177).
+   * Sem os Itens, pela mesma razão de `listarRegistrosDesde`.
+   */
+  listarRegistrosRecentes(
+    usuarioId: string,
+    limite: number,
+  ): Promise<RegistroResumido[]>;
+
+  /**
+   * Devolve o Registro completo de `id` **no Histórico de `usuarioId`**, com os
+   * Itens na ordem apresentada (FR-177). Registro inexistente — inclusive
+   * quando é de outro Usuário — é `nao_encontrado` (FR-166, FR-179), o mesmo
+   * desfecho dos demais recursos do acervo.
+   */
+  obterRegistroDeSessao(
+    usuarioId: string,
+    id: string,
+  ): Promise<Desfecho<RegistroDeSessao>>;
 }

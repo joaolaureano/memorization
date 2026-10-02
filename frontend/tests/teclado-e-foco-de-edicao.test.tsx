@@ -2,9 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
-import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
-import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
+import { PaginaDoFormularioDeBaralho } from "../src/ui/PaginaDoFormularioDeBaralho";
 
 /**
  * T408 — edição, salvamento e descarte de Cartão e de Baralho apenas por
@@ -14,8 +14,9 @@ import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
  * auxiliares reproduzem esses comportamentos, sempre disparando antes o evento
  * de teclado real. A prova cobre os três verbos de FR-067 em cada entidade:
  * editar, salvar e confirmar descarte — com o foco indo ao campo recusado
- * quando a Interface recusa o conteúdo e voltando ao botão da entidade depois
- * de fechar a edição.
+ * quando a Interface recusa o conteúdo. Depois da spec 012, a edição de cada
+ * entidade acontece na página de formulário própria, e o descarte vem da
+ * proteção de saída que envolve a tela (`comProtecaoDeSaida`).
  */
 
 const SELETOR_DE_CONTROLES_INTERATIVOS = [
@@ -64,7 +65,10 @@ function digitarPeloTeclado(campo: HTMLElement, texto: string): void {
 function apertarEnter(elemento: HTMLElement): void {
   fireEvent.keyDown(elemento, { key: "Enter" });
 
-  if (elemento instanceof HTMLButtonElement) {
+  if (
+    elemento instanceof HTMLButtonElement ||
+    elemento instanceof HTMLAnchorElement
+  ) {
     fireEvent.click(elemento);
   }
 }
@@ -98,39 +102,39 @@ async function criarBaralho(): Promise<{
 }
 
 describe("edição por teclado", () => {
-  it("edita um Cartão, salva, confirma descarte e foca o campo recusado só por teclado (FR-067)", async () => {
+  it("edita um Cartão, salva e foca o campo recusado só por teclado (FR-067)", async () => {
     const cliente = await criarCartao();
+    const cartao = await cliente.listarCartoes();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
+    if (!cartao.ok) {
+      throw new Error("a listagem deveria ser aceita");
+    }
 
-    await screen.findByText("To walk");
+    render(
+      comProtecaoDeSaida(
+        <PaginaDoFormularioDeCartao
+          cliente={cliente}
+          id={cartao.cartoes[0].id}
+        />,
+        true,
+      ),
+    );
 
-    // Abre a edição percorrendo a ordem de tabulação: Frente, Verso, Criar
-    // Cartão e, então, Editar.
-    const botaoEditar = screen.getByRole("button", { name: "Editar" });
-
-    apertarTab();
-    apertarTab();
-    apertarTab();
-    apertarTab();
-
-    expect(document.activeElement).toBe(botaoEditar);
-    apertarEnter(botaoEditar);
-
+    // O foco inicial vai ao campo Frente, já com o valor atual preenchido.
     const campoDeFrente = (await screen.findByLabelText(
-      "Frente do Cartão",
+      "Frente",
     )) as HTMLTextAreaElement;
 
-    expect(campoDeFrente).toHaveFocus();
+    await waitFor(() => {
+      expect(campoDeFrente).toHaveFocus();
+    });
 
     // Recusa de domínio: o foco vai ao campo recusado e o conteúdo permanece.
     digitarPeloTeclado(campoDeFrente, "   ");
-    apertarTab(); // Verso do Cartão
-    apertarTab(); // Salvar alterações
+    apertarTab(); // Verso
+    apertarTab(); // Salvar
 
-    const botaoSalvar = screen.getByRole("button", {
-      name: "Salvar alterações",
-    });
+    const botaoSalvar = screen.getByRole("button", { name: "Salvar" });
     expect(document.activeElement).toBe(botaoSalvar);
     apertarEnter(botaoSalvar);
 
@@ -140,97 +144,51 @@ describe("edição por teclado", () => {
     expect(campoDeFrente).toHaveFocus();
     expect(campoDeFrente).toHaveValue("   ");
 
-    // Salva um conteúdo válido pelo teclado e volta ao botão Editar.
+    // Salva um conteúdo válido pelo teclado e volta para a lista.
     digitarPeloTeclado(campoDeFrente, "To run");
-    apertarTab(); // Verso do Cartão
-    apertarTab(); // Salvar alterações
+    apertarTab(); // Verso
+    apertarTab(); // Salvar
 
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Salvar alterações" }),
+      screen.getByRole("button", { name: "Salvar" }),
     );
-    apertarEnter(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
-
-    expect(await screen.findByText("Cartão editado.")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Editar" })).toHaveFocus();
-    });
-    expect(screen.getByText("To run")).toBeInTheDocument();
-
-    // Sai de uma edição suja e confirma o descarte no diálogo por teclado.
-    const botaoEditarAposSalvar = screen.getByRole("button", {
-      name: "Editar",
-    });
-    apertarEnter(botaoEditarAposSalvar);
-
-    const campoDeFrenteSujo = (await screen.findByLabelText(
-      "Frente do Cartão",
-    )) as HTMLTextAreaElement;
-
-    expect(campoDeFrenteSujo).toHaveFocus();
-    digitarPeloTeclado(campoDeFrenteSujo, "To sprint");
-    apertarTab(); // Verso do Cartão
-    apertarTab(); // Salvar alterações
-    apertarTab(); // Cancelar
-
-    const botaoCancelar = screen.getByRole("button", { name: "Cancelar" });
-    expect(document.activeElement).toBe(botaoCancelar);
-    apertarEnter(botaoCancelar);
-
-    const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent(/alterações não salvas neste Cartão/i);
-
-    const botaoContinuar = screen.getByRole("button", {
-      name: "Continuar editando",
-    });
-    expect(document.activeElement).toBe(botaoContinuar);
-
-    apertarTab();
-    const botaoDescartar = screen.getByRole("button", {
-      name: "Descartar alterações",
-    });
-    expect(document.activeElement).toBe(botaoDescartar);
-    apertarEnter(botaoDescartar);
+    apertarEnter(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(window.location.hash).toBe("#/cartoes");
     });
-    expect(screen.queryByLabelText("Frente do Cartão")).not.toBeInTheDocument();
-    expect(screen.getByText("To run")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Editar" })).toHaveFocus();
   });
 
-  it("renomeia um Baralho, salva, confirma descarte e foca o campo recusado só por teclado (FR-067)", async () => {
+  it("renomeia um Baralho, salva, confirma descarte e foca o campo recusado só por teclado (FR-067, FR-159)", async () => {
     const { cliente, idDoBaralho } = await criarBaralho();
 
-    render(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />);
+    // A renomeação acontece na página de formulário própria da spec 012; a
+    // confirmação de descarte vem da proteção de saída que a envolve.
+    render(
+      comProtecaoDeSaida(
+        <PaginaDoFormularioDeBaralho cliente={cliente} id={idDoBaralho} />,
+        true,
+      ),
+    );
 
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
-
-    // Abre a renomeação na ordem de tabulação: Voltar, Estudar, Renomear.
-    const botaoRenomear = screen.getByRole("button", { name: "Renomear" });
-
-    apertarTab();
-    apertarTab();
-    apertarTab();
-
-    expect(document.activeElement).toBe(botaoRenomear);
-    apertarEnter(botaoRenomear);
+    await screen.findByRole("heading", { level: 1, name: "Renomear Baralho" });
 
     const campoDeNome = (await screen.findByLabelText(
       "Nome",
     )) as HTMLInputElement;
 
-    expect(campoDeNome).toHaveFocus();
+    // Sem foco automático, a ordem de tabulação sai do link Voltar e chega ao
+    // campo Nome.
+    apertarTab();
+    apertarTab();
+
+    expect(document.activeElement).toBe(campoDeNome);
 
     // Recusa de domínio: o foco vai ao campo recusado e o conteúdo permanece.
     digitarPeloTeclado(campoDeNome, "   ");
-    apertarTab(); // Salvar alterações
+    apertarTab(); // Salvar
 
-    const botaoSalvar = screen.getByRole("button", {
-      name: "Salvar alterações",
-    });
+    const botaoSalvar = screen.getByRole("button", { name: "Salvar" });
     expect(document.activeElement).toBe(botaoSalvar);
     apertarEnter(botaoSalvar);
 
@@ -240,66 +198,55 @@ describe("edição por teclado", () => {
     expect(campoDeNome).toHaveFocus();
     expect(campoDeNome).toHaveValue("   ");
 
-    // Salva um nome válido pelo teclado e volta ao botão Renomear.
-    digitarPeloTeclado(campoDeNome, "Idiomas");
-    apertarTab(); // Salvar alterações
-
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
-    apertarEnter(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Idiomas" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Baralho renomeado.")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Renomear" })).toHaveFocus();
-    });
-
-    // Sai de uma renomeação suja e confirma o descarte no diálogo por teclado.
-    const botaoRenomearAposSalvar = screen.getByRole("button", {
-      name: "Renomear",
-    });
-    apertarEnter(botaoRenomearAposSalvar);
-
-    const campoDeNomeSujo = (await screen.findByLabelText(
-      "Nome",
-    )) as HTMLInputElement;
-
-    expect(campoDeNomeSujo).toHaveFocus();
-    digitarPeloTeclado(campoDeNomeSujo, "Idiomas alterado");
-    apertarTab(); // Salvar alterações
+    // Sai de uma renomeação suja: a navegação pela proteção de saída pede a
+    // confirmação de descarte, operada só por teclado.
+    digitarPeloTeclado(campoDeNome, "Idiomas alterado");
+    apertarTab(); // Salvar
     apertarTab(); // Cancelar
 
-    const botaoCancelar = screen.getByRole("button", { name: "Cancelar" });
-    expect(document.activeElement).toBe(botaoCancelar);
-    apertarEnter(botaoCancelar);
+    const linkCancelar = screen.getByRole("link", { name: "Cancelar" });
+    expect(document.activeElement).toBe(linkCancelar);
+    apertarEnter(linkCancelar);
 
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent(/alterações não salvas neste Baralho/i);
+    expect(dialogo).toHaveTextContent(/o nome digitado será perdido/i);
 
-    const botaoContinuar = screen.getByRole("button", {
-      name: "Continuar editando",
+    // FR-159: o diálogo abre com o foco na ação sem consequência (Cancelar);
+    // o descarte exige um Tab deliberado até "Descartar".
+    const botaoCancelarDoDialogo = screen.getByRole("button", {
+      name: "Cancelar",
     });
-    expect(document.activeElement).toBe(botaoContinuar);
+    expect(document.activeElement).toBe(botaoCancelarDoDialogo);
 
     apertarTab();
-    const botaoDescartar = screen.getByRole("button", {
-      name: "Descartar alterações",
-    });
+
+    const botaoDescartar = screen.getByRole("button", { name: "Descartar" });
     expect(document.activeElement).toBe(botaoDescartar);
     apertarEnter(botaoDescartar);
 
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    expect(screen.queryByLabelText("Nome")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Idiomas" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Renomear" })).toHaveFocus();
+
+    // Salva um nome válido pelo teclado.
+    digitarPeloTeclado(campoDeNome, "Idiomas");
+    campoDeNome.focus();
+    apertarTab(); // Salvar
+
+    const botaoSalvarFinal = screen.getByRole("button", { name: "Salvar" });
+    expect(document.activeElement).toBe(botaoSalvarFinal);
+    apertarEnter(botaoSalvarFinal);
+
+    await waitFor(async () => {
+      const atual = await cliente.obterBaralho(idDoBaralho);
+
+      expect(atual.ok).toBe(true);
+
+      if (!atual.ok) {
+        return;
+      }
+
+      expect(atual.baralho.nome).toBe("Idiomas");
+    });
   });
 });

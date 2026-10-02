@@ -4,6 +4,9 @@ import type {
   ArmazenamentoDoAcervo,
   Baralho,
   Cartao,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
 } from "../armazenamento/porta.ts";
 import {
   validarFrente,
@@ -24,7 +27,13 @@ import type {
  * Cartões podem ter a mesma Frente (FR-009). `Baralho` é `{ id, nome }` — o
  * nome é rótulo, não identificador (FR-012).
  */
-export type { Baralho, Cartao };
+export type {
+  Baralho,
+  Cartao,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
+};
 
 /**
  * O que `criarCartao` recebe: exatamente Frente e Verso (FR-001).
@@ -202,6 +211,75 @@ export type ResultadoDeExclusaoDeBaralho =
     };
 
 /**
+ * Corpo de `POST /sessoes` ainda **cru**: tudo é `unknown`, porque vem da rede
+ * e nada garante a forma antes de o `Acervo` validar (FR-161, FR-164).
+ *
+ * A validação vive aqui, e não na rota: a mesma Interface de domínio serve a
+ * qualquer entrada, e o transporte HTTP continua sendo só transporte (FR-046).
+ */
+export interface DadosDeRegistro {
+  id: unknown;
+  baralhoId: unknown;
+  nomeDoBaralho: unknown;
+  itens: unknown;
+}
+
+/**
+ * Resultado de `registrarSessao`. Como o registro é reenviável, a recusa
+ * distingue três situações que o caller trata de modo diferente (FR-163,
+ * FR-164, FR-166):
+ *
+ * - `dados_invalidos`: o corpo não descreve um Registro de sessão válido —
+ *   identificador fora da forma UUID, Baralho sem identificação, nome do
+ *   Baralho fora dos limites vigentes, lista de Itens vazia ou grande demais,
+ *   Item com Frente, Verso ou Resultado fora das regras do Cartão. Nada foi
+ *   gravado;
+ * - `conflito`: o `id` já pertence a um registro de **outro** Usuário. Nada foi
+ *   gravado, e o registro alheio continua invisível para quem tentou (FR-166);
+ * - `indisponivel`: o armazenamento falhou. O Resumo continua visível e a
+ *   pessoa pode registrar de novo com o mesmo conteúdo (FR-164).
+ */
+export type ResultadoDeRegistroDeSessao =
+  | { ok: true; registro: RegistroDeSessao }
+  | { ok: false; erro: "dados_invalidos" | "conflito" | "indisponivel" };
+
+/**
+ * Os números de Início (FR-169): o tamanho do acervo **atual** — Cartões e
+ * Baralhos — e o Histórico que interessa à primeira tela — os registros da
+ * janela pedida e as 5 Sessões concluídas mais recentes.
+ *
+ * Nada aqui é guardado como verdade própria (FR-170): tudo é derivado na
+ * leitura, dos Cartões e Baralhos existentes e dos registros do Histórico.
+ */
+export interface Estatisticas {
+  cartoes: number;
+  baralhos: number;
+  registrosDaJanela: RegistroResumido[];
+  recentes: RegistroResumido[];
+}
+
+/**
+ * Resultado de `obterEstatisticas`: `dados_invalidos` quando `desde` não é um
+ * instante ISO-8601 utilizável como limite da janela, ou `indisponivel` quando
+ * o armazenamento falhou — caso em que a falha das Estatísticas não impede
+ * navegar para Baralhos e Cartões (FR-173).
+ */
+export type ResultadoDeEstatisticas =
+  | { ok: true; estatisticas: Estatisticas }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
+
+/**
+ * Resultado de `obterRegistroDeSessao`. `baralhoExiste` diz se o Baralho do
+ * registro ainda está no acervo: o Resumo de um registro antigo mostra os
+ * textos guardados de qualquer modo, e só indica "Baralho excluído" quando ele
+ * não existe mais (FR-178). Registro inexistente — inclusive o de outro
+ * Usuário — é `nao_encontrado` (FR-166, FR-179).
+ */
+export type ResultadoDeObterRegistro =
+  | { ok: true; registro: RegistroDeSessao; baralhoExiste: boolean }
+  | { ok: false; erro: "nao_encontrado" | "indisponivel" };
+
+/**
  * Interface profunda do Module `Acervo` (Princípio IV).
  *
  * As operações escondem as regras de conteúdo de Cartão, de Baralho e de
@@ -316,6 +394,47 @@ export interface Acervo {
    * recusado como `nao_encontrado`.
    */
   excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
+
+  /**
+   * Registra a Sessão **concluída** no Histórico do usuário do `Acervo`
+   * (FR-161). A Sessão interrompida continua sem rastro: só quem conclui chega
+   * aqui, e recusa nenhuma grava pela metade (FR-162, FR-164).
+   *
+   * O corpo vem cru e é validado nesta Interface: identificador na forma
+   * canônica de UUID — é ele que dá a idempotência —, Baralho identificado,
+   * nome do Baralho dentro dos limites vigentes, de 1 a 1000 Itens, cada um com
+   * Frente e Verso válidos como Cartão e Resultado `acertou` ou `errou`.
+   * `estudados`, `acertos`, `erros` e `posicao` são **derivados** dos Itens, de
+   * modo que o caller não consegue produzir totais que não batam com a lista
+   * (FR-161). O Baralho não precisa existir: o nome é guardado como era
+   * (FR-165).
+   *
+   * O instante de conclusão é definido na primeira gravação: reenviar o mesmo
+   * registro devolve o registro guardado, sem duplicá-lo e sem mudar a data
+   * (FR-163).
+   */
+  registrarSessao(
+    dados: DadosDeRegistro,
+  ): Promise<ResultadoDeRegistroDeSessao>;
+
+  /**
+   * Devolve as Estatísticas de Início do usuário do `Acervo` (FR-169, FR-170):
+   * o tamanho do acervo atual, o Histórico de `desde` em diante e as 5 Sessões
+   * concluídas mais recentes (FR-177).
+   *
+   * `desde` é um instante ISO-8601: no futuro além de um dia (relógio de quem
+   * chama adiantado) ou há mais de 31 dias no passado é recusado como
+   * `dados_invalidos` — a janela do mês é o máximo que Início precisa.
+   */
+  obterEstatisticas(desde: string): Promise<ResultadoDeEstatisticas>;
+
+  /**
+   * Devolve o Registro de sessão completo de `id` no Histórico do usuário do
+   * `Acervo`, com os Itens na ordem apresentada e a informação de o Baralho
+   * ainda existir (FR-177, FR-178). Registro de outro Usuário se comporta como
+   * inexistente (FR-166, FR-179).
+   */
+  obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
 }
 
 /**
@@ -355,6 +474,193 @@ const ARMAZENAMENTO_INDISPONIVEL = {
   erro: "indisponivel",
   mensagem: "O armazenamento não está disponível. Tente novamente.",
 } as const;
+
+/**
+ * Recusas das operações de Histórico. São resultados previstos da Interface —
+ * o caller as distingue por `erro`, e nenhuma delas é exceção.
+ *
+ * Elas não carregam mensagem porque os resultados desta feature são só código
+ * (contrato da `013`): quem traduz a falha em frase para a tela é o cliente,
+ * que conhece o texto de cada rota.
+ */
+const DADOS_INVALIDOS = { erro: "dados_invalidos" } as const;
+
+const REGISTRO_EM_CONFLITO = { erro: "conflito" } as const;
+
+const REGISTRO_NAO_ENCONTRADO = { erro: "nao_encontrado" } as const;
+
+const HISTORICO_INDISPONIVEL = { erro: "indisponivel" } as const;
+
+/** Limite de Itens de um Registro de sessão (contrato da `013`, FR-161). */
+const LIMITE_DE_ITENS_REGISTRADOS = 1000;
+
+/** Quantas Sessões concluídas Início mostra (FR-169). */
+const LIMITE_DE_SESSOES_RECENTES = 5;
+
+/** Janela máxima aceita em `desde`, em dias (FR-169). */
+const DIAS_MAXIMOS_NA_JANELA = 31;
+
+/** Tolerância para relógio adiantado de quem chama o `desde`. */
+const DIAS_DE_TOLERANCIA_NO_FUTURO = 1;
+
+const UM_DIA_EM_MILISSEGUNDOS = 24 * 60 * 60 * 1000;
+
+/**
+ * Identificador único universal na forma canônica de `randomUUID`.
+ *
+ * O `id` do Registro é a chave da idempotência (FR-163), então recusar o que
+ * não tem essa forma impede que um texto arbitrário do cliente colida com o
+ * registro de outra pessoa (FR-166).
+ */
+const IDENTIFICADOR_UNICO_UNIVERSAL =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Instante ISO-8601 completo, com hora, minuto, segundo e fuso — a forma
+ * combinada para o `desde` das Estatísticas.
+ *
+ * `Date.parse` sozinho aceitaria textos ambíguos ("2026-10-01" ou "ontem") que
+ * não identificam um instante, e a janela precisa de um limite no tempo.
+ */
+const INSTANTE_ISO_8601 =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** `true` para objeto não nulo — a forma que um Item decodificado pode ter. */
+function ehObjeto(valor: unknown): valor is Record<string, unknown> {
+  return typeof valor === "object" && valor !== null;
+}
+
+/**
+ * Interpreta um Item cru do corpo, com a `posicao` da ordem apresentada —
+ * nunca informada pelo cliente (FR-161).
+ *
+ * Devolve `null` quando Frente, Verso ou Resultado não passam nas regras
+ * vigentes: as de Cartão são as mesmas da criação e da edição (FR-002, FR-051,
+ * FR-052), e o Resultado precisa ser `acertou` ou `errou`. Reaproveitar
+ * `validarFrente` e `validarVerso` garante que um Item guardado nunca teria
+ * sido recusado como Cartão.
+ */
+function interpretarItem(
+  valor: unknown,
+  posicao: number,
+): ItemRegistrado | null {
+  if (!ehObjeto(valor)) {
+    return null;
+  }
+
+  const { frente, verso, resultado } = valor;
+
+  if (typeof frente !== "string" || validarFrente(frente) !== null) {
+    return null;
+  }
+
+  if (typeof verso !== "string" || validarVerso(verso) !== null) {
+    return null;
+  }
+
+  if (resultado === "acertou" || resultado === "errou") {
+    return { posicao, frente, verso, resultado };
+  }
+
+  return null;
+}
+
+/**
+ * Interpreta o corpo cru como Registro de sessão, derivando `estudados`,
+ * `acertos`, `erros` e a `posicao` de cada Item, e datando a conclusão com o
+ * relógio do servidor (FR-161, FR-163).
+ *
+ * Devolve `null` — recusa `dados_invalidos` — quando qualquer invariante do
+ * contrato falha. O Baralho **não** precisa existir: o registro guarda o nome
+ * como era, e o Baralho pode ter sido excluído antes mesmo de a Sessão ser
+ * registrada (FR-165, FR-178).
+ */
+function interpretarRegistro(dados: DadosDeRegistro): RegistroDeSessao | null {
+  const { id, baralhoId, nomeDoBaralho, itens } = dados;
+
+  if (typeof id !== "string" || !IDENTIFICADOR_UNICO_UNIVERSAL.test(id)) {
+    return null;
+  }
+
+  if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
+    return null;
+  }
+
+  if (
+    typeof nomeDoBaralho !== "string" ||
+    validarNomeDeBaralho(nomeDoBaralho) !== null
+  ) {
+    return null;
+  }
+
+  if (
+    !Array.isArray(itens) ||
+    itens.length === 0 ||
+    itens.length > LIMITE_DE_ITENS_REGISTRADOS
+  ) {
+    return null;
+  }
+
+  const registrados: ItemRegistrado[] = [];
+
+  for (const [posicao, item] of itens.entries()) {
+    const registrado = interpretarItem(item, posicao);
+
+    if (registrado === null) {
+      return null;
+    }
+
+    registrados.push(registrado);
+  }
+
+  const acertos = registrados.filter(
+    (item) => item.resultado === "acertou",
+  ).length;
+
+  return {
+    id,
+    baralhoId,
+    nomeDoBaralho,
+    concluidaEm: new Date().toISOString(),
+    estudados: registrados.length,
+    acertos,
+    erros: registrados.length - acertos,
+    itens: registrados,
+  };
+}
+
+/**
+ * Devolve o `desde` já validado, ou `null` quando ele não serve como limite da
+ * janela.
+ *
+ * Não basta ser um texto: precisa ser um instante ISO-8601 completo, não mais
+ * de um dia no futuro — a tolerância para relógio adiantado de quem chama — e
+ * não mais de 31 dias no passado, que é a maior janela que Início pede
+ * (FR-169).
+ */
+function interpretarJanela(desde: unknown, agora: Date): string | null {
+  if (typeof desde !== "string" || !INSTANTE_ISO_8601.test(desde)) {
+    return null;
+  }
+
+  const instante = Date.parse(desde);
+
+  if (Number.isNaN(instante)) {
+    return null;
+  }
+
+  const limiteSuperior =
+    agora.getTime() + DIAS_DE_TOLERANCIA_NO_FUTURO * UM_DIA_EM_MILISSEGUNDOS;
+
+  if (instante > limiteSuperior) {
+    return null;
+  }
+
+  const limiteInferior =
+    agora.getTime() - DIAS_MAXIMOS_NA_JANELA * UM_DIA_EM_MILISSEGUNDOS;
+
+  return instante >= limiteInferior ? desde : null;
+}
 
 /**
  * Cria o `Acervo` do Usuário `usuarioId` sobre a Porta de armazenamento
@@ -602,6 +908,101 @@ export function criarAcervo(
       }
 
       return { ok: true };
+    },
+
+    async registrarSessao(dados) {
+      const registro = interpretarRegistro(dados);
+
+      if (registro === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      /**
+       * O instante de conclusão vai junto, mas quem manda é a primeira
+       * inserção: se o `id` já existe para este Usuário, a Porta devolve o
+       * registro guardado — com a data original — e o reenvio não duplica nem
+       * reescreve nada (FR-163). O mesmo `id` de outro Usuário é `conflito`
+       * (FR-166).
+       */
+      const gravado = await armazenamento.inserirRegistroDeSessao(
+        usuarioId,
+        registro,
+      );
+
+      if (!gravado.ok) {
+        return gravado.erro === "conflito"
+          ? { ok: false, ...REGISTRO_EM_CONFLITO }
+          : { ok: false, ...HISTORICO_INDISPONIVEL };
+      }
+
+      return { ok: true, registro: gravado.valor };
+    },
+
+    async obterEstatisticas(desde) {
+      const janela = interpretarJanela(desde, new Date());
+
+      if (janela === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      /**
+       * O tamanho do acervo é lido pelas listagens já existentes — Cartões e
+       * Baralhos **atuais** —, e o Histórico vem recortado em duas leituras:
+       * a janela pedida e as Sessões recentes (FR-169). Nada disso é guardado
+       * como verdade própria (FR-170), e a listagem sem Itens é o que mantém
+       * Início respondendo com Histórico grande (SC-077).
+       */
+      const [cartoes, baralhos, registrosDaJanela, recentes] = await Promise.all(
+        [
+          armazenamento.listarCartoes(usuarioId),
+          armazenamento.listarBaralhos(usuarioId),
+          armazenamento.listarRegistrosDesde(usuarioId, janela),
+          armazenamento.listarRegistrosRecentes(
+            usuarioId,
+            LIMITE_DE_SESSOES_RECENTES,
+          ),
+        ],
+      );
+
+      return {
+        ok: true,
+        estatisticas: {
+          cartoes: cartoes.length,
+          baralhos: baralhos.length,
+          registrosDaJanela,
+          recentes,
+        },
+      };
+    },
+
+    async obterRegistroDeSessao(id) {
+      const encontrado = await armazenamento.obterRegistroDeSessao(
+        usuarioId,
+        id,
+      );
+
+      if (!encontrado.ok) {
+        return encontrado.erro === "nao_encontrado"
+          ? { ok: false, ...REGISTRO_NAO_ENCONTRADO }
+          : { ok: false, ...HISTORICO_INDISPONIVEL };
+      }
+
+      /**
+       * O registro é devolvido como está — a Porta não tem como ele mudar
+       * (FR-165) —, e a existência do Baralho é conferida na hora da leitura:
+       * o Resumo antigo só indica "Baralho excluído" quando ele sumiu de
+       * verdade (FR-178).
+       */
+      const baralho = await armazenamento.obterBaralho(
+        usuarioId,
+        encontrado.valor.baralhoId,
+      );
+
+      return {
+        ok: true,
+        registro: encontrado.valor,
+        baralhoExiste: baralho.ok,
+      };
     },
   };
 }

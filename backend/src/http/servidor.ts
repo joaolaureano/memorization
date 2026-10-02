@@ -10,6 +10,7 @@ import {
   registrarRotaDeEntrada,
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDeSessoes,
   registrarRotasDeUsuarios,
   type AcervoDeUsuario,
 } from "./rotas.ts";
@@ -50,6 +51,18 @@ export const CAMINHO_DOS_USUARIOS = "/usuarios";
  * `authorization` entre os cabeçalhos permitidos.
  */
 export const CAMINHO_DE_ENTRAR = "/entrar";
+
+/**
+ * Caminho das rotas de Sessão (contrato da `013`). Recebe o mesmo tratamento
+ * de CORS mínimo das demais, porque o Início e o Resumo são consumidos do
+ * navegador, em outra origem.
+ */
+export const CAMINHO_DAS_SESSOES = "/sessoes";
+
+/**
+ * Caminho da rota de Estatísticas (contrato da `013`), com o mesmo CORS.
+ */
+export const CAMINHO_DAS_ESTATISTICAS = "/estatisticas";
 
 /**
  * Erro lançado quando o servidor está escutando fora do loopback.
@@ -201,7 +214,10 @@ export function criarServidor(
    * e impede a leitura das respostas. Os caminhos parametrizados de edição,
    * exclusão e Vínculo recebem o mesmo tratamento das rotas de coleção, e
    * `/usuarios` e `/entrar` entram na mesma lista com os mesmos métodos e
-   * cabeçalhos, agora incluindo `authorization`. Como a aplicação escuta
+   * cabeçalhos, agora incluindo `authorization`. As rotas de Histórico —
+   * `/sessoes`, `/sessoes/:id` e `/estatisticas` —, que o Início consome do
+   * navegador em outra origem, recebem o mesmo tratamento. Como a aplicação
+   * escuta
    * exclusivamente em 127.0.0.1, permitir qualquer origem é a configuração
    * mínima segura — o serviço não é alcançável pela rede.
    *
@@ -220,6 +236,9 @@ export function criarServidor(
       "/baralhos/:baralhoId/vinculos/:cartaoId",
       CAMINHO_DOS_USUARIOS,
       CAMINHO_DE_ENTRAR,
+      CAMINHO_DAS_SESSOES,
+      "/sessoes/:id",
+      CAMINHO_DAS_ESTATISTICAS,
     ]) {
       permitirPreVoo(servidor, caminho);
     }
@@ -233,7 +252,10 @@ export function criarServidor(
         caminho === CAMINHO_DOS_BARALHOS ||
         caminho.startsWith("/baralhos/") ||
         caminho === CAMINHO_DOS_USUARIOS ||
-        caminho === CAMINHO_DE_ENTRAR
+        caminho === CAMINHO_DE_ENTRAR ||
+        caminho === CAMINHO_DAS_SESSOES ||
+        caminho.startsWith("/sessoes/") ||
+        caminho === CAMINHO_DAS_ESTATISTICAS
       ) {
         resposta.header("access-control-allow-origin", "*");
       }
@@ -291,6 +313,7 @@ export async function iniciarServidor(
   const servidor = criarServidor(identidade);
   registrarRotasDeCartoes(servidor, acervoDe);
   registrarRotasDeBaralhos(servidor, acervoDe);
+  registrarRotasDeSessoes(servidor, acervoDe);
   registrarRotasDeUsuarios(servidor, identidade);
   registrarRotaDeEntrada(servidor);
 

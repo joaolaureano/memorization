@@ -97,18 +97,19 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     await criarUsuarioDeProva(enderecoDaApi);
 
     // A UI real abre sobre um acervo vazio — o arquivo é novo, sem Cartões — e
-    // exige Entrar antes de mostrar qualquer coisa (FR-097).
+    // exige Entrar antes de mostrar qualquer coisa (FR-097); depois de Entrar
+    // o destino é Baralhos, e a lista de Cartões é alcançada pela navegação
+    // "Principal".
     await page.goto(enderecoDoFrontend);
     await entrarSeNecessario(page);
+    await irParaCartoes(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
     ).toBeVisible();
     await expect(page.getByRole("listitem")).toHaveCount(0);
     await expect(
-      page.getByText(
-        "Ainda não há Cartões. Crie o primeiro Cartão para começar a memorizar.",
-      ),
+      page.getByText("Ainda não há Cartões. Crie o primeiro para começar."),
     ).toBeVisible();
 
     // Exatamente dois Cartões criados pela UI, sem nenhuma interceptação de
@@ -161,6 +162,7 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     // cada um com a sua Frente e o seu Verso, e nada além deles.
     await page.goto(enderecoDoFrontend);
     await entrarSeNecessario(page);
+    await irParaCartoes(page);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
@@ -187,16 +189,40 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
 });
 
 /**
- * Cria um Cartão pela tela real: preenche Frente e Verso nos campos do
- * formulário e submete com o botão.
+ * Vai para a lista de Cartões pela navegação principal: depois de Entrar o
+ * destino é Baralhos, e a lista de Cartões é uma página própria.
+ */
+async function irParaCartoes(page: Page): Promise<void> {
+  await page
+    .getByRole("navigation", { name: "Principal" })
+    .getByRole("link", { name: "Cartões" })
+    .click();
+}
+
+/**
+ * Cria um Cartão pela tela real: abre a página "Criar cartão" a partir da
+ * lista de Cartões, preenche Frente e Verso e salva; o sucesso volta para a
+ * lista de Cartões.
  */
 async function criarCartaoPelaUi(
   page: Page,
   cartao: { frente: string; verso: string },
 ): Promise<void> {
+  // Com a lista vazia, "Criar cartão" aparece duas vezes: no cabeçalho da
+  // página e na ação do estado vazio. O primeiro (o do cabeçalho) é sempre
+  // o caminho da criação.
+  await page.getByRole("link", { name: "Criar cartão" }).first().click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Criar cartão" }),
+  ).toBeVisible();
+
   await page.getByLabel("Frente").fill(cartao.frente);
   await page.getByLabel("Verso").fill(cartao.verso);
-  await page.getByRole("button", { name: "Criar Cartão" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Cartões" }),
+  ).toBeVisible();
 }
 
 /**

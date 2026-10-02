@@ -211,6 +211,12 @@ describe("PaginaDeEntrada — recusa de Entrar", () => {
     apertarTab();
     expect(document.activeElement).toBe(campoDaSenha);
 
+    // O campo de Senha traz o botão Mostrar/Ocultar entre ele e o Entrar.
+    apertarTab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Mostrar Senha" }),
+    );
+
     apertarTab();
     const botaoDeEntrada = screen.getByRole("button", { name: "Entrar" });
     expect(document.activeElement).toBe(botaoDeEntrada);
@@ -323,22 +329,91 @@ describe("PaginaDeEntrada — aviso inicial e anúncios", () => {
   });
 });
 
+describe("PaginaDeEntrada — Senha e submissão pendente", () => {
+  it("mantém a Senha mascarada; Mostrar Senha a revela e volta a ocultá-la, sem alterar o que foi digitado (FR-141, FR-142)", () => {
+    renderizarEntrada();
+
+    const campoDaSenha = screen.getByLabelText("Senha", { exact: true });
+
+    fireEvent.change(campoDaSenha, { target: { value: SENHA_DE_PROVA } });
+
+    // A Senha começa mascarada: o navegador e o leitor de tela a tratam como
+    // campo de Senha, e o botão anuncia a próxima ação.
+    const botaoDeVisibilidade = screen.getByRole("button", {
+      name: "Mostrar Senha",
+    });
+
+    expect(campoDaSenha).toHaveAttribute("type", "password");
+    expect(botaoDeVisibilidade).toHaveAttribute("aria-pressed", "false");
+    expect(botaoDeVisibilidade).toHaveAttribute(
+      "aria-controls",
+      "campo-senha-da-entrada",
+    );
+
+    fireEvent.click(botaoDeVisibilidade);
+
+    // Revelada: o tipo passa a texto e o botão nomeia a ação inversa.
+    expect(campoDaSenha).toHaveAttribute("type", "text");
+    expect(
+      screen.getByRole("button", { name: "Ocultar Senha" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Alternar a visibilidade nunca altera o valor digitado.
+    expect(campoDaSenha).toHaveValue(SENHA_DE_PROVA);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar Senha" }));
+
+    expect(campoDaSenha).toHaveAttribute("type", "password");
+    expect(
+      screen.getByRole("button", { name: "Mostrar Senha" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(campoDaSenha).toHaveValue(SENHA_DE_PROVA);
+  });
+
+  it("enquanto a tentativa está pendente, Entrar fica desabilitado e mostra Entrando… (FR-154)", async () => {
+    renderizarEntrada();
+
+    fireEvent.change(screen.getByLabelText("Nome de usuário"), {
+      target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
+    });
+    fireEvent.change(screen.getByLabelText("Senha", { exact: true }), {
+      target: { value: CREDENCIAL_DE_PROVA.senha },
+    });
+
+    const botaoDeEntrada = screen.getByRole("button", { name: "Entrar" });
+    fireEvent.click(botaoDeEntrada);
+
+    // A tentativa pendente desabilita a submissão e a rotula com a ação em
+    // curso, impedindo um segundo envio.
+    expect(botaoDeEntrada).toBeDisabled();
+    expect(botaoDeEntrada).toHaveTextContent("Entrando…");
+
+    // Concluída a tentativa, a submissão volta ao rótulo e à disponibilidade.
+    await waitFor(() => expect(botaoDeEntrada).toBeEnabled());
+    expect(botaoDeEntrada).toHaveTextContent("Entrar");
+  });
+});
+
 describe("PaginaDeEntrada por teclado", () => {
-  it("percorre Nome de usuário, Senha, Entrar e Criar conta na ordem visual, com o foco em cada passo (FR-095, SC-032)", async () => {
+  it("percorre Nome de usuário, Senha, Mostrar Senha, Entrar e Criar conta na ordem visual, com o foco em cada passo (FR-095, SC-032)", async () => {
     const aoEntrar = vi.fn();
     renderizarEntrada(aoEntrar);
 
     const campoDoNome = screen.getByLabelText("Nome de usuário");
-    const campoDaSenha = screen.getByLabelText("Senha");
+    const campoDaSenha = screen.getByLabelText("Senha", { exact: true });
+    const botaoDeVisibilidade = screen.getByRole("button", {
+      name: "Mostrar Senha",
+    });
     const botaoDeEntrada = screen.getByRole("button", { name: "Entrar" });
     const acessoAoCadastro = screen.getByRole("link", { name: "Criar conta" });
 
-    // A ordem de tabulação é a ordem visual da coluna única.
+    // A ordem de tabulação é a ordem visual da coluna única: os dois campos, o
+    // botão que revela a Senha, a submissão e o acesso a "Criar conta".
     const controles = controlesInterativos();
 
     expect(controles).toEqual([
       campoDoNome,
       campoDaSenha,
+      botaoDeVisibilidade,
       botaoDeEntrada,
       acessoAoCadastro,
     ]);
@@ -352,11 +427,14 @@ describe("PaginaDeEntrada por teclado", () => {
     digitarPeloTeclado(campoDaSenha, CREDENCIAL_DE_PROVA.senha);
 
     apertarTab();
+    expect(document.activeElement).toBe(botaoDeVisibilidade);
+
+    apertarTab();
     expect(document.activeElement).toBe(botaoDeEntrada);
 
     // Shift+Tab volta um passo da ordem, como no navegador.
     apertarShiftTab();
-    expect(document.activeElement).toBe(campoDaSenha);
+    expect(document.activeElement).toBe(botaoDeVisibilidade);
 
     apertarTab();
     expect(document.activeElement).toBe(botaoDeEntrada);
@@ -365,5 +443,84 @@ describe("PaginaDeEntrada por teclado", () => {
     await waitFor(() =>
       expect(aoEntrar).toHaveBeenCalledWith(CREDENCIAL_DE_PROVA),
     );
+  });
+});
+
+describe("PaginaDeEntrada — campo de Senha e envio pendente", () => {
+  it("a Senha começa mascarada e o controle de visibilidade começa em Mostrar (FR-078, FR-142)", () => {
+    renderizarEntrada();
+
+    const campoDaSenha = screen.getByLabelText("Senha", { exact: true });
+
+    expect(campoDaSenha).toHaveAttribute("type", "password");
+    expect(campoDaSenha).toHaveAttribute("autocomplete", "current-password");
+
+    const botaoDeVisibilidade = screen.getByRole("button", {
+      name: "Mostrar Senha",
+    });
+
+    expect(botaoDeVisibilidade).toHaveAttribute("aria-pressed", "false");
+    expect(botaoDeVisibilidade).toHaveAttribute(
+      "aria-controls",
+      "campo-senha-da-entrada",
+    );
+  });
+
+  it("Mostrar Senha revela o conteúdo e Ocultar Senha volta a mascarar, sem alterar o valor digitado (FR-142)", () => {
+    renderizarEntrada();
+
+    const campoDaSenha = screen.getByLabelText("Senha", { exact: true });
+
+    fireEvent.change(campoDaSenha, { target: { value: SENHA_DE_PROVA } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar Senha" }));
+
+    // É o mesmo campo que passa a texto claro, com o mesmo valor — a
+    // alternância não reescreve, não move nem apaga o que foi digitado.
+    const campoSenhaVisivel = screen.getByLabelText("Senha", { exact: true });
+
+    expect(campoSenhaVisivel).toBe(campoDaSenha);
+    expect(campoSenhaVisivel).toHaveAttribute("type", "text");
+    expect(campoSenhaVisivel).toHaveValue(SENHA_DE_PROVA);
+
+    const ocultar = screen.getByRole("button", { name: "Ocultar Senha" });
+
+    expect(ocultar).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(ocultar);
+
+    const campoSenhaMascarado = screen.getByLabelText("Senha", { exact: true });
+
+    expect(campoSenhaMascarado).toHaveAttribute("type", "password");
+    expect(campoSenhaMascarado).toHaveValue(SENHA_DE_PROVA);
+    expect(
+      screen.getByRole("button", { name: "Mostrar Senha" }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("enquanto o Entrar está pendente, o botão fica desabilitado e mostra Entrando… (FR-154)", async () => {
+    const aoEntrar = vi.fn();
+    renderizarEntrada(aoEntrar);
+
+    fireEvent.change(screen.getByLabelText("Nome de usuário"), {
+      target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
+    });
+    fireEvent.change(screen.getByLabelText("Senha"), {
+      target: { value: CREDENCIAL_DE_PROVA.senha },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+
+    // Com a operação em curso, o botão se identifica como pendente e fica
+    // desabilitado — uma segunda submissão não é possível (FR-154).
+    const pendente = screen.getByRole("button", { name: "Entrando…" });
+
+    expect(pendente).toBeDisabled();
+    expect(pendente).toHaveTextContent("Entrando…");
+
+    // Concluída a operação, o botão volta a Entrar e a Credencial é entregue.
+    await waitFor(() =>
+      expect(aoEntrar).toHaveBeenCalledWith(CREDENCIAL_DE_PROVA),
+    );
+    expect(screen.getByRole("button", { name: "Entrar" })).toBeEnabled();
   });
 });

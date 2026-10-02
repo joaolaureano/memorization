@@ -179,6 +179,69 @@ CREATE TABLE vinculo (
 `;
 
 /**
+ * A migração 6 dá ao acervo o **histórico de Sessões** — a feature
+ * `013-estatisticas-e-historico` (FR-161 a FR-179) —, com o **mesmo número de
+ * versão** da migração do Adapter local. Nenhuma tabela existente é tocada:
+ * Cartões, Baralhos, Vínculos e Usuários de uma base instalada sobrevivem
+ * intactos.
+ *
+ * `registro_de_sessao` guarda o resumo concluído, e `item_de_registro` guarda
+ * os Itens na **ordem apresentada** (`posicao`), que a listagem do histórico não
+ * carrega: o resumo é o que a listagem lê, e os Itens só na abertura de uma
+ * Sessão. `id` é a chave primária porque o `id` chega do cliente e é ele que
+ * torna a inserção idempotente (FR-163); a ausência de `UNIQUE` sobre qualquer
+ * outro campo é o que permite duas Sessões do mesmo Baralho no mesmo instante.
+ *
+ * `baralho_id` **não** tem chave estrangeira, de propósito: o Baralho pode ser
+ * excluído depois, e o histórico não pode cair junto nem impedir a exclusão —
+ * `nome_do_baralho` guarda o rótulo do momento da conclusão (FR-164), e é por
+ * isso que ele também é copiado, em vez de lido de `baralho`. `usuario_id`, ao
+ * contrário, tem a chave estrangeira com cascata das demais tabelas: o histórico
+ * é do Usuário, e excluir o Usuário exclui o histórico dele (FR-092).
+ *
+ * `concluida_em` é `TIMESTAMPTZ`, e não texto: é o instante da conclusão,
+ * definido pelo servidor na primeira inserção, e o driver o lê de volta como
+ * instante — o Adapter o converte para a cadeia ISO-8601 UTC que a Porta
+ * promete. As `CHECK` de `estudados`, `acertos`, `erros` e da soma duplicam,
+ * como nas migrações anteriores, os invariantes do `Acervo`: a validação
+ * primária vive lá, e aqui fica a rede de segurança contra estado inválido. As
+ * `CHECK` de `frente` e `verso` são as mesmas de `cartao`, com `btrim` e
+ * `char_length`, e a de `resultado` restringe o vocabulário a
+ * `('acertou','errou')`.
+ *
+ * O índice `registro_de_sessao_usuario_concluida` serve as três leituras da
+ * Porta de uma vez: o escopo do Usuário e a ordem do mais recente ao mais antigo
+ * (FR-165, FR-169). Os Itens são lidos pela chave primária composta
+ * `(registro_id, posicao)`, que já os devolve na ordem apresentada e impede
+ * posição repetida.
+ */
+const ESQUEMA_REGISTRO_DE_SESSAO = `
+CREATE TABLE registro_de_sessao (
+  id              TEXT PRIMARY KEY,
+  usuario_id      TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  baralho_id      TEXT NOT NULL,
+  nome_do_baralho TEXT NOT NULL CHECK (char_length(btrim(nome_do_baralho)) > 0 AND char_length(nome_do_baralho) <= 100),
+  concluida_em    TIMESTAMPTZ NOT NULL,
+  estudados       INTEGER NOT NULL CHECK (estudados >= 1),
+  acertos         INTEGER NOT NULL CHECK (acertos >= 0),
+  erros           INTEGER NOT NULL CHECK (erros >= 0),
+  CHECK (acertos + erros = estudados)
+);
+
+CREATE INDEX registro_de_sessao_usuario_concluida
+    ON registro_de_sessao (usuario_id, concluida_em DESC);
+
+CREATE TABLE item_de_registro (
+  registro_id TEXT NOT NULL REFERENCES registro_de_sessao(id) ON DELETE CASCADE,
+  posicao     INTEGER NOT NULL,
+  frente      TEXT NOT NULL CHECK (char_length(btrim(frente)) > 0 AND char_length(frente) <= 1000),
+  verso       TEXT NOT NULL CHECK (char_length(btrim(verso))  > 0 AND char_length(verso)  <= 1000),
+  resultado   TEXT NOT NULL CHECK (resultado IN ('acertou','errou')),
+  PRIMARY KEY (registro_id, posicao)
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -189,4 +252,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 3, sql: ESQUEMA_VINCULO },
   { versao: 4, sql: ESQUEMA_USUARIO },
   { versao: 5, sql: ESQUEMA_DONO_NO_ACERVO },
+  { versao: 6, sql: ESQUEMA_REGISTRO_DE_SESSAO },
 ];

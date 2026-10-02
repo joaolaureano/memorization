@@ -97,18 +97,23 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
       page.getByRole("heading", { level: 1, name: "Baralhos" }),
     ).toBeVisible();
     await expect(page.getByRole("listitem")).toHaveCount(0);
+    // Na UI de 012 a lista não tem formulário inline: criar é uma página
+    // própria, alcançada pelo link "Criar baralho".
     await expect(
-      page.getByText(
-        "Ainda não há Baralhos. Crie o primeiro Baralho para começar a organizar seus Cartões.",
-      ),
+      page.getByRole("link", { name: "Criar baralho" }),
     ).toBeVisible();
 
     // Dois Baralhos com o mesmo nome, como no roteiro da spec: o nome é
     // rótulo, não identificador. Cada POST chega ao banco SQLite em arquivo.
+    // Criar Baralho agora é uma página própria (#/baralhos/novo) e o sucesso
+    // leva ao detalhe do Baralho novo, de onde se volta à lista pela
+    // navegação principal.
     await criarBaralhoPelaUi(page, NOME_DO_BARALHO);
+    await voltarParaBaralhos(page);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
     await criarBaralhoPelaUi(page, NOME_DO_BARALHO);
+    await voltarParaBaralhos(page);
     await expect(page.getByRole("listitem")).toHaveCount(2);
 
     const criados = await listarBaralhosPelaApi(enderecoDaApi);
@@ -145,8 +150,9 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
 
     // Reabrir a UI: a Credencial não sobreviveu ao recarregamento, então
     // Entrar é exigido de novo (FR-089, SC-031); os dois Baralhos persistem,
-    // cada um com o mesmo nome e a elegibilidade derivada comunicada por
-    // texto.
+    // cada um com o mesmo nome e a elegibilidade derivada comunicada pelo
+    // próprio controle Estudar — link quando há Cartões, botão desabilitado
+    // descrito pelo estado do Baralho quando não há (FR-144).
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
     await entrarSeNecessario(page);
 
@@ -160,12 +166,18 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
       .filter({ hasText: NOME_DO_BARALHO });
 
     await expect(itens).toHaveCount(2);
-    await expect(itens.nth(0)).toContainText(
-      "Não elegível para estudo: nenhum Cartão vinculado.",
-    );
-    await expect(itens.nth(1)).toContainText(
-      "Não elegível para estudo: nenhum Cartão vinculado.",
-    );
+
+    // FR-144: sem Cartões, cada Baralho se apresenta como não pronto para
+    // estudar e o controle Estudar é um botão desabilitado — não um link.
+    for (const item of [itens.nth(0), itens.nth(1)]) {
+      await expect(item).toContainText("0 Cartões");
+      await expect(item).toContainText(
+        "Adicione Cartões para começar a estudar.",
+      );
+      await expect(
+        item.getByRole("button", { name: `Estudar ${NOME_DO_BARALHO}` }),
+      ).toBeDisabled();
+    }
 
     // Persistência exata conferida também direto na API: os mesmos ids, os
     // mesmos nomes e a mesma elegibilidade — os Baralhos foram relidos do
@@ -184,12 +196,34 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
 });
 
 /**
- * Cria um Baralho pela tela real: preenche o nome no campo do formulário e
- * submete com o botão.
+ * Cria um Baralho pela tela real da UI de 012: abre a página de criação
+ * (#/baralhos/novo), preenche o Nome e submete com "Salvar". O sucesso leva ao
+ * detalhe do Baralho novo, cujo título assume o nome informado.
  */
 async function criarBaralhoPelaUi(page: Page, nome: string): Promise<void> {
+  await page.getByRole("link", { name: "Criar baralho" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Criar baralho" }),
+  ).toBeVisible();
   await page.getByLabel("Nome").fill(nome);
-  await page.getByRole("button", { name: "Criar Baralho" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: nome }),
+  ).toBeVisible();
+}
+
+/**
+ * Volta à lista de Baralhos pela navegação principal — o caminho da UI depois
+ * de criar um Baralho, cujo sucesso abre o detalhe.
+ */
+async function voltarParaBaralhos(page: Page): Promise<void> {
+  await page
+    .getByRole("navigation", { name: "Principal" })
+    .getByRole("link", { name: "Baralhos" })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Baralhos" }),
+  ).toBeVisible();
 }
 
 /** Aguarda a API responder `{ status: "ok" }` no `/health`. */

@@ -74,16 +74,25 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
   await page.goto(ENDERECO_DO_FRONTEND);
   await entrarPelaUi(page, credencial);
 
-  // A tela real de Cartões carrega: cabeçalho, formulário de criação e a
-  // lista com os 50 Cartões do acervo interceptado.
+  // Depois de Entrar, o destino é Baralhos: a tela de Cartões é alcançada
+  // pelo link "Cartões" da navegação Principal (spec 012), que troca o
+  // fragmento sem recarregar o documento — a Credencial em memória continua
+  // valendo.
+  await page
+    .getByRole('navigation', { name: 'Principal' })
+    .getByRole('link', { name: 'Cartões' })
+    .click();
+
+  // A tela real de Cartões carrega: cabeçalho, o atalho de criação (a
+  // criação agora é uma página própria em #/cartoes/novo) e a lista com os
+  // 50 Cartões do acervo interceptado — cada Cartão com seu botão "Excluir".
   await expect(
     page.getByRole('heading', { level: 1, name: 'Cartões' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('heading', { level: 2, name: 'Novo Cartão' }),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Criar Cartão' })).toBeEnabled();
-  await expect(page.getByRole('listitem')).toHaveCount(QUANTIDADE_DE_CARTOES);
+  await expect(page.getByRole('link', { name: 'Criar cartão' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Excluir / })).toHaveCount(
+    QUANTIDADE_DE_CARTOES,
+  );
 
   /** Largura do conteúdo além da janela: 0 quando não há rolagem horizontal. */
   const medirExcessoDeLargura = () =>
@@ -101,13 +110,15 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
   // Cartão, e o Cartão conhecido é visualmente localizável sem busca ou
   // paginação.
   const ultimoCartao = cartoes[QUANTIDADE_DE_CARTOES - 1];
-  const itemConhecido = page
-    .getByRole('listitem')
-    .filter({ hasText: ultimoCartao.frente });
+  const excluirDoCartaoConhecido = page.getByRole('button', {
+    name: `Excluir ${ultimoCartao.frente}`,
+  });
 
-  await itemConhecido.scrollIntoViewIfNeeded();
-  await expect(itemConhecido).toBeVisible();
-  await expect(itemConhecido).toContainText(ultimoCartao.verso);
+  await excluirDoCartaoConhecido.scrollIntoViewIfNeeded();
+  await expect(excluirDoCartaoConhecido).toBeVisible();
+  await expect(
+    page.getByText(ultimoCartao.verso, { exact: true }),
+  ).toBeVisible();
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);

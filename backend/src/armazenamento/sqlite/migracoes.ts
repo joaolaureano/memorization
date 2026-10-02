@@ -172,6 +172,64 @@ CREATE TABLE vinculo (
 `;
 
 /**
+ * A migração 6 cria o histórico de Sessões — a feature `013`. São duas tabelas
+ * novas, e nenhuma tabela existente é tocada: Cartões, Baralhos, Vínculos e
+ * Usuários de uma base instalada sobrevivem intactos (FR-100).
+ *
+ * Em `registro_de_sessao`, `id` é `PRIMARY KEY` **global**, e não por Usuário:
+ * é o identificador que o cliente gera para a Sessão (FR-163), e é essa
+ * unicidade global que permite ao Adapter distinguir a reinserção do mesmo
+ * `id` pelo mesmo dono — idempotente — do `id` que já pertence a outro
+ * Usuário, que é recusa de domínio e não falha do armazenamento. `usuario_id`
+ * traz a mesma chave estrangeira com cascata das tabelas do acervo (migração
+ * 5): excluir o Usuário apaga o histórico dele.
+ *
+ * `baralho_id` **não** tem chave estrangeira, de propósito: o Baralho pode ser
+ * excluído depois da Sessão, e o histórico precisa continuar legível. É por
+ * isso que `nome_do_baralho` é copiado na conclusão, e não lido do Baralho na
+ * listagem — o nome que a Sessão guarda é o do momento em que ela terminou.
+ *
+ * `concluida_em` é `TEXT` em ISO-8601 UTC: ordenável e comparável como texto,
+ * que é exatamente o que as listagens e a janela de 31 dias usam. Os `CHECK`
+ * de contagem garantem no próprio esquema que `acertos + erros = estudados` e
+ * que uma Sessão tem ao menos um Item — rede de segurança contra erro de
+ * programação, já que a validação primária, com mensagem útil, vive no
+ * `Acervo`. O índice por `(usuario_id, concluida_em DESC)` serve à listagem
+ * por dono e à ordem do mais recente ao mais antigo.
+ *
+ * `item_de_registro` guarda Frente e Verso **como eram na conclusão**, e não
+ * como o Cartão está hoje, porque o Cartão pode mudar ou sumir. A chave
+ * primária composta `(registro_id, posicao)` torna a posição única dentro do
+ * Registro e preserva a ordem apresentada sem depender de coluna extra; a
+ * cascata faz os Itens caírem junto com o Registro.
+ */
+const ESQUEMA_REGISTRO_DE_SESSAO = `
+CREATE TABLE registro_de_sessao (
+  id              TEXT PRIMARY KEY,
+  usuario_id      TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  baralho_id      TEXT NOT NULL,
+  nome_do_baralho TEXT NOT NULL,
+  concluida_em    TEXT NOT NULL,
+  estudados       INTEGER NOT NULL CHECK (estudados >= 1),
+  acertos         INTEGER NOT NULL CHECK (acertos >= 0),
+  erros           INTEGER NOT NULL CHECK (erros >= 0),
+  CHECK (acertos + erros = estudados)
+);
+
+CREATE INDEX registro_de_sessao_usuario_concluida
+  ON registro_de_sessao (usuario_id, concluida_em DESC);
+
+CREATE TABLE item_de_registro (
+  registro_id TEXT NOT NULL REFERENCES registro_de_sessao(id) ON DELETE CASCADE,
+  posicao     INTEGER NOT NULL,
+  frente      TEXT NOT NULL,
+  verso       TEXT NOT NULL,
+  resultado   TEXT NOT NULL CHECK (resultado IN ('acertou', 'errou')),
+  PRIMARY KEY (registro_id, posicao)
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -182,4 +240,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 3, sql: ESQUEMA_VINCULO },
   { versao: 4, sql: ESQUEMA_USUARIO },
   { versao: 5, sql: ESQUEMA_DONO_NO_ACERVO },
+  { versao: 6, sql: ESQUEMA_REGISTRO_DE_SESSAO },
 ];

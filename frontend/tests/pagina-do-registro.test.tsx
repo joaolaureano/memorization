@@ -1,0 +1,174 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import type {
+  ClienteDoAcervo,
+  RegistroDeSessao,
+} from "../src/acervo-cliente/cliente";
+import {
+  INDISPONIVEL,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+  MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
+} from "../src/acervo-cliente/cliente";
+import { PaginaDoRegistro } from "../src/ui/PaginaDoRegistro";
+
+/**
+ * Provas da tela de um Registro do histórico (FR-166, FR-177..FR-179).
+ *
+ * A tela consome uma única operação — `obterRegistroDeSessao` —, e o duplo
+ * responde só a ela: o encadeamento de Registro e Itens, a idempotência e o
+ * recorte por Usuário são do Adapter e têm provas próprias. Aqui interessa o
+ * que a tela faz com o que voltou: o selo do Baralho excluído, o resumo e a
+ * mensagem de Registro inexistente.
+ */
+
+afterEach(() => {
+  cleanup();
+});
+
+/**
+ * O `ClienteDoAcervo` de prova, restrito à leitura que a tela exercita. As
+ * demais operações não são montadas porque a tela não as chama.
+ */
+function clienteComRegistro(
+  obterRegistroDeSessao: ClienteDoAcervo["obterRegistroDeSessao"],
+): ClienteDoAcervo {
+  return { obterRegistroDeSessao } as ClienteDoAcervo;
+}
+
+/** Um Registro de prova, com os Itens na ordem em que foram apresentados. */
+const REGISTRO: RegistroDeSessao = {
+  id: "sessao-1",
+  baralhoId: "baralho-1",
+  nomeDoBaralho: "Inglês",
+  concluidaEm: "2026-09-30T12:30:00.000Z",
+  estudados: 3,
+  acertos: 2,
+  erros: 1,
+  itens: [
+    {
+      posicao: 0,
+      frente: "ephemeral",
+      verso: "efêmero, passageiro",
+      resultado: "acertou",
+    },
+    {
+      posicao: 1,
+      frente: "to cope with",
+      verso: "lidar com",
+      resultado: "acertou",
+    },
+    {
+      posicao: 2,
+      frente: "thoroughly",
+      verso: "minuciosamente",
+      resultado: "errou",
+    },
+  ],
+};
+
+describe("PaginaDoRegistro", () => {
+  it("mostra a Sessão, o Baralho vivo e o resumo dos acertos", async () => {
+    const idsPedidos: string[] = [];
+
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async (id) => {
+          idsPedidos.push(id);
+
+          return { ok: true, registro: REGISTRO, baralhoExiste: true };
+        })}
+        id="sessao-1"
+      />,
+    );
+
+    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
+    expect(screen.getByText("Inglês")).toBeTruthy();
+    expect(screen.getByText(/2026/)).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Ver baralho" }).getAttribute("href"),
+    ).toBe("#/baralhos/baralho-1");
+    // O resumo dos itens vem do componente de Resumo da Sessão (FR-178).
+    expect(screen.getByText(/de acertos/)).toBeTruthy();
+    expect(idsPedidos).toEqual(["sessao-1"]);
+  });
+
+  it("traz o selo do Baralho excluído em vez de um link quebrado", async () => {
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => ({
+          ok: true,
+          registro: REGISTRO,
+          baralhoExiste: false,
+        }))}
+        id="sessao-1"
+      />,
+    );
+
+    expect(await screen.findByText("Baralho excluído")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Ver baralho" })).toBeNull();
+    // O que foi estudado continua à vista (FR-166).
+    expect(screen.getByText("Inglês")).toBeTruthy();
+  });
+
+  it("avisa quando o Registro não existe e oferece a volta ao Início", async () => {
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => ({
+          ok: false,
+          erro: "nao_encontrado",
+          mensagem: MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
+        }))}
+        id="sessao-inexistente"
+      />,
+    );
+
+    expect(
+      await screen.findByText(MENSAGEM_DE_SESSAO_NAO_ENCONTRADA),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Voltar para Início" })
+        .getAttribute("href"),
+    ).toBe("#/inicio");
+  });
+
+  it("preserva a página e permite tentar de novo quando a leitura falha", async () => {
+    let tentativas = 0;
+
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => {
+          tentativas += 1;
+
+          return tentativas === 1
+            ? {
+                ok: false,
+                erro: INDISPONIVEL,
+                mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+              }
+            : { ok: true, registro: REGISTRO, baralhoExiste: true };
+        })}
+        id="sessao-1"
+      />,
+    );
+
+    expect(
+      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO),
+    ).toBeTruthy();
+    expect(screen.getByText("← Voltar para Início")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Inglês")).toBeTruthy();
+    });
+    expect(tentativas).toBe(2);
+  });
+});

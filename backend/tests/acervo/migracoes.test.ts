@@ -344,3 +344,104 @@ describe("arquivo já na versão corrente — mesma versão, mesmos dados", () =
     }
   });
 });
+
+describe("migração 6 — tabelas do Histórico de Sessão", () => {
+  /** Sobe a base até a versão 5, a última antes das tabelas do Histórico. */
+  function ateAVersaoCinco(banco: DatabaseSync): void {
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 5),
+    );
+  }
+
+  /** O DDL de uma tabela, lido do catálogo do SQLite. */
+  function ddlDaTabela(banco: DatabaseSync, nome: string): string {
+    const linha = banco
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(nome);
+
+    return linha === undefined ? "" : String(linha.sql);
+  }
+
+  it("cria registro_de_sessao e item_de_registro com o índice por dono e instante e as CHECK", () => {
+    comBanco((banco) => {
+      ateAVersaoCinco(banco);
+
+      expect(existeTabela(banco, "registro_de_sessao")).toBe(false);
+      expect(existeTabela(banco, "item_de_registro")).toBe(false);
+
+      aplicarEsquema(banco);
+
+      expect(existeTabela(banco, "registro_de_sessao")).toBe(true);
+      expect(existeTabela(banco, "item_de_registro")).toBe(true);
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+
+      /** O índice é o que faz a listagem do dono por janela de instante (FR-169). */
+      const indice = banco
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+        .get("registro_de_sessao_usuario_concluida");
+
+      expect(indice?.name).toBe("registro_de_sessao_usuario_concluida");
+
+      /** Os totais são derivados e o Resultado é restrito no esquema (FR-161). */
+      const registro = ddlDaTabela(banco, "registro_de_sessao");
+      const item = ddlDaTabela(banco, "item_de_registro");
+
+      expect(registro).toMatch(/estudados >= 1/);
+      expect(registro).toMatch(/acertos \+ erros\)? = estudados/);
+
+      expect(item).toMatch(/resultado IN/);
+      expect(item).toMatch(/'acertou'/);
+      expect(item).toMatch(/'errou'/);
+      expect(item).toMatch(/PRIMARY KEY\s*\(registro_id, posicao\)/);
+
+      /** As cascatas deixam o Histórico sem linhas órfãs (FR-167). */
+      const chavesDoRegistro = banco
+        .prepare("PRAGMA foreign_key_list(registro_de_sessao)")
+        .all();
+      const chavesDoItem = banco
+        .prepare("PRAGMA foreign_key_list(item_de_registro)")
+        .all();
+
+      expect(
+        chavesDoRegistro.some(
+          (chave) => chave.table === "usuario" && chave.on_delete === "CASCADE",
+        ),
+      ).toBe(true);
+      expect(
+        chavesDoItem.some(
+          (chave) =>
+            chave.table === "registro_de_sessao" &&
+            chave.on_delete === "CASCADE",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it("preserva Cartões, Baralhos, Vínculos e Usuários das versões 1 a 5", () => {
+    comBanco((banco) => {
+      ateAVersaoCinco(banco);
+
+      const dono = gravarDono(banco);
+
+      gravarCartao(banco, dono, "c1");
+      gravarBaralho(banco, dono, "b1", "Inglês");
+      gravarVinculo(banco, "c1", "b1");
+
+      aplicarEsquema(banco);
+
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+      expect(contarLinhas(banco, "cartao")).toBe(1);
+      expect(contarLinhas(banco, "baralho")).toBe(1);
+      expect(contarLinhas(banco, "vinculo")).toBe(1);
+      expect(contarLinhas(banco, "usuario")).toBe(1);
+
+      /** O Vínculo continua apontando para as duas linhas do dono. */
+      const vinculo = banco
+        .prepare("SELECT cartao_id, baralho_id FROM vinculo")
+        .get();
+
+      expect(vinculo).toEqual({ cartao_id: "c1", baralho_id: "b1" });
+    });
+  });
+});

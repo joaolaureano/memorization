@@ -6,6 +6,9 @@ import type {
   Baralho,
   Cartao,
   ContagemPorBaralho,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
 } from "../../src/armazenamento/porta.ts";
 import { criarDonoDeTeste } from "./usuarios-de-teste.ts";
 
@@ -74,6 +77,52 @@ function contagemDe(
     contagens.find((contagem) => contagem.baralhoId === baralhoId)
       ?.quantidadeDeCartoes ?? 0
   );
+}
+
+/**
+ * Registro de sessão concluída com identificador fixo, para que o cenário possa
+ * citá-lo. `concluidaEm` é controlado pelo cenário porque é ele que ordena o
+ * Histórico, do mais recente ao mais antigo (FR-169); os instantes são ISO-8601
+ * UTC com milissegundos `.000`, a forma que os dois Adapters devolvem sem
+ * alteração. `estudados`, `acertos` e `erros` são derivados dos Itens, como o
+ * Module os deriva antes de gravar (FR-161).
+ */
+function registroDe(
+  id: string,
+  concluidaEm = "2026-01-01T00:00:00.000Z",
+  itens: readonly ItemRegistrado[] = [
+    { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
+  ],
+): RegistroDeSessao {
+  const acertos = itens.filter((item) => item.resultado === "acertou").length;
+
+  return {
+    id,
+    baralhoId: "b1",
+    nomeDoBaralho: "Inglês",
+    concluidaEm,
+    estudados: itens.length,
+    acertos,
+    erros: itens.length - acertos,
+    itens,
+  };
+}
+
+/**
+ * O Registro como as listagens o devolvem: sem os Itens, porque Início só
+ * precisa dos totais e do instante, e o Histórico grande continua respondendo
+ * (FR-169, SC-077).
+ */
+function semItens(registro: RegistroDeSessao): RegistroResumido {
+  return {
+    id: registro.id,
+    baralhoId: registro.baralhoId,
+    nomeDoBaralho: registro.nomeDoBaralho,
+    concluidaEm: registro.concluidaEm,
+    estudados: registro.estudados,
+    acertos: registro.acertos,
+    erros: registro.erros,
+  };
 }
 
 /**
@@ -611,6 +660,192 @@ export function bateriaDaPorta(
         expect(await armazenamento().obterCartao(DONO_DOIS, "c2")).toEqual({
           ok: true,
           valor: { id: "c2", frente: "To read", verso: "Ler" },
+        });
+      });
+    });
+
+    /**
+     * Histórico de Sessões concluídas (FR-161..FR-179): os quatro métodos que o
+     * Início e o Resumo exercitam, provados na Interface e não em dialeto
+     * algum.
+     *
+     * O que estes cenários fixam: o Registro volta inteiro, com os Itens na
+     * ordem apresentada; reenviar o mesmo `id` do mesmo Usuário devolve o
+     * registro já guardado, sem duplicar e mantendo a primeira `concluidaEm`
+     * (FR-163); o mesmo `id` de outro Usuário é `conflito`, porque Históricos
+     * não se misturam (FR-166); as listagens são do dono, do mais recente ao
+     * mais antigo e sem os Itens (FR-169, SC-077); e o Baralho e os Cartões de
+     * origem podem ser excluídos sem que o Registro se perca (FR-165, FR-178).
+     *
+     * A cascata da exclusão do Usuário não é exercitada aqui porque a Porta não
+     * expõe exclusão de Usuário: ela é do esquema e fica provada pelas
+     * migrações.
+     */
+    describe("Histórico de Sessão", () => {
+      it("guarda o Registro com os Itens na ordem apresentada e o devolve inteiro", async () => {
+        const registro = registroDe("r1", "2026-01-02T12:00:00.000Z", [
+          { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
+          { posicao: 1, frente: "To read", verso: "Ler", resultado: "errou" },
+          { posicao: 2, frente: "To run", verso: "Correr", resultado: "acertou" },
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroDeSessao(DONO_UM, registro),
+        ).toEqual({ ok: true, valor: registro });
+
+        /** `toEqual` compara os Itens na ordem: a posição é a apresentada. */
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: registro,
+        });
+      });
+
+      it("reinserir o mesmo id do mesmo Usuário devolve o registro guardado, sem duplicar e com a primeira concluidaEm", async () => {
+        const primeiro = registroDe("r1", "2026-01-02T12:00:00.000Z");
+
+        await armazenamento().inserirRegistroDeSessao(DONO_UM, primeiro);
+
+        const reenvio = registroDe("r1", "2026-03-04T09:30:00.000Z", [
+          { posicao: 0, frente: "To read", verso: "Ler", resultado: "errou" },
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroDeSessao(DONO_UM, reenvio),
+        ).toEqual({ ok: true, valor: primeiro });
+
+        /** O reenvio não duplica: a listagem traz exatamente o registro. */
+        expect(await armazenamento().listarRegistrosRecentes(DONO_UM, 10)).toEqual([
+          semItens(primeiro),
+        ]);
+      });
+
+      it("recusa como conflito o mesmo id vindo de outro Usuário", async () => {
+        await armazenamento().inserirRegistroDeSessao(DONO_UM, registroDe("r1"));
+
+        expect(
+          await armazenamento().inserirRegistroDeSessao(DONO_DOIS, registroDe("r1")),
+        ).toEqual({ ok: false, erro: "conflito" });
+
+        /** O Histórico do outro Usuário continua vazio (FR-166). */
+        expect(
+          await armazenamento().listarRegistrosRecentes(DONO_DOIS, 10),
+        ).toEqual([]);
+      });
+
+      it("lista o Histórico do dono, do mais recente ao mais antigo e sem os Itens", async () => {
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r1", "2026-01-01T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r2", "2026-01-03T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r3", "2026-01-02T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_DOIS,
+          registroDe("r4", "2026-01-04T00:00:00.000Z"),
+        );
+
+        const doDono = await armazenamento().listarRegistrosRecentes(DONO_UM, 10);
+
+        expect(doDono.map((registro) => registro.id)).toEqual(["r2", "r3", "r1"]);
+
+        /** A linha de listagem não carrega os Itens (SC-077). */
+        expect(doDono).toEqual([
+          semItens(registroDe("r2", "2026-01-03T00:00:00.000Z")),
+          semItens(registroDe("r3", "2026-01-02T00:00:00.000Z")),
+          semItens(registroDe("r1", "2026-01-01T00:00:00.000Z")),
+        ]);
+
+        /** O Histórico de outro dono não aparece. */
+        expect(
+          (await armazenamento().listarRegistrosRecentes(DONO_DOIS, 10)).map(
+            (registro) => registro.id,
+          ),
+        ).toEqual(["r4"]);
+      });
+
+      it("filtra por desde, incluindo o instante de fronteira", async () => {
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r1", "2026-01-01T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r2", "2026-01-02T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r3", "2026-01-03T00:00:00.000Z"),
+        );
+
+        const naJanela = await armazenamento().listarRegistrosDesde(
+          DONO_UM,
+          "2026-01-02T00:00:00.000Z",
+        );
+
+        /** `r2` é o limite e entra; `r1` fica de fora. */
+        expect(naJanela.map((registro) => registro.id)).toEqual(["r3", "r2"]);
+
+        const vazia = await armazenamento().listarRegistrosDesde(
+          DONO_UM,
+          "2026-02-01T00:00:00.000Z",
+        );
+
+        expect(vazia).toEqual([]);
+      });
+
+      it("devolve no máximo o limite de Sessões recentes informado", async () => {
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r1", "2026-01-01T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r2", "2026-01-02T00:00:00.000Z"),
+        );
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("r3", "2026-01-03T00:00:00.000Z"),
+        );
+
+        expect(
+          (await armazenamento().listarRegistrosRecentes(DONO_UM, 2)).map(
+            (registro) => registro.id,
+          ),
+        ).toEqual(["r3", "r2"]);
+      });
+
+      it("recusa o Registro de outro Usuário e o inexistente como nao_encontrado", async () => {
+        await armazenamento().inserirRegistroDeSessao(DONO_DOIS, registroDe("r1"));
+
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(
+          await armazenamento().obterRegistroDeSessao(DONO_UM, "inexistente"),
+        ).toEqual({ ok: false, erro: "nao_encontrado" });
+      });
+
+      it("preserva o Registro quando o Baralho e os Cartões de origem são excluídos", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().vincular(DONO_UM, "c1", "b1");
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z");
+
+        await armazenamento().inserirRegistroDeSessao(DONO_UM, registro);
+        await armazenamento().excluirCartao(DONO_UM, "c1");
+        await armazenamento().excluirBaralho(DONO_UM, "b1");
+
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: registro,
         });
       });
     });

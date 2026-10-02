@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
+import { CampoDeSenha } from "./CampoDeSenha";
 
 /**
  * Tela "Entrar" (T708 a T713; specs/008-entrar/tasks.md).
@@ -27,6 +28,11 @@ import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
  * apagada, o Nome de usuário permanece digitado e o foco vai ao campo que
  * precisa de correção. FR-096: a recusa e a conclusão de Sair são anunciadas
  * por região ativa, e não apenas exibidas.
+ *
+ * A apresentação segue o vocabulário de classes de `estilos.css` (FR-138), e a
+ * Senha usa o `CampoDeSenha`, que traz o botão Mostrar/Ocultar sem alterar o
+ * valor digitado (FR-141, FR-142). FR-153 a FR-155: a coluna única, o foco
+ * visível e a submissão pendente desabilitada preservam o percurso por teclado.
  */
 
 /**
@@ -102,77 +108,92 @@ export function PaginaDeEntrada({
   }
 
   return (
-    <div className="pagina">
-      <h1>Entrar</h1>
+    <section className="acesso">
+      <div className="cartao">
+        <p className="sobretitulo">Bem-vindo de volta</p>
+        <h1>Entrar</h1>
 
-      {aviso !== null &&
-        (aviso.tipo === "saida" ? (
-          // FR-096: a conclusão de Sair é anunciada por região ativa polida. O
-          // papel já implica o anúncio; os atributos vêm explícitos para que a
-          // semântica seja asseverável por teste.
+        {aviso !== null &&
+          (aviso.tipo === "saida" ? (
+            // FR-096: a conclusão de Sair é anunciada por região ativa polida. O
+            // papel já implica o anúncio; os atributos vêm explícitos para que a
+            // semântica seja asseverável por teste.
+            <p
+              className="aviso aviso--sucesso"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              aria-label="Saída concluída"
+            >
+              {aviso.texto}
+            </p>
+          ) : (
+            // FR-091 e FR-096: a recusa que descartou a Credencial chega como
+            // alerta nomeado, e não apenas como texto exibido.
+            <p
+              className="aviso aviso--erro"
+              role="alert"
+              aria-label="Credencial recusada"
+            >
+              {aviso.texto}
+            </p>
+          ))}
+
+        {falha !== null && (
+          // FR-096: a recusa de Entrar é anunciada por região assertiva. O papel
+          // `alert` já implica região assertiva e atômica; nenhum `aria-live`
+          // explícito redundante, que poderia duplicar o anúncio. A região sai da
+          // árvore no início de cada tentativa, de modo que a mesma mensagem
+          // repetida seja anunciada de novo.
           <p
-            className="confirmacao-do-sair"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label="Saída concluída"
+            className="aviso aviso--erro"
+            role="alert"
+            aria-label="Falha ao Entrar"
           >
-            {aviso.texto}
+            {falha}
           </p>
-        ) : (
-          // FR-091 e FR-096: a recusa que descartou a Credencial chega como
-          // alerta nomeado, e não apenas como texto exibido.
-          <p className="erro" role="alert" aria-label="Credencial recusada">
-            {aviso.texto}
-          </p>
-        ))}
+        )}
 
-      {falha !== null && (
-        // FR-096: a recusa de Entrar é anunciada por região assertiva. O papel
-        // `alert` já implica região assertiva e atômica; nenhum `aria-live`
-        // explícito redundante, que poderia duplicar o anúncio. A região sai da
-        // árvore no início de cada tentativa, de modo que a mesma mensagem
-        // repetida seja anunciada de novo.
-        <p className="erro" role="alert" aria-label="Falha ao Entrar">
-          {falha}
-        </p>
-      )}
+        <form className="formulario" onSubmit={entrar}>
+          <div className="campo">
+            <label
+              className="rotulo"
+              htmlFor="campo-nome-de-usuario-da-entrada"
+            >
+              Nome de usuário
+            </label>
+            <input
+              id="campo-nome-de-usuario-da-entrada"
+              ref={campoDeNomeDeUsuario}
+              type="text"
+              autoComplete="username"
+              value={nomeDeUsuario}
+              onChange={(evento) => setNomeDeUsuario(evento.target.value)}
+            />
+          </div>
 
-      <form className="formulario-de-entrada" onSubmit={entrar}>
-        <div className="campo">
-          <label htmlFor="campo-nome-de-usuario-da-entrada">
-            Nome de usuário
-          </label>
-          <input
-            id="campo-nome-de-usuario-da-entrada"
-            ref={campoDeNomeDeUsuario}
-            type="text"
-            autoComplete="username"
-            value={nomeDeUsuario}
-            onChange={(evento) => setNomeDeUsuario(evento.target.value)}
-          />
-        </div>
-
-        <div className="campo">
-          <label htmlFor="campo-senha-da-entrada">Senha</label>
-          <input
+          <CampoDeSenha
             id="campo-senha-da-entrada"
-            ref={campoDaSenha}
-            type="password"
+            rotulo="Senha"
+            valor={senha}
+            aoMudar={(valor) => setSenha(valor)}
             autoComplete="current-password"
-            value={senha}
-            onChange={(evento) => setSenha(evento.target.value)}
+            referencia={campoDaSenha}
           />
-        </div>
 
-        <button className="botao-de-entrada" type="submit" disabled={submetendo}>
-          Entrar
-        </button>
-      </form>
+          <button
+            className="botao botao--primario"
+            type="submit"
+            disabled={submetendo}
+          >
+            {submetendo ? "Entrando…" : "Entrar"}
+          </button>
+        </form>
 
-      <p className="acesso-ao-cadastro">
-        Ainda não tem conta? <a href="#/criar-conta">Criar conta</a>
-      </p>
-    </div>
+        <p className="ajuda">
+          Ainda não tem conta? <a href="#/criar-conta">Criar conta</a>
+        </p>
+      </div>
+    </section>
   );
 }

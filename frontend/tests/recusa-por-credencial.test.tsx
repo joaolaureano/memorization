@@ -20,6 +20,11 @@ import { CREDENCIAL_DE_PROVA, clienteDeProva } from "./apoio-de-prova";
  * FR-091 —, e a Credencial mantida pela página passa a ser recusada em toda
  * operação. Nenhum valor literal de Senha é versionado: a Credencial vem do
  * apoio das provas, gerada a cada execução.
+ *
+ * Depois da `012`, criar Cartão tem tela própria (`#/cartoes/novo`), e não um
+ * formulário sempre aberto no meio da lista: as provas de criação abrem essa
+ * tela pela ação da pessoa antes de digitar, e o envio é o botão "Salvar"
+ * (FR-140, FR-141).
  */
 
 beforeEach(() => {
@@ -46,6 +51,22 @@ function entrarPelaTela(): void {
     target: { value: CREDENCIAL_DE_PROVA.senha },
   });
   fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+}
+
+/**
+ * Abre a tela própria de criação de Cartão (FR-141) pela ação da pessoa. O
+ * atalho do cabeçalho é o primeiro na ordem do documento e existe sempre,
+ * mesmo durante a carga; a lista vazia repete o mesmo atalho no estado vazio,
+ * e os dois levam à mesma rota.
+ */
+function abrirCriacaoDeCartao(): void {
+  const atalho = screen.getAllByRole("link", { name: "Criar cartão" })[0];
+
+  if (atalho === undefined) {
+    throw new Error("A tela de Cartões não oferece o atalho de criação.");
+  }
+
+  fireEvent.click(atalho);
 }
 
 describe("recusa por Credencial", () => {
@@ -96,17 +117,20 @@ describe("recusa por Credencial", () => {
     // O acervo do Usuário aparece: a Credencial ainda vale nesta operação.
     expect(await screen.findByText("To walk")).toBeInTheDocument();
 
+    // FR-141: a criação tem tela própria, alcançada pela ação da pessoa. O
+    // formulário já está montado quando a Credencial deixa de valer.
+    abrirCriacaoDeCartao();
+    const campoDeFrente = await screen.findByLabelText("Frente");
+
     // O Usuário deixa de existir, e a Credencial mantida pela página deixa de
     // valer (FR-091).
     servidor.esquecerUsuario(CREDENCIAL_DE_PROVA.nomeDeUsuario);
 
-    fireEvent.change(screen.getByLabelText("Frente"), {
-      target: { value: "To run" },
-    });
+    fireEvent.change(campoDeFrente, { target: { value: "To run" } });
     fireEvent.change(screen.getByLabelText("Verso"), {
       target: { value: "Correr" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Criar Cartão" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     // A tela "Entrar" volta com a explicação, e nada da criação aparece como
     // concluída — nem na tela, nem no acervo.
@@ -138,6 +162,11 @@ describe("recusa por Credencial", () => {
       ).toBeInTheDocument(),
     );
 
+    // FR-141: a criação de Cartão vive em tela própria; é para lá que a
+    // pessoa vai antes de digitar.
+    abrirCriacaoDeCartao();
+    const campoDeFrente = await screen.findByLabelText("Frente");
+
     /** O que o navegador guardou: nada pode carregar a Credencial. */
     const estadoDoNavegador = () => ({
       cookie: document.cookie,
@@ -158,13 +187,11 @@ describe("recusa por Credencial", () => {
     // é descartada e nada dela fica no navegador.
     servidor.esquecerUsuario(CREDENCIAL_DE_PROVA.nomeDeUsuario);
 
-    fireEvent.change(screen.getByLabelText("Frente"), {
-      target: { value: "To run" },
-    });
+    fireEvent.change(campoDeFrente, { target: { value: "To run" } });
     fireEvent.change(screen.getByLabelText("Verso"), {
       target: { value: "Correr" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Criar Cartão" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await screen.findByRole("alert", { name: "Credencial recusada" });
 
@@ -176,5 +203,44 @@ describe("recusa por Credencial", () => {
     });
     expect(document.cookie).not.toContain(CREDENCIAL_DE_PROVA.senha);
     expect(window.location.href).not.toContain(CREDENCIAL_DE_PROVA.senha);
+  });
+
+  it("a recusa de Credencial vai para Entrar mesmo com proteção ativa, sem abrir confirmação de descarte (FR-157)", async () => {
+    const servidor = clienteDeProva();
+
+    render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
+    entrarPelaTela();
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeInTheDocument();
+
+    // FR-141: a criação de Cartão tem tela própria. O formulário com
+    // alterações não salvas registra a proteção de descarte (FR-148, FR-151):
+    // há trabalho a perder na tela corrente.
+    abrirCriacaoDeCartao();
+    const campoDeFrente = await screen.findByLabelText("Frente");
+
+    fireEvent.change(campoDeFrente, { target: { value: "To run" } });
+    fireEvent.change(screen.getByLabelText("Verso"), {
+      target: { value: "Correr" },
+    });
+
+    // O Usuário deixa de existir: a próxima operação do acervo é recusada.
+    servidor.esquecerUsuario(CREDENCIAL_DE_PROVA.nomeDeUsuario);
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    // A recusa sempre vence: nenhuma confirmação de descarte é aberta, e a
+    // tela "Entrar" volta com a explicação (FR-157).
+    expect(
+      await screen.findByRole("alert", { name: "Credencial recusada" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Entrar" }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/entrar");
   });
 });

@@ -3,6 +3,7 @@ import {
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
@@ -18,18 +19,26 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeRegistro,
   DadosDeUsuario,
+  Estatisticas,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeEntrar,
+  ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
   ResultadoDeObterBaralho,
+  ResultadoDeObterRegistro,
+  ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeVinculacao,
   Usuario,
@@ -546,6 +555,130 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  async registrarSessao(
+    dados: DadosDeRegistro,
+  ): Promise<ResultadoDeRegistroDeSessao> {
+    try {
+      const resposta = await fetch(`${this.endereco}/sessoes`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({
+          id: dados.id,
+          baralhoId: dados.baralhoId,
+          nomeDoBaralho: dados.nomeDoBaralho,
+          itens: dados.itens.map((item) => ({
+            frente: item.frente,
+            verso: item.verso,
+            resultado: item.resultado,
+          })),
+        }),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      // 201 é o registro novo e 200 é o mesmo registro reenviado com o mesmo
+      // `id`: os dois entregam o mesmo corpo, e o Adapter não distingue os
+      // desfechos para o caller (FR-163).
+      if (resposta.status === 201 || resposta.status === 200) {
+        const registro = lerRegistroDeSessao(await resposta.json());
+
+        if (registro !== null) {
+          return { ok: true, registro };
+        }
+
+        return this.falhaDeIndisponibilidadeDeHistorico();
+      }
+
+      if (resposta.status === 400) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "dados_invalidos")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      if (resposta.status === 409) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "conflito")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+  }
+
+  async obterEstatisticas(desde: string): Promise<ResultadoDeEstatisticas> {
+    try {
+      const resposta = await fetch(
+        `${this.endereco}/estatisticas?desde=${encodeURIComponent(desde)}`,
+        { headers: this.cabecalho() },
+      );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const estatisticas = lerEstatisticas(await resposta.json());
+
+        if (estatisticas !== null) {
+          return { ok: true, estatisticas };
+        }
+
+        return this.falhaDeIndisponibilidadeDeHistorico();
+      }
+
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+  }
+
+  async obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro> {
+    try {
+      const resposta = await fetch(
+        `${this.endereco}/sessoes/${encodeURIComponent(id)}`,
+        { headers: this.cabecalho() },
+      );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const lido = lerRegistroComBaralho(await resposta.json());
+
+        if (lido !== null) {
+          return {
+            ok: true,
+            registro: lido.registro,
+            baralhoExiste: lido.baralhoExiste,
+          };
+        }
+
+        return this.falhaDeIndisponibilidadeDeHistorico();
+      }
+
+      if (resposta.status === 404) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "nao_encontrado")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+  }
+
   /**
    * Traduz a recusa uniforme do contrato de Cartões (`{ erro, mensagem }`) no
    * modo de erro correspondente. Um código que não seja regra de Cartão — por
@@ -652,6 +785,18 @@ export class ClienteHttp implements ClienteDoAcervo {
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDeHistorico(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
     };
   }
 }
@@ -946,4 +1091,156 @@ function lerBaralhoComCartoes(corpo: unknown): BaralhoComCartoes | null {
     elegivel,
     cartoes,
   };
+}
+
+function lerItemRegistrado(corpo: unknown): ItemRegistrado | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.posicao !== "number" ||
+    typeof campos.frente !== "string" ||
+    typeof campos.verso !== "string" ||
+    (campos.resultado !== "acertou" && campos.resultado !== "errou")
+  ) {
+    return null;
+  }
+
+  return {
+    posicao: campos.posicao,
+    frente: campos.frente,
+    verso: campos.verso,
+    resultado: campos.resultado,
+  };
+}
+
+function lerRegistroResumido(corpo: unknown): RegistroResumido | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.id !== "string" ||
+    typeof campos.baralhoId !== "string" ||
+    typeof campos.nomeDoBaralho !== "string" ||
+    typeof campos.concluidaEm !== "string" ||
+    typeof campos.estudados !== "number" ||
+    typeof campos.acertos !== "number" ||
+    typeof campos.erros !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    id: campos.id,
+    baralhoId: campos.baralhoId,
+    nomeDoBaralho: campos.nomeDoBaralho,
+    concluidaEm: campos.concluidaEm,
+    estudados: campos.estudados,
+    acertos: campos.acertos,
+    erros: campos.erros,
+  };
+}
+
+function lerRegistroDeSessao(corpo: unknown): RegistroDeSessao | null {
+  const resumo = lerRegistroResumido(corpo);
+
+  if (resumo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (!Array.isArray(campos.itens)) {
+    return null;
+  }
+
+  const itens: ItemRegistrado[] = [];
+
+  for (const item of campos.itens) {
+    const lido = lerItemRegistrado(item);
+
+    if (lido === null) {
+      return null;
+    }
+
+    itens.push(lido);
+  }
+
+  return { ...resumo, itens };
+}
+
+function lerListaDeRegistrosResumidos(
+  corpo: unknown,
+): RegistroResumido[] | null {
+  if (!Array.isArray(corpo)) {
+    return null;
+  }
+
+  const registros: RegistroResumido[] = [];
+
+  for (const item of corpo) {
+    const lido = lerRegistroResumido(item);
+
+    if (lido === null) {
+      return null;
+    }
+
+    registros.push(lido);
+  }
+
+  return registros;
+}
+
+function lerEstatisticas(corpo: unknown): Estatisticas | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.cartoes !== "number" ||
+    typeof campos.baralhos !== "number"
+  ) {
+    return null;
+  }
+
+  const registrosDaJanela = lerListaDeRegistrosResumidos(
+    campos.registrosDaJanela,
+  );
+  const recentes = lerListaDeRegistrosResumidos(campos.recentes);
+
+  if (registrosDaJanela === null || recentes === null) {
+    return null;
+  }
+
+  return {
+    cartoes: campos.cartoes,
+    baralhos: campos.baralhos,
+    registrosDaJanela,
+    recentes,
+  };
+}
+
+function lerRegistroComBaralho(
+  corpo: unknown,
+): { registro: RegistroDeSessao; baralhoExiste: boolean } | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+  const registro = lerRegistroDeSessao(campos.registro);
+
+  if (registro === null || typeof campos.baralhoExiste !== "boolean") {
+    return null;
+  }
+
+  return { registro, baralhoExiste: campos.baralhoExiste };
 }

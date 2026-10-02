@@ -89,6 +89,21 @@ export interface ResumoDaSessao {
   readonly erros: number;
 }
 
+/**
+ * Percentual inteiro de Acertos do Resumo (FR-152, SC-067).
+ *
+ * A conta é derivada do Resumo, nunca armazenada. Sem Itens estudados não há
+ * percentual a apresentar, e o valor é 0 — a tela mostra "0%" em vez de uma
+ * divisão indefinida.
+ */
+export function percentualDeAcertos(resumo: ResumoDaSessao): number {
+  if (resumo.estudados === 0) {
+    return 0;
+  }
+
+  return Math.round((resumo.acertos / resumo.estudados) * 100);
+}
+
 /** Base do estado observável da Sessão. */
 interface EstadoBaseDaSessao {
   readonly baralhoId: string;

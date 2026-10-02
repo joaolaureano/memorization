@@ -2,12 +2,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
-import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDeAdicionarCartoes } from "../src/ui/PaginaDeAdicionarCartoes";
 
 /**
- * T210 — vincular e desvincular apenas por teclado, com foco preservado
- * (specs/003-vincular-cartao-baralho/tasks.md, FR-063, FR-064, SC-019).
+ * T1111 — vincular Cartões apenas por teclado, com foco preservado
+ * (FR-063, FR-064, SC-019; regra preservada de
+ * specs/003-vincular-cartao-baralho).
  *
  * O jsdom não executa o comportamento padrão de Tab nem de Enter. Os
  * auxiliares reproduzem esses comportamentos — o mesmo papel que
@@ -91,12 +92,20 @@ async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
   };
 }
 
-describe("PaginaDoBaralho por teclado", () => {
+describe("PaginaDeAdicionarCartoes por teclado", () => {
   it("vincula dois Cartões em sequência só por teclado e preserva a posição do foco (FR-063, FR-064, SC-019)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    render(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />);
+    render(
+      comProtecaoDeSaida(
+        <PaginaDeAdicionarCartoes cliente={cliente} id={idDoBaralho} />,
+        true,
+      ),
+    );
 
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Adicionar cartões a Inglês",
+    });
 
     const botaoVincularPrimeiro = screen.getByRole("button", {
       name: "Vincular To walk",
@@ -106,17 +115,17 @@ describe("PaginaDoBaralho por teclado", () => {
     });
 
     // A ordem de tabulação começa no link de volta e segue pelos botões de
-    // Vincular, na mesma ordem das duas listas.
+    // Vincular, na mesma ordem da lista.
     const controlesIniciais = controlesInterativos();
     expect(controlesIniciais[0]).toBe(
-      screen.getByRole("link", { name: "Voltar para Baralhos" }),
+      screen.getByRole("link", { name: "← Voltar para o Baralho" }),
     );
     expect(controlesIniciais[1]).toBe(botaoVincularPrimeiro);
     expect(controlesIniciais[2]).toBe(botaoVincularSegundo);
 
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Voltar para Baralhos" }),
+      screen.getByRole("link", { name: "← Voltar para o Baralho" }),
     );
 
     apertarTab();
@@ -127,15 +136,8 @@ describe("PaginaDoBaralho por teclado", () => {
       await screen.findByText(/Cartão vinculado ao Baralho\./),
     ).toBeInTheDocument();
 
-    // Após vincular, o foco vai ao botão equivalente na outra lista: o
-    // "Desvincular" do Cartão recém-movido.
-    const botaoDesvincularPrimeiro = screen.getByRole("button", {
-      name: "Desvincular To walk",
-    });
-    expect(document.activeElement).toBe(botaoDesvincularPrimeiro);
-
-    // O segundo Cartão continua a um Tab de distância, sem voltar ao início.
-    apertarTab();
+    // Após vincular, o Cartão sai da lista — o Cartão seguinte assume a
+    // posição e o foco, sem voltar ao início da página.
     const botaoVincularRestante = screen.getByRole("button", {
       name: "Vincular To run",
     });
@@ -144,11 +146,13 @@ describe("PaginaDoBaralho por teclado", () => {
     apertarEnter(botaoVincularRestante);
 
     expect(
-      await screen.findByRole("button", { name: "Desvincular To run" }),
+      await screen.findByText("Todos os seus Cartões já estão neste Baralho."),
     ).toBeInTheDocument();
-
+    expect(
+      screen.queryByRole("button", { name: "Vincular To run" }),
+    ).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Desvincular To run" }),
+      screen.getByRole("heading", { level: 2, name: "Cartões disponíveis" }),
     );
   });
 });

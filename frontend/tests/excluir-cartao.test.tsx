@@ -52,7 +52,7 @@ function itemDoCartao(): HTMLElement {
 }
 
 function botaoDeExcluir(): HTMLElement {
-  return within(itemDoCartao()).getByRole("button", { name: "Excluir" });
+  return within(itemDoCartao()).getByRole("button", { name: "Excluir To walk" });
 }
 
 describe("exclusão de Cartão", () => {
@@ -110,8 +110,8 @@ describe("exclusão de Cartão", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Ainda não há Cartões. Crie o primeiro Cartão para começar a memorizar.",
+      await screen.findByText(
+        "Ainda não há Cartões. Crie o primeiro para começar.",
       ),
     ).toBeInTheDocument();
 

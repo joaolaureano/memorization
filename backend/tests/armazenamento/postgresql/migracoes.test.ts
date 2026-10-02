@@ -137,6 +137,8 @@ describe("base nova e vazia", () => {
       expect(tabelas.map((tabela) => tabela.nome).sort()).toEqual([
         "baralho",
         "cartao",
+        "item_de_registro",
+        "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
         "vinculo",
@@ -443,6 +445,8 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
         "baralho",
         "cartao",
+        "item_de_registro",
+        "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
         "vinculo",
@@ -601,6 +605,8 @@ describe("migração 4 — tabela usuario", () => {
       expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
         "baralho",
         "cartao",
+        "item_de_registro",
+        "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
         "vinculo",
@@ -633,6 +639,199 @@ describe("migração 4 — tabela usuario", () => {
       expect(cartoes.rows).toEqual([]);
       expect(baralhos.rows).toEqual([]);
       expect(vinculos.rows).toEqual([]);
+
+      const versoes = await piscina.query<{ versao: number }>(
+        "SELECT versao FROM versao_do_esquema;",
+      );
+
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
+        versaoCorrenteConhecida(),
+      ]);
+    } finally {
+      await piscina.end();
+    }
+  });
+});
+
+/**
+ * T1207, no dialeto da nuvem — a migração 6 cria as tabelas do Histórico de
+ * Sessão (FR-161, FR-167).
+ *
+ * A verificação é do esquema: `registro_de_sessao` e `item_de_registro`
+ * existem, o índice por dono e instante sustenta a janela das Estatísticas e as
+ * Sessões recentes de Início (FR-169, SC-077), as `CHECK` derivam os totais e
+ * restringem o Resultado, e as duas cascatas — do Usuário para o Registro e do
+ * Registro para os Itens — deixam o Histórico sem linhas órfãs (FR-167). Uma
+ * base na versão 5, com Cartões, Baralhos, Vínculos e Usuários dentro, chega à
+ * versão corrente sem perder nada: a migração só acrescenta tabelas (FR-165).
+ */
+describe("migração 6 — tabelas do Histórico de Sessão", () => {
+  it("guarda registro_de_sessao e item_de_registro com o índice por dono e instante e as CHECK", async () => {
+    await comBaseVazia("historico-forma", async (piscina, consultar) => {
+      await aplicarMigracoes(piscina);
+
+      const tabelas = await consultar<{ nome: string }>(
+        `SELECT tablename AS nome FROM pg_tables
+          WHERE schemaname = 'public' ORDER BY tablename;`,
+      );
+
+      expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+        "baralho",
+        "cartao",
+        "item_de_registro",
+        "registro_de_sessao",
+        "usuario",
+        "versao_do_esquema",
+        "vinculo",
+      ]);
+
+      /** `concluida_em` é instante: ordena a listagem do mais recente. */
+      const colunas = await consultar<{ nome: string; tipo: string }>(
+        `SELECT column_name AS nome, data_type AS tipo
+           FROM information_schema.columns
+          WHERE table_name = 'registro_de_sessao'
+          ORDER BY column_name;`,
+      );
+
+      expect(colunas.map((coluna) => coluna.nome)).toEqual([
+        "acertos",
+        "baralho_id",
+        "concluida_em",
+        "erros",
+        "estudados",
+        "id",
+        "nome_do_baralho",
+        "usuario_id",
+      ]);
+
+      const instante = colunas.find((coluna) => coluna.nome === "concluida_em");
+
+      expect(instante?.tipo).toBe("timestamp with time zone");
+
+      /** O índice é o que faz a janela e as Sessões recentes responderem. */
+      const indices = await consultar<{ nome: string; definicao: string }>(
+        `SELECT indexname AS nome, indexdef AS definicao
+           FROM pg_indexes WHERE tablename = 'registro_de_sessao';`,
+      );
+
+      const porDonoEInstante = indices.find(
+        (indice) => indice.nome === "registro_de_sessao_usuario_concluida",
+      );
+
+      expect(porDonoEInstante?.definicao).toMatch(/usuario_id/);
+      expect(porDonoEInstante?.definicao).toMatch(/concluida_em DESC/);
+
+      /** As CHECK derivam os totais e restringem o Resultado (FR-161). */
+      const doRegistro = await consultar<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'registro_de_sessao'::regclass AND contype = 'c';`,
+      );
+      const definicoesDoRegistro = doRegistro
+        .map((restricao) => restricao.definicao)
+        .join(" ");
+
+      expect(definicoesDoRegistro).toMatch(/estudados >= 1/);
+      expect(definicoesDoRegistro).toMatch(/acertos \+ erros\)? = estudados/);
+
+      const doItem = await consultar<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'item_de_registro'::regclass AND contype = 'c';`,
+      );
+      const definicoesDoItem = doItem
+        .map((restricao) => restricao.definicao)
+        .join(" ");
+
+      expect(definicoesDoItem).toMatch(/resultado/);
+      expect(definicoesDoItem).toMatch(/'acertou'/);
+      expect(definicoesDoItem).toMatch(/'errou'/);
+    });
+  });
+
+  it("tem as duas cascatas: do Usuário para o Registro e do Registro para os Itens", async () => {
+    await comBaseVazia("historico-cascatas", async (piscina, consultar) => {
+      await aplicarMigracoes(piscina);
+
+      const estrangeiras = await consultar<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid IN ('registro_de_sessao'::regclass, 'item_de_registro'::regclass)
+            AND contype = 'f';`,
+      );
+      const definicoes = estrangeiras
+        .map((restricao) => restricao.definicao)
+        .join(" ");
+
+      expect(definicoes).toMatch(/REFERENCES usuario\(id\)/);
+      expect(definicoes).toMatch(/REFERENCES registro_de_sessao\(id\)/);
+      expect(definicoes.match(/ON DELETE CASCADE/g) ?? []).toHaveLength(2);
+    });
+  });
+
+  it("leva uma base na versão 5 à versão corrente, preservando Cartões, Baralhos, Vínculos e Usuários", async () => {
+    const apoio = await servidorDeTeste();
+    const nomeDaBase = await apoio.criarBase("historico-base-instalada");
+    const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+    try {
+      /** O que a feature anterior deixou instalado: as migrações 1 a 5. */
+      await aplicarMigracoes(piscina, MIGRACOES.slice(0, 5));
+
+      /**
+       * O dono entra por INSERT direto, e não pelo Adapter: abrir o Adapter
+       * aplicaria a migração 6 e a base deixaria de estar na versão 5, que é
+       * justamente o ponto de partida da prova.
+       */
+      const dono = "dono-um";
+
+      await piscina.query(
+        `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+         VALUES ($1, $2, $3, $4, '{}');`,
+        [dono, "ana.silva", Buffer.alloc(16), Buffer.from("hash-sintetico")],
+      );
+      await piscina.query(
+        "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ('c1', 'To walk', 'Caminhar', $1);",
+        [dono],
+      );
+      await piscina.query(
+        "INSERT INTO baralho (id, nome, usuario_id) VALUES ('b1', 'Inglês', $1);",
+        [dono],
+      );
+      await piscina.query(
+        "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
+      );
+
+      expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
+
+      /** A migração só acrescenta tabelas: nada do acervo se perde (FR-165). */
+      expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
+        { id: "c1" },
+      ]);
+      expect((await piscina.query("SELECT id FROM baralho;")).rows).toEqual([
+        { id: "b1" },
+      ]);
+      expect(
+        (await piscina.query("SELECT cartao_id FROM vinculo;")).rows,
+      ).toEqual([{ cartao_id: "c1" }]);
+      expect((await piscina.query("SELECT id FROM usuario;")).rows).toEqual([
+        { id: dono },
+      ]);
+
+      const tabelas = await piscina.query<{ nome: string }>(
+        `SELECT tablename AS nome FROM pg_tables
+          WHERE schemaname = 'public' ORDER BY tablename;`,
+      );
+
+      expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "baralho",
+        "cartao",
+        "item_de_registro",
+        "registro_de_sessao",
+        "usuario",
+        "versao_do_esquema",
+        "vinculo",
+      ]);
 
       const versoes = await piscina.query<{ versao: number }>(
         "SELECT versao FROM versao_do_esquema;",
@@ -780,6 +979,8 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "item_de_registro",
+      "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
       "vinculo",
@@ -826,6 +1027,8 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "item_de_registro",
+      "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
       "vinculo",
@@ -846,6 +1049,8 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
       "baralho",
       "cartao",
+      "item_de_registro",
+      "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
       "vinculo",

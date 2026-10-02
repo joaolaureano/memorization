@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
-import { clienteDeProva } from "./apoio-de-prova";
-import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
 
 /**
  * T011 — Criar Cartão e navegar a lista apenas por teclado, com foco visível
@@ -122,22 +122,32 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
   },
 ];
 
-describe("PaginaDeCartoes por teclado", () => {
-  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Criar Cartão (FR-054, SC-017)", async () => {
-    render(<PaginaDeCartoes cliente={clienteDeProva()} />);
-    await screen.findByText(/ainda não há Cartões/i);
+describe("PaginaDoFormularioDeCartao por teclado", () => {
+  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Salvar (FR-054, SC-017)", async () => {
+    render(
+      comProtecaoDeSaida(
+        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        true,
+      ),
+    );
 
+    const linkDeVoltar = screen.getByRole("link", {
+      name: "← Voltar para Cartões",
+    });
     const campoFrente = screen.getByLabelText("Frente");
     const campoVerso = screen.getByLabelText("Verso");
-    const botaoDeCriacao = screen.getByRole("button", { name: "Criar Cartão" });
+    const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
 
-    // Os únicos controles interativos são os dois campos e o botão, nesta
-    // ordem — a mesma da disposição visual da coluna única.
+    // A ordem de tabulação acompanha a disposição visual da coluna única: o
+    // caminho de volta, os dois campos e o salvamento (FR-054, SC-017).
     const controles = controlesInterativos();
-    expect(controles).toHaveLength(3);
-    expect(controles[0]).toBe(campoFrente);
-    expect(controles[1]).toBe(campoVerso);
-    expect(controles[2]).toBe(botaoDeCriacao);
+    expect(controles[0]).toBe(linkDeVoltar);
+    expect(controles[1]).toBe(campoFrente);
+    expect(controles[2]).toBe(campoVerso);
+    expect(controles[3]).toBe(botaoDeSalvar);
+
+    apertarTab();
+    expect(document.activeElement).toBe(linkDeVoltar);
 
     apertarTab();
     expect(document.activeElement).toBe(campoFrente);
@@ -148,21 +158,23 @@ describe("PaginaDeCartoes por teclado", () => {
     digitarPeloTeclado(campoVerso, "Caminhar");
 
     apertarTab();
-    expect(document.activeElement).toBe(botaoDeCriacao);
-    apertarEnter(botaoDeCriacao);
+    expect(document.activeElement).toBe(botaoDeSalvar);
+    apertarEnter(botaoDeSalvar);
 
-    const cartaoListado = await screen.findByRole("listitem");
-    expect(cartaoListado).toHaveTextContent("To walk");
-    expect(cartaoListado).toHaveTextContent("Caminhar");
-    expect(campoFrente).toHaveValue("");
-    expect(campoVerso).toHaveValue("");
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/cartoes");
+    });
   });
 
   it.each(CASOS_DE_RECUSA)(
     "numa recusa $descricao, o foco vai ao campo $campo e o conteúdo permanece (FR-055)",
     async (caso) => {
-      render(<PaginaDeCartoes cliente={clienteDeProva()} />);
-      await screen.findByText(/ainda não há Cartões/i);
+      render(
+        comProtecaoDeSaida(
+          <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+          true,
+        ),
+      );
 
       const campoFrente = screen.getByLabelText("Frente");
       const campoVerso = screen.getByLabelText("Verso");
@@ -170,15 +182,15 @@ describe("PaginaDeCartoes por teclado", () => {
       digitarPeloTeclado(campoFrente, caso.frente);
       digitarPeloTeclado(campoVerso, caso.verso);
 
-      // Submete percorrendo a ordem visual por teclado.
+      // Submete percorrendo a ordem visual por teclado, do caminho de volta
+      // ao salvamento.
+      apertarTab(); // ← Voltar para Cartões
       apertarTab(); // Frente
       apertarTab(); // Verso
-      apertarTab(); // Criar Cartão
-      const botaoDeCriacao = screen.getByRole("button", {
-        name: "Criar Cartão",
-      });
-      expect(document.activeElement).toBe(botaoDeCriacao);
-      apertarEnter(botaoDeCriacao);
+      apertarTab(); // Salvar
+      const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
+      expect(document.activeElement).toBe(botaoDeSalvar);
+      apertarEnter(botaoDeSalvar);
 
       expect(await screen.findByText(caso.mensagem)).toBeInTheDocument();
 
@@ -193,25 +205,31 @@ describe("PaginaDeCartoes por teclado", () => {
 
   it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-055)", async () => {
     const cliente = clienteDeProva();
-    render(<PaginaDeCartoes cliente={cliente} />);
-    await screen.findByText(/ainda não há Cartões/i);
+
+    render(
+      comProtecaoDeSaida(
+        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        true,
+      ),
+    );
 
     digitarPeloTeclado(screen.getByLabelText("Frente"), "To walk");
     digitarPeloTeclado(screen.getByLabelText("Verso"), "Caminhar");
 
     cliente.simularIndisponibilidade();
 
+    apertarTab(); // ← Voltar para Cartões
     apertarTab(); // Frente
     apertarTab(); // Verso
-    apertarTab(); // Criar Cartão
-    const botaoDeCriacao = screen.getByRole("button", { name: "Criar Cartão" });
-    apertarEnter(botaoDeCriacao);
+    apertarTab(); // Salvar
+    const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
+    apertarEnter(botaoDeSalvar);
 
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE),
     ).toBeInTheDocument();
 
-    expect(document.activeElement).toBe(botaoDeCriacao);
+    expect(document.activeElement).toBe(botaoDeSalvar);
     expect(screen.getByLabelText("Frente")).toHaveValue("To walk");
     expect(screen.getByLabelText("Verso")).toHaveValue("Caminhar");
   });

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { PaginaDeCadastro } from "../src/ui/PaginaDeCadastro";
+import { comProtecaoDeSaida } from "./apoio-de-prova";
 
 /**
  * T611 — o Cadastro inteiro por teclado, com o foco sempre identificável e
@@ -119,24 +120,32 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 
 describe("PaginaDeCadastro por teclado", () => {
   it("conclui o Cadastro do primeiro campo à confirmação apenas por teclado, na ordem visual (FR-081, SC-020)", async () => {
-    render(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />);
+    render(comProtecaoDeSaida(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />));
 
     const campoDoNome = screen.getByLabelText("Nome de usuário");
     const campoDaSenha = screen.getByLabelText("Senha");
     const campoDaConfirmacao = screen.getByLabelText("Confirmação da Senha");
+    const botaoDeMostrarSenha = screen.getByRole("button", {
+      name: "Mostrar Senha",
+    });
+    const botaoDeMostrarConfirmacao = screen.getByRole("button", {
+      name: "Mostrar Confirmação da Senha",
+    });
     const botaoDeCadastro = screen.getByRole("button", { name: "Criar conta" });
     const acessoAEntrada = screen.getByRole("link", { name: "Entrar" });
 
-    // Os únicos controles interativos são os três campos, a ação e a volta a
-    // "Entrar" (FR-097), nesta ordem — a mesma da disposição visual da coluna
-    // única.
+    // Os controles interativos são os três campos, cada botão Mostrar/Ocultar
+    // dos dois campos de Senha (FR-142), a ação e a volta a "Entrar" (FR-097),
+    // nesta ordem — a mesma da disposição visual da coluna única.
     const controles = controlesInterativos();
-    expect(controles).toHaveLength(5);
+    expect(controles).toHaveLength(7);
     expect(controles[0]).toBe(campoDoNome);
     expect(controles[1]).toBe(campoDaSenha);
-    expect(controles[2]).toBe(campoDaConfirmacao);
-    expect(controles[3]).toBe(botaoDeCadastro);
-    expect(controles[4]).toBe(acessoAEntrada);
+    expect(controles[2]).toBe(botaoDeMostrarSenha);
+    expect(controles[3]).toBe(campoDaConfirmacao);
+    expect(controles[4]).toBe(botaoDeMostrarConfirmacao);
+    expect(controles[5]).toBe(botaoDeCadastro);
+    expect(controles[6]).toBe(acessoAEntrada);
 
     apertarTab();
     expect(document.activeElement).toBe(campoDoNome);
@@ -147,21 +156,29 @@ describe("PaginaDeCadastro por teclado", () => {
     digitarPeloTeclado(campoDaSenha, SENHA_VALIDA);
 
     apertarTab();
+    expect(document.activeElement).toBe(botaoDeMostrarSenha);
+
+    apertarTab();
     expect(document.activeElement).toBe(campoDaConfirmacao);
     digitarPeloTeclado(campoDaConfirmacao, SENHA_VALIDA);
+
+    apertarTab();
+    expect(document.activeElement).toBe(botaoDeMostrarConfirmacao);
 
     apertarTab();
     expect(document.activeElement).toBe(botaoDeCadastro);
     apertarEnter(botaoDeCadastro);
 
-    const confirmacao = await screen.findByRole("status");
+    const confirmacao = await screen.findByRole("status", {
+      name: "Cadastro concluído",
+    });
     expect(confirmacao).toHaveTextContent(
       `O Usuário ${NOME_DE_USUARIO_VALIDO} foi criado.`,
     );
   });
 
   it("volta o foco com Shift+Tab pela mesma ordem visual (FR-081)", () => {
-    render(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />);
+    render(comProtecaoDeSaida(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />));
 
     const campoDoNome = screen.getByLabelText("Nome de usuário");
     const campoDaSenha = screen.getByLabelText("Senha");
@@ -171,6 +188,7 @@ describe("PaginaDeCadastro por teclado", () => {
     campoDoNome.focus();
     apertarTab();
     expect(document.activeElement).toBe(campoDaSenha);
+    apertarTab();
     apertarTab();
     expect(document.activeElement).toBe(campoDaConfirmacao);
 
@@ -186,7 +204,7 @@ describe("PaginaDeCadastro por teclado", () => {
   it.each(CASOS_DE_RECUSA)(
     "numa recusa de $descricao, o foco vai ao campo a corrigir e o conteúdo permanece (FR-072, FR-081)",
     async (caso) => {
-      render(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />);
+      render(comProtecaoDeSaida(<PaginaDeCadastro cliente={new ClienteEmMemoria()} />));
 
       const campoDoNome = screen.getByLabelText("Nome de usuário");
 
@@ -200,7 +218,12 @@ describe("PaginaDeCadastro por teclado", () => {
       const campoDaConfirmacao = screen.getByLabelText("Confirmação da Senha");
       digitarPeloTeclado(campoDaConfirmacao, caso.confirmacaoDaSenha);
 
-      apertarTab(); // Criar conta
+      // Avança pelos dois botões Mostrar/Ocultar até a ação de submissão: os
+      // dois campos de Senha acrescentam, cada um, um controle à tabulação.
+      apertarTab();
+      apertarTab();
+      apertarTab();
+
       const botaoDeCadastro = screen.getByRole("button", {
         name: "Criar conta",
       });
@@ -225,7 +248,7 @@ describe("PaginaDeCadastro por teclado", () => {
       senha: SENHA_VALIDA,
     });
 
-    render(<PaginaDeCadastro cliente={cliente} />);
+    render(comProtecaoDeSaida(<PaginaDeCadastro cliente={cliente} />));
 
     const campoDoNome = screen.getByLabelText("Nome de usuário");
 
@@ -237,6 +260,9 @@ describe("PaginaDeCadastro por teclado", () => {
       screen.getByLabelText("Confirmação da Senha"),
       SENHA_VALIDA,
     );
+
+    apertarTab();
+    apertarTab();
     apertarTab();
 
     const botaoDeCadastro = screen.getByRole("button", { name: "Criar conta" });
@@ -254,7 +280,7 @@ describe("PaginaDeCadastro por teclado", () => {
   it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-081)", async () => {
     const cliente = new ClienteEmMemoria();
 
-    render(<PaginaDeCadastro cliente={cliente} />);
+    render(comProtecaoDeSaida(<PaginaDeCadastro cliente={cliente} />));
 
     const campoDoNome = screen.getByLabelText("Nome de usuário");
 
@@ -270,6 +296,9 @@ describe("PaginaDeCadastro por teclado", () => {
     cliente.simularIndisponibilidade();
 
     apertarTab();
+    apertarTab();
+    apertarTab();
+
     const botaoDeCadastro = screen.getByRole("button", { name: "Criar conta" });
 
     apertarTab();
@@ -303,8 +332,5 @@ describe("PaginaDeCadastro por teclado", () => {
 
     // O indicador nunca é suprimido em nenhum controle interativo.
     expect(estilos).not.toMatch(/outline\s*:\s*(none|0)\s*;?/);
-
-    // O formulário de Cadastro é a coluna única já usada pelas demais telas.
-    expect(estilos).toMatch(/\.formulario-de-cadastro/);
   });
 });

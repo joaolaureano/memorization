@@ -1,11 +1,15 @@
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_CONFLITO_DE_SESSAO,
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
+  MENSAGEM_DE_DADOS_INVALIDOS,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
+  MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
   NAO_AUTENTICADO,
 } from "./cliente";
 import type {
@@ -16,18 +20,24 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeRegistro,
   DadosDeUsuario,
+  RegistroDeSessao,
+  RegistroResumido,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeEntrar,
+  ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
   ResultadoDeObterBaralho,
+  ResultadoDeObterRegistro,
+  ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeVinculacao,
 } from "./cliente";
@@ -615,6 +625,156 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 
   /**
+   * Registra uma Sessão concluída no histórico (FR-161, FR-163).
+   *
+   * O `id` vem do cliente: se já existir neste Usuário, devolve o Registro
+   * existente sem alterar nada — é o que torna a operação idempotente. O mesmo
+   * `id` no histórico de **outro** Usuário é `conflito`: nunca se sobrescreve o
+   * Registro alheio. Os totais e a `concluidaEm` são derivados aqui, como o
+   * servidor os derivaria, e nunca aceitos do cliente.
+   */
+  async registrarSessao(
+    dados: DadosDeRegistro,
+  ): Promise<ResultadoDeRegistroDeSessao> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    if (!dadosDeRegistroValidos(dados)) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: MENSAGEM_DE_DADOS_INVALIDOS,
+      };
+    }
+
+    const existente = this.base.registros.find(
+      (registro) => registro.id === dados.id,
+    );
+
+    if (existente !== undefined) {
+      if (existente.usuarioId !== dono.id) {
+        return {
+          ok: false,
+          erro: "conflito",
+          mensagem: MENSAGEM_DE_CONFLITO_DE_SESSAO,
+        };
+      }
+
+      return { ok: true, registro: registroSemDono(existente) };
+    }
+
+    const estudados = dados.itens.length;
+    const acertos = dados.itens.filter(
+      (item) => item.resultado === "acertou",
+    ).length;
+
+    const registro: RegistroDaBase = {
+      id: dados.id,
+      usuarioId: dono.id,
+      baralhoId: dados.baralhoId,
+      nomeDoBaralho: dados.nomeDoBaralho,
+      concluidaEm: new Date().toISOString(),
+      estudados,
+      acertos,
+      erros: estudados - acertos,
+      itens: dados.itens.map((item, posicao) => ({
+        posicao,
+        frente: item.frente,
+        verso: item.verso,
+        resultado: item.resultado,
+      })),
+    };
+
+    this.base.registros.push(registro);
+
+    return { ok: true, registro: registroSemDono(registro) };
+  }
+
+  /**
+   * Os números do Início (FR-164, FR-165): o tamanho atual do acervo do dono,
+   * os Registros com `concluidaEm >= desde` e os 5 mais recentes, do mais
+   * recente ao mais antigo.
+   */
+  async obterEstatisticas(desde: string): Promise<ResultadoDeEstatisticas> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const registros = this.registrosDoDono(dono.id);
+
+    return {
+      ok: true,
+      estatisticas: {
+        cartoes: this.base.cartoes.filter(
+          (cartao) => cartao.usuarioId === dono.id,
+        ).length,
+        baralhos: this.base.baralhos.filter(
+          (baralho) => baralho.usuarioId === dono.id,
+        ).length,
+        registrosDaJanela: registros
+          .filter((registro) => registro.concluidaEm >= desde)
+          .map(registroResumido),
+        recentes: registros.slice(0, 5).map(registroResumido),
+      },
+    };
+  }
+
+  /**
+   * Abre um Registro do histórico com os itens na ordem apresentada e informa
+   * se o Baralho da Sessão ainda existe no acervo do dono (FR-166). O Registro
+   * de outro Usuário se comporta como inexistente (FR-092).
+   */
+  async obterRegistroDeSessao(
+    id: string,
+  ): Promise<ResultadoDeObterRegistro> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const registro = this.base.registros.find(
+      (item) => item.id === id && item.usuarioId === dono.id,
+    );
+
+    if (registro === undefined) {
+      return {
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
+      };
+    }
+
+    const baralhoExiste = this.base.baralhos.some(
+      (baralho) =>
+        baralho.id === registro.baralhoId && baralho.usuarioId === dono.id,
+    );
+
+    return {
+      ok: true,
+      registro: registroSemDono(registro),
+      baralhoExiste,
+    };
+  }
+
+  /**
    * Simula a indisponibilidade do transporte (uso de teste). Enquanto
    * simulada, nenhuma operação é concluída nem gravada.
    */
@@ -702,6 +862,37 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     };
   }
 
+  private falhaDeIndisponibilidadeDeHistorico(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+    };
+  }
+
+  /**
+   * Os Registros do dono, do mais recente ao mais antigo (FR-164). Como dois
+   * Registros podem ter a mesma `concluidaEm` — o relógio é o mesmo —, o
+   * desempate é a ordem de inserção, do último para o primeiro.
+   */
+  private registrosDoDono(usuarioId: string): RegistroDaBase[] {
+    return this.base.registros
+      .filter((registro) => registro.usuarioId === usuarioId)
+      .map((registro, indice) => ({ registro, indice }))
+      .sort((a, b) => {
+        if (a.registro.concluidaEm === b.registro.concluidaEm) {
+          return b.indice - a.indice;
+        }
+
+        return a.registro.concluidaEm < b.registro.concluidaEm ? 1 : -1;
+      })
+      .map(({ registro }) => registro);
+  }
+
   private baralhosDoCartao(usuarioId: string, cartaoId: string): Baralho[] {
     return this.base.vinculos
       .filter(
@@ -749,6 +940,7 @@ interface BaseEmMemoria {
   cartoes: CartaoDoDono[];
   baralhos: BaralhoDoDono[];
   vinculos: VinculoDoDono[];
+  registros: RegistroDaBase[];
   sequenciaDeCartoes: number;
   sequenciaDeBaralhos: number;
   sequenciaDeUsuarios: number;
@@ -794,6 +986,7 @@ function novaBaseEmMemoria(
     cartoes: [],
     baralhos: [],
     vinculos: [],
+    registros: [],
     sequenciaDeCartoes: 0,
     sequenciaDeBaralhos: 0,
     sequenciaDeUsuarios: 0,
@@ -818,4 +1011,98 @@ function cartaoSemDono(cartao: CartaoDoDono): Cartao {
 /** O Baralho como a Interface o devolve: sem o dono, que é Implementation. */
 function baralhoSemDono(baralho: BaralhoDoDono): Baralho {
   return { id: baralho.id, nome: baralho.nome };
+}
+
+/** Registro do histórico com o dono: o `usuarioId` é o escopo (FR-161). */
+interface RegistroDaBase extends RegistroDeSessao {
+  usuarioId: string;
+}
+
+/** O Registro como a Interface o devolve: sem o dono, que é Implementation. */
+function registroSemDono(registro: RegistroDaBase): RegistroDeSessao {
+  return {
+    id: registro.id,
+    baralhoId: registro.baralhoId,
+    nomeDoBaralho: registro.nomeDoBaralho,
+    concluidaEm: registro.concluidaEm,
+    estudados: registro.estudados,
+    acertos: registro.acertos,
+    erros: registro.erros,
+    itens: registro.itens.map((item) => ({ ...item })),
+  };
+}
+
+/** A linha da listagem: o Registro sem os itens (FR-164). */
+function registroResumido(registro: RegistroDaBase): RegistroResumido {
+  return {
+    id: registro.id,
+    baralhoId: registro.baralhoId,
+    nomeDoBaralho: registro.nomeDoBaralho,
+    concluidaEm: registro.concluidaEm,
+    estudados: registro.estudados,
+    acertos: registro.acertos,
+    erros: registro.erros,
+  };
+}
+
+const FORMATO_DE_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function ehUuid(valor: unknown): valor is string {
+  return typeof valor === "string" && FORMATO_DE_UUID.test(valor);
+}
+
+function itemDeRegistroValido(item: unknown): boolean {
+  if (typeof item !== "object" || item === null) {
+    return false;
+  }
+
+  const campos = item as Record<string, unknown>;
+
+  if (
+    typeof campos.frente !== "string" ||
+    validarFrente(campos.frente) !== null
+  ) {
+    return false;
+  }
+
+  if (
+    typeof campos.verso !== "string" ||
+    validarVerso(campos.verso) !== null
+  ) {
+    return false;
+  }
+
+  return campos.resultado === "acertou" || campos.resultado === "errou";
+}
+
+/**
+ * As invariantes de `registrarSessao` (FR-161): só dados assim chegam à base.
+ * Qualquer desvio é `dados_invalidos`, e nada é gravado.
+ */
+function dadosDeRegistroValidos(dados: DadosDeRegistro): boolean {
+  if (!ehUuid(dados.id)) {
+    return false;
+  }
+
+  if (typeof dados.baralhoId !== "string" || dados.baralhoId === "") {
+    return false;
+  }
+
+  if (
+    typeof dados.nomeDoBaralho !== "string" ||
+    validarNomeDeBaralho(dados.nomeDoBaralho) !== null
+  ) {
+    return false;
+  }
+
+  if (!Array.isArray(dados.itens)) {
+    return false;
+  }
+
+  if (dados.itens.length < 1 || dados.itens.length > 1000) {
+    return false;
+  }
+
+  return dados.itens.every(itemDeRegistroValido);
 }

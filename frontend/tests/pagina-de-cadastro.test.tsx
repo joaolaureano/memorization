@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
@@ -13,8 +13,10 @@ import {
 } from "../src/acervo-cliente/validacao";
 import {
   MENSAGEM_DE_CONFIRMACAO_DIVERGENTE,
+  MENSAGEM_DE_SAIDA_BLOQUEADA,
   PaginaDeCadastro,
 } from "../src/ui/PaginaDeCadastro";
+import { comProtecaoDeSaida } from "./apoio-de-prova";
 
 /**
  * T608 a T610 — a tela "Criar conta" (specs/007-criar-usuario/tasks.md).
@@ -45,9 +47,20 @@ const ROTULO_DA_CONFIRMACAO = "Confirmação da Senha";
 function renderizarPaginaDeCadastro(
   cliente: ClienteEmMemoria = new ClienteEmMemoria(),
 ): ClienteEmMemoria {
-  render(<PaginaDeCadastro cliente={cliente} />);
+  // FR-148: a tela registra a proteção de saída, então a prova a monta sob o
+  // provedor — o mesmo que a aplicação usa.
+  render(comProtecaoDeSaida(<PaginaDeCadastro cliente={cliente} />));
 
   return cliente;
+}
+
+/**
+ * Muda o hash como uma navegação por link e entrega o evento à interface. É o
+ * caminho de quem tenta sair da tela por outra rota.
+ */
+function mudarOhash(hash: string): void {
+  window.location.hash = hash;
+  window.dispatchEvent(new Event("hashchange"));
 }
 
 /** Preenche os três campos pelos rótulos acessíveis. */
@@ -73,6 +86,11 @@ function submeter(): void {
 }
 
 describe("PaginaDeCadastro", () => {
+  beforeEach(() => {
+    // Cada prova parte de uma URL sem hash, como uma montagem limpa da tela.
+    window.history.replaceState(null, "", "/");
+  });
+
   it("oferece a volta a Entrar e, concluído o Cadastro, oferece Entrar em seguida (FR-097)", async () => {
     renderizarPaginaDeCadastro();
 
@@ -85,9 +103,13 @@ describe("PaginaDeCadastro", () => {
     preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
     submeter();
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      `O Usuário ${NOME_DE_USUARIO_VALIDO} foi criado.`,
+    // O provedor agora também renderiza uma região viva própria (vazia), então
+    // a mensagem é localizada pelo texto e conferida dentro de um `status`.
+    const mensagemDeSucesso = await screen.findByText(
+      `Cadastro concluído. O Usuário ${NOME_DE_USUARIO_VALIDO} foi criado.`,
     );
+
+    expect(mensagemDeSucesso.closest('[role="status"]')).not.toBeNull();
 
     // E o próximo passo de quem acabou de criar o Usuário é Entrar: a oferta
     // continua ali, uma só, agora como sequência da conclusão.
@@ -191,7 +213,9 @@ describe("PaginaDeCadastro", () => {
     preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
     submeter();
 
-    const confirmacao = await screen.findByRole("status");
+    const confirmacao = await screen.findByRole("status", {
+      name: "Cadastro concluído",
+    });
 
     expect(confirmacao).toHaveAccessibleName("Cadastro concluído");
     expect(confirmacao).toHaveTextContent(
@@ -214,7 +238,7 @@ describe("PaginaDeCadastro", () => {
     preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
     submeter();
 
-    await screen.findByRole("status");
+    await screen.findByRole("status", { name: "Cadastro concluído" });
 
     expect(window.localStorage.length).toBe(0);
     expect(window.sessionStorage.length).toBe(0);
@@ -237,7 +261,9 @@ describe("PaginaDeCadastro", () => {
       MENSAGEM_DE_CONFIRMACAO_DIVERGENTE,
     );
     expect(document.activeElement).toBe(campoDaConfirmacao);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Cadastro concluído" }),
+    ).not.toBeInTheDocument();
 
     // O conteúdo digitado permanece, pronto para a correção.
     expect(screen.getByLabelText(ROTULO_DO_NOME)).toHaveValue(
@@ -378,7 +404,9 @@ describe("PaginaDeCadastro", () => {
     expect(document.activeElement).toBe(
       screen.getByLabelText(ROTULO_DO_NOME),
     );
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Cadastro concluído" }),
+    ).not.toBeInTheDocument();
   });
 
   it("com o transporte indisponível, reporta a falha, não conclui e preserva os três campos (FR-044, FR-045, SC-012)", async () => {
@@ -394,7 +422,9 @@ describe("PaginaDeCadastro", () => {
     );
 
     // Nenhuma operação aparece como concluída...
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Cadastro concluído" }),
+    ).not.toBeInTheDocument();
 
     // ...e nenhum conteúdo informado foi perdido.
     expect(screen.getByLabelText(ROTULO_DO_NOME)).toHaveValue(
@@ -421,12 +451,131 @@ describe("PaginaDeCadastro", () => {
     cliente.restaurarDisponibilidade();
     submeter();
 
-    const confirmacao = await screen.findByRole("status");
+    const confirmacao = await screen.findByRole("status", {
+      name: "Cadastro concluído",
+    });
 
     expect(confirmacao).toHaveTextContent(
       `O Usuário ${NOME_DE_USUARIO_VALIDO} foi criado.`,
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByLabelText(ROTULO_DA_SENHA)).toHaveValue("");
+  });
+
+  it("os dois campos de Senha começam mascarados e alternam de forma independente (FR-142)", () => {
+    renderizarPaginaDeCadastro();
+
+    const campoDaSenha = screen.getByLabelText(ROTULO_DA_SENHA);
+    const campoDaConfirmacao = screen.getByLabelText(ROTULO_DA_CONFIRMACAO);
+
+    expect(campoDaSenha).toHaveAttribute("type", "password");
+    expect(campoDaConfirmacao).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar Senha" }));
+
+    // Só a Senha é revelada; a Confirmação segue mascarada.
+    expect(campoDaSenha).toHaveAttribute("type", "text");
+    expect(campoDaConfirmacao).toHaveAttribute("type", "password");
+    expect(
+      screen.getByRole("button", { name: "Ocultar Senha" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Mostrar Confirmação da Senha" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mostrar Confirmação da Senha" }),
+    );
+
+    expect(campoDaConfirmacao).toHaveAttribute("type", "text");
+    expect(campoDaSenha).toHaveAttribute("type", "text");
+  });
+
+  it("sair com o formulário preenchido pede confirmação e Cancelar mantém os campos (FR-148)", async () => {
+    renderizarPaginaDeCadastro();
+
+    preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
+
+    mudarOhash("#/baralhos");
+
+    const dialogo = await screen.findByRole("dialog");
+
+    expect(
+      within(dialogo).getByText("Descartar o Cadastro?"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialogo).getByText("Os dados preenchidos serão perdidos."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // O conteúdo permanece, pronto para correção ou nova tentativa.
+    expect(screen.getByLabelText(ROTULO_DO_NOME)).toHaveValue(
+      NOME_DE_USUARIO_VALIDO,
+    );
+    expect(screen.getByLabelText(ROTULO_DA_SENHA)).toHaveValue(SENHA_VALIDA);
+    expect(screen.getByLabelText(ROTULO_DA_CONFIRMACAO)).toHaveValue(
+      SENHA_VALIDA,
+    );
+
+    // A proteção segue vigente: nova tentativa de saída pede de novo.
+    mudarOhash("#/baralhos");
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("confirmar o descarte navega para a rota pedida (FR-148)", async () => {
+    renderizarPaginaDeCadastro();
+
+    preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
+
+    mudarOhash("#/baralhos");
+
+    const dialogo = await screen.findByRole("dialog");
+
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Descartar" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#/baralhos");
+  });
+
+  it("sair com o formulário vazio não pede confirmação (FR-148)", () => {
+    renderizarPaginaDeCadastro();
+
+    mudarOhash("#/baralhos");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#/baralhos");
+  });
+
+  it("com o Cadastro em andamento, a saída é bloqueada e anunciada (FR-148, FR-154)", async () => {
+    const cliente = new ClienteEmMemoria();
+
+    vi.spyOn(cliente, "criarUsuario").mockReturnValue(
+      new Promise<never>(() => {}),
+    );
+
+    renderizarPaginaDeCadastro(cliente);
+    preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA, SENHA_VALIDA);
+    submeter();
+
+    const botaoEmAndamento = await screen.findByRole("button", {
+      name: "Criando conta…",
+    });
+
+    expect(botaoEmAndamento).toBeDisabled();
+
+    // Com o envio pendente, a proteção vigente é `pendencia`: a navegação é
+    // bloqueada e o motivo é anunciado pela região viva (FR-154).
+    act(() => {
+      window.location.hash = "#/baralhos";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(MENSAGEM_DE_SAIDA_BLOQUEADA),
+    ).toBeInTheDocument();
   });
 });

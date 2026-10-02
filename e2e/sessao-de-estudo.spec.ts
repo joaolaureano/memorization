@@ -123,8 +123,25 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       ),
     ).toBeVisible();
 
-    // Interromper descarta essa Sessão e devolve ao Baralho.
-    await page.getByRole("link", { name: "Interromper" }).click();
+    // Interromper pede confirmação (spec 012): "Cancelar" mantém a Sessão no
+    // Item atual e "Interromper" a descarta, devolvendo ao Baralho sem Resumo.
+    await page.getByRole("button", { name: "Interromper" }).click();
+
+    const dialogoDeInterrupcao = page.getByRole("dialog");
+
+    await expect(
+      dialogoDeInterrupcao.getByText("Interromper a Sessão?"),
+    ).toBeVisible();
+
+    await dialogoDeInterrupcao
+      .getByRole("button", { name: "Cancelar" })
+      .click();
+    await expect(page.getByText("Item 1 de 5")).toBeVisible();
+
+    await page.getByRole("button", { name: "Interromper" }).click();
+    await dialogoDeInterrupcao
+      .getByRole("button", { name: "Interromper" })
+      .click();
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
@@ -146,7 +163,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       await expect(page.getByRole("heading", { name: "Frente" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Verso" })).toHaveCount(0);
 
-      await page.getByRole("button", { name: "Revelar" }).click();
+      await page.getByRole("button", { name: "Revelar verso" }).click();
 
       await expect(page.getByRole("heading", { name: "Verso" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Acertei" })).toBeVisible();
@@ -162,9 +179,27 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await expect(
       page.getByRole("heading", { name: "Resumo da Sessão" }),
     ).toBeVisible();
-    await expect(page.getByText("Itens estudados: 3")).toBeVisible();
-    await expect(page.getByText("Acertos: 2")).toBeVisible();
-    await expect(page.getByText("Erros: 1")).toBeVisible();
+    await expect(page.getByText(/6[67]%/)).toBeVisible();
+    await expect(page.getByText("de acertos")).toBeVisible();
+    // SC-004: o Resumo deriva tudo dos mesmos três Itens apresentados — dois
+    // acertos e um erro —, e a tela os apresenta na contagem e nos botões dos
+    // grupos (FR-174, FR-176).
+    await expect(page.getByText("2 de 3 Itens")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Acertos (2)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Erros (1)" }),
+    ).toBeVisible();
+
+    // FR-161, FR-163: a Sessão concluída é registrada no histórico assim que
+    // o Resumo aparece, e a própria tela confirma o Registro confirmado.
+    await expect(
+      page.getByText("Sessão registrada no seu histórico."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Ver em Início" }),
+    ).toBeVisible();
 
     // Interrupção: inicia outra Sessão e recarrega a página. A Sessão é
     // descartada e a tela volta ao início, sem retomada nem Resumo.

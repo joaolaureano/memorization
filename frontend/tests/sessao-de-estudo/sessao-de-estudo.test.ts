@@ -15,8 +15,12 @@ import {
   MENSAGEM_DE_REVELACAO_AUSENTE,
   MENSAGEM_DE_SESSAO_CONCLUIDA,
   SessaoDeEstudo,
+  percentualDeAcertos,
 } from "../../src/sessao-de-estudo/sessao-de-estudo";
-import type { ResultadoDoItem } from "../../src/sessao-de-estudo/sessao-de-estudo";
+import type {
+  ResumoDaSessao,
+  ResultadoDoItem,
+} from "../../src/sessao-de-estudo/sessao-de-estudo";
 
 /**
  * T301–T303 — bateria do Module `SessaoDeEstudo`
@@ -467,5 +471,26 @@ describe("SessaoDeEstudo — interrupção e ausência de persistência (T303)",
     expect(fontes).not.toMatch(/\blocalStorage\b/);
     expect(fontes).not.toMatch(/\bsessionStorage\b/);
     expect(fontes).not.toMatch(/\bfetch\s*\(/);
+  });
+});
+
+describe("percentualDeAcertos (T1114, FR-152, SC-067)", () => {
+  const casos: ReadonlyArray<[ResumoDaSessao, number]> = [
+    [{ estudados: 1, acertos: 1, erros: 0 }, 100],
+    [{ estudados: 1, acertos: 0, erros: 1 }, 0],
+    [{ estudados: 3, acertos: 2, erros: 1 }, 67],
+    [{ estudados: 3, acertos: 1, erros: 2 }, 33],
+    [{ estudados: 3, acertos: 3, erros: 0 }, 100],
+    [{ estudados: 3, acertos: 0, erros: 3 }, 0],
+  ];
+
+  for (const [resumo, esperado] of casos) {
+    it(`para ${resumo.acertos} acertos em ${resumo.estudados} itens, devolve ${esperado}`, () => {
+      expect(percentualDeAcertos(resumo)).toBe(esperado);
+    });
+  }
+
+  it("devolve 0 quando nada foi estudado, sem dividir por zero", () => {
+    expect(percentualDeAcertos({ estudados: 0, acertos: 0, erros: 0 })).toBe(0);
   });
 });

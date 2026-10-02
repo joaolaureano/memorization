@@ -259,9 +259,15 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
       .filter({ hasText: BARALHO_RESTANTE });
 
     await expect(itemDoBaralhoRestante).toHaveCount(1);
+    await expect(itemDoBaralhoRestante).toContainText("0 Cartões");
     await expect(itemDoBaralhoRestante).toContainText(
-      "Não elegível para estudo: nenhum Cartão vinculado.",
+      "Adicione Cartões para começar a estudar.",
     );
+    await expect(
+      itemDoBaralhoRestante.getByRole("button", {
+        name: `Estudar ${BARALHO_RESTANTE}`,
+      }),
+    ).toBeDisabled();
   } finally {
     await encerrarProcesso(frontend);
     await encerrarProcesso(api);
