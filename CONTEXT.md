@@ -38,7 +38,8 @@ _Avoid_: baralho válido, baralho pronto, baralho ativo
 
 **Sessão de estudo**:
 Execução em que cartões de um único baralho são revisados um a um até o resumo.
-Não sobrevive ao seu encerramento.
+Concluída, vira um registro de sessão; interrompida, é descartada sem deixar
+rastro.
 _Avoid_: revisão, treino, rodada, prática
 
 **Item de estudo**:
@@ -57,8 +58,29 @@ _Avoid_: nota, correção, avaliação, score, métrica
 
 **Resumo da sessão**:
 Consolidação final de quantos itens foram estudados, quantos acertos e quantos
-erros. Exibido ao fim da sessão e descartado com ela.
-_Avoid_: relatório, estatística, placar, histórico
+erros, com a lista dos cartões acertados e dos errados. Exibido ao fim da
+sessão e guardado no registro da sessão.
+_Avoid_: relatório, placar
+
+**Registro de sessão**:
+Memória permanente de uma sessão concluída: quando terminou, de qual baralho e o
+resultado de cada item, com a frente, o verso e o nome do baralho como eram
+naquele momento. Editar ou excluir cartões e baralhos depois não o altera.
+_Avoid_: log, entrada, histórico (para um único registro)
+
+**Histórico de estudo**:
+O conjunto dos registros de sessão de um usuário, do mais recente ao mais antigo.
+_Avoid_: log, timeline, atividade
+
+**Taxa de acerto**:
+Acertos divididos pelos itens estudados de um conjunto de registros de sessão,
+em percentual inteiro arredondado.
+_Avoid_: score, nota, aproveitamento, desempenho
+
+**Estatísticas**:
+Números derivados do acervo e do histórico de estudo de um usuário, apresentados
+na tela Início.
+_Avoid_: métricas, dashboard, KPIs, relatório
 
 ### Acesso
 

@@ -1,45 +1,54 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   BaralhoComCartoes,
-  CartaoListado,
+  Cartao,
   ClienteDoAcervo,
 } from "../acervo-cliente/cliente";
-import {
-  LIMITE_DE_CARACTERES_DE_BARALHO,
-  ehCodigoDeErroDeBaralho,
-} from "../acervo-cliente/validacao";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
+import { EstadoDaCarga } from "./EstadoDaCarga";
+import { useDescartarProtecao, useProtecaoDeSaida } from "./protecao-de-saida";
 
 /**
- * Tela de Vínculos de um Baralho (T209; specs/003-vincular-cartao-baralho/tasks.md).
+ * Tela de detalhe de um Baralho
+ * (T1110; specs/012-interface-visual-navegavel/tasks.md, FR-145, FR-147,
+ * FR-153, FR-156).
  *
- * A tela é a página de detalhe do Baralho, na rota `#/baralhos/<id>`. Consome
- * somente a Interface `ClienteDoAcervo`: `obterBaralho(id)` devolve o Baralho
- * com os Cartões já vinculados e a elegibilidade derivada; `listarCartoes()`
- * devolve todos os Cartões, para que a tela apresente também os que ainda
- * podem ser vinculados. A tela **não reproduz nenhuma regra de domínio** —
- * quem decide se um par pode ser vinculado, se um Vínculo existe ou se o
- * Baralho existe é o cliente, e a tela apenas exibe as mensagens em português
- * que ele devolve (FR-046).
+ * É a página `#/baralhos/<id>`: mostra o Baralho, a contagem de Cartões, o
+ * caminho para Estudar e a lista dos Cartões vinculados, com a remoção de cada
+ * Vínculo (FR-145, FR-147). As operações que esta tela antes acumulava —
+ * renomear e vincular Cartões existentes — passaram a viver nas suas próprias
+ * páginas (`#/baralhos/<id>/editar` e `#/baralhos/<id>/adicionar`), e por isso
+ * a tela consome apenas `obterBaralho(id)`, que já traz os Cartões vinculados e
+ * a elegibilidade derivada.
  *
- * T212 (FR-044, FR-045, SC-012): vincular e desvincular nunca alteram a lista
- * por otimismo. A operação é submetida e, **somente após o sucesso**, a tela
- * relê `obterBaralho` e `listarCartoes` e passa a exibir o que o servidor
- * confirmou. Se a releitura falhar, as listas permanecem exatamente como
- * estavam — o estado confirmado anteriormente.
+ * A tela **não reproduz nenhuma regra de domínio** — quem decide se o Baralho
+ * existe é o cliente, e a tela apenas exibe as mensagens em português que ele
+ * devolve (FR-046). Baralho inexistente e Baralho que não pertence a quem está
+ * autenticado resolvem na mesma mensagem, sem distinguir os dois casos
+ * (FR-156).
  *
- * T404 (FR-015, FR-050; specs/005-editar-cartao-e-baralho/tasks.md): a
- * renomeação é feita inline, informa quantos Cartões o Baralho possui e
- * preserva Vínculos e elegibilidade. Sair da renomeação com alterações não
- * salvas exige confirmação explícita.
+ * FR-044, FR-045, SC-012: remover nunca altera a lista por otimismo. A operação
+ * é submetida e, **somente após o sucesso**, a tela relê `obterBaralho` e passa
+ * a exibir o que o servidor confirmou. Se a releitura falhar, a lista permanece
+ * exatamente como estava — o estado confirmado anteriormente.
  *
- * T504, T505, T506 (FR-016, FR-017, FR-068, FR-069, FR-045;
- * specs/006-excluir-cartao-e-baralho/tasks.md): a exclusão do Baralho é
+ * FR-147: remover um Cartão deste Baralho é reversível — o Cartão e os demais
+ * Vínculos continuam existindo (FR-021) —, então não há diálogo de
+ * confirmação. Já a exclusão do Baralho (FR-016, FR-017, FR-068, FR-069) é
  * precedida de diálogo acessível que declara quantos Cartões continuarão
- * existindo e que nenhum Cartão será destruído. Confirmada, a tela navega
- * para `#/baralhos`; em falha de transporte, a entidade continua exibida.
+ * existindo e que nenhum Cartão será destruído. Confirmada, a tela navega para
+ * `#/baralhos`; em falha de transporte, o Baralho continua exibido (FR-045).
+ *
+ * FR-153, FR-154: carregamento, falha e vazio têm apresentação própria
+ * (`EstadoDaCarga`), e enquanto há operação em andamento a saída da tela é
+ * protegida e os botões da operação ficam desabilitados.
  */
 
 interface PropriedadesDaPaginaDoBaralho {
@@ -48,141 +57,110 @@ interface PropriedadesDaPaginaDoBaralho {
 }
 
 /**
- * Ação de foco a executar depois que uma releitura bem-sucedida re-renderiza
- * as duas listas. `tipo` é o botão equivalente **na outra lista** — após
- * vincular, o Cartão passa a ter botão "Desvincular"; após desvincular, passa
- * a ter botão "Vincular".
+ * Ação de foco a executar depois que uma remoção bem-sucedida re-renderiza a
+ * lista (FR-063, FR-064, SC-019). `proximoCartaoId` é o vizinho que passa a
+ * ocupar a posição do Cartão removido — o seguinte, ou o anterior quando o
+ * removido era o último. Sem vizinho, o foco vai ao título da seção, nunca de
+ * volta ao início da página.
  */
-interface FocoAposAtualizacao {
-  tipo: "vincular" | "desvincular";
+interface FocoAposRemocao {
   cartaoId: string;
+  proximoCartaoId: string | null;
 }
 
-/** Folga a partir da qual a aproximação do limite passa a ser comunicada. */
-const FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO = 10;
+/** Motivo anunciado enquanto uma operação do Baralho está em andamento (FR-154). */
+const MOTIVO_DE_PENDENCIA = "Aguarde: a operação está em andamento.";
 
 export function PaginaDoBaralho({
   cliente,
   id,
 }: PropriedadesDaPaginaDoBaralho) {
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
-  const [cartoes, setCartoes] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
-  const [falhaDeListagem, setFalhaDeListagem] = useState<string | null>(null);
+  const [falhaDeCarregamento, setFalhaDeCarregamento] = useState<string | null>(
+    null,
+  );
   const [baralhoNaoEncontrado, setBaralhoNaoEncontrado] = useState<
     string | null
   >(null);
   const [falhaDeAcao, setFalhaDeAcao] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState<string | null>(null);
   const [sequenciaDeAnuncio, setSequenciaDeAnuncio] = useState(0);
-  const [anuncioDeRenomeacao, setAnuncioDeRenomeacao] = useState<string | null>(
-    null,
-  );
-  const [sequenciaDeAnuncioDeRenomeacao, setSequenciaDeAnuncioDeRenomeacao] =
-    useState(0);
-  const [focoAposAtualizacao, setFocoAposAtualizacao] =
-    useState<FocoAposAtualizacao | null>(null);
-
-  const [renomeando, setRenomeando] = useState(false);
-  const [nomeEmEdicao, setNomeEmEdicao] = useState("");
-  const [salvandoRenomeacao, setSalvandoRenomeacao] = useState(false);
-  const [falhaDeRenomeacao, setFalhaDeRenomeacao] = useState<string | null>(
-    null,
-  );
-  const [descartePendente, setDescartePendente] = useState(false);
-  const [focoAposRenomeacao, setFocoAposRenomeacao] = useState(false);
-
-  const [baralhoParaExcluir, setBaralhoParaExcluir] =
-    useState<BaralhoComCartoes | null>(null);
+  const [removendo, setRemovendo] = useState<string | null>(null);
+  const [focoAposRemocao, setFocoAposRemocao] =
+    useState<FocoAposRemocao | null>(null);
+  const [exclusaoPedida, setExclusaoPedida] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [falhaDeExclusao, setFalhaDeExclusao] = useState<string | null>(null);
   const [focoAposExclusao, setFocoAposExclusao] = useState(false);
 
   const botoes = useRef(new Map<string, HTMLButtonElement>());
-  const tituloDosVinculados = useRef<HTMLHeadingElement>(null);
-  const tituloDosNaoVinculados = useRef<HTMLHeadingElement>(null);
-  const campoDeNome = useRef<HTMLInputElement>(null);
-  const botaoDeRenomear = useRef<HTMLButtonElement>(null);
+  const tituloDosCartoes = useRef<HTMLHeadingElement>(null);
   const botaoDeExcluir = useRef<HTMLButtonElement>(null);
+  const requisicao = useRef(0);
 
-  const renomeacaoEstaSuja =
-    baralho !== null && renomeando && nomeEmEdicao !== baralho.nome;
+  const descartarProtecao = useDescartarProtecao();
 
-  useEffect(() => {
-    let ativo = true;
+  // FR-154: enquanto uma operação está em andamento, sair da tela é bloqueado
+  // com o motivo anunciado, e não com um diálogo.
+  useProtecaoDeSaida(
+    removendo !== null || excluindo
+      ? { tipo: "pendencia", motivo: MOTIVO_DE_PENDENCIA }
+      : null,
+  );
+
+  const carregar = useCallback(() => {
+    const minha = ++requisicao.current;
 
     setCarregando(true);
-    setFalhaDeListagem(null);
+    setFalhaDeCarregamento(null);
     setBaralhoNaoEncontrado(null);
-    setBaralho(null);
-    setCartoes([]);
+    setFalhaDeAcao(null);
+    setAnuncio(null);
 
-    void Promise.all([cliente.obterBaralho(id), cliente.listarCartoes()]).then(
-      ([resultadoDoBaralho, resultadoDosCartoes]) => {
-        if (!ativo) {
-          return;
-        }
+    void cliente.obterBaralho(id).then((resultado) => {
+      if (minha !== requisicao.current) {
+        return;
+      }
 
-        if (!resultadoDoBaralho.ok) {
-          if (resultadoDoBaralho.erro === "nao_encontrado") {
-            setBaralhoNaoEncontrado(resultadoDoBaralho.mensagem);
-          } else {
-            setFalhaDeListagem(resultadoDoBaralho.mensagem);
-          }
-        } else if (!resultadoDosCartoes.ok) {
-          setFalhaDeListagem(resultadoDosCartoes.mensagem);
+      if (resultado.ok) {
+        setBaralho(resultado.baralho);
+      } else {
+        setBaralho(null);
+
+        if (resultado.erro === "nao_encontrado") {
+          setBaralhoNaoEncontrado(resultado.mensagem);
         } else {
-          setBaralho(resultadoDoBaralho.baralho);
-          setCartoes(resultadoDosCartoes.cartoes);
+          setFalhaDeCarregamento(resultado.mensagem);
         }
+      }
 
-        setCarregando(false);
-      },
-    );
-
-    return () => {
-      ativo = false;
-    };
+      setCarregando(false);
+    });
   }, [cliente, id]);
 
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
   useLayoutEffect(() => {
-    if (focoAposAtualizacao === null) {
+    if (focoAposRemocao === null) {
       return;
     }
 
-    const chave = `${focoAposAtualizacao.tipo}:${focoAposAtualizacao.cartaoId}`;
-    const botao = botoes.current.get(chave);
+    const vizinho =
+      focoAposRemocao.proximoCartaoId === null
+        ? undefined
+        : botoes.current.get(`remover:${focoAposRemocao.proximoCartaoId}`);
 
-    if (botao !== undefined) {
-      botao.focus();
+    if (vizinho !== undefined) {
+      vizinho.focus();
     } else {
-      const titulo =
-        focoAposAtualizacao.tipo === "desvincular"
-          ? tituloDosVinculados
-          : tituloDosNaoVinculados;
-
-      titulo.current?.focus();
+      tituloDosCartoes.current?.focus();
     }
 
-    setFocoAposAtualizacao(null);
-  }, [focoAposAtualizacao, baralho, cartoes]);
-
-  useEffect(() => {
-    if (!renomeando) {
-      return;
-    }
-
-    campoDeNome.current?.focus();
-  }, [renomeando]);
-
-  useEffect(() => {
-    if (!focoAposRenomeacao) {
-      return;
-    }
-
-    botaoDeRenomear.current?.focus();
-    setFocoAposRenomeacao(false);
-  }, [focoAposRenomeacao, baralho]);
+    setFocoAposRemocao(null);
+  }, [focoAposRemocao, baralho]);
 
   useEffect(() => {
     if (!focoAposExclusao) {
@@ -193,156 +171,57 @@ export function PaginaDoBaralho({
     setFocoAposExclusao(false);
   }, [focoAposExclusao, baralho]);
 
-  async function vincular(cartao: { id: string }): Promise<void> {
+  /**
+   * Remove o Cartão deste Baralho, sem confirmação (FR-147, FR-066).
+   *
+   * FR-044: a lista só muda depois que o servidor confirmou a remoção — o
+   * Cartão sai da lista, e o Baralho é relido para que a contagem e a
+   * elegibilidade passem a refletir o estado confirmado. Se a remoção ou a
+   * releitura falhar, a lista não é tocada e a mensagem do cliente é exibida.
+   */
+  async function removerDoBaralho(cartao: Cartao): Promise<void> {
     setFalhaDeAcao(null);
     setAnuncio(null);
+    setRemovendo(cartao.id);
 
-    const resultado = await cliente.vincular(cartao.id, id);
-
-    if (!resultado.ok) {
-      setFalhaDeAcao(resultado.mensagem);
-      return;
-    }
-
-    await relerAposOperacao(cartao, "desvincular");
-  }
-
-  async function desvincular(cartao: { id: string }): Promise<void> {
-    setFalhaDeAcao(null);
-    setAnuncio(null);
+    const cartoesAtuais = baralho?.cartoes ?? [];
+    const indice = cartoesAtuais.findIndex((item) => item.id === cartao.id);
+    const vizinho =
+      indice < 0
+        ? null
+        : (cartoesAtuais[indice + 1] ?? cartoesAtuais[indice - 1] ?? null);
+    const eraElegivel = baralho?.elegivel ?? false;
 
     const resultado = await cliente.desvincular(cartao.id, id);
 
     if (!resultado.ok) {
       setFalhaDeAcao(resultado.mensagem);
+      setRemovendo(null);
       return;
     }
 
-    await relerAposOperacao(cartao, "vincular");
-  }
+    const releitura = await cliente.obterBaralho(id);
 
-  /**
-   * Relê o Baralho e os Cartões após uma operação bem-sucedida (FR-044).
-   *
-   * O Vínculo só aparece ou desaparece depois que o servidor o confirmou na
-   * releitura. Se qualquer releitura falhar, as listas não são tocadas: a
-   * tela continua retratando o último estado confirmado, e a falha é exibida
-   * para nova tentativa.
-   */
-  async function relerAposOperacao(
-    cartao: { id: string },
-    tipoDeFoco: FocoAposAtualizacao["tipo"],
-  ): Promise<void> {
-    const eraElegivel = baralho?.elegivel ?? false;
-    const [resultadoDoBaralho, resultadoDosCartoes] = await Promise.all([
-      cliente.obterBaralho(id),
-      cliente.listarCartoes(),
-    ]);
-
-    if (!resultadoDoBaralho.ok) {
-      setFalhaDeAcao(resultadoDoBaralho.mensagem);
+    if (!releitura.ok) {
+      setFalhaDeAcao(releitura.mensagem);
+      setRemovendo(null);
       return;
     }
 
-    if (!resultadoDosCartoes.ok) {
-      setFalhaDeAcao(resultadoDosCartoes.mensagem);
-      return;
+    const mensagens = ["Cartão removido deste Baralho."];
+
+    if (eraElegivel && !releitura.baralho.elegivel) {
+      mensagens.push("O Baralho ficou sem Cartões; Estudar está indisponível.");
     }
 
-    const mensagens =
-      tipoDeFoco === "desvincular"
-        ? ["Cartão vinculado ao Baralho."]
-        : ["Cartão desvinculado do Baralho."];
-
-    if (!eraElegivel && resultadoDoBaralho.baralho.elegivel) {
-      mensagens.push("O Baralho tornou-se elegível para estudo.");
-    } else if (eraElegivel && !resultadoDoBaralho.baralho.elegivel) {
-      mensagens.push("O Baralho deixou de ser elegível para estudo.");
-    }
-
-    setBaralho(resultadoDoBaralho.baralho);
-    setCartoes(resultadoDosCartoes.cartoes);
+    setBaralho(releitura.baralho);
     setAnuncio(mensagens.join(" "));
     setSequenciaDeAnuncio((atual) => atual + 1);
-    setFocoAposAtualizacao({ tipo: tipoDeFoco, cartaoId: cartao.id });
-  }
-
-  function comecarRenomeacao(): void {
-    if (baralho === null) {
-      return;
-    }
-
-    setRenomeando(true);
-    setNomeEmEdicao(baralho.nome);
-    setFalhaDeRenomeacao(null);
-    setFalhaDeExclusao(null);
-  }
-
-  function fecharRenomeacao(): void {
-    setRenomeando(false);
-    setNomeEmEdicao("");
-    setFalhaDeRenomeacao(null);
-    setFocoAposRenomeacao(true);
-  }
-
-  function cancelarRenomeacao(): void {
-    if (renomeacaoEstaSuja) {
-      setDescartePendente(true);
-      return;
-    }
-
-    fecharRenomeacao();
-  }
-
-  function confirmarDescarte(): void {
-    setDescartePendente(false);
-    fecharRenomeacao();
-  }
-
-  function recusarDescarte(): void {
-    setDescartePendente(false);
-    campoDeNome.current?.focus();
-  }
-
-  async function salvarRenomeacao(
-    evento: FormEvent<HTMLFormElement>,
-  ): Promise<void> {
-    evento.preventDefault();
-
-    if (baralho === null) {
-      return;
-    }
-
-    setSalvandoRenomeacao(true);
-    setFalhaDeRenomeacao(null);
-
-    const resultado = await cliente.renomearBaralho(id, nomeEmEdicao);
-
-    if (resultado.ok) {
-      // FR-044: o novo nome só aparece depois de o servidor confirmar a
-      // renomeação. Vínculos e elegibilidade não são tocados; a releitura
-      // abaixo apenas reconcilia o restante do Baralho com o acervo.
-      setBaralho((atual) =>
-        atual === null ? atual : { ...atual, nome: resultado.baralho.nome },
-      );
-      fecharRenomeacao();
-      setAnuncioDeRenomeacao("Baralho renomeado.");
-      setSequenciaDeAnuncioDeRenomeacao((atual) => atual + 1);
-
-      const releitura = await cliente.obterBaralho(id);
-
-      if (releitura.ok) {
-        setBaralho(releitura.baralho);
-      }
-    } else {
-      setFalhaDeRenomeacao(resultado.mensagem);
-
-      if (ehCodigoDeErroDeBaralho(resultado.erro)) {
-        campoDeNome.current?.focus();
-      }
-    }
-
-    setSalvandoRenomeacao(false);
+    setFocoAposRemocao({
+      cartaoId: cartao.id,
+      proximoCartaoId: vizinho?.id ?? null,
+    });
+    setRemovendo(null);
   }
 
   function abrirExclusao(): void {
@@ -350,37 +229,41 @@ export function PaginaDoBaralho({
       return;
     }
 
-    setBaralhoParaExcluir(baralho);
     setFalhaDeExclusao(null);
+    setExclusaoPedida(true);
   }
 
   function cancelarExclusao(): void {
-    setBaralhoParaExcluir(null);
+    setExclusaoPedida(false);
     setFocoAposExclusao(true);
   }
 
   async function confirmarExclusao(): Promise<void> {
-    if (baralhoParaExcluir === null) {
+    if (baralho === null) {
       return;
     }
 
     setExcluindo(true);
     setFalhaDeExclusao(null);
 
-    const resultado = await cliente.excluirBaralho(baralhoParaExcluir.id);
+    const resultado = await cliente.excluirBaralho(baralho.id);
+
+    setExcluindo(false);
 
     if (resultado.ok) {
       // FR-044: só depois de o servidor confirmar a exclusão a tela navega
-      // para a lista de Baralhos — onde o Baralho não aparecerá mais.
-      setBaralhoParaExcluir(null);
+      // para a lista de Baralhos — onde o Baralho não aparecerá mais. A
+      // proteção de pendência é descartada antes, porque esta navegação
+      // sempre vence (FR-154).
+      setExclusaoPedida(false);
+      descartarProtecao();
       window.location.hash = "#/baralhos";
-    } else {
-      setFalhaDeExclusao(resultado.mensagem);
-      setBaralhoParaExcluir(null);
-      setFocoAposExclusao(true);
+      return;
     }
 
-    setExcluindo(false);
+    setFalhaDeExclusao(resultado.mensagem);
+    setExclusaoPedida(false);
+    setFocoAposExclusao(true);
   }
 
   function registrarBotao(chave: string) {
@@ -393,49 +276,74 @@ export function PaginaDoBaralho({
     };
   }
 
-  const idsVinculados = new Set((baralho?.cartoes ?? []).map((cartao) => cartao.id));
-  const cartoesNaoVinculados = cartoes.filter(
-    (cartao) => !idsVinculados.has(cartao.id),
-  );
+  const quantidadeDeCartoes = baralho?.cartoes.length ?? 0;
 
   return (
     <div className="pagina">
       <p className="voltar">
-        <a href="#/baralhos">Voltar para Baralhos</a>
+        <a href="#/baralhos">← Voltar para Baralhos</a>
       </p>
 
-      <h1>
-        {baralhoNaoEncontrado !== null
-          ? "Baralho não encontrado"
-          : (baralho?.nome ?? "Baralho")}
-      </h1>
+      <div className="cabecalho-da-pagina">
+        <div>
+          <p className="sobretitulo">Baralho</p>
+          <h1>
+            {baralhoNaoEncontrado !== null
+              ? "Baralho não encontrado"
+              : (baralho?.nome ?? "Baralho")}
+          </h1>
+          {baralho !== null && (
+            <p className="texto-secundario">
+              {descricaoDaContagemDeCartoes(quantidadeDeCartoes)}
+            </p>
+          )}
+        </div>
+
+        {baralho !== null && (
+          // FR-145: Estudar é a primeira ação da página. Sem Cartões, o
+          // caminho não leva a lugar nenhum: o botão fica desabilitado e a
+          // explicação vem ao lado.
+          <div className="acoes">
+            {quantidadeDeCartoes === 0 ? (
+              <>
+                <button
+                  type="button"
+                  className="botao botao--primario"
+                  disabled
+                  aria-describedby="motivo-para-nao-estudar"
+                >
+                  Estudar este Baralho
+                </button>
+                <p id="motivo-para-nao-estudar" className="ajuda">
+                  Adicione Cartões ao Baralho para poder estudar.
+                </p>
+              </>
+            ) : (
+              <a
+                className="botao botao--primario"
+                href={`#/baralhos/${id}/estudo`}
+              >
+                Estudar este Baralho
+              </a>
+            )}
+          </div>
+        )}
+      </div>
 
       {carregando ? (
-        <p className="carregando">Carregando Baralho…</p>
+        <EstadoDaCarga estado="carregando" mensagem="Carregando Baralho…" />
       ) : baralhoNaoEncontrado !== null ? (
-        <p
-          className="erro"
-          role="alert"
-          aria-label="Baralho não encontrado"
-        >
+        <p className="erro" role="alert" aria-label="Baralho não encontrado">
           {baralhoNaoEncontrado}
         </p>
-      ) : falhaDeListagem !== null ? (
-        <p
-          className="erro"
-          role="alert"
-          aria-label="Falha ao carregar o Baralho"
-        >
-          {falhaDeListagem}
-        </p>
+      ) : falhaDeCarregamento !== null ? (
+        <EstadoDaCarga
+          estado="falha"
+          mensagem={falhaDeCarregamento}
+          aoTentarNovamente={carregar}
+        />
       ) : baralho !== null ? (
         <>
-          <p className="elegibilidade-do-baralho">
-            {baralho.elegivel
-              ? "Elegível para estudo."
-              : "Não elegível para estudo: nenhum Cartão vinculado."}
-          </p>
-
           {falhaDeAcao !== null && (
             <p
               className="erro"
@@ -459,168 +367,70 @@ export function PaginaDoBaralho({
             </p>
           )}
 
-          {cartoes.length === 0 ? (
-            // FR-062: o caso "não há Cartão" é distinto dos demais. Sem
-            // Cartão algum, as duas listas seriam vazias por motivos
-            // diferentes; uma única mensagem explica a ação que destrava a
-            // tela.
-            <p
-              className="estado-vazio"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              aria-label="Estado vazio da tela de Vínculos"
-            >
-              Ainda não há Cartões. Crie um Cartão antes de vincular.
+          <section>
+            <h2 ref={tituloDosCartoes} tabIndex={-1}>
+              Cartões do Baralho
+            </h2>
+
+            {baralho.cartoes.length === 0 ? (
+              // FR-153: o Baralho vazio tem a sua própria apresentação, e a
+              // ação que o destrava é vincular Cartões existentes.
+              <div className="estado-vazio">
+                <p>Este Baralho ainda não tem Cartões.</p>
+              </div>
+            ) : (
+              <ul className="lista">
+                {baralho.cartoes.map((cartao) => (
+                  <li key={cartao.id} className="cartao">
+                    <p className="lado-do-cartao">Frente</p>
+                    <p className="conteudo-do-cartao">{cartao.frente}</p>
+                    <p className="lado-do-cartao">Verso</p>
+                    <p className="conteudo-do-cartao">{cartao.verso}</p>
+                    <div className="acoes">
+                      <button
+                        ref={registrarBotao(`remover:${cartao.id}`)}
+                        className="botao botao--secundario"
+                        type="button"
+                        disabled={removendo !== null}
+                        aria-label={`Remover ${cartao.frente} deste baralho`}
+                        onClick={() => void removerDoBaralho(cartao)}
+                      >
+                        Remover deste baralho
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p>
+              <a
+                className="botao botao--secundario"
+                href={`#/baralhos/${id}/adicionar`}
+              >
+                Adicionar cartões existentes
+              </a>
             </p>
-          ) : (
-            <>
-              <section>
-                <h2 ref={tituloDosVinculados} tabIndex={-1}>
-                  Cartões do Baralho
-                </h2>
+          </section>
 
-                {baralho.cartoes.length === 0 ? (
-                  <p className="estado-vazio">
-                    Este Baralho ainda não tem Cartões vinculados.
-                  </p>
-                ) : (
-                  <ul className="lista-de-cartoes">
-                    {baralho.cartoes.map((cartao) => (
-                      <li key={cartao.id} className="cartao">
-                        <p className="frente-do-cartao">
-                          <span className="rotulo">Frente</span> {cartao.frente}
-                        </p>
-                        <p className="verso-do-cartao">
-                          <span className="rotulo">Verso</span> {cartao.verso}
-                        </p>
-                        <button
-                          ref={registrarBotao(`desvincular:${cartao.id}`)}
-                          className="botao-de-vinculo"
-                          type="button"
-                          aria-label={`Desvincular ${cartao.frente}`}
-                          onClick={() => void desvincular(cartao)}
-                        >
-                          Desvincular
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-
-              <section>
-                <h2 ref={tituloDosNaoVinculados} tabIndex={-1}>
-                  Cartões não vinculados
-                </h2>
-
-                {cartoesNaoVinculados.length === 0 ? (
-                  <p className="estado-vazio">
-                    Todos os Cartões já estão vinculados a este Baralho.
-                  </p>
-                ) : (
-                  <ul className="lista-de-cartoes">
-                    {cartoesNaoVinculados.map((cartao) => (
-                      <li key={cartao.id} className="cartao">
-                        <p className="frente-do-cartao">
-                          <span className="rotulo">Frente</span> {cartao.frente}
-                        </p>
-                        <p className="verso-do-cartao">
-                          <span className="rotulo">Verso</span> {cartao.verso}
-                        </p>
-                        <button
-                          ref={registrarBotao(`vincular:${cartao.id}`)}
-                          className="botao-de-vinculo"
-                          type="button"
-                          aria-label={`Vincular ${cartao.frente}`}
-                          onClick={() => void vincular(cartao)}
-                        >
-                          Vincular
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </>
-          )}
-
-          <p className="estudar-baralho">
-            <a href={`#/baralhos/${id}/estudo`}>Estudar este Baralho</a>
-          </p>
-
-          <div className="acoes-do-baralho">
-            <button
-              ref={botaoDeRenomear}
-              type="button"
-              disabled={renomeando}
-              onClick={comecarRenomeacao}
+          <div className="acoes">
+            <a
+              className="botao botao--secundario"
+              href={`#/baralhos/${id}/editar`}
             >
               Renomear
-            </button>
+            </a>
             <button
               ref={botaoDeExcluir}
               type="button"
-              disabled={renomeando}
+              className="botao botao--perigo"
+              aria-label="Excluir Baralho"
+              disabled={removendo !== null || excluindo}
               onClick={abrirExclusao}
             >
               Excluir Baralho
             </button>
           </div>
-
-          {renomeando && (
-            <form
-              className="formulario-de-renomeacao"
-              onSubmit={(evento) => void salvarRenomeacao(evento)}
-            >
-              <p className="alcance-da-edicao">
-                {descricaoDeAlcanceDeRenomeacao(baralho.cartoes.length)}
-              </p>
-
-              <div className="campo">
-                <label htmlFor="campo-nome-do-baralho">Nome</label>
-                <input
-                  id="campo-nome-do-baralho"
-                  ref={campoDeNome}
-                  value={nomeEmEdicao}
-                  onChange={(evento) => setNomeEmEdicao(evento.target.value)}
-                  aria-describedby={
-                    avisoDeLimiteDeBaralho(nomeEmEdicao.length) === null
-                      ? "contador-do-nome-do-baralho"
-                      : "contador-do-nome-do-baralho aviso-do-nome-do-baralho"
-                  }
-                />
-                <p id="contador-do-nome-do-baralho" className="contador">
-                  {nomeEmEdicao.length} / {LIMITE_DE_CARACTERES_DE_BARALHO}{" "}
-                  caracteres
-                </p>
-                {avisoDeLimiteDeBaralho(nomeEmEdicao.length) !== null && (
-                  <p id="aviso-do-nome-do-baralho" className="aviso-de-limite">
-                    {avisoDeLimiteDeBaralho(nomeEmEdicao.length)}
-                  </p>
-                )}
-              </div>
-
-              {falhaDeRenomeacao !== null && (
-                <p
-                  className="erro"
-                  role="alert"
-                  aria-label="Falha na renomeação do Baralho"
-                >
-                  {falhaDeRenomeacao}
-                </p>
-              )}
-
-              <div className="acoes-de-edicao">
-                <button type="submit" disabled={salvandoRenomeacao}>
-                  Salvar alterações
-                </button>
-                <button type="button" onClick={cancelarRenomeacao}>
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          )}
 
           {falhaDeExclusao !== null && (
             <p
@@ -632,47 +442,19 @@ export function PaginaDoBaralho({
             </p>
           )}
 
-          {anuncioDeRenomeacao !== null && (
-            <p
-              key={`anuncio-de-renomeacao-${sequenciaDeAnuncioDeRenomeacao}`}
-              className="anuncio-de-acao"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-              aria-label="Mudança de Baralho"
-            >
-              {anuncioDeRenomeacao}
-            </p>
-          )}
         </>
       ) : null}
 
-      {descartePendente && (
+      {exclusaoPedida && baralho !== null && (
         <DialogoDeConfirmacao
           aberto
-          titulo="Descartar alterações?"
-          rotuloDeConfirmacao="Descartar alterações"
-          rotuloDeCancelamento="Continuar editando"
-          aoConfirmar={confirmarDescarte}
-          aoCancelar={recusarDescarte}
-        >
-          <p>
-            Você tem alterações não salvas neste Baralho. Deseja descartar
-            essas alterações?
-          </p>
-        </DialogoDeConfirmacao>
-      )}
-
-      {baralhoParaExcluir !== null && (
-        <DialogoDeConfirmacao
-          aberto
-          titulo="Excluir Baralho"
+          titulo={`Excluir “${baralho.nome}”?`}
           rotuloDeConfirmacao="Excluir Baralho"
           confirmacaoDesabilitada={excluindo}
           aoConfirmar={() => void confirmarExclusao()}
           aoCancelar={cancelarExclusao}
         >
-          <p>{descricaoDeExclusaoDeBaralho(baralhoParaExcluir)}</p>
+          <p>{descricaoDeExclusaoDeBaralho(baralho)}</p>
         </DialogoDeConfirmacao>
       )}
     </div>
@@ -680,40 +462,19 @@ export function PaginaDoBaralho({
 }
 
 /**
- * Comunicação da contagem e do limite durante a digitação do nome (FR-061).
+ * Informa quantos Cartões o Baralho tem (FR-145). O texto do cabeçalho sai
+ * daqui, e é a única apresentação da contagem na página.
  */
-function avisoDeLimiteDeBaralho(comprimento: number): string | null {
-  const restantes = LIMITE_DE_CARACTERES_DE_BARALHO - comprimento;
-
-  if (restantes > FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO) {
-    return null;
-  }
-
-  if (restantes < 0) {
-    return `Atenção: o nome excede o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  if (restantes === 0) {
-    return `Atenção: o nome atingiu o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  return `Atenção: faltam ${restantes} caracteres para o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO}.`;
-}
-
-/**
- * Informa o alcance da renomeação de um Baralho (FR-015): quantos Cartões
- * estão vinculados a ele.
- */
-function descricaoDeAlcanceDeRenomeacao(quantidade: number): string {
+function descricaoDaContagemDeCartoes(quantidade: number): string {
   if (quantidade === 0) {
-    return "Este Baralho não tem Cartões vinculados.";
+    return "Nenhum Cartão neste Baralho.";
   }
 
   if (quantidade === 1) {
-    return "Este Baralho tem 1 Cartão vinculado.";
+    return "1 Cartão neste Baralho.";
   }
 
-  return `Este Baralho tem ${quantidade} Cartões vinculados.`;
+  return `${quantidade} Cartões neste Baralho.`;
 }
 
 /**

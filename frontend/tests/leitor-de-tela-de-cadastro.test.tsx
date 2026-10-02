@@ -13,6 +13,7 @@ import {
   MENSAGEM_DE_CONFIRMACAO_DIVERGENTE,
   PaginaDeCadastro,
 } from "../src/ui/PaginaDeCadastro";
+import { comProtecaoDeSaida } from "./apoio-de-prova";
 
 /**
  * T612 — recusas e confirmação do Cadastro perceptíveis por leitor de tela
@@ -33,7 +34,9 @@ const SENHA_VALIDA = "senha-de-prova";
 function renderizarPaginaDeCadastro(
   cliente: ClienteEmMemoria = new ClienteEmMemoria(),
 ): void {
-  render(<PaginaDeCadastro cliente={cliente} />);
+  // FR-148: a tela registra a proteção de saída, então a prova a monta sob o
+  // provedor — o mesmo que a aplicação usa.
+  render(comProtecaoDeSaida(<PaginaDeCadastro cliente={cliente} />));
 }
 
 /** Preenche os três campos pelos rótulos acessíveis. */
@@ -114,7 +117,9 @@ describe("PaginaDeCadastro para leitor de tela", () => {
     preencher(NOME_DE_USUARIO_VALIDO, SENHA_VALIDA);
     submeter();
 
-    const confirmacao = await screen.findByRole("status");
+    const confirmacao = await screen.findByRole("status", {
+      name: "Cadastro concluído",
+    });
 
     expect(confirmacao).toHaveAccessibleName("Cadastro concluído");
     expect(confirmacao).toHaveAttribute("aria-live", "polite");
@@ -143,7 +148,9 @@ describe("PaginaDeCadastro para leitor de tela", () => {
     expect(alerta).not.toHaveAttribute("aria-live");
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Cadastro concluído" }),
+    ).not.toBeInTheDocument();
   });
 
   it("a recusa de domínio é um alerta nomeado, com a mensagem do cliente e sem duplicar anúncios (FR-082, FR-046)", async () => {
@@ -182,7 +189,9 @@ describe("PaginaDeCadastro para leitor de tela", () => {
 
     expect(alerta).toHaveAccessibleName("Falha no Cadastro");
     expect(alerta).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS);
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Cadastro concluído" }),
+    ).not.toBeInTheDocument();
   });
 
   it("cada nova tentativa recusada insere um alerta novo, reanunciável (FR-082)", async () => {

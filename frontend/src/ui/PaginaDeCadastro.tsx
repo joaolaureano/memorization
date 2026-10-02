@@ -10,6 +10,8 @@ import {
   ehCodigoDeErroDeCadastro,
   type CodigoDeErroDeCadastro,
 } from "../acervo-cliente/validacao";
+import { CampoDeSenha } from "./CampoDeSenha";
+import { useProtecaoDeSaida, type Protecao } from "./protecao-de-saida";
 
 /**
  * Tela "Criar conta" (T608 a T612; specs/007-criar-usuario/tasks.md).
@@ -38,6 +40,16 @@ import {
  * — o próximo passo de quem acabou de criar o Usuário. As duas ofertas são
  * exclusivas, de modo que exista uma única ação com o nome "Entrar" em cada
  * momento da tela.
+ *
+ * FR-141 a FR-143: a tela segue o vocabulário visual do protótipo (`acesso`,
+ * `cartao`, `sobretitulo`, `botao--primario`) e os dois campos de Senha usam o
+ * `CampoDeSenha`, cada um com o seu próprio Mostrar/Ocultar (FR-142). Concluído
+ * o Cadastro, a confirmação aparece com acesso a Entrar — nunca uma entrada
+ * automática.
+ *
+ * FR-148 e FR-154: com conteúdo digitado e ainda não concluído, sair da tela
+ * passa pela proteção de saída (`descarte`); com o envio em andamento, a saída
+ * é bloqueada e o motivo é anunciado (`pendencia`).
  */
 
 /**
@@ -55,6 +67,13 @@ const FOLGA_PARA_AVISO_DE_LIMITE = 10;
  */
 export const MENSAGEM_DE_CONFIRMACAO_DIVERGENTE =
   "A Senha e a Confirmação da Senha estão diferentes. Digite a mesma Senha nos dois campos.";
+
+/**
+ * O motivo da saída bloqueada enquanto o Cadastro é enviado (FR-154). Não é
+ * código do contrato: é a razão anunciada pela proteção de saída.
+ */
+export const MENSAGEM_DE_SAIDA_BLOQUEADA =
+  "Aguarde: o Cadastro está sendo enviado.";
 
 /**
  * Campo a corrigir para cada recusa de regra de Cadastro (FR-081).
@@ -136,8 +155,28 @@ export function PaginaDeCadastro({
   const avisoDoNome = avisoDoNomeDeUsuario(nomeDeUsuario);
   const avisoDaSenha = avisoDaSenhaDigitada(senha);
 
+  // FR-148: enquanto houver conteúdo digitado e não concluído, sair da tela
+  // passa pela confirmação; FR-154: com o envio em andamento, a saída é apenas
+  // bloqueada e o motivo, anunciado.
+  const formularioPreenchido =
+    nomeDeUsuario !== "" || senha !== "" || confirmacaoDaSenha !== "";
+
+  const protecao: Protecao | null = submetendo
+    ? { tipo: "pendencia", motivo: MENSAGEM_DE_SAIDA_BLOQUEADA }
+    : usuarioCadastrado === null && formularioPreenchido
+      ? {
+          tipo: "descarte",
+          titulo: "Descartar o Cadastro?",
+          descricao: "Os dados preenchidos serão perdidos.",
+          rotuloDeConfirmacao: "Descartar",
+        }
+      : null;
+
+  useProtecaoDeSaida(protecao);
+
   return (
-    <div className="pagina">
+    <section className="acesso">
+      <p className="sobretitulo">Cadastro</p>
       <h1>Criar conta</h1>
 
       {usuarioCadastrado !== null && (
@@ -148,7 +187,7 @@ export function PaginaDeCadastro({
         // asseverável por teste, sem mudar o que o leitor de tela anuncia.
         <p
           key={sequenciaDeConfirmacao}
-          className="confirmacao-do-cadastro"
+          className="aviso aviso--sucesso"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -159,16 +198,11 @@ export function PaginaDeCadastro({
         </p>
       )}
 
-      {usuarioCadastrado !== null && (
-        // FR-097: concluído o Cadastro, a tela oferece Entrar em seguida.
-        <p className="acesso-a-entrada">
-          <a href="#/entrar">Entrar</a>
-        </p>
-      )}
-
-      <form className="formulario-de-cadastro" onSubmit={cadastrar}>
+      <form className="formulario cartao" onSubmit={cadastrar}>
         <div className="campo">
-          <label htmlFor="campo-nome-de-usuario">Nome de usuário</label>
+          <label className="rotulo" htmlFor="campo-nome-de-usuario">
+            Nome de usuário
+          </label>
           <input
             id="campo-nome-de-usuario"
             ref={campoDeNomeDeUsuario}
@@ -180,7 +214,7 @@ export function PaginaDeCadastro({
                 : "regras-do-nome-de-usuario contador-do-nome-de-usuario aviso-do-nome-de-usuario"
             }
           />
-          <p id="regras-do-nome-de-usuario" className="contador">
+          <p id="regras-do-nome-de-usuario" className="ajuda">
             De {LIMITE_MINIMO_DE_NOME_DE_USUARIO} a{" "}
             {LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres: letras de A a Z sem
             acento, dígitos, ponto, sublinhado e hífen.
@@ -190,81 +224,83 @@ export function PaginaDeCadastro({
             caracteres
           </p>
           {avisoDoNome !== null && (
-            <p id="aviso-do-nome-de-usuario" className="aviso-de-limite">
+            <p id="aviso-do-nome-de-usuario" className="ajuda">
               {avisoDoNome}
             </p>
           )}
         </div>
 
-        <div className="campo">
-          <label htmlFor="campo-senha">Senha</label>
-          <input
-            id="campo-senha"
-            ref={campoDeSenha}
-            type="password"
-            autoComplete="new-password"
-            value={senha}
-            onChange={(evento) => setSenha(evento.target.value)}
-            aria-describedby={
-              avisoDaSenha === null
-                ? "regras-da-senha contador-da-senha"
-                : "regras-da-senha contador-da-senha aviso-da-senha"
-            }
-          />
-          <p id="regras-da-senha" className="contador">
-            De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres,
-            qualquer caractere, inclusive espaços.
+        <CampoDeSenha
+          id="campo-senha"
+          rotulo="Senha"
+          valor={senha}
+          aoMudar={setSenha}
+          autoComplete="new-password"
+          descritoPor={
+            avisoDaSenha === null
+              ? "regras-da-senha contador-da-senha"
+              : "regras-da-senha contador-da-senha aviso-da-senha"
+          }
+          referencia={campoDeSenha}
+        />
+        <p id="regras-da-senha" className="ajuda">
+          De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres,
+          qualquer caractere, inclusive espaços.
+        </p>
+        <p id="contador-da-senha" className="contador">
+          {senha.length} / {LIMITE_MAXIMO_DE_SENHA} caracteres
+        </p>
+        {avisoDaSenha !== null && (
+          <p id="aviso-da-senha" className="ajuda">
+            {avisoDaSenha}
           </p>
-          <p id="contador-da-senha" className="contador">
-            {senha.length} / {LIMITE_MAXIMO_DE_SENHA} caracteres
-          </p>
-          {avisoDaSenha !== null && (
-            <p id="aviso-da-senha" className="aviso-de-limite">
-              {avisoDaSenha}
-            </p>
-          )}
-        </div>
+        )}
 
-        <div className="campo">
-          <label htmlFor="campo-confirmacao-da-senha">
-            Confirmação da Senha
-          </label>
-          <input
-            id="campo-confirmacao-da-senha"
-            ref={campoDeConfirmacaoDaSenha}
-            type="password"
-            autoComplete="new-password"
-            value={confirmacaoDaSenha}
-            onChange={(evento) => setConfirmacaoDaSenha(evento.target.value)}
-          />
-        </div>
+        <CampoDeSenha
+          id="campo-confirmacao-da-senha"
+          rotulo="Confirmação da Senha"
+          valor={confirmacaoDaSenha}
+          aoMudar={setConfirmacaoDaSenha}
+          autoComplete="new-password"
+          referencia={campoDeConfirmacaoDaSenha}
+        />
 
         {falha !== null && (
           // FR-082: a recusa é anunciada por região assertiva, e não apenas
           // exibida. O papel `alert` já implica região assertiva e atômica;
           // nenhum `aria-live` explícito redundante, que poderia duplicar o
           // anúncio.
-          <p className="erro" role="alert" aria-label="Falha no Cadastro">
+          <p
+            className="aviso aviso--erro"
+            role="alert"
+            aria-label="Falha no Cadastro"
+          >
             {falha}
           </p>
         )}
 
         <button
-          className="botao-de-criacao"
+          className="botao botao--primario"
           type="submit"
           disabled={submetendo}
         >
-          Criar conta
+          {submetendo ? "Criando conta…" : "Criar conta"}
         </button>
       </form>
 
-      {usuarioCadastrado === null && (
+      {usuarioCadastrado === null ? (
         // FR-097: a volta a "Entrar", o caminho de quem já tem Usuário.
-        <p className="acesso-a-entrada">
+        <p className="voltar">
           Já tem uma conta? <a href="#/entrar">Entrar</a>
         </p>
+      ) : (
+        // FR-143: concluído o Cadastro, o próximo passo é Entrar — sem entrada
+        // automática, e sem deixar duas ações com o nome "Entrar".
+        <p className="voltar">
+          <a href="#/entrar">Entrar</a>
+        </p>
       )}
-    </div>
+    </section>
   );
 }
 

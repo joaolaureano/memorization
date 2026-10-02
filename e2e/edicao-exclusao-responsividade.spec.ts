@@ -25,8 +25,8 @@ import type { ProcessoIniciado } from "./servidores-locais";
 // specs/006-excluir-cartao-e-baralho/tasks.md, FR-042, FR-046).
 //
 // Exercita o frontend React real sobre a API real, em viewport de telefone. A
-// prova mede a ausência de rolagem horizontal com o formulário inline de
-// edição aberto e com o diálogo de confirmação de exclusão aberto.
+// prova mede a ausência de rolagem horizontal com a página de edição aberta e
+// com o diálogo de confirmação de exclusão aberto.
 
 const CARTAO = {
   frente: "To walk",
@@ -90,12 +90,22 @@ test("edição e exclusão de Cartão permanecem utilizáveis e sem rolagem hori
     await entrarSeNecessario(page);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
-    await page.getByRole("button", { name: "Editar" }).click();
-    await expect(page.getByLabel("Frente do Cartão")).toBeVisible();
+    // Na UI da spec 012 editar é navegar: o Cartão traz o link "Editar
+    // <Frente>" (aria-label) rumo a #/cartoes/:id/editar.
+    await page
+      .getByRole("link", { name: `Editar ${CARTAO.frente}` })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Editar Cartão" }),
+    ).toBeVisible();
     expect(await medirExcessoDeLargura(page)).toBeLessThanOrEqual(0);
 
-    await page.getByRole("button", { name: "Cancelar" }).click();
-    await page.getByRole("button", { name: "Excluir" }).click();
+    // O formulário não foi alterado, então sair dele não pergunta nada; a
+    // exclusão abre o diálogo de confirmação na própria lista.
+    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page
+      .getByRole("button", { name: `Excluir ${CARTAO.frente}` })
+      .click();
 
     const dialogo = page.getByRole("dialog");
     await expect(dialogo).toBeVisible();
@@ -153,11 +163,16 @@ test("renomeação e exclusão de Baralho permanecem utilizáveis e sem rolagem 
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Renomear" }).click();
-    await expect(page.getByLabel("Nome")).toBeVisible();
+    await page.getByRole("link", { name: "Renomear" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Renomear Baralho" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Salvar" })).toBeVisible();
     expect(await medirExcessoDeLargura(page)).toBeLessThanOrEqual(0);
 
-    await page.getByRole("button", { name: "Cancelar" }).click();
+    // O Baralho não foi alterado, então voltar ao detalhe não pergunta nada;
+    // ali fica o botão "Excluir Baralho".
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await page.getByRole("button", { name: "Excluir Baralho" }).click();
 
     const dialogo = page.getByRole("dialog");

@@ -1,0 +1,1 @@
+Validação Chromium: 132 combinações cenário/largura; 5 telas com CSS zoom 200%; acesso, cadastro, isolamento, falha/retry, pending, estudo, diálogo, teclado e saída verificados. Nenhum erro JavaScript. Capturas em 390 e 1440 px.

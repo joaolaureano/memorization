@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 import type {
   ArmazenamentoDoAcervo,
@@ -9,6 +9,10 @@ import type {
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
+  ResultadoDoItemRegistrado,
   Usuario,
 } from "../porta.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
@@ -70,6 +74,18 @@ const NAO_ENCONTRADO: Desfecho<never> = {
 const VINCULO_DUPLICADO: Desfecho<never> = {
   ok: false,
   erro: "vinculo_duplicado",
+};
+
+/**
+ * Desfecho do `id` de Registro de Sessão já usado por **outro** Usuário. O
+ * Registro de outro Usuário é indistinguível de um que nunca existiu — o mesmo
+ * `nao_encontrado` do acervo (SC-030) —, mas aqui a repetição do `id` é do
+ * cliente, e a recusa precisa ser distinta: `conflito`, e não `nao_encontrado`,
+ * para que quem chamou saiba que o `id` está tomado (FR-163).
+ */
+const CONFLITO_DE_REGISTRO: Desfecho<never> = {
+  ok: false,
+  erro: "conflito",
 };
 
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
@@ -211,6 +227,91 @@ SELECT baralho.id AS "baralhoId",
  GROUP BY baralho.id;
 `;
 
+/**
+ * A inserção idempotente do Registro de Sessão (FR-163): o
+ * `ON CONFLICT (id) DO NOTHING` deixa a linha existente intacta e **não**
+ * devolve linha alguma, de modo que o Adapter sabe que o `id` já estava lá. Ele
+ * então procura o Registro **no acervo do Usuário** para separar a repetição
+ * legítima — que devolve o Registro guardado, sem alterá-lo — do `id` tomado por
+ * outro Usuário, que é `conflito`.
+ *
+ * `concluida_em` recebe o instante informado pelo Module, já como
+ * `TIMESTAMPTZ`, e o `RETURNING` devolve o que o servidor efetivamente gravou:
+ * a resposta é o Registro **guardado**, e não o que o cliente mandou (FR-164).
+ */
+const INSERIR_REGISTRO_DE_SESSAO = `
+INSERT INTO registro_de_sessao
+       (id, usuario_id, baralho_id, nome_do_baralho, concluida_em, estudados, acertos, erros)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING
+RETURNING concluida_em AS "concluidaEm";
+`;
+
+/**
+ * Os Itens entram na mesma transação do Registro: o histórico de uma Sessão ou
+ * está inteiro, ou não está (FR-161). A ordem é a `posicao` informada, e não a
+ * ordem de inserção.
+ */
+const INSERIR_ITEM_DE_REGISTRO = `
+INSERT INTO item_de_registro (registro_id, posicao, frente, verso, resultado)
+VALUES ($1, $2, $3, $4, $5);
+`;
+
+/**
+ * As listagens leem só o resumo — sem os Itens (FR-163, FR-165) —, do mais
+ * recente ao mais antigo, e ambas restritas a `usuario_id`: o histórico de outro
+ * Usuário não é alcançável por nenhuma delas (FR-092, SC-030).
+ */
+const COLUNAS_DE_RESUMO = `
+       id,
+       baralho_id      AS "baralhoId",
+       nome_do_baralho AS "nomeDoBaralho",
+       concluida_em    AS "concluidaEm",
+       estudados,
+       acertos,
+       erros
+  FROM registro_de_sessao
+`;
+
+/** Os Registros concluídos a partir de `desde`, do mais recente ao mais antigo. */
+const LISTAR_REGISTROS_DESDE = `
+SELECT ${COLUNAS_DE_RESUMO}
+ WHERE usuario_id = $1
+   AND concluida_em >= $2::timestamptz
+ ORDER BY concluida_em DESC;
+`;
+
+/** Os `limite` Registros mais recentes do Usuário. */
+const LISTAR_REGISTROS_RECENTES = `
+SELECT ${COLUNAS_DE_RESUMO}
+ WHERE usuario_id = $1
+ ORDER BY concluida_em DESC
+ LIMIT $2;
+`;
+
+/**
+ * O Registro completo é escopado pelo Usuário como todo o resto: o `id` de outro
+ * Usuário não devolve linha, e é por isso que o Module o apresenta como
+ * inexistente (FR-092, SC-030).
+ */
+const OBTER_REGISTRO_DE_SESSAO = `
+SELECT ${COLUNAS_DE_RESUMO}
+ WHERE id = $1
+   AND usuario_id = $2;
+`;
+
+/**
+ * Os Itens do Registro, na ordem apresentada. A consulta não repete o escopo do
+ * Usuário porque só é alcançada depois de `OBTER_REGISTRO_DE_SESSAO` ter
+ * confirmado que o Registro é dele.
+ */
+const LISTAR_ITENS_DO_REGISTRO = `
+SELECT posicao, frente, verso, resultado
+  FROM item_de_registro
+ WHERE registro_id = $1
+ ORDER BY posicao;
+`;
+
 const INSERIR_USUARIO = `
 INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
 VALUES ($1, $2, $3, $4, $5);
@@ -255,6 +356,35 @@ type LinhaDeUsuario = {
   hash: Buffer;
   parametros: string;
 };
+
+/**
+ * Instante como o driver o entrega: `TIMESTAMPTZ` é lido como `Date`, e o texto
+ * ISO só aparece se a coluna for lida como texto. O Adapter aceita os dois e
+ * normaliza na saída (FR-164).
+ */
+type Instante = Date | string;
+
+/** Linha de `registro_de_sessao` como o Adapter a lê, sem os Itens. */
+type LinhaDeRegistro = {
+  id: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  concluidaEm: Instante;
+  estudados: number;
+  acertos: number;
+  erros: number;
+};
+
+/** Linha de `item_de_registro`; `resultado` é o vocabulário do `CHECK`. */
+type LinhaDeItem = {
+  posicao: number;
+  frente: string;
+  verso: string;
+  resultado: ResultadoDoItemRegistrado;
+};
+
+/** Uma conexão que sabe executar consultas: a piscina ou uma conexão dela. */
+type Conexao = Pool | PoolClient;
 
 /**
  * Diz se a falha é a violação informada. O SQLSTATE é a única coisa estável e
@@ -324,6 +454,40 @@ async function comDesfechoDeUsuario<D>(
   }
 }
 
+/**
+ * Executa o corpo numa conexão exclusiva, dentro de uma transação. É o que faz
+ * o Registro e os seus Itens entrarem juntos ou não entrarem: o `ROLLBACK`
+ * desfaz por completo uma inserção interrompida no meio, sem Registro órfão de
+ * Itens (FR-161). A conexão volta para o conjunto em qualquer desfecho, e a
+ * falha original continua subindo para o `comDesfecho` traduzir.
+ */
+async function emTransacao<T>(
+  piscina: Pool,
+  corpo: (cliente: PoolClient) => Promise<T>,
+): Promise<T> {
+  const cliente = await piscina.connect();
+
+  try {
+    await cliente.query("BEGIN;");
+
+    const resultado = await corpo(cliente);
+
+    await cliente.query("COMMIT;");
+
+    return resultado;
+  } catch (erro) {
+    try {
+      await cliente.query("ROLLBACK;");
+    } catch {
+      // Sem transação ativa para desfazer; a falha original é a que importa.
+    }
+
+    throw erro;
+  } finally {
+    cliente.release();
+  }
+}
+
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
   return { id: linha.id, frente: linha.frente, verso: linha.verso };
@@ -342,6 +506,68 @@ function usuarioDaLinha(linha: LinhaDeUsuario): Usuario {
     sal: linha.sal,
     hash: linha.hash,
     parametros: linha.parametros,
+  };
+}
+
+/**
+ * O instante em ISO-8601 UTC, que é a forma que a Porta promete. O fuso é o da
+ * coluna `TIMESTAMPTZ`, e o `toISOString` escreve em UTC: a conversão é de
+ * representação, não de horário (FR-164).
+ */
+function instanteIso(valor: Instante): string {
+  return (typeof valor === "string" ? new Date(valor) : valor).toISOString();
+}
+
+/** Lê a linha como resumo: o Registro sem os Itens (FR-163). */
+function registroResumidoDaLinha(linha: LinhaDeRegistro): RegistroResumido {
+  return {
+    id: linha.id,
+    baralhoId: linha.baralhoId,
+    nomeDoBaralho: linha.nomeDoBaralho,
+    concluidaEm: instanteIso(linha.concluidaEm),
+    estudados: linha.estudados,
+    acertos: linha.acertos,
+    erros: linha.erros,
+  };
+}
+
+/** Lê a linha como Item registrado, na `posicao` em que foi apresentado. */
+function itemDaLinha(linha: LinhaDeItem): ItemRegistrado {
+  return {
+    posicao: linha.posicao,
+    frente: linha.frente,
+    verso: linha.verso,
+    resultado: linha.resultado,
+  };
+}
+
+/**
+ * Lê o Registro completo do Usuário, com os Itens na ordem apresentada; ausente
+ * — inclusive quando o Registro é de outro Usuário — é `undefined`, e quem
+ * chamou decide o desfecho (FR-092, SC-030).
+ */
+async function lerRegistroDoUsuario(
+  conexao: Conexao,
+  usuarioId: string,
+  id: string,
+): Promise<RegistroDeSessao | undefined> {
+  const { rows } = await conexao.query<LinhaDeRegistro>(
+    OBTER_REGISTRO_DE_SESSAO,
+    [id, usuarioId],
+  );
+
+  if (rows[0] === undefined) {
+    return undefined;
+  }
+
+  const { rows: linhasDeItens } = await conexao.query<LinhaDeItem>(
+    LISTAR_ITENS_DO_REGISTRO,
+    [id],
+  );
+
+  return {
+    ...registroResumidoDaLinha(rows[0]),
+    itens: linhasDeItens.map(itemDaLinha),
   };
 }
 
@@ -543,6 +769,102 @@ export async function abrirArmazenamentoPostgresql(
       }));
 
       return contagens;
+    },
+
+    /**
+     * Guarda o Registro e os Itens numa transação (FR-161) e é idempotente pelo
+     * `id` (FR-163): a segunda inserção do mesmo `id` **deste** Usuário devolve
+     * o Registro guardado, sem alterá-lo; o mesmo `id` de outro Usuário é
+     * `conflito`. A distinção sai do próprio escopo — a leitura do Registro
+     * existente também é restrita a `usuario_id`, e por isso o `id` alheio não
+     * devolve linha (FR-092).
+     */
+    async inserirRegistroDeSessao(usuarioId, registro) {
+      return comDesfecho<RegistroDeSessao>(() =>
+        emTransacao<Desfecho<RegistroDeSessao>>(piscina, async (cliente) => {
+          const { rows } = await cliente.query<{ concluidaEm: Instante }>(
+            INSERIR_REGISTRO_DE_SESSAO,
+            [
+              registro.id,
+              usuarioId,
+              registro.baralhoId,
+              registro.nomeDoBaralho,
+              registro.concluidaEm,
+              registro.estudados,
+              registro.acertos,
+              registro.erros,
+            ],
+          );
+
+          /**
+           * Nenhuma linha devolvida é o `id` já existente: o Registro do
+           * Usuário é o resultado, e o de outro Usuário é conflito. Nada é
+           * gravado — nem os Itens.
+           */
+          if (rows[0] === undefined) {
+            const existente = await lerRegistroDoUsuario(
+              cliente,
+              usuarioId,
+              registro.id,
+            );
+
+            return existente === undefined
+              ? CONFLITO_DE_REGISTRO
+              : { ok: true, valor: existente };
+          }
+
+          for (const item of registro.itens) {
+            await cliente.query(INSERIR_ITEM_DE_REGISTRO, [
+              registro.id,
+              item.posicao,
+              item.frente,
+              item.verso,
+              item.resultado,
+            ]);
+          }
+
+          return {
+            ok: true,
+            valor: {
+              ...registro,
+              concluidaEm: instanteIso(rows[0].concluidaEm),
+            },
+          };
+        }),
+      );
+    },
+
+    async listarRegistrosDesde(usuarioId, desde) {
+      const { rows } = await piscina.query<LinhaDeRegistro>(
+        LISTAR_REGISTROS_DESDE,
+        [usuarioId, desde],
+      );
+
+      return rows.map(registroResumidoDaLinha);
+    },
+
+    async listarRegistrosRecentes(usuarioId, limite) {
+      const { rows } = await piscina.query<LinhaDeRegistro>(
+        LISTAR_REGISTROS_RECENTES,
+        [usuarioId, limite],
+      );
+
+      return rows.map(registroResumidoDaLinha);
+    },
+
+    /**
+     * O Registro completo com os Itens na ordem apresentada; de outro Usuário
+     * ou inexistente é `nao_encontrado`, o mesmo desfecho e sem revelar qual dos
+     * dois (FR-092, SC-030).
+     */
+    async obterRegistroDeSessao(usuarioId, id) {
+      return comDesfecho<RegistroDeSessao>(async () => {
+        const registro = await lerRegistroDoUsuario(piscina, usuarioId, id);
+
+        return registro === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: registro };
+      });
     },
   };
 

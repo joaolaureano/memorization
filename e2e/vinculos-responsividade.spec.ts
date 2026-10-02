@@ -11,12 +11,18 @@ import {
 // Exercita o frontend React real servido pelo Vite dev (webServer do harness),
 // não uma cópia HTML da tela: `src/main.tsx` monta `Aplicacao` com o
 // `ClienteHttp`, e o Playwright intercepta apenas o transporte — o
-// GET /baralhos/b1 devolve o Baralho com Cartões vinculados, e o GET /cartoes
+// GET /baralhos/b1 devolve o Baralho com os Cartões vinculados, e o GET /cartoes
 // devolve todos os Cartões do acervo. Nenhum DOM da tela é reproduzido aqui.
 //
+// Depois da spec 012, o Vínculo de Cartões existentes vive em duas telas: o
+// detalhe do Baralho (`#/baralhos/b1`) mostra a seção "Cartões do Baralho" e o
+// link "Adicionar cartões existentes", que leva à tela de Vínculos
+// (`#/baralhos/b1/adicionar`) — os Cartões do acervo que ainda não pertencem ao
+// Baralho, cada um com o botão "Vincular <Frente>".
+//
 // Provas: sem rolagem horizontal em viewport de telefone (scrollWidth <=
-// clientWidth, no topo e no fim da lista) e um Cartão conhecido é visualmente
-// localizável sem busca ou paginação.
+// clientWidth, no topo e no fim da lista de candidatos) e um Cartão conhecido é
+// visualmente localizável sem busca ou paginação.
 
 const PORTA_DO_FRONTEND = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
 const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
@@ -95,22 +101,36 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
     await rota.fallback();
   });
 
-  await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1`);
+  await page.goto(`${ENDERECO_DO_FRONTEND}/`);
   await entrarPelaUi(page, credencial);
 
-  // A tela real de Vínculos carrega: o Baralho, a elegibilidade e as duas
-  // listas — a dos vinculados e a dos ainda não vinculados.
+  // Depois de Entrar o destino é Baralhos (spec 012): o detalhe do Baralho é a
+  // porta da tela de Vínculos.
+  await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1`);
+
+  // O detalhe do Baralho carrega com os Cartões vinculados; com Cartões, o
+  // Baralho é elegível e a primeira ação, "Estudar este Baralho", está
+  // disponível.
   await expect(
     page.getByRole('heading', { level: 1, name: 'Inglês' }),
   ).toBeVisible();
+  await expect(page.getByText('Estudar este Baralho')).toBeVisible();
   await expect(
     page.getByRole('heading', { level: 2, name: 'Cartões do Baralho' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Cartões não vinculados' }),
-  ).toBeVisible();
-  await expect(page.getByText('Elegível para estudo.')).toBeVisible();
-  await expect(page.getByRole('listitem')).toHaveCount(QUANTIDADE_DE_CARTOES);
+    page.getByRole('button', { name: /^Remover .* deste baralho$/ }),
+  ).toHaveCount(QUANTIDADE_DE_VINCULADOS);
+
+  // "Adicionar cartões existentes" abre a tela de Vínculos: os Cartões do
+  // acervo que ainda não pertencem ao Baralho.
+  await page
+    .getByRole('link', { name: 'Adicionar cartões existentes' })
+    .click();
+
+  await expect(
+    page.getByRole('button', { name: /^Vincular / }),
+  ).toHaveCount(QUANTIDADE_DE_CARTOES - QUANTIDADE_DE_VINCULADOS);
 
   /** Largura do conteúdo além da janela: 0 quando não há rolagem horizontal. */
   const medirExcessoDeLargura = () =>
@@ -124,16 +144,15 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
   // Sem rolagem horizontal já no topo da lista.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
-  // A lista é navegável até o fim: a rolagem vertical alcança o último
-  // Cartão não vinculado, visualmente localizável sem busca ou paginação.
+  // A lista é navegável até o fim: a rolagem vertical alcança o último Cartão
+  // ainda não vinculado, visualizável e acionável sem busca ou paginação.
   const ultimoCartao = cartoes[QUANTIDADE_DE_CARTOES - 1];
-  const itemConhecido = page
-    .getByRole('listitem')
-    .filter({ hasText: ultimoCartao.frente });
+  const itemConhecido = page.getByRole('button', {
+    name: `Vincular ${ultimoCartao.frente}`,
+  });
 
   await itemConhecido.scrollIntoViewIfNeeded();
   await expect(itemConhecido).toBeVisible();
-  await expect(itemConhecido).toContainText(ultimoCartao.verso);
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);

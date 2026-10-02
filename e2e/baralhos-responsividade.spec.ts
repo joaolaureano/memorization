@@ -74,15 +74,19 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos`);
   await entrarPelaUi(page, credencial);
 
-  // A tela real de Baralhos carrega: cabeçalho, formulário de criação e a
-  // lista com os 10 Baralhos do acervo interceptado.
+  // A tela real de Baralhos carrega: cabeçalho, o link de criação e a lista
+  // com os 10 Baralhos do acervo interceptado. A criação deixou de ser um
+  // formulário embutido na lista (FR-042): ela vive na página #/baralhos/novo,
+  // alcançada pelo link "Criar baralho".
   await expect(
     page.getByRole('heading', { level: 1, name: 'Baralhos' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Novo Baralho' }),
+    page.getByRole('link', { name: 'Criar baralho' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Criar Baralho' })).toBeEnabled();
+  await expect(
+    page.getByRole('link', { name: 'Criar baralho' }),
+  ).toBeEnabled();
   await expect(page.getByRole('listitem')).toHaveCount(QUANTIDADE_DE_BARALHOS);
 
   /** Largura do conteúdo além da janela: 0 quando não há rolagem horizontal. */
@@ -99,7 +103,7 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
 
   // A lista é navegável até o fim: a rolagem vertical alcança o último
   // Baralho, e o Baralho conhecido é visualmente localizável sem busca ou
-  // paginação, com a elegibilidade comunicada por texto.
+  // paginação, com o estado comunicado por texto e pelo controle Estudar.
   const ultimoBaralho = baralhos[QUANTIDADE_DE_BARALHOS - 1];
   const itemConhecido = page
     .getByRole('listitem')
@@ -108,8 +112,13 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
   await itemConhecido.scrollIntoViewIfNeeded();
   await expect(itemConhecido).toBeVisible();
   await expect(itemConhecido).toContainText(
-    'Não elegível para estudo: nenhum Cartão vinculado.',
+    'Adicione Cartões para começar a estudar.',
   );
+  await expect(
+    itemConhecido.getByRole('button', {
+      name: `Estudar ${ultimoBaralho.nome}`,
+    }),
+  ).toBeDisabled();
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);

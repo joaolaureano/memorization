@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-accent="azul">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Memorization — protótipo visual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* 1. DESIGN TOKENS */
+:root{
+  --bg:#12161f; --surface:#1a2030; --surface-2:#232b3d; --border:#2e3850;
+  --text:#e6e9f0; --muted:#9aa3b5; --success:#3ecf8e; --danger:#f26d6d;
+  --radius:16px; --radius-sm:10px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+}
+[data-accent="azul"]{ --accent:#6c8cff; --accent-strong:#5a78f0; --on-accent:#0b1020; }
+[data-accent="verde"]{ --accent:#1ed760; --accent-strong:#17b852; --on-accent:#06120a; }
+
+/* 2. BASE */
+*,*::before,*::after{ box-sizing:border-box; }
+body{ margin:0; background:#0d1017; color:var(--text);
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+h1,h2{ margin:0; font-weight:700; letter-spacing:-0.02em; line-height:1.25; }
+h1{ font-size:24px; } h2{ font-size:15px; }
+p{ margin:0; } ul{ margin:0; padding:0; list-style:none; }
+a{ color:var(--accent); }
+.muted{ color:var(--muted); } .small{ font-size:12px; }
+a:focus-visible,button:focus-visible,input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:6px; }
+
+/* 3. PROTOTYPE PAGE CHROME */
+.topbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:var(--sp-4);
+  padding:var(--sp-5) clamp(12px,4vw,32px); border-bottom:1px solid #1b2130; }
+.page-title{ font-size:18px; }
+.page-subtitle{ color:var(--muted); font-size:12px; margin-top:2px; }
+.toggle{ display:inline-flex; gap:var(--sp-1); padding:var(--sp-1); background:var(--surface);
+  border:1px solid var(--border); border-radius:999px; }
+.toggle-btn{ font:inherit; font-size:13px; font-weight:600; color:var(--muted); background:transparent;
+  border:0; border-radius:999px; padding:8px 14px; cursor:pointer; }
+.toggle-btn[aria-pressed="true"]{ background:var(--accent); color:var(--on-accent); }
+.screens{ display:flex; flex-wrap:wrap; align-items:stretch; justify-content:center; gap:var(--sp-6);
+  padding:var(--sp-6) clamp(12px,4vw,32px) 80px; }
+.screen-panel{ display:flex; flex-direction:column; width:390px; max-width:100%; min-width:0; }
+.caption{ font-size:12px; font-weight:600; letter-spacing:0.04em; color:var(--muted); margin-bottom:var(--sp-2); }
+
+/* 4. PHONE FRAME */
+.phone{ flex:1; display:flex; flex-direction:column; min-height:760px; background:var(--bg);
+  border:1px solid var(--border); border-radius:28px; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.35); }
+
+/* 5. APP BAR · WORDMARK · NAV */
+.appbar{ display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3);
+  padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border); }
+.wordmark{ display:inline-block; font-weight:700; font-size:15px; letter-spacing:-0.02em; color:var(--text); }
+.wordmark .dot{ display:inline-block; width:5px; height:5px; margin-left:3px; border-radius:50%;
+  background:var(--accent); transform:translateY(-5px); }
+.wordmark--lg{ font-size:26px; }
+.wordmark--lg .dot{ width:8px; height:8px; transform:translateY(-9px); }
+.appnav{ display:flex; gap:var(--sp-3); font-size:13px; }
+.appnav a{ position:relative; color:var(--text); font-weight:500; text-decoration:none; padding:2px 0; }
+.appnav a:hover{ color:var(--accent); }
+.appnav a[aria-current="page"]{ color:var(--accent); font-weight:600; }
+.appnav a[aria-current="page"]::after{ content:""; position:absolute; left:0; right:0; bottom:-4px;
+  height:2px; border-radius:2px; background:var(--accent); }
+
+/* 6. BUTTONS */
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:var(--sp-2); height:48px;
+  padding:0 var(--sp-4); font:inherit; font-weight:700; border-radius:12px; border:1px solid transparent;
+  cursor:pointer; white-space:nowrap; }
+.btn-primary{ width:100%; background:var(--accent); color:var(--on-accent); }
+.btn-primary:hover{ background:var(--accent-strong); }
+.btn-secondary{ background:transparent; border-color:var(--border); color:var(--text); height:44px; font-weight:600; }
+.btn-secondary:hover{ background:var(--surface-2); }
+.btn-danger{ color:var(--danger); }
+.btn-sm{ height:34px; padding:0 var(--sp-3); font-size:13px; border-radius:var(--radius-sm); }
+.btn-row{ display:flex; gap:var(--sp-3); }
+.btn-row > .btn{ flex:1; }
+
+/* 7. FORMS */
+.form-stack{ display:flex; flex-direction:column; gap:var(--sp-4); width:100%; text-align:left; }
+.field{ display:flex; flex-direction:column; gap:6px; }
+.field label{ font-size:12px; font-weight:700; letter-spacing:0.02em; }
+input[type="text"],input[type="password"]{ width:100%; height:44px; padding:0 var(--sp-3); font:inherit;
+  color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); }
+input::placeholder{ color:var(--muted); }
+input:focus{ outline:none; border-color:var(--accent); }
+.helper{ font-size:12px; color:var(--muted); }
+
+/* 8. CARDS · LISTS · PILLS */
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:var(--sp-4); }
+.screen-body{ flex:1; display:flex; flex-direction:column; gap:var(--sp-4); padding:var(--sp-4); }
+.section-head{ display:flex; align-items:center; gap:var(--sp-2); margin-top:var(--sp-2); }
+.badge{ display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; padding:0 6px;
+  font-size:12px; font-weight:700; color:var(--muted); background:var(--surface-2); border:1px solid var(--border); border-radius:999px; }
+.pill{ display:inline-flex; align-items:center; gap:var(--sp-1); width:fit-content; padding:2px 8px;
+  font-size:11.5px; font-weight:600; border:1px solid transparent; border-radius:999px; }
+.pill-ok{ color:var(--success); background:color-mix(in srgb, var(--success) 14%, transparent);
+  border-color:color-mix(in srgb, var(--success) 35%, transparent); }
+.pill-muted{ color:var(--muted); background:var(--surface-2); border-color:var(--border); }
+.deck{ display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-3); background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius); }
+.deck + .deck{ margin-top:var(--sp-3); }
+.tile{ flex:0 0 auto; display:grid; place-items:center; width:40px; height:40px; font-size:16px; font-weight:700;
+  color:var(--accent); border-radius:12px; background:color-mix(in srgb, var(--accent) 18%, transparent); }
+.deck-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.deck-name{ font-weight:600; }
+.chev{ color:var(--muted); font-size:20px; line-height:1; }
+.back{ align-self:flex-start; font-size:13px; font-weight:600; color:var(--muted); text-decoration:none; }
+.back:hover{ color:var(--accent); }
+.title-row{ display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap; }
+
+/* 9. LOGIN SCREEN */
+.screen-body--login{ justify-content:center; align-items:center; gap:var(--sp-5); padding:var(--sp-6) var(--sp-5); text-align:center; }
+.login-hero{ display:flex; flex-direction:column; gap:var(--sp-2); align-items:center; }
+.login-hero h1{ margin-top:var(--sp-3); }
+.login-footer{ font-size:13px; }
+
+/* 10. BARALHO */
+.mini-card{ display:flex; flex-direction:column; gap:var(--sp-2); padding:var(--sp-3); background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius); }
+.mini-card + .mini-card{ margin-top:var(--sp-3); }
+.face-label{ font-size:10px; font-weight:700; letter-spacing:0.08em; color:var(--muted); }
+.face-text{ font-size:15px; font-weight:500; }
+.mini-card .divider{ border:0; border-top:1px solid var(--border); margin:0; }
+.mini-card .row-end{ display:flex; justify-content:flex-end; }
+
+/* 11. SESSÃO DE ESTUDO */
+.session-top{ display:flex; align-items:center; justify-content:space-between; gap:var(--sp-3); }
+.progress{ height:8px; border-radius:999px; background:var(--surface-2); overflow:hidden; }
+.progress-fill{ height:100%; background:var(--accent); border-radius:999px; }
+.h1-sm{ font-size:20px; }
+.study-card{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-2);
+  min-height:220px; padding:var(--sp-5); text-align:center; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:20px; }
+.study-card .dashed{ width:100%; border:0; border-top:1px dashed var(--border); margin:var(--sp-2) 0; }
+.big{ font-size:28px; font-weight:700; letter-spacing:-0.02em; }
+.medium{ font-size:20px; font-weight:600; }
+.answer-row{ display:flex; gap:var(--sp-3); margin-top:auto; }
+.answer-row .btn{ flex:1; height:56px; }
+.btn-correct{ background:color-mix(in srgb, var(--success) 18%, transparent); border:1px solid var(--success); color:var(--success); }
+.btn-wrong{ background:color-mix(in srgb, var(--danger) 18%, transparent); border:1px solid var(--danger); color:var(--danger); }
+
+/* 12. RESUMO DA SESSÃO */
+.ring-wrap{ position:relative; width:160px; height:160px; margin:var(--sp-2) auto 0; }
+.ring-wrap svg{ display:block; }
+.ring-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.ring-value{ font-size:30px; font-weight:700; letter-spacing:-0.03em; }
+.stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:var(--sp-2); }
+.stat{ padding:var(--sp-3); background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+.stat-label{ display:block; font-size:11px; font-weight:600; color:var(--muted); line-height:1.3; }
+.stat-value{ display:block; margin-top:var(--sp-1); font-size:20px; font-weight:700; }
+.is-success{ color:var(--success); } .is-danger{ color:var(--danger); }
+
+/* 13. AJUSTES v2 */
+.study-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--accent); color:var(--on-accent); font-size:14px; }
+.study-btn:disabled{ background:var(--surface-2); color:var(--muted); cursor:not-allowed; }
+.deck--off .deck-name, .deck--off .tile{ opacity:.55; }
+.result-toggles{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
+.result-btn{ height:52px; font:inherit; font-weight:600; border-radius:12px; cursor:pointer;
+  background:var(--surface); border:1px solid var(--border); }
+.result-btn strong{ font-size:18px; margin-left:4px; }
+.result-btn[aria-expanded="true"].is-success{ border-color:var(--success); background:color-mix(in srgb, var(--success) 14%, transparent); }
+.result-btn[aria-expanded="true"].is-danger{ border-color:var(--danger); background:color-mix(in srgb, var(--danger) 14%, transparent); }
+.result-list{ margin-top:var(--sp-3); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.result-list li{ display:flex; justify-content:space-between; gap:var(--sp-3); padding:10px var(--sp-3); background:var(--surface); }
+.result-list li + li{ border-top:1px solid var(--border); }
+.kpis{ display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); }
+.bars{ display:flex; align-items:flex-end; gap:var(--sp-2); height:120px; margin-top:var(--sp-4); }
+.bars li{ flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:6px; }
+.bar{ display:block; width:100%; min-height:3px; border-radius:6px 6px 2px 2px; background:var(--accent); }
+.score{ font-weight:700; color:var(--accent); }
+.tag-new{ margin-left:6px; padding:1px 6px; border-radius:999px; font-size:10px; color:#f5c451; border:1px solid #f5c45166; }
+.appnav{ gap:10px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <p class="page-title"><strong>Memorization — protótipo visual</strong></p>
+    <p class="page-subtitle">Paleta escura · telas existentes, sem novas funcionalidades</p>
+  </div>
+  <div class="toggle" role="group" aria-label="Cor de destaque">
+    <button type="button" class="toggle-btn" data-accent="azul" aria-pressed="true">Destaque azul</button>
+    <button type="button" class="toggle-btn" data-accent="verde" aria-pressed="false">Destaque verde</button>
+  </div>
+</header>
+
+<main class="screens">
+
+  <!-- 1 · ENTRAR -->
+  <section class="screen-panel" aria-labelledby="cap-1">
+    <p class="caption" id="cap-1">1 · Entrar</p>
+    <div class="phone">
+      <div class="screen-body screen-body--login">
+        <div class="login-hero">
+          <p class="wordmark wordmark--lg">memorization<span class="dot"></span></p>
+          <h1>Entrar</h1>
+        </div>
+        <form class="form-stack" onsubmit="return false">
+          <div class="field">
+            <label for="login-user">Nome de usuário</label>
+            <input id="login-user" type="text" value="joao" />
+          </div>
+          <div class="field">
+            <label for="login-pass">Senha</label>
+            <input id="login-pass" type="password" value="minhasenha123" />
+            <p class="helper">De 8 a 128 caracteres.</p>
+          </div>
+          <button type="button" class="btn btn-primary">Entrar</button>
+        </form>
+        <p class="muted login-footer">Não tem conta? <a href="#">Criar conta</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1b · INÍCIO / ESTATÍSTICAS (requer feature nova) -->
+  <section class="screen-panel" aria-labelledby="cap-1b">
+    <p class="caption" id="cap-1b">2 · Início — estatísticas <span class="tag-new">feature nova</span></p>
+    <div class="phone">
+      <header class="appbar">
+        <span class="wordmark">memorization<span class="dot"></span></span>
+        <nav class="appnav" aria-label="Principal"><a href="#" aria-current="page">Início</a><a href="#">Cartões</a><a href="#">Baralhos</a><a href="#">Sair</a></nav>
+      </header>
+      <div class="screen-body">
+        <div>
+          <p class="muted small">Olá, joao</p>
+          <h1>Seu estudo</h1>
+        </div>
+        <div class="kpis">
+          <div class="stat"><span class="stat-label">Cartões</span><span class="stat-value">16</span></div>
+          <div class="stat"><span class="stat-label">Baralhos</span><span class="stat-value">3</span></div>
+          <div class="stat"><span class="stat-label">Sessões na semana</span><span class="stat-value">6</span></div>
+          <div class="stat"><span class="stat-label">Taxa de acerto</span><span class="stat-value">72%</span></div>
+        </div>
+        <section class="card" aria-labelledby="semana-title">
+          <h2 id="semana-title">Itens estudados nos últimos 7 dias</h2>
+          <ul class="bars" role="img" aria-label="Itens por dia: seg 8, ter 13, qua 0, qui 6, sex 17, sáb 10, dom 20">
+              <li><span class="bar" style="height:40%"></span><span class="muted small">seg</span></li>
+              <li><span class="bar" style="height:65%"></span><span class="muted small">ter</span></li>
+              <li><span class="bar" style="height:0%"></span><span class="muted small">qua</span></li>
+              <li><span class="bar" style="height:30%"></span><span class="muted small">qui</span></li>
+              <li><span class="bar" style="height:85%"></span><span class="muted small">sex</span></li>
+              <li><span class="bar" style="height:50%"></span><span class="muted small">sáb</span></li>
+              <li><span class="bar" style="height:100%"></span><span class="muted small">dom</span></li>
+          </ul>
+        </section>
+        <section aria-labelledby="ultimas-title">
+          <div class="section-head"><h2 id="ultimas-title">Últimas Sessões</h2></div>
+          <ul style="margin-top:12px;">
+            <li class="deck"><span class="tile" aria-hidden="true">I</span><span class="deck-main"><span class="deck-name">Inglês</span><span class="muted small">hoje · 3 itens</span></span><span class="score">67%</span></li>
+            <li class="deck"><span class="tile" aria-hidden="true">A</span><span class="deck-main"><span class="deck-name">Algoritmos</span><span class="muted small">ontem · 10 itens</span></span><span class="score">80%</span></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · BARALHOS -->
+  <section class="screen-panel" aria-labelledby="cap-2">
+    <p class="caption" id="cap-2">3 · Baralhos</p>
+    <div class="phone">
+      <header class="appbar">
+        <span class="wordmark">memorization<span class="dot"></span></span>
+        <nav class="appnav" aria-label="Principal">
+          <a href="#">Início</a><a href="#">Cartões</a><a href="#" aria-current="page">Baralhos</a><a href="#">Sair</a>
+        </nav>
+      </header>
+      <div class="screen-body">
+        <h1>Baralhos</h1>
+        <section class="card" aria-labelledby="novo-baralho-title">
+          <h2 id="novo-baralho-title" style="margin-bottom:12px;">Novo Baralho</h2>
+          <form class="form-stack" onsubmit="return false">
+            <div class="field">
+              <label for="deck-nome">Nome</label>
+              <input id="deck-nome" type="text" />
+              <p class="helper">0 / 100 caracteres</p>
+            </div>
+            <button type="button" class="btn btn-primary">Criar Baralho</button>
+          </form>
+        </section>
+        <section aria-labelledby="lista-baralhos-title">
+          <div class="section-head"><h2 id="lista-baralhos-title">Lista de Baralhos</h2></div>
+          <ul style="margin-top:12px;">
+            <li class="deck">
+              <span class="tile" aria-hidden="true">I</span>
+              <span class="deck-main">
+                <span class="deck-name">Inglês</span>
+                <span class="muted small">4 Cartões</span>
+              </span>
+              <button type="button" class="study-btn" aria-label="Estudar Inglês" title="Estudar">▶</button>
+            </li>
+            <li class="deck">
+              <span class="tile" aria-hidden="true">A</span>
+              <span class="deck-main">
+                <span class="deck-name">Algoritmos</span>
+                <span class="muted small">12 Cartões</span>
+              </span>
+              <button type="button" class="study-btn" aria-label="Estudar Algoritmos" title="Estudar">▶</button>
+            </li>
+            <li class="deck deck--off">
+              <span class="tile" aria-hidden="true">R</span>
+              <span class="deck-main">
+                <span class="deck-name">Rascunhos</span>
+                <span class="muted small">0 Cartões</span>
+              </span>
+              <button type="button" class="study-btn" disabled aria-label="Estudar Rascunhos — indisponível: nenhum Cartão vinculado" title="Nenhum Cartão vinculado">▶</button>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · BARALHO -->
+  <section class="screen-panel" aria-labelledby="cap-3">
+    <p class="caption" id="cap-3">4 · Baralho</p>
+    <div class="phone">
+      <header class="appbar">
+        <span class="wordmark">memorization<span class="dot"></span></span>
+        <nav class="appnav" aria-label="Principal">
+          <a href="#">Início</a><a href="#">Cartões</a><a href="#" aria-current="page">Baralhos</a><a href="#">Sair</a>
+        </nav>
+      </header>
+      <div class="screen-body">
+        <a class="back" href="#">← Voltar para Baralhos</a>
+        <div class="title-row">
+          <h1>Inglês</h1>
+        </div>
+        <button type="button" class="btn btn-primary">Estudar este Baralho</button>
+        <section aria-labelledby="cartoes-vinculados-title">
+          <div class="section-head">
+            <h2 id="cartoes-vinculados-title">Cartões do Baralho</h2>
+            <span class="badge">4</span>
+          </div>
+          <ul style="margin-top:12px;">
+            <li class="mini-card">
+              <span class="face-label">FRENTE</span><p class="face-text">ephemeral</p>
+              <hr class="divider" />
+              <span class="face-label">VERSO</span><p class="face-text">efêmero, passageiro</p>
+              <div class="row-end"><button type="button" class="btn btn-secondary btn-sm">Desvincular</button></div>
+            </li>
+            <li class="mini-card">
+              <span class="face-label">FRENTE</span><p class="face-text">to cope with</p>
+              <hr class="divider" />
+              <span class="face-label">VERSO</span><p class="face-text">lidar com</p>
+              <div class="row-end"><button type="button" class="btn btn-secondary btn-sm">Desvincular</button></div>
+            </li>
+            <li class="mini-card">
+              <span class="face-label">FRENTE</span><p class="face-text">thoroughly</p>
+              <hr class="divider" />
+              <span class="face-label">VERSO</span><p class="face-text">minuciosamente</p>
+              <div class="row-end"><button type="button" class="btn btn-secondary btn-sm">Desvincular</button></div>
+            </li>
+          </ul>
+        </section>
+        <section aria-labelledby="cartoes-nao-vinculados-title">
+          <div class="section-head"><h2 id="cartoes-nao-vinculados-title">Cartões não vinculados</h2></div>
+          <p class="muted small" style="margin-top:8px;">Todos os Cartões já estão vinculados a este Baralho.</p>
+        </section>
+        <div class="btn-row" style="margin-top:auto;">
+          <button type="button" class="btn btn-secondary">Renomear</button>
+          <button type="button" class="btn btn-secondary btn-danger">Excluir Baralho</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · SESSÃO DE ESTUDO -->
+  <section class="screen-panel" aria-labelledby="cap-4">
+    <p class="caption" id="cap-4">5 · Sessão de estudo</p>
+    <div class="phone">
+      <header class="appbar">
+        <span class="wordmark">memorization<span class="dot"></span></span>
+        <nav class="appnav" aria-label="Principal">
+          <a href="#">Início</a><a href="#">Cartões</a><a href="#" aria-current="page">Baralhos</a><a href="#">Sair</a>
+        </nav>
+      </header>
+      <div class="screen-body">
+        <div class="session-top">
+          <a class="back" href="#">✕ Interromper</a>
+          <span class="muted small">Item 2 de 3</span>
+        </div>
+        <div>
+          <div class="progress" role="img" aria-label="Progresso: 1 de 3 Itens respondidos">
+            <div class="progress-fill" style="width:33%;"></div>
+          </div>
+          <p class="muted small" style="margin-top:8px;">1 Item respondido; 2 Itens faltando.</p>
+        </div>
+        <h1 class="h1-sm">Estudar Inglês</h1>
+        <p class="muted small" role="status">Verso revelado.</p>
+        <div class="study-card">
+          <span class="face-label">FRENTE</span>
+          <p class="big">to cope with</p>
+          <hr class="dashed" />
+          <span class="face-label">VERSO</span>
+          <p class="medium">lidar com</p>
+        </div>
+        <div class="answer-row">
+          <button type="button" class="btn btn-correct">✓ Acertei</button>
+          <button type="button" class="btn btn-wrong">✕ Errei</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · RESUMO DA SESSÃO -->
+  <section class="screen-panel" aria-labelledby="cap-5">
+    <p class="caption" id="cap-5">6 · Resumo da Sessão</p>
+    <div class="phone">
+      <header class="appbar">
+        <span class="wordmark">memorization<span class="dot"></span></span>
+        <nav class="appnav" aria-label="Principal">
+          <a href="#">Início</a><a href="#">Cartões</a><a href="#" aria-current="page">Baralhos</a><a href="#">Sair</a>
+        </nav>
+      </header>
+      <div class="screen-body">
+        <a class="back" href="#">← Voltar para o Baralho</a>
+        <div>
+          <h1 class="h1-sm">Estudar Inglês</h1>
+          <p class="muted small" style="margin-top:4px;">Sessão concluída.</p>
+        </div>
+        <div class="ring-wrap">
+          <svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="67% de acertos">
+            <circle cx="80" cy="80" r="70" fill="none" stroke="var(--surface-2)" stroke-width="12" />
+            <circle cx="80" cy="80" r="70" fill="none" stroke="var(--accent)" stroke-width="12"
+                    stroke-linecap="round" stroke-dasharray="439.8" stroke-dashoffset="145.1"
+                    transform="rotate(-90 80 80)" />
+          </svg>
+          <div class="ring-center">
+            <span class="ring-value">67%</span>
+            <span class="muted small">de acertos</span>
+          </div>
+        </div>
+        <section aria-labelledby="resumo-title">
+          <div class="section-head"><h2 id="resumo-title">Resumo da Sessão</h2></div>
+          <div class="result-toggles" style="margin-top:12px;">
+            <button type="button" class="result-btn is-success" aria-expanded="false" aria-controls="lista-acertos">✓ Acertos <strong>2</strong></button>
+            <button type="button" class="result-btn is-danger" aria-expanded="true" aria-controls="lista-erros">✕ Erros <strong>1</strong></button>
+          </div>
+          <ul id="lista-acertos" class="result-list" hidden>
+            <li><span>ephemeral</span><span class="muted">efêmero, passageiro</span></li>
+            <li><span>to cope with</span><span class="muted">lidar com</span></li>
+          </ul>
+          <ul id="lista-erros" class="result-list">
+            <li><span>thoroughly</span><span class="muted">minuciosamente</span></li>
+          </ul>
+        </section>
+        <button type="button" class="btn btn-primary" style="margin-top:auto;">Voltar para o Baralho</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // Alternância de destaque (azul / verde) — apenas visual.
+  document.querySelectorAll('.toggle-btn').forEach(function (btn, _, all) {
+    btn.addEventListener('click', function () {
+      document.documentElement.dataset.accent = btn.dataset.accent;
+      all.forEach(function (o) { o.setAttribute('aria-pressed', String(o === btn)); });
+    });
+  });
+  document.querySelectorAll('.result-btn').forEach(function (btn, _, all) {
+    btn.addEventListener('click', function () {
+      all.forEach(function (o) {
+        var on = o === btn && o.getAttribute('aria-expanded') !== 'true';
+        o.setAttribute('aria-expanded', String(on));
+        document.getElementById(o.getAttribute('aria-controls')).hidden = !on;
+      });
+    });
+  });
+</script>
+</body>
+</html>

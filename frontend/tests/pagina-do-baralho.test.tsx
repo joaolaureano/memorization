@@ -3,20 +3,21 @@ import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
- * T209 — tela de Vínculos do Baralho
- * (specs/003-vincular-cartao-baralho/tasks.md, FR-019, FR-021, FR-046,
- * FR-062, FR-066).
+ * T1110 — tela de detalhe do Baralho
+ * (specs/012-interface-visual-navegavel/tasks.md, FR-145, FR-147, FR-153,
+ * FR-156; e as regras preservadas de 003/005/006: FR-021, FR-044, FR-045,
+ * FR-046, FR-066).
  *
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. As asserções cobrem a apresentação do
- * Baralho com os Cartões vinculados e os ainda não vinculados, a criação e a
- * remoção de Vínculos sem diálogo de confirmação, os três estados vazios
- * distinguidos por texto e a falha de gravação que não exibe Vínculo
- * inexistente nem some com Vínculo confirmado (FR-044, FR-045).
+ * Baralho e da contagem, o caminho para Estudar (primeiro e desabilitado sem
+ * Cartões), a remoção de um Cartão **sem** diálogo de confirmação (FR-147,
+ * FR-066), o Baralho inexistente e a falha de gravação que não some com o
+ * Vínculo confirmado (FR-044, FR-045, SC-012).
  */
 
 interface AcervoDeTeste {
@@ -51,7 +52,7 @@ async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
 }
 
 function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
-  render(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />);
+  render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />, true));
 }
 
 /** A seção cujo título de nível 2 tem o nome informado. */
@@ -67,96 +68,27 @@ function secao(nome: string): HTMLElement {
 }
 
 describe("PaginaDoBaralho", () => {
-  it("apresenta o Baralho, a elegibilidade e separa vinculados de não vinculados (FR-019, FR-014)", async () => {
-    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    renderizar(cliente, idDoBaralho);
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Não elegível para estudo: nenhum Cartão vinculado.",
-      ),
-    ).toBeInTheDocument();
-
-    const vinculados = secao("Cartões do Baralho");
-    const naoVinculados = secao("Cartões não vinculados");
-
-    expect(vinculados).toHaveTextContent(
-      "Este Baralho ainda não tem Cartões vinculados.",
-    );
-    expect(within(naoVinculados).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(naoVinculados).getByText("To walk")).toBeInTheDocument();
-    expect(within(naoVinculados).getByText("To run")).toBeInTheDocument();
-  });
-
-  it("vincula um Cartão e relê as listas confirmadas pelo cliente (FR-019, FR-044)", async () => {
-    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("heading", { level: 1, name: "Inglês" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Vincular To walk" }),
-    );
-
-    expect(
-      await screen.findByText(/Cartão vinculado ao Baralho\./),
-    ).toBeInTheDocument();
-
-    const vinculados = secao("Cartões do Baralho");
-    const naoVinculados = secao("Cartões não vinculados");
-
-    expect(within(vinculados).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(vinculados).getByText("To walk")).toBeInTheDocument();
-    expect(within(naoVinculados).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(naoVinculados).getByText("To run")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Vincular To walk" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Desvincular To walk" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Elegível para estudo.")).toBeInTheDocument();
-  });
-
-  it("desvincula sem pedir confirmação e preserva Cartão e Baralho (FR-021, FR-066)", async () => {
+  it("apresenta o Baralho, a contagem e o caminho para Estudar (FR-145)", async () => {
     const { cliente, idDoBaralho, idDoPrimeiroCartao } =
       await criarAcervoDeTeste();
     await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
 
     renderizar(cliente, idDoBaralho);
 
-    await screen.findByRole("button", { name: "Desvincular To walk" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Desvincular To walk" }),
-    );
-
     expect(
-      await screen.findByText(/Cartão desvinculado do Baralho\./),
+      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
     ).toBeInTheDocument();
-
-    // Desvincular é reversível e não destrói nada: nenhum diálogo de
-    // confirmação é apresentado.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-
-    expect(secao("Cartões do Baralho")).toHaveTextContent(
-      "Este Baralho ainda não tem Cartões vinculados.",
-    );
-    expect(within(secao("Cartões não vinculados")).getAllByRole("listitem")).toHaveLength(
-      2,
-    );
+    expect(screen.getByText("Baralho")).toBeInTheDocument();
+    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Não elegível para estudo: nenhum Cartão vinculado.",
-      ),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: "Estudar este Baralho" }),
+    ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
+    expect(
+      screen.getByRole("link", { name: "← Voltar para Baralhos" }),
+    ).toHaveAttribute("href", "#/baralhos");
   });
 
-  it("comunica a ausência total de Cartões, distinguindo-a dos demais vazios (FR-062)", async () => {
+  it("sem Cartões, Estudar fica desabilitado com a explicação e o vazio oferece adicionar (FR-145, FR-153)", async () => {
     const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
@@ -166,22 +98,22 @@ describe("PaginaDoBaralho", () => {
 
     renderizar(cliente, baralho.baralho.id);
 
+    await screen.findByRole("heading", { level: 1, name: "Inglês" });
+
+    const estudar = screen.getByRole("button", { name: "Estudar este Baralho" });
+    expect(estudar).toBeDisabled();
+    expect(estudar).toHaveAccessibleDescription(
+      "Adicione Cartões ao Baralho para poder estudar.",
+    );
     expect(
-      await screen.findByText(
-        "Ainda não há Cartões. Crie um Cartão antes de vincular.",
-      ),
+      screen.getByText("Este Baralho ainda não tem Cartões."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Este Baralho ainda não tem Cartões vinculados."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "Todos os Cartões já estão vinculados a este Baralho.",
-      ),
-    ).not.toBeInTheDocument();
+      screen.getByRole("link", { name: "Adicionar cartões existentes" }),
+    ).toHaveAttribute("href", `#/baralhos/${baralho.baralho.id}/adicionar`);
   });
 
-  it("comunica quando todos os Cartões já estão vinculados (FR-062)", async () => {
+  it("remove um Cartão sem confirmação e preserva os demais Vínculos e o Cartão no acervo (FR-147, FR-066, FR-021)", async () => {
     const { cliente, idDoBaralho, idDoPrimeiroCartao, idDoSegundoCartao } =
       await criarAcervoDeTeste();
     await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
@@ -189,75 +121,67 @@ describe("PaginaDoBaralho", () => {
 
     renderizar(cliente, idDoBaralho);
 
-    expect(
-      await screen.findByText(
-        "Todos os Cartões já estão vinculados a este Baralho.",
-      ),
-    ).toBeInTheDocument();
-    expect(within(secao("Cartões do Baralho")).getAllByRole("listitem")).toHaveLength(
-      2,
+    await screen.findByRole("button", {
+      name: "Remover To walk deste baralho",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remover To walk deste baralho" }),
     );
+
     expect(
-      screen.queryByText("Este Baralho ainda não tem Cartões vinculados."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Ainda não há Cartões. Crie um Cartão antes de vincular."),
-    ).not.toBeInTheDocument();
+      await screen.findByText(/Cartão removido deste Baralho\./),
+    ).toBeInTheDocument();
+
+    // Remover é reversível e não destrói nada: nenhum diálogo é apresentado.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    const cartoesDoBaralho = secao("Cartões do Baralho");
+    expect(within(cartoesDoBaralho).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(cartoesDoBaralho).getByText("To run")).toBeInTheDocument();
+    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
+
+    // O Cartão removido continua no acervo.
+    const acervo = await cliente.listarCartoes();
+
+    expect(acervo.ok).toBe(true);
+
+    if (acervo.ok) {
+      expect(acervo.cartoes).toHaveLength(2);
+      expect(acervo.cartoes.some((cartao) => cartao.id === idDoPrimeiroCartao))
+        .toBe(true);
+    }
   });
 
-  it("Baralho inexistente mostra a mensagem em português com o link de volta", async () => {
+  it("Baralho inexistente mostra a mensagem em português com o link de volta (FR-156)", async () => {
     renderizar(clienteDeProva(), "b-inexistente");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Baralho não encontrado" }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Baralho não encontrado",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("Baralho não encontrado.")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Voltar para Baralhos" }),
+      screen.getByRole("link", { name: "← Voltar para Baralhos" }),
     ).toHaveAttribute("href", "#/baralhos");
   });
 
-  it("com o cliente indisponível, vincular falha e nenhum Vínculo inexistente é exibido (FR-044, FR-045, SC-012)", async () => {
-    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("button", { name: "Vincular To walk" });
-
-    cliente.simularIndisponibilidade();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Vincular To walk" }),
-    );
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-    );
-
-    expect(
-      screen.queryByText(/Cartão vinculado ao Baralho\./),
-    ).not.toBeInTheDocument();
-    expect(secao("Cartões do Baralho")).toHaveTextContent(
-      "Este Baralho ainda não tem Cartões vinculados.",
-    );
-    expect(
-      within(secao("Cartões não vinculados")).getAllByRole("listitem"),
-    ).toHaveLength(2);
-    expect(
-      screen.getByRole("button", { name: "Vincular To walk" }),
-    ).toBeInTheDocument();
-  });
-
-  it("com o cliente indisponível, desvincular falha e o Vínculo confirmado permanece exibido (FR-044, FR-045, SC-012)", async () => {
+  it("com o cliente indisponível, remover falha e o Vínculo confirmado permanece exibido (FR-044, FR-045, SC-012)", async () => {
     const { cliente, idDoBaralho, idDoPrimeiroCartao } =
       await criarAcervoDeTeste();
     await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
 
     renderizar(cliente, idDoBaralho);
 
-    await screen.findByRole("button", { name: "Desvincular To walk" });
+    await screen.findByRole("button", {
+      name: "Remover To walk deste baralho",
+    });
 
     cliente.simularIndisponibilidade();
     fireEvent.click(
-      screen.getByRole("button", { name: "Desvincular To walk" }),
+      screen.getByRole("button", { name: "Remover To walk deste baralho" }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -265,14 +189,32 @@ describe("PaginaDoBaralho", () => {
     );
 
     expect(
-      screen.queryByText(/Cartão desvinculado do Baralho\./),
+      screen.queryByText(/Cartão removido deste Baralho\./),
     ).not.toBeInTheDocument();
-    expect(within(secao("Cartões do Baralho")).getAllByRole("listitem")).toHaveLength(
-      1,
+    expect(within(secao("Cartões do Baralho")).getAllByRole("listitem"))
+      .toHaveLength(1);
+    // A elegibilidade é comunicada apenas pelo estado de "Estudar este
+    // Baralho": com o Vínculo confirmado, o caminho continua disponível.
+    expect(
+      screen.getByRole("link", { name: "Estudar este Baralho" }),
+    ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
+    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
+  });
+
+  it("a falha de carregamento oferece tentar novamente (FR-153)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
+
+    cliente.simularIndisponibilidade();
+
+    renderizar(cliente, idDoBaralho);
+
+    // A carga desta tela vem de `obterBaralho`: a indisponibilidade devolve a
+    // mensagem de Baralhos, não a de Vínculos.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Não foi possível acessar os Baralhos. Tente novamente.",
     );
     expect(
-      screen.getByRole("button", { name: "Desvincular To walk" }),
+      screen.getByRole("button", { name: "Tentar novamente" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Elegível para estudo.")).toBeInTheDocument();
   });
 });

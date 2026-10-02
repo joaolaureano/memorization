@@ -93,16 +93,44 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
       0,
     );
 
-    // Ana entra e cria o Cartão dela pela tela real.
+    // Ana entra e cria o Cartão dela pela tela real. Depois de Entrar o
+    // destino é Início (spec 013); o Cartão nasce no formulário dedicado,
+    // alcançado pelo link "Criar cartão" da lista de Cartões.
     await entrarPelaUi(page, credencialDaAna);
+
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: `Olá, ${credencialDaAna.nomeDeUsuario}`,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Cartões", exact: true }).click();
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Cartões" }),
     ).toBeVisible();
 
+    // O cabeçalho tem "Criar cartão" e o estado vazio repete o mesmo link; o
+    // `.first()` escolhe o do cabeçalho sem depender de a lista já ter
+    // carregado, evitando a violação de strict mode.
+    await page
+      .getByRole("link", { name: "Criar cartão" })
+      .first()
+      .click();
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Criar cartão" }),
+    ).toBeVisible();
+
     await page.getByLabel("Frente").fill(CARTAO_DA_ANA.frente);
     await page.getByLabel("Verso").fill(CARTAO_DA_ANA.verso);
-    await page.getByRole("button", { name: "Criar Cartão" }).click();
+    await page.getByRole("button", { name: "Salvar" }).click();
+
+    // O sucesso volta para a lista de Cartões.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeVisible();
 
     await expect(page.getByRole("listitem")).toHaveCount(1);
     await expect(page.getByText(CARTAO_DA_ANA.frente)).toBeVisible();
@@ -196,8 +224,31 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
     );
     await expect(page.getByText(CARTAO_DA_ANA.frente)).toHaveCount(0);
 
-    // Entrar de novo devolve o acervo como estava (FR-094).
+    // Entrar de novo devolve o acervo como estava (FR-094): a Credencial volta
+    // a valer e a navegação principal reaparece. O destino depois de Entrar é
+    // Início (spec 013) — mas a aplicação Entra mostrando a rota que estiver no
+    // hash, e o reload conservou `#/cartoes` da navegação anterior; voltar à
+    // raiz antes de Entrar é o que põe o destino em Início sob teste. Depois,
+    // navegar por Baralhos e de volta a Cartões confirma que o acervo continua
+    // o mesmo, com o Cartão da Ana.
+    await page.goto(enderecoDoFrontend);
+
     await entrarPelaUi(page, credencialDaAna);
+
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: `Olá, ${credencialDaAna.nomeDeUsuario}`,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Baralhos", exact: true }).click();
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Baralhos" }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Cartões", exact: true }).click();
 
     await expect(page.getByText(CARTAO_DA_ANA.frente)).toBeVisible();
     await expect(page.getByRole("listitem")).toHaveCount(1);
@@ -286,7 +337,10 @@ test("duas abas mantêm Credenciais independentes: Sair numa não descarta a da 
     ).toBeVisible();
 
     await expect(
-      segundaAba.getByRole("heading", { level: 1, name: "Cartões" }),
+      segundaAba.getByRole("heading", {
+        level: 1,
+        name: `Olá, ${credencialDoBruno.nomeDeUsuario}`,
+      }),
     ).toBeVisible();
     await expect(
       segundaAba.getByRole("navigation", { name: "Principal" }),
@@ -296,7 +350,10 @@ test("duas abas mantêm Credenciais independentes: Sair numa não descarta a da 
     await entrarPelaUi(page, credencialDaAna);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", {
+        level: 1,
+        name: `Olá, ${credencialDaAna.nomeDeUsuario}`,
+      }),
     ).toBeVisible();
 
     await segundaAba.close();

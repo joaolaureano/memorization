@@ -243,15 +243,23 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       await piscina.end();
     }
 
-    const colunas = await servidor.consultar<{ tabela: string; nome: string }>(
+    const colunas = await servidor.consultar<{ nome: string }>(
       nomeDaBase,
-      `SELECT table_name AS tabela, column_name AS nome
+      `SELECT column_name AS nome
          FROM information_schema.columns
         WHERE table_schema = 'public';`,
     );
 
+    /**
+     * A varredura é sobre o **nome da coluna**: FR-079 proíbe a coluna capaz de
+     * guardar a Credencial, e o nome de tabela `registro_de_sessao` nomeia a
+     * Sessão de **estudo** da migração 6, e não uma sessão de credencial. As
+     * colunas novas do Histórico guardam conteúdo de estudo — `frente`,
+     * `verso`, `nome_do_baralho`, `resultado`, `estudados`, `acertos`,
+     * `erros`, `concluida_em`, `posicao` —, nenhuma delas com nome de segredo.
+     */
     for (const coluna of colunas) {
-      expect(`${coluna.tabela}.${coluna.nome}`).not.toMatch(
+      expect(coluna.nome).not.toMatch(
         /senha|password|token|sessao|cookie|credencial/i,
       );
     }

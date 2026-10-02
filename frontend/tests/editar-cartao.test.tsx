@@ -1,23 +1,27 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
-import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
 
 /**
- * T404 e T405 — edição de Cartão pela tela de Cartões
+ * T404 e T405 — edição de Cartão na página do formulário
  * (specs/005-editar-cartao-e-baralho/tasks.md, FR-005, FR-006, FR-050,
- * FR-044, FR-045, SC-014).
+ * FR-044, FR-045, SC-014; e specs/012-interface-visual-navegavel, FR-146,
+ * FR-148, FR-154, FR-156).
  *
- * A tela é exercitada com o `ClienteEmMemoria`, sem servidor. As asserções
- * cobrem o alcance da edição em três Baralhos, a recusa que preserva conteúdo
- * e foco, a confirmação de descarte e a falha de transporte que não conclui a
- * operação nem perde o texto digitado.
+ * A página é exercitada com o `ClienteEmMemoria`, sem servidor, envolvida pelo
+ * `ProvedorDeProtecaoDeSaida`. As asserções cobrem o alcance da edição em três
+ * Baralhos, a recusa que preserva conteúdo e foco, a confirmação de descarte e
+ * a falha de transporte que não conclui a operação nem perde o texto digitado.
  */
 
-async function criarCartaoVinculadoATresBaralhos(): Promise<ClienteEmMemoria> {
+async function criarCartaoVinculadoATresBaralhos(): Promise<{
+  cliente: ClienteEmMemoria;
+  id: string;
+}> {
   const cliente = clienteDeProva();
   const cartao = await cliente.criarCartao({
     frente: "To walk",
@@ -38,10 +42,10 @@ async function criarCartaoVinculadoATresBaralhos(): Promise<ClienteEmMemoria> {
     await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
   }
 
-  return cliente;
+  return { cliente, id: cartao.cartao.id };
 }
 
-async function criarCartao(): Promise<ClienteEmMemoria> {
+async function criarCartao(): Promise<{ cliente: ClienteEmMemoria; id: string }> {
   const cliente = clienteDeProva();
   const cartao = await cliente.criarCartao({
     frente: "To walk",
@@ -52,37 +56,36 @@ async function criarCartao(): Promise<ClienteEmMemoria> {
     throw new Error("a criação do Cartão deveria ser aceita");
   }
 
-  return cliente;
-}
-
-function abrirEdicao(): void {
-  fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+  return { cliente, id: cartao.cartao.id };
 }
 
 function campoDeFrenteEmEdicao(): HTMLTextAreaElement {
-  return screen.getByLabelText("Frente do Cartão") as HTMLTextAreaElement;
+  return screen.getByLabelText("Frente") as HTMLTextAreaElement;
 }
 
 function campoDeVersoEmEdicao(): HTMLTextAreaElement {
-  return screen.getByLabelText("Verso do Cartão") as HTMLTextAreaElement;
+  return screen.getByLabelText("Verso") as HTMLTextAreaElement;
+}
+
+function renderizarEdicao(cliente: ClienteEmMemoria, id: string): void {
+  render(
+    comProtecaoDeSaida(
+      <PaginaDoFormularioDeCartao cliente={cliente} id={id} />,
+      true,
+    ),
+  );
 }
 
 describe("edição de Cartão", () => {
-  it("edita um Cartão vinculado a três Baralhos e informa o alcance antes de salvar (FR-005, FR-006)", async () => {
-    const cliente = await criarCartaoVinculadoATresBaralhos();
+  it("edita um Cartão vinculado a três Baralhos e informa o alcance antes de salvar (FR-005, FR-006, FR-146)", async () => {
+    const { cliente, id } = await criarCartaoVinculadoATresBaralhos();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
-
-    const item = (await screen.findByText("To walk")).closest("li");
-
-    if (item === null) {
-      throw new Error("item do Cartão não encontrado");
-    }
-
-    fireEvent.click(within(item).getByRole("button", { name: "Editar" }));
+    renderizarEdicao(cliente, id);
 
     expect(
-      screen.getByText("Este Cartão está vinculado a 3 Baralhos."),
+      await screen.findByText(
+        /vinculado a 3 Baralhos: Inglês, Espanhol, Francês/i,
+      ),
     ).toBeInTheDocument();
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
@@ -91,14 +94,11 @@ describe("edição de Cartão", () => {
     fireEvent.change(campoDeVersoEmEdicao(), {
       target: { value: "Correr" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
-    expect(await screen.findByText("Cartão editado.")).toBeInTheDocument();
-    expect(screen.getByText("To run")).toBeInTheDocument();
-    expect(screen.getByText("Correr")).toBeInTheDocument();
-    expect(screen.queryByText("To walk")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/cartoes");
+    });
 
     // A alteração vale no próprio Cartão e, por isso, em todos os Baralhos
     // a que ele está vinculado — nenhum Vínculo é recriado ou alterado.
@@ -124,20 +124,16 @@ describe("edição de Cartão", () => {
     }
   });
 
-  it("recusa conteúdo vazio na edição, preserva o texto digitado e foca o campo a corrigir", async () => {
-    const cliente = await criarCartao();
+  it("recusa conteúdo vazio na edição, preserva o texto digitado e foca o campo a corrigir (FR-005, FR-055)", async () => {
+    const { cliente, id } = await criarCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
-
-    await screen.findByText("To walk");
-    abrirEdicao();
+    renderizarEdicao(cliente, id);
+    await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
       target: { value: "   " },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(
       await screen.findByText(/a frente do cartão não pode ficar vazia/i),
@@ -146,48 +142,28 @@ describe("edição de Cartão", () => {
     expect(campoDeFrenteEmEdicao()).toHaveFocus();
   });
 
-  it("sair de edição suja exige confirmação; recusar preserva a edição e confirmar descarta (FR-050, SC-014)", async () => {
-    const cliente = await criarCartao();
+  it("formulário sujo pede confirmação de descarte ao sair (FR-050, FR-148, SC-014)", async () => {
+    const { cliente, id } = await criarCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
-
-    await screen.findByText("To walk");
-    abrirEdicao();
+    renderizarEdicao(cliente, id);
+    await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
       target: { value: "To run" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+    window.location.hash = "#/baralhos";
 
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent(
-      /alterações não salvas neste Cartão/i,
-    );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Continuar editando" }),
-    );
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(campoDeFrenteEmEdicao()).toHaveValue("To run");
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Descartar alterações" }),
-    );
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Frente do Cartão")).not.toBeInTheDocument();
-    expect(screen.getByText("To walk")).toBeInTheDocument();
+    expect(dialogo).toHaveTextContent(/o texto digitado será perdido/i);
   });
 
   it("com o cliente indisponível, salvar edição falha e o conteúdo digitado permanece (FR-044, FR-045, SC-012)", async () => {
-    const cliente = await criarCartao();
+    const { cliente, id } = await criarCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
-
-    await screen.findByText("To walk");
-    abrirEdicao();
+    renderizarEdicao(cliente, id);
+    await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
       target: { value: "To run" },
@@ -197,14 +173,11 @@ describe("edição de Cartão", () => {
     });
 
     cliente.simularIndisponibilidade();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Salvar alterações" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Cartão editado.")).not.toBeInTheDocument();
     expect(campoDeFrenteEmEdicao()).toHaveValue("To run");
     expect(campoDeVersoEmEdicao()).toHaveValue("Correr");
   });

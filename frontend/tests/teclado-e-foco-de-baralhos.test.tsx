@@ -4,23 +4,23 @@ import { join } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
+import type { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
 
 /**
- * T109 — Criar Baralho e navegar a lista apenas por teclado, com foco visível
- * (specs/002-criar-baralho/tasks.md, FR-058, FR-059, SC-018).
+ * T1109 — a lista de Baralhos percorrível apenas por teclado, com foco visível
+ * (spec 012: FR-144, FR-148, FR-153; FR-058 e FR-059 herdados de 002/005).
  *
  * A tela é exercitada pela superfície da Seam `ClienteDoAcervo` com o
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
- * 1. O percurso do campo ao salvamento é concluído só por teclado, na ordem
- *    visual — Nome, Criar Baralho — com o elemento focado conferido a cada
- *    passo por `document.activeElement`.
- * 2. Numa recusa, o foco vai ao campo que precisa de correção, guiado apenas
- *    pelo código de erro devolvido pela Interface (nunca por regra de domínio
- *    replicada na tela); quando o transporte falha, nenhum campo é apontado.
+ * 1. A ordem de tabulação segue a disposição visual — Criar baralho, depois
+ *    Ver baralho e Estudar de cada Baralho —, com o elemento focado conferido
+ *    a cada passo por `document.activeElement`.
+ * 2. O Estudar de um Baralho vazio fica fora da ordem de tabulação, por ser um
+ *    controle desabilitado, e a falha de listagem deixa a nova tentativa como
+ *    única ação além do cabeçalho, acionável por Enter.
  * 3. O indicador de foco de `estilos.css` é um contorno geométrico, sem
  *    depender apenas de cor, e nunca é suprimido.
  */
@@ -55,130 +55,125 @@ function apertarTab(): void {
   proximo.focus();
 }
 
-/** Digita pelo teclado: um `keydown` por caractere e a atualização do valor. */
-function digitarPeloTeclado(campo: HTMLElement, texto: string): void {
-  for (const caractere of texto) {
-    fireEvent.keyDown(campo, { key: caractere });
-  }
-
-  fireEvent.change(campo, { target: { value: texto } });
-}
-
 /**
  * Aperta Enter como um navegador: dispara o evento de teclado e executa o
- * comportamento padrão — a ativação do botão de submissão focado.
+ * comportamento padrão — a ativação do botão focado.
  */
 function apertarEnter(elemento: HTMLElement): void {
   fireEvent.keyDown(elemento, { key: "Enter" });
 
-  if (elemento instanceof HTMLButtonElement && elemento.type === "submit") {
+  if (elemento instanceof HTMLButtonElement) {
     fireEvent.click(elemento);
   }
 }
 
-interface CasoDeRecusa {
-  descricao: string;
-  nome: string;
-  mensagem: RegExp;
+/** Cria um Baralho já vinculado aos Cartões informados, pela Interface. */
+async function semearBaralho(
+  cliente: ClienteEmMemoria,
+  nome: string,
+  frentes: string[] = [],
+): Promise<void> {
+  const criacao = await cliente.criarBaralho({ nome });
+
+  if (!criacao.ok) {
+    throw new Error(`Baralho de prova "${nome}" não foi criado.`);
+  }
+
+  for (const frente of frentes) {
+    const cartao = await cliente.criarCartao({
+      frente,
+      verso: `Verso de ${frente}`,
+    });
+
+    if (!cartao.ok) {
+      throw new Error(`Cartão de prova "${frente}" não foi criado.`);
+    }
+
+    const vinculo = await cliente.vincular(cartao.cartao.id, criacao.baralho.id);
+
+    if (!vinculo.ok) {
+      throw new Error(`Vínculo de prova "${frente}" não foi criado.`);
+    }
+  }
 }
 
-/** Os dois modos de recusa de regra de Baralho, ambos no campo Nome (FR-059). */
-const CASOS_DE_RECUSA: CasoDeRecusa[] = [
-  {
-    descricao: "nome_vazio",
-    nome: "   ",
-    mensagem: /o nome do baralho não pode ficar vazio/i,
-  },
-  {
-    descricao: "nome_muito_longo",
-    nome: "x".repeat(101),
-    mensagem: /o nome do baralho deve ter no máximo 100 caracteres/i,
-  },
-];
-
 describe("PaginaDeBaralhos por teclado", () => {
-  it("conclui a criação do campo ao salvamento apenas por teclado, na ordem visual Nome → Criar Baralho (FR-058, SC-018)", async () => {
-    render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
-    await screen.findByText(/ainda não há Baralhos/i);
+  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Ver baralho → Estudar (FR-144)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Inglês", ["Hello"]);
 
-    const campoNome = screen.getByLabelText("Nome");
-    const botaoDeCriacao = screen.getByRole("button", {
-      name: "Criar Baralho",
-    });
+    render(<PaginaDeBaralhos cliente={cliente} />);
+    await screen.findByRole("listitem");
 
-    // Os únicos controles interativos são o campo e o botão, nesta ordem — a
-    // mesma da disposição visual da coluna única.
     const controles = controlesInterativos();
-    expect(controles).toHaveLength(2);
-    expect(controles[0]).toBe(campoNome);
-    expect(controles[1]).toBe(botaoDeCriacao);
-
-    apertarTab();
-    expect(document.activeElement).toBe(campoNome);
-    digitarPeloTeclado(campoNome, "Inglês");
-
-    apertarTab();
-    expect(document.activeElement).toBe(botaoDeCriacao);
-    apertarEnter(botaoDeCriacao);
-
-    const baralhoListado = await screen.findByRole("listitem");
-    expect(baralhoListado).toHaveTextContent("Inglês");
-    expect(baralhoListado).toHaveTextContent(
-      "Não elegível para estudo: nenhum Cartão vinculado.",
+    expect(controles).toHaveLength(3);
+    expect(controles[0]).toBe(
+      screen.getByRole("link", { name: "Criar baralho" }),
     );
-    expect(campoNome).toHaveValue("");
+    expect(controles[1]).toBe(
+      screen.getByRole("link", { name: "Ver baralho Inglês" }),
+    );
+    expect(controles[2]).toBe(
+      screen.getByRole("link", { name: "Estudar Inglês" }),
+    );
+
+    apertarTab();
+    expect(document.activeElement).toBe(controles[0]);
+
+    apertarTab();
+    expect(document.activeElement).toBe(controles[1]);
+
+    apertarTab();
+    expect(document.activeElement).toBe(controles[2]);
   });
 
-  it.each(CASOS_DE_RECUSA)(
-    "numa recusa $descricao, o foco vai ao campo Nome e o conteúdo permanece (FR-059)",
-    async (caso) => {
-      render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
-      await screen.findByText(/ainda não há Baralhos/i);
-
-      const campoNome = screen.getByLabelText("Nome");
-
-      digitarPeloTeclado(campoNome, caso.nome);
-
-      // Submete percorrendo a ordem visual por teclado.
-      apertarTab(); // Nome
-      apertarTab(); // Criar Baralho
-      const botaoDeCriacao = screen.getByRole("button", {
-        name: "Criar Baralho",
-      });
-      expect(document.activeElement).toBe(botaoDeCriacao);
-      apertarEnter(botaoDeCriacao);
-
-      expect(await screen.findByText(caso.mensagem)).toBeInTheDocument();
-
-      expect(document.activeElement).toBe(campoNome);
-      expect(campoNome).toHaveFocus();
-      expect(campoNome).toHaveValue(caso.nome);
-    },
-  );
-
-  it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-059)", async () => {
+  it("o Estudar de um Baralho vazio fica fora da ordem de tabulação (FR-144)", async () => {
     const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Alemão");
+
     render(<PaginaDeBaralhos cliente={cliente} />);
-    await screen.findByText(/ainda não há Baralhos/i);
+    await screen.findByRole("listitem");
 
-    const campoNome = screen.getByLabelText("Nome");
-    digitarPeloTeclado(campoNome, "Inglês");
+    const botaoDeEstudo = screen.getByRole("button", {
+      name: "Estudar Alemão",
+    });
 
+    expect(botaoDeEstudo).toBeDisabled();
+    expect(controlesInterativos()).toHaveLength(2);
+    expect(controlesInterativos()).not.toContain(botaoDeEstudo);
+
+    // A ordem visual termina no acesso ao Baralho: nada a focar depois dele.
+    apertarTab();
+    apertarTab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("link", { name: "Ver baralho Alemão" }),
+    );
+  });
+
+  it("na falha de listagem, a nova tentativa é a única ação além do cabeçalho e é acionável por Enter (FR-148)", async () => {
+    const cliente = clienteDeProva();
     cliente.simularIndisponibilidade();
 
-    apertarTab(); // Nome
-    apertarTab(); // Criar Baralho
-    const botaoDeCriacao = screen.getByRole("button", {
-      name: "Criar Baralho",
-    });
-    apertarEnter(botaoDeCriacao);
+    render(<PaginaDeBaralhos cliente={cliente} />);
+    await screen.findByRole("alert");
+
+    const controles = controlesInterativos();
+    expect(controles).toHaveLength(2);
+    expect(controles[1]).toBe(
+      screen.getByRole("button", { name: "Tentar novamente" }),
+    );
+
+    apertarTab();
+    apertarTab();
+    expect(document.activeElement).toBe(controles[1]);
+
+    cliente.restaurarDisponibilidade();
+    apertarEnter(controles[1]);
 
     expect(
-      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS),
+      await screen.findByText(/ainda não há Baralhos/i),
     ).toBeInTheDocument();
-
-    expect(document.activeElement).toBe(botaoDeCriacao);
-    expect(campoNome).toHaveValue("Inglês");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("o indicador de foco é um contorno geométrico e não depende apenas de cor (FR-059)", () => {

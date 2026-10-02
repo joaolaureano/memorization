@@ -78,6 +78,42 @@ const corpoDeUsuario = z.object({
 });
 
 /**
+ * Forma do corpo de `POST /sessoes`: o Registro de sessão que o cliente envia
+ * ao concluir — o identificador que dá a idempotência, o Baralho e o seu nome
+ * no momento da conclusão e a lista de Itens, cada um com Frente, Verso e
+ * Resultado (contrato da `013`, §3).
+ *
+ * O esquema confere apenas a **forma**. Os limites de tamanho, a forma canônica
+ * do identificador, o intervalo de 1 a 1000 Itens e a validade de Frente e
+ * Verso como Cartão continuam sendo julgados exclusivamente pelo `Acervo`
+ * (FR-161), e Resultado fora de `acertou`/`errou` também é recusado lá. Por
+ * isso a recusa de forma na borda usa o **mesmo** código da recusa de domínio —
+ * `dados_invalidos` —, e o cliente tem um só caminho para corpo inválido.
+ */
+const corpoDeRegistro = z.object({
+  id: z.string(),
+  baralhoId: z.string(),
+  nomeDoBaralho: z.string(),
+  itens: z.array(
+    z.object({
+      frente: z.string(),
+      verso: z.string(),
+      resultado: z.string(),
+    }),
+  ),
+});
+
+/**
+ * Forma da consulta de `GET /estatisticas`: o `desde` da janela é um único
+ * texto (contrato da `013`, §3). Ausente, repetido ou de outro tipo é recusado
+ * na borda como `dados_invalidos`; se ele é um instante ISO-8601 utilizável
+ * como limite, quem decide é o `Acervo` (FR-169).
+ */
+const consultaDaJanela = z.object({
+  desde: z.string(),
+});
+
+/**
  * Recusa uniforme de forma inválida na borda. Regra de domínio exige mensagem
  * útil ao usuário; forma inválida não — mas a resposta é estável e em
  * português, como toda a interface (FR-046). O código `corpo_invalido` não é
@@ -93,6 +129,35 @@ export const CORPO_INVALIDO = {
  * a operação **não** foi concluída (FR-044, FR-045).
  */
 const INDISPONIVEL = 503;
+
+/**
+ * Recusas das rotas de Histórico, cada uma com o código estável e a mensagem
+ * em português — a mesma forma `{ erro, mensagem }` de todas as demais rotas
+ * (FR-046).
+ *
+ * Os resultados desta feature carregam apenas o código (contrato da `013`), e
+ * quem traduz a falha em frase para a tela é o cliente; ainda assim a resposta
+ * carrega a mensagem, porque é ela que o Adapter do cliente exige em toda
+ * recusa (FR-044). O isolamento por Usuário faz o registro alheio se comportar
+ * como inexistente, e é `nao_encontrado` que a leitura de um registro de outro
+ * Usuário recebe (FR-166, FR-179).
+ */
+const DADOS_DO_REGISTRO_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados da Sessão são inválidos.",
+} as const;
+const REGISTRO_EM_CONFLITO = {
+  erro: "conflito",
+  mensagem: "Esta Sessão já foi registrada por outro Usuário.",
+} as const;
+const REGISTRO_NAO_ENCONTRADO = {
+  erro: "nao_encontrado",
+  mensagem: "Sessão não encontrada.",
+} as const;
+const INDISPONIVEL_DO_HISTORICO = {
+  erro: "indisponivel",
+  mensagem: "O armazenamento está indisponível.",
+} as const;
 
 /**
  * Responde a falha do armazenamento com o código estável e a mensagem em
@@ -379,6 +444,104 @@ export function registrarRotasDeBaralhos(
       return resposta.status(204).send();
     },
   );
+}
+
+/**
+ * Registra as rotas de Histórico do contrato sobre o `Acervo` de quem Entrou:
+ * `POST /sessoes`, `GET /estatisticas` e `GET /sessoes/{id}`
+ * (`specs/013-estatisticas-e-historico/contracts/contratos.md`, §3).
+ *
+ * Mesma estrutura fina das rotas de Baralho: a Credencial já foi exigida pelo
+ * hook `onRequest` (FR-090), o `Acervo` é construído **dentro** de cada handler
+ * com o dono decorado na requisição, de modo que nenhum acervo é guardado entre
+ * requisições e toda operação é restrita ao Histórico de quem Entrou (FR-092);
+ * a forma é validada na borda com Zod e as regras de domínio são julgadas
+ * exclusivamente pelo `Acervo` (FR-161). A recusa de domínio atravessa como
+ * código, sem texto: é o cliente que a traduz em frase.
+ *
+ * O `POST /sessoes` é **idempotente** pelo `id` (FR-163): a primeira gravação
+ * responde `201`; o reenvio do mesmo `id` devolve o registro guardado e
+ * responde `200`. A distinção é feita sem estado — o registro devolvido carrega
+ * a data da **primeira** gravação, e uma data anterior ao início desta
+ * requisição só pode vir de um registro que já existia.
+ */
+export function registrarRotasDeSessoes(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  servidor.post("/sessoes", async (requisicao, resposta) => {
+    const corpo = corpoDeRegistro.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
+    }
+
+    /**
+     * O relógio marca o início antes da chamada: quem manda na data é a
+     * primeira inserção, e o `Acervo` só devolve uma data anterior a este
+     * instante quando o registro já existia (FR-163).
+     */
+    const inicioDaRequisicao = Date.now();
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.registrarSessao(corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
+      }
+
+      if (resultado.erro === "conflito") {
+        return resposta.status(409).send(REGISTRO_EM_CONFLITO);
+      }
+
+      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+    }
+
+    const jaExistia =
+      Date.parse(resultado.registro.concluidaEm) < inicioDaRequisicao;
+
+    return resposta.status(jaExistia ? 200 : 201).send(resultado.registro);
+  });
+
+  servidor.get("/estatisticas", async (requisicao, resposta) => {
+    const consulta = consultaDaJanela.safeParse(requisicao.query);
+
+    if (!consulta.success) {
+      return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterEstatisticas(consulta.data.desde);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
+      }
+
+      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+    }
+
+    return resposta.status(200).send(resultado.estatisticas);
+  });
+
+  servidor.get("/sessoes/:id", async (requisicao, resposta) => {
+    const { id } = requisicao.params as { id: string };
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterRegistroDeSessao(id);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+      }
+
+      return resposta.status(404).send(REGISTRO_NAO_ENCONTRADO);
+    }
+
+    return resposta.status(200).send({
+      registro: resultado.registro,
+      baralhoExiste: resultado.baralhoExiste,
+    });
+  });
 }
 
 /**

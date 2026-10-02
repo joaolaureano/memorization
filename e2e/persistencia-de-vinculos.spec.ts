@@ -96,51 +96,97 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     await criarUsuarioDeProva(enderecoDaApi);
 
     // Prepara um Cartão e um Baralho reais, pelas telas das features 001 e
-    // 002 — o Vínculo será um ato distinto, na tela desta feature.
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
-    await entrarSeNecessario(page);
+    // 002 — o Vínculo será um ato distinto, na tela desta feature. Cada criação
+    // é uma página própria (`#/cartoes/novo`, `#/baralhos/novo`), alcançada
+    // pelo link da lista (spec 012).
+    await abrirRotaAutenticada(page, enderecoDoFrontend, "#/cartoes");
     await criarCartaoPelaUi(page, CARTAO);
-    await expect(page.getByRole("listitem")).toHaveCount(1);
+    await expect(
+      page.getByRole("link", { name: `Editar ${CARTAO.frente}` }),
+    ).toBeVisible();
 
-    await page.goto(`${enderecoDoFrontend}/#/baralhos`);
-    await entrarSeNecessario(page);
+    await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
     await criarBaralhoPelaUi(page, NOME_DO_BARALHO);
-    await expect(page.getByRole("listitem")).toHaveCount(1);
+
+    // A criação bem-sucedida leva ao detalhe do Baralho novo (spec 012).
+    await expect(
+      page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
+    ).toBeVisible();
+
+    // De volta à lista, o Baralho novo aparece e ainda não é elegível: sem
+    // Cartões vinculados, "Estudar" é um botão desabilitado (spec 012).
+    await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
+    await expect(
+      page.getByRole("link", { name: `Ver baralho ${NOME_DO_BARALHO}` }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: `Estudar ${NOME_DO_BARALHO}` }),
+    ).toBeDisabled();
 
     const baralhosCriados = await listarBaralhosPelaApi(enderecoDaApi);
     expect(baralhosCriados).toHaveLength(1);
     const idDoBaralho = baralhosCriados[0].id;
 
-    // A tela de Vínculos é a página de detalhe do Baralho.
-    await page.goto(`${enderecoDoFrontend}/#/baralhos/${idDoBaralho}`);
-    await entrarSeNecessario(page);
+    // A tela de Vínculos é a página de detalhe do Baralho (spec 012): o
+    // Cartão ainda não está vinculado e o ato de vincular vive na página
+    // "Adicionar cartões existentes".
+    await abrirRotaAutenticada(
+      page,
+      enderecoDoFrontend,
+      `#/baralhos/${idDoBaralho}`,
+    );
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
     await expect(
-      page.getByText(
-        "Não elegível para estudo: nenhum Cartão vinculado.",
-      ),
+      page.getByRole("heading", { name: "Cartões do Baralho" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Este Baralho ainda não tem Cartões vinculados."),
-    ).toBeVisible();
+      page.getByRole("button", {
+        name: `Remover ${CARTAO.frente} deste baralho`,
+      }),
+    ).toHaveCount(0);
+
+    await page
+      .getByRole("link", { name: "Adicionar cartões existentes" })
+      .click();
 
     await page
       .getByRole("button", { name: `Vincular ${CARTAO.frente}` })
       .click();
 
-    await expect(page.getByText(/Cartão vinculado ao Baralho\./)).toBeVisible();
+    // A vinculação é assíncrona e protegida: enquanto a operação corre, sair
+    // da tela é bloqueado e a lista de disponíveis ainda mostra o Cartão. Só
+    // depois que o servidor confirma o Vínculo o Cartão sai da lista. Esperar
+    // por isso garante que o Vínculo já existe antes de navegar — sem essa
+    // espera, a lista de Baralhos seria relida sem o Vínculo e o Baralho
+    // ainda apareceria inelegível.
     await expect(
-      page.getByText(/O Baralho tornou-se elegível para estudo\./),
+      page.getByRole("button", { name: `Vincular ${CARTAO.frente}` }),
+    ).toHaveCount(0);
+
+    // O Vínculo é o que torna o Baralho elegível para estudo (spec 012): a
+    // lista passa a oferecer "Estudar" como link.
+    await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
+    await expect(
+      page.getByRole("link", { name: `Estudar ${NOME_DO_BARALHO}` }),
+    ).toBeVisible();
+
+    // O Cartão vinculado aparece na seção "Cartões do Baralho" do detalhe.
+    await abrirRotaAutenticada(
+      page,
+      enderecoDoFrontend,
+      `#/baralhos/${idDoBaralho}`,
+    );
+    await expect(
+      page.getByRole("button", {
+        name: `Remover ${CARTAO.frente} deste baralho`,
+      }),
     ).toBeVisible();
     await expect(
-      page.getByText("Elegível para estudo.", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Todos os Cartões já estão vinculados a este Baralho."),
-    ).toBeVisible();
+      page.getByRole("listitem").filter({ hasText: CARTAO.frente }),
+    ).toHaveCount(1);
 
     const baralhoVinculado = await obterBaralhoPelaApi(
       enderecoDaApi,
@@ -178,19 +224,37 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
       (resposta) => resposta.ok,
     );
 
-    // Reabrir a tela de Vínculos: o Vínculo persiste, o Baralho continua
-    // elegível e o Cartão segue na lista de vinculados.
-    await page.goto(`${enderecoDoFrontend}/#/baralhos/${idDoBaralho}`);
-    await entrarSeNecessario(page);
+    // Reabrir a aplicação: reiniciar o frontend descarta a Credencial, que
+    // vivia apenas na memória da página, e Entrar é exigido de novo (FR-089,
+    // SC-031). O recarregamento é explícito — um `goto` que só muda o
+    // fragmento não recarrega o documento — para que a sessão autenticada seja
+    // restabelecida de forma determinística antes das telas do acervo.
+    await recarregarAutenticado(page, enderecoDoFrontend);
+
+    // A tela desejada é alcançada pela navegação "Principal", e não por um
+    // fragmento posto às cegas: depois de Entrar a aplicação abre o Início.
+    await page
+      .getByRole("navigation", { name: "Principal" })
+      .getByRole("link", { name: "Baralhos" })
+      .click();
+
+    // O Baralho continua elegível para estudo: o Vínculo persistiu.
+    await expect(
+      page.getByRole("link", { name: `Estudar ${NOME_DO_BARALHO}` }),
+    ).toBeVisible();
+
+    // O detalhe segue com o Cartão vinculado (mesmo id, mesma Frente e Verso).
+    await page
+      .getByRole("link", { name: `Ver baralho ${NOME_DO_BARALHO}` })
+      .click();
 
     await expect(
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
     await expect(
-      page.getByText("Elegível para estudo.", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Todos os Cartões já estão vinculados a este Baralho."),
+      page.getByRole("button", {
+        name: `Remover ${CARTAO.frente} deste baralho`,
+      }),
     ).toBeVisible();
 
     const itemVinculado = page
@@ -211,25 +275,82 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
 });
 
 /**
- * Cria um Cartão pela tela real: preenche Frente e Verso nos campos do
- * formulário e submete com o botão.
+ * Abre `rota` já autenticado, reafirmando o destino depois do Entrar.
+ *
+ * Depois de Entrar a aplicação abre o Início (spec 013), e não a rota pedida:
+ * quem depende de uma tela específica precisa reafirmá-la. Quando o documento
+ * é recarregado — o frontend reiniciado, ou o Vite reconectando —, a Credencial
+ * mantida apenas na memória se vai e Entrar é exigido de novo (FR-089,
+ * SC-031). A rota é reafirmada pelo fragmento, sem recarregar: um
+ * recarregamento descartaria a Credencial recém-obtida e pediria Entrar outra
+ * vez.
+ */
+async function abrirRotaAutenticada(
+  page: Page,
+  enderecoDoFrontend: string,
+  rota: string,
+): Promise<void> {
+  await page.goto(`${enderecoDoFrontend}${rota}`);
+  await entrarSeNecessario(page);
+
+  await page.evaluate((destino) => {
+    window.location.hash = destino;
+  }, rota);
+}
+
+/**
+ * Reabre a aplicação autenticada depois de reiniciar os servidores.
+ *
+ * A Credencial vive apenas na memória da página (FR-079, SC-033) e reiniciar o
+ * frontend a descarta: o documento é recarregado de propósito — um `goto` que
+ * só muda o fragmento não recarrega — e Entrar é refeito antes de qualquer
+ * tela do acervo (FR-089, SC-031). Depois de Entrar a aplicação mostra a rota
+ * do fragmento, por isso o destino seguinte é reafirmado pela navegação, e não
+ * pelo fragmento posto às cegas.
+ */
+async function recarregarAutenticado(
+  page: Page,
+  enderecoDoFrontend: string,
+): Promise<void> {
+  await page.goto(`${enderecoDoFrontend}/`);
+  await page.reload();
+  await entrarSeNecessario(page);
+}
+
+/**
+ * Cria um Cartão pela tela real (spec 012): a lista de Cartões não tem mais
+ * formulário embutido — o link "Criar cartão" leva à página `#/cartoes/novo`,
+ * onde Frente e Verso são preenchidos e "Salvar" submete. O sucesso volta à
+ * lista de Cartões.
  */
 async function criarCartaoPelaUi(
   page: Page,
   cartao: { frente: string; verso: string },
 ): Promise<void> {
+  await page.getByRole("link", { name: "Criar cartão" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Criar cartão" }),
+  ).toBeVisible();
+
   await page.getByLabel("Frente").fill(cartao.frente);
   await page.getByLabel("Verso").fill(cartao.verso);
-  await page.getByRole("button", { name: "Criar Cartão" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
 }
 
 /**
- * Cria um Baralho pela tela real: preenche o nome no campo do formulário e
- * submete com o botão.
+ * Cria um Baralho pela tela real (spec 012): a lista de Baralhos não tem mais
+ * formulário embutido — o link "Criar baralho" leva à página `#/baralhos/novo`,
+ * onde o "Nome" é preenchido e "Salvar" submete. O sucesso vai ao detalhe do
+ * Baralho novo.
  */
 async function criarBaralhoPelaUi(page: Page, nome: string): Promise<void> {
+  await page.getByRole("link", { name: "Criar baralho" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Criar baralho" }),
+  ).toBeVisible();
+
   await page.getByLabel("Nome").fill(nome);
-  await page.getByRole("button", { name: "Criar Baralho" }).click();
+  await page.getByRole("button", { name: "Salvar" }).click();
 }
 
 /** Aguarda a API responder `{ status: "ok" }` no `/health`. */

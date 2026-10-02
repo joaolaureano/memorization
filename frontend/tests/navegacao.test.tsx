@@ -8,7 +8,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Credencial } from "../src/acervo-cliente/cliente";
 import { Aplicacao } from "../src/ui/Aplicacao";
-import { ROTA_PADRAO, interpretarRota } from "../src/ui/navegacao";
+import {
+  ROTA_PADRAO,
+  destinoAtivo,
+  hashDaRota,
+  interpretarRota,
+} from "../src/ui/navegacao";
 import {
   CREDENCIAL_DE_PROVA,
   clienteDeProva,
@@ -21,12 +26,12 @@ import {
  *
  * Sem Credencial, a única tela alcançável é "Entrar" (FR-097, SC-027): nenhuma
  * outra rota resolve em outra tela, e nem a navegação principal nem "Sair"
- * aparecem. Depois de Entrar, a navegação para Cartões e Baralhos e a ação
- * "Sair" aparecem em toda tela alcançável, com `aria-current="page"` no link
- * corrente (FR-094, FR-098); Sair descarta a Credencial e volta a "Entrar", e
- * nenhum caminho do navegador — nem o voltar — traz conteúdo do acervo de volta
- * (SC-034). Cada aba mantém a própria Credencial: Sair numa não afeta a outra
- * (FR-089).
+ * aparecem. Depois de Entrar, a navegação para Início, Baralhos e Cartões e a
+ * ação "Sair" aparecem em toda tela alcançável, com `aria-current="page"` no
+ * link corrente (FR-094, FR-098, FR-168); Sair descarta a Credencial e volta a
+ * "Entrar", e nenhum caminho do navegador — nem o voltar — traz conteúdo do
+ * acervo de volta (SC-034). Cada aba mantém a própria Credencial: Sair numa não
+ * afeta a outra (FR-089).
  *
  * A casca não recebe Credencial pronta — por desenho, ela nasce sem nenhuma —,
  * então toda prova de tela autenticada passa pela tela "Entrar".
@@ -87,6 +92,8 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       "",
       "#/",
       "#/entrar",
+      "#/inicio",
+      "#/sessoes/s1",
       "#/cartoes",
       "#/baralhos",
       "#/baralhos/b1",
@@ -104,10 +111,18 @@ describe("interpretarRota sob a guarda de Credencial", () => {
     });
   });
 
-  it("com Credencial, Entrar resolve em Cartões e as demais rotas seguem as publicadas (FR-098)", () => {
-    expect(interpretarRota("#/entrar", true)).toEqual({ nome: "cartoes" });
-    expect(interpretarRota("", true)).toEqual({ nome: "cartoes" });
-    expect(interpretarRota("#/inexistente", true)).toEqual({ nome: "cartoes" });
+  it("com Credencial, Entrar resolve em Início e as demais rotas seguem as publicadas (FR-098, FR-168)", () => {
+    // `#/entrar` é o destino de quem acabou de Entrar: Início, a rota padrão
+    // (FR-168) — a tela "Entrar" não tem o que oferecer a quem já entrou.
+    expect(interpretarRota("#/entrar", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("#/inexistente", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("#/inicio", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("#/inicio/", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("#/sessoes/s1", true)).toEqual({
+      nome: "registro",
+      id: "s1",
+    });
     expect(interpretarRota("#/cartoes/", true)).toEqual({ nome: "cartoes" });
     expect(interpretarRota("#/baralhos", true)).toEqual({ nome: "baralhos" });
     expect(interpretarRota("#/baralhos/", true)).toEqual({ nome: "baralhos" });
@@ -128,13 +143,108 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       id: "b1",
     });
     expect(interpretarRota("#/baralhos/b1/estudo/extra", true)).toEqual({
-      nome: "cartoes",
+      nome: "inicio",
+    });
+    expect(interpretarRota("#/sessoes/s1/extra", true)).toEqual({
+      nome: "inicio",
     });
     expect(interpretarRota("#/criar-conta", true)).toEqual({ nome: "cadastro" });
   });
 
-  it("mantém Cartões como rota padrão publicada", () => {
-    expect(ROTA_PADRAO).toBe("#/cartoes");
+  it("mantém o Início como rota padrão publicada (FR-168)", () => {
+    expect(ROTA_PADRAO).toBe("#/inicio");
+  });
+});
+
+describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
+  it("reconhece as rotas de criação e edição dos dois acervos", () => {
+    expect(interpretarRota("#/baralhos/novo", true)).toEqual({
+      nome: "novo-baralho",
+    });
+    expect(interpretarRota("#/baralhos/7/editar", true)).toEqual({
+      nome: "editar-baralho",
+      id: "7",
+    });
+    expect(interpretarRota("#/baralhos/7/adicionar", true)).toEqual({
+      nome: "adicionar-cartoes",
+      id: "7",
+    });
+    expect(interpretarRota("#/cartoes/novo", true)).toEqual({
+      nome: "novo-cartao",
+    });
+    expect(interpretarRota("#/cartoes/7/editar", true)).toEqual({
+      nome: "editar-cartao",
+      id: "7",
+    });
+  });
+
+  it("`novo` é palavra reservada: nunca é tratado como o id de um Baralho", () => {
+    const rota = interpretarRota("#/baralhos/novo", true);
+
+    expect(rota).toEqual({ nome: "novo-baralho" });
+    expect(rota.nome).not.toBe("baralho");
+  });
+
+  it("um caminho sem rota publicada resolve na rota padrão, Início (FR-168)", () => {
+    // `#/cartoes/<id>` não é publicado: só a edição de um Cartão tem hash.
+    expect(interpretarRota("#/cartoes/7", true)).toEqual({ nome: "inicio" });
+    expect(interpretarRota("#/baralhos/b1/estudo/extra", true)).toEqual({
+      nome: "inicio",
+    });
+  });
+
+  it("um escape malformado resolve na rota padrão, sem derrubar a interpretação", () => {
+    expect(interpretarRota("#/baralhos/%E0%A4%A", true)).toEqual({
+      nome: "inicio",
+    });
+  });
+
+  it("os ids voltam de hashDaRota como entraram, inclusive com espaço e barra", () => {
+    for (const id of ["7", "a b", "a/b", "café"]) {
+      expect(interpretarRota(hashDaRota({ nome: "baralho", id }), true)).toEqual(
+        { nome: "baralho", id },
+      );
+      expect(
+        interpretarRota(hashDaRota({ nome: "editar-baralho", id }), true),
+      ).toEqual({ nome: "editar-baralho", id });
+      expect(
+        interpretarRota(hashDaRota({ nome: "adicionar-cartoes", id }), true),
+      ).toEqual({ nome: "adicionar-cartoes", id });
+      expect(interpretarRota(hashDaRota({ nome: "estudo", id }), true)).toEqual({
+        nome: "estudo",
+        id,
+      });
+      expect(
+        interpretarRota(hashDaRota({ nome: "editar-cartao", id }), true),
+      ).toEqual({ nome: "editar-cartao", id });
+      expect(
+        interpretarRota(hashDaRota({ nome: "registro", id }), true),
+      ).toEqual({ nome: "registro", id });
+    }
+  });
+});
+
+describe("destinoAtivo", () => {
+  it("aponta o destino da moldura de cada rota publicada (FR-139, FR-168)", () => {
+    expect(destinoAtivo({ nome: "inicio" })).toBe("inicio");
+    expect(destinoAtivo({ nome: "registro", id: "s1" })).toBe("inicio");
+
+    expect(destinoAtivo({ nome: "cartoes" })).toBe("cartoes");
+    expect(destinoAtivo({ nome: "novo-cartao" })).toBe("cartoes");
+    expect(destinoAtivo({ nome: "editar-cartao", id: "7" })).toBe("cartoes");
+
+    expect(destinoAtivo({ nome: "baralhos" })).toBe("baralhos");
+    expect(destinoAtivo({ nome: "novo-baralho" })).toBe("baralhos");
+    expect(destinoAtivo({ nome: "baralho", id: "7" })).toBe("baralhos");
+    expect(destinoAtivo({ nome: "editar-baralho", id: "7" })).toBe("baralhos");
+    expect(destinoAtivo({ nome: "adicionar-cartoes", id: "7" })).toBe(
+      "baralhos",
+    );
+    expect(destinoAtivo({ nome: "estudo", id: "7" })).toBe("baralhos");
+
+    // Entrar e Criar conta não têm moldura de navegação (FR-098).
+    expect(destinoAtivo({ nome: "entrar" })).toBeNull();
+    expect(destinoAtivo({ nome: "cadastro" })).toBeNull();
   });
 });
 
@@ -196,7 +306,7 @@ describe("Aplicacao sem Credencial", () => {
 });
 
 describe("Aplicacao depois de Entrar", () => {
-  it("oferece Cartões, Baralhos e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098)", async () => {
+  it("oferece Início, Baralhos, Cartões e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168)", async () => {
     const servidor = clienteDeProva();
 
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
@@ -224,7 +334,17 @@ describe("Aplicacao depois de Entrar", () => {
     expect(linkDeBaralhos).toHaveAttribute("href", "#/baralhos");
     expect(linkDeCartoes).toHaveAttribute("aria-current", "page");
     expect(linkDeBaralhos).not.toHaveAttribute("aria-current");
-    expect(within(navegacao).getByRole("button", { name: "Sair" })).toBeEnabled();
+
+    // FR-139 e FR-168: a navegação lista Início, Baralhos e Cartões, nessa
+    // ordem.
+    expect(
+      within(navegacao)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Início", "Baralhos", "Cartões"]);
+
+    // FR-139: "Sair" vive na moldura, fora da navegação "Principal".
+    expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
 
     // FR-098: o link "Criar conta" deixou a navegação principal e passou a ser
     // oferecido pela tela "Entrar".
@@ -240,11 +360,9 @@ describe("Aplicacao depois de Entrar", () => {
       navegarPara(hash);
 
       expect(
-        within(screen.getByRole("navigation", { name: "Principal" })).getByRole(
-          "button",
-          { name: "Sair" },
-        ),
+        screen.getByRole("navigation", { name: "Principal" }),
       ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
     }
   });
 
@@ -318,7 +436,7 @@ describe("Aplicacao depois de Entrar", () => {
     expect(screen.queryByRole("navigation")).toBeNull();
   });
 
-  it("voltar a Entrar com a mesma Credencial devolve o acervo como estava (FR-094)", async () => {
+  it("voltar a Entrar com a mesma Credencial devolve o acervo como estava (FR-094, FR-168)", async () => {
     const servidor = clienteDeProva();
 
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
@@ -335,10 +453,26 @@ describe("Aplicacao depois de Entrar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
     entrarPelaTela();
 
-    expect(await screen.findByText("To walk")).toBeInTheDocument();
+    // Com a Credencial de volta, `#/entrar` resolve na rota padrão, Início
+    // (FR-168): é o destino de quem acabou de Entrar, e não mais Cartões.
     expect(
-      screen.getByRole("navigation", { name: "Principal" }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: `Olá, ${CREDENCIAL_DE_PROVA.nomeDeUsuario}`,
+      }),
     ).toBeInTheDocument();
+
+    // O acervo do Usuário continua o mesmo: o Cartão criado antes segue lá,
+    // alcançável pelo destino "Cartões" da navegação principal (FR-094).
+    const navegacao = screen.getByRole("navigation", { name: "Principal" });
+
+    fireEvent.click(within(navegacao).getByRole("link", { name: "Cartões" }));
+
+    expect(await screen.findByText("To walk")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Cartões" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("recarregar a página exige Entrar de novo (FR-089, SC-031)", async () => {
@@ -423,12 +557,9 @@ describe("Aplicacao depois de Entrar", () => {
     expect(document.activeElement).toBe(botaoDeEntrada);
     fireEvent.click(botaoDeEntrada);
 
-    const navegacao = await screen.findByRole("navigation", {
-      name: "Principal",
-    });
-    const botaoDeSaida = within(navegacao).getByRole("button", {
-      name: "Sair",
-    });
+    await screen.findByRole("navigation", { name: "Principal" });
+    // FR-139: "Sair" está na moldura, fora da navegação "Principal".
+    const botaoDeSaida = screen.getByRole("button", { name: "Sair" });
 
     // O destino "Sair" é alcançável sem mouse, e o foco é identificável sem
     // depender de cor: o indicador é um contorno geométrico declarado no CSS.
@@ -455,5 +586,154 @@ describe("Aplicacao depois de Entrar", () => {
     expect(regraDeFoco).not.toBeNull();
     expect(regraDeFoco?.[1]).toMatch(/outline:\s*3px\s+solid/);
     expect(regraDeFoco?.[1]).toMatch(/outline-offset:\s*2px/);
+  });
+
+  it("depois de Entrar, o destino é Início, com a saudação ao Usuário (FR-168)", async () => {
+    // Quem Entra logo depois de ter sido levado a Entrar chega no Início: é
+    // `#/entrar` que resolve na rota padrão (FR-168), sem Cartões no caminho.
+    window.location.hash = "#/entrar";
+
+    render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+
+    entrarPelaTela();
+
+    // O Início saúda o Usuário que Entrou: o título traz o seu Nome de usuário.
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: `Olá, ${CREDENCIAL_DE_PROVA.nomeDeUsuario}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("marca o destino corrente da moldura nas telas de Baralhos e de Cartões (FR-139)", async () => {
+    render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    // `#/baralhos/7` é uma tela de Baralhos: o destino corrente é "Baralhos".
+    navegarPara("#/baralhos/7");
+
+    expect(screen.getByRole("link", { name: "Baralhos" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Cartões" })).not.toHaveAttribute(
+      "aria-current",
+    );
+
+    // `#/cartoes/novo` é uma tela de Cartões: o destino corrente é "Cartões".
+    navegarPara("#/cartoes/novo");
+
+    expect(screen.getByRole("link", { name: "Cartões" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Baralhos" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("com Credencial, #/sessoes/<id> apresenta o Registro da Sessão (FR-166, FR-177)", async () => {
+    const servidor = clienteDeProva();
+    const baralho = await servidor.criarBaralho({ nome: "Inglês" });
+
+    if (!baralho.ok) {
+      throw new Error("a criação do cenário deveria ser aceita");
+    }
+
+    const registro = await servidor.registrarSessao({
+      id: globalThis.crypto.randomUUID(),
+      baralhoId: baralho.baralho.id,
+      nomeDoBaralho: "Inglês",
+      itens: [{ frente: "To walk", verso: "Caminhar", resultado: "acertou" }],
+    });
+
+    if (!registro.ok) {
+      throw new Error("o registro do cenário deveria ser aceito");
+    }
+
+    render(
+      <Aplicacao
+        criarCliente={(credencial) => servidor.comoUsuario(credencial)}
+      />,
+    );
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    navegarPara(`#/sessoes/${registro.registro.id}`);
+
+    // O Registro é alcançado pelo id da Sessão, e traz o nome do Baralho como
+    // era no momento da conclusão (FR-166, FR-177).
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver baralho" })).toHaveAttribute(
+      "href",
+      `#/baralhos/${baralho.baralho.id}`,
+    );
+  });
+});
+
+describe("Aplicacao nas telas de formulário da 012", () => {
+  it("com Credencial, #/cartoes/novo apresenta a tela de criação de Cartão (FR-140)", async () => {
+    render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    navegarPara("#/cartoes/novo");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Criar cartão" }),
+    ).toBeInTheDocument();
+  });
+
+  it("com Credencial, #/baralhos/novo apresenta a tela de criação de Baralho (FR-140)", async () => {
+    render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    navegarPara("#/baralhos/novo");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Criar baralho" }),
+    ).toBeInTheDocument();
+  });
+
+  it("um Criar cartão sujo pede Descartar as alterações ao navegar, e Cancelar preserva o digitado (FR-148, FR-151)", async () => {
+    render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    navegarPara("#/cartoes/novo");
+
+    const frente = await screen.findByLabelText("Frente");
+
+    fireEvent.change(frente, { target: { value: "To walk" } });
+
+    // FR-148: com o formulário sujo, a navegação da moldura passa pela
+    // confirmação de descarte antes de trocar de tela.
+    fireEvent.click(screen.getByRole("link", { name: "Baralhos" }));
+
+    expect(
+      await screen.findByText("Descartar as alterações?"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("O texto digitado será perdido."),
+    ).toBeInTheDocument();
+
+    // Cancelar mantém a tela de origem e o texto digitado (FR-151).
+    fireEvent.click(screen.getByRole("button", { name: /cancelar/i }));
+
+    expect(screen.queryByText("Descartar as alterações?")).toBeNull();
+    expect(
+      screen.queryByRole("heading", { level: 1, name: "Baralhos" }),
+    ).toBeNull();
+    expect(screen.getByLabelText("Frente")).toHaveValue("To walk");
   });
 });

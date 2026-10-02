@@ -4,6 +4,7 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeRegistro,
   DadosDeUsuario,
 } from "../acervo-cliente/cliente";
 
@@ -92,5 +93,14 @@ export function comGuardaDeCredencial(
 
     criarUsuario: async (dados: DadosDeUsuario) =>
       vigiar(await cliente.criarUsuario(dados)),
+
+    registrarSessao: async (dados: DadosDeRegistro) =>
+      vigiar(await cliente.registrarSessao(dados)),
+
+    obterEstatisticas: async (desde: string) =>
+      vigiar(await cliente.obterEstatisticas(desde)),
+
+    obterRegistroDeSessao: async (id: string) =>
+      vigiar(await cliente.obterRegistroDeSessao(id)),
   };
 }

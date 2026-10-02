@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 
+import { createElement } from "react";
+import type { ReactElement } from "react";
+
 import type { Credencial } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { ProvedorDeProtecaoDeSaida } from "../src/ui/protecao-de-saida";
 
 /**
  * Apoio das provas de tela e de cliente (T711, T712, T713;
@@ -70,4 +74,22 @@ export function fabricaDeClienteDeProva(): (
   const servidor = clienteDeProva();
 
   return (credencial) => servidor.comoUsuario(credencial);
+}
+
+/**
+ * Envolve uma tela no `ProvedorDeProtecaoDeSaida`, para as provas de tela que
+ * exercem a proteção de saída (FR-148). O padrão `temCredencial = false` serve
+ * às telas de Acesso, que são justamente as alcançáveis sem Credencial.
+ *
+ * Usa `createElement` (e não JSX) porque este apoio é um `.ts`: o arquivo não
+ * passa pelo transform de JSX.
+ */
+export function comProtecaoDeSaida(
+  ui: ReactElement,
+  temCredencial = false,
+): ReactElement {
+  return createElement(ProvedorDeProtecaoDeSaida, {
+    temCredencial,
+    children: ui,
+  });
 }

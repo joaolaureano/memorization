@@ -1,58 +1,30 @@
-import { useEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   BaralhoListado,
   ClienteDoAcervo,
 } from "../acervo-cliente/cliente";
-import {
-  LIMITE_DE_CARACTERES_DE_BARALHO,
-  ehCodigoDeErroDeBaralho,
-  type CodigoDeErroDeBaralho,
-} from "../acervo-cliente/validacao";
+import { EstadoDaCarga } from "./EstadoDaCarga";
+import { hashDaRota } from "./navegacao";
 
 /**
- * Tela de Baralhos (T107; specs/002-criar-baralho/tasks.md).
+ * Tela de Baralhos (T1108; spec 012: FR-140, FR-144, FR-148, FR-153; FR-046 e
+ * FR-060 herdados de 002/005).
  *
- * Reúne o fluxo de lista e de criação consumindo somente a Interface
- * `ClienteDoAcervo` — o Adapter (Http em produção, EmMemoria em teste) chega
- * por propriedade. A tela **não reproduz nenhuma regra de domínio**: todo
- * conteúdo é submetido ao cliente, e a recusa é exibida com a mensagem em
- * português exatamente como o cliente a devolve (FR-046). A única constante
- * de domínio usada aqui é o limite de caracteres, importada de `validacao.ts`,
- * e apenas para comunicar contagem e limite durante a digitação (FR-061) —
- * nunca para recusar conteúdo.
+ * É **somente a lista**: a criação mora em `PaginaDoFormularioDeBaralho` e
+ * começa apenas por ação da pessoa, pelo link "Criar baralho" (FR-140). A tela
+ * consome exclusivamente a Interface `ClienteDoAcervo` — o Adapter (Http em
+ * produção, EmMemoria em teste) chega por propriedade — e não reproduz nenhuma
+ * regra de domínio: as mensagens exibidas são as que o cliente devolve, em
+ * português (FR-046).
  *
- * T108 (FR-044, FR-045, SC-012): a recusa da criação é exibida com a mensagem
- * da Interface, nunca é inserida na lista como concluída e deixa o nome
- * intacto para nova tentativa. Como a listagem pode ter falhado antes, uma
- * criação bem-sucedida reconcilia a lista com o acervo pela Interface — sem
- * isso, o Baralho efetivamente persistido ficaria escondido atrás da falha de
- * listagem, e a tela não retrataria a operação concluída.
- */
-
-/**
- * Folga a partir da qual a aproximação do limite passa a ser comunicada
- * explicitamente. Decisão de apresentação da tela, não regra de domínio: a
- * recusa de conteúdo acima do limite permanece exclusiva do `ClienteDoAcervo`.
- */
-const FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO = 10;
-
-/**
- * Campo a corrigir para cada recusa de regra de Baralho (FR-059).
+ * Carregando, falha e vazio vêm de `EstadoDaCarga` (FR-153), e a falha oferece
+ * "Tentar novamente", que relê a lista pela Interface (FR-148).
  *
- * A tela não reproduz nenhuma regra de domínio: qual campo precisa de correção
- * é decidido exclusivamente pelo código estável devolvido pela Interface
- * `ClienteDoAcervo`, e este mapa apenas o traduz em direção de foco.
- * `indisponivel` fica de fora de propósito — quando o transporte falha,
- * nenhum campo precisa de correção e o foco permanece onde estava.
+ * A elegibilidade não vira texto: ela se comunica pelo próprio controle
+ * Estudar — link quando o Baralho tem Cartões, botão desabilitado descrito
+ * pelo estado do Baralho quando não tem (FR-144).
  */
-const CAMPO_PARA_CORRECAO: Readonly<
-  Record<CodigoDeErroDeBaralho, "nome">
-> = {
-  nome_vazio: "nome",
-  nome_muito_longo: "nome",
-};
 
 interface PropriedadesDaPaginaDeBaralhos {
   cliente: ClienteDoAcervo;
@@ -64,15 +36,13 @@ export function PaginaDeBaralhos({
   const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [falhaDeListagem, setFalhaDeListagem] = useState<string | null>(null);
-
-  const [nome, setNome] = useState("");
-  const [submetendo, setSubmetendo] = useState(false);
-  const [falhaDeCriacao, setFalhaDeCriacao] = useState<string | null>(null);
-
-  const campoDeNome = useRef<HTMLInputElement>(null);
+  const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     let ativo = true;
+
+    setCarregando(true);
+    setFalhaDeListagem(null);
 
     void cliente.listarBaralhos().then((resultado) => {
       if (!ativo) {
@@ -91,195 +61,119 @@ export function PaginaDeBaralhos({
     return () => {
       ativo = false;
     };
-  }, [cliente]);
-
-  async function criarBaralho(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
-    setSubmetendo(true);
-    setFalhaDeCriacao(null);
-
-    const resultado = await cliente.criarBaralho({ nome });
-
-    if (resultado.ok) {
-      // O contrato de criação devolve `Baralho` (id e nome); a lista exige
-      // também a forma `BaralhoListado`. Um Baralho recém-criado ainda não
-      // tem Vínculo, então os campos derivados são 0 e falso. A reconciliação
-      // abaixo relê os valores autoritativos quando a listagem tinha falhado.
-      setBaralhos((atuais) => [
-        ...atuais,
-        {
-          ...resultado.baralho,
-          quantidadeDeCartoes: 0,
-          elegivel: false,
-        },
-      ]);
-      setNome("");
-
-      if (falhaDeListagem !== null) {
-        await reconciliarListagem();
-      }
-    } else {
-      setFalhaDeCriacao(resultado.mensagem);
-
-      // FR-059: numa recusa, o foco vai ao campo que precisa de correção. A
-      // direção vem só do código devolvido pela Interface — a tela não decide
-      // qual conteúdo é inválido, apenas para onde mover o foco.
-      if (ehCodigoDeErroDeBaralho(resultado.erro)) {
-        const campo = CAMPO_PARA_CORRECAO[resultado.erro];
-
-        if (campo === "nome") {
-          campoDeNome.current?.focus();
-        }
-      }
-    }
-
-    setSubmetendo(false);
-  }
+  }, [cliente, tentativa]);
 
   /**
-   * Relê a lista pela Interface quando ela já havia falhado (FR-044).
-   *
-   * O Baralho recém-criado foi persistido, e a tela deve retratá-lo: sem esta
-   * releitura, a falha de listagem anterior continuaria escondendo a lista
-   * inteira — inclusive a criação que acabou de ser concluída. Uma falha aqui
-   * apenas mantém a recusa de listagem vigente; nenhuma mensagem é inventada.
+   * Relê a lista pela Interface: é a ação "Tentar novamente" da falha
+   * (FR-148). Nenhuma mensagem é inventada; a releitura só substitui o que a
+   * Interface devolver.
    */
-  async function reconciliarListagem() {
-    const resultado = await cliente.listarBaralhos();
-
-    if (resultado.ok) {
-      setBaralhos(resultado.baralhos);
-      setFalhaDeListagem(null);
-    }
+  function recarregar() {
+    setTentativa((atual) => atual + 1);
   }
 
   return (
     <div className="pagina">
-      <h1>Baralhos</h1>
-
-      <section>
-        <h2>Novo Baralho</h2>
-
-        <form className="formulario-de-baralho" onSubmit={criarBaralho}>
-          <div className="campo">
-            <label htmlFor="campo-nome">Nome</label>
-            <input
-              id="campo-nome"
-              ref={campoDeNome}
-              value={nome}
-              onChange={(evento) => setNome(evento.target.value)}
-              aria-describedby={
-                avisoDeLimite(nome.length) === null
-                  ? "contador-do-nome"
-                  : "contador-do-nome aviso-do-nome"
-              }
-            />
-            <p id="contador-do-nome" className="contador">
-              {nome.length} / {LIMITE_DE_CARACTERES_DE_BARALHO} caracteres
-            </p>
-            {avisoDeLimite(nome.length) !== null && (
-              <p id="aviso-do-nome" className="aviso-de-limite">
-                {avisoDeLimite(nome.length)}
-              </p>
-            )}
-          </div>
-
-          {falhaDeCriacao !== null && (
-            <p
-              className="erro"
-              role="alert"
-              aria-label="Falha na criação do Baralho"
-            >
-              {falhaDeCriacao}
-            </p>
-          )}
-
-          <button
-            className="botao-de-criacao"
-            type="submit"
-            disabled={submetendo}
-          >
-            Criar Baralho
-          </button>
-        </form>
-      </section>
-
-      <section>
-        <h2>Lista de Baralhos</h2>
-
-        {carregando ? (
-          <p className="carregando">Carregando Baralhos…</p>
-        ) : falhaDeListagem !== null ? (
-          <p
-            className="erro"
-            role="alert"
-            aria-label="Falha na listagem de Baralhos"
-          >
-            {falhaDeListagem}
+      <header className="cabecalho-da-pagina">
+        <div>
+          <p className="sobretitulo">Seu acervo</p>
+          <h1>Baralhos</h1>
+          <p className="texto-secundario">
+            Escolha o que você quer memorizar hoje.
           </p>
-        ) : baralhos.length === 0 ? (
-          // FR-060: o estado vazio é anunciado por região ativa polida — não
-          // apenas texto visual. O papel já implica `aria-live="polite"` e
-          // `aria-atomic="true"`; os atributos vêm explícitos com os mesmos
-          // valores para que a semântica seja asseverável por teste, sem
-          // mudar o que o leitor de tela anuncia. O `aria-label` nomeia a
-          // região; o conteúdo continua sendo a mensagem anunciada.
-          <p
-            className="estado-vazio"
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label="Estado vazio da lista de Baralhos"
-          >
-            Ainda não há Baralhos. Crie o primeiro Baralho para começar a
-            organizar seus Cartões.
-          </p>
-        ) : (
-          <ul className="lista-de-baralhos">
-            {baralhos.map((baralho) => (
-              <li key={baralho.id} className="baralho">
-                <p className="nome-do-baralho">
-                  <a href={`#/baralhos/${baralho.id}`}>{baralho.nome}</a>
-                </p>
-                <p className="quantidade-de-cartoes">
-                  <span className="rotulo">Cartões</span>{" "}
-                  {baralho.quantidadeDeCartoes}
-                </p>
-                <p className="elegibilidade-do-baralho">
-                  {baralho.elegivel
-                    ? "Elegível para estudo."
-                    : "Não elegível para estudo: nenhum Cartão vinculado."}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        </div>
+        <a className="botao botao--primario" href="#/baralhos/novo">
+          Criar baralho
+        </a>
+      </header>
+
+      {carregando ? (
+        <EstadoDaCarga estado="carregando" mensagem="Carregando Baralhos…" />
+      ) : falhaDeListagem !== null ? (
+        <EstadoDaCarga
+          estado="falha"
+          mensagem={falhaDeListagem}
+          aoTentarNovamente={recarregar}
+        />
+      ) : baralhos.length === 0 ? (
+        <EstadoDaCarga
+          estado="vazio"
+          mensagem="Ainda não há Baralhos. Crie o primeiro para começar a estudar."
+          acao={
+            <a className="botao botao--primario" href="#/baralhos/novo">
+              Criar baralho
+            </a>
+          }
+        />
+      ) : (
+        <ul className="lista">
+          {baralhos.map((baralho) => (
+            <ItemDeBaralho key={baralho.id} baralho={baralho} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 /**
- * Comunicação da contagem e do limite durante a digitação (FR-061).
+ * Um Baralho na lista (FR-144).
  *
- * Devolve `null` longe do limite e, perto dele, um aviso explícito sobre o
- * texto como digitado — sem recusar nada: a recusa é sempre do
- * `ClienteDoAcervo`, e esta função não a antecipa nem a reproduz.
+ * A elegibilidade não vira texto próprio: o controle Estudar a comunica — link
+ * para a Sessão de estudo quando o Baralho tem Cartões, botão desabilitado
+ * descrito pelo estado do Baralho quando não tem. Os `aria-label` mantêm o
+ * texto visível curto e, ao mesmo tempo, um nome acessível único por Baralho.
  */
-function avisoDeLimite(comprimento: number): string | null {
-  const restantes = LIMITE_DE_CARACTERES_DE_BARALHO - comprimento;
+function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
+  const estadoDoBaralhoId = `estado-do-baralho-${baralho.id}`;
+  const temCartoes = baralho.quantidadeDeCartoes > 0;
 
-  if (restantes > FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO) {
-    return null;
-  }
-
-  if (restantes < 0) {
-    return `Atenção: o nome excede o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  if (restantes === 0) {
-    return `Atenção: o nome atingiu o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  return `Atenção: faltam ${restantes} caracteres para o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO}.`;
+  return (
+    <li className="cartao">
+      <p className="sobretitulo">Baralho</p>
+      <h2 className="titulo-do-item">{baralho.nome}</h2>
+      <p className="texto-secundario">
+        {contagemDeCartoes(baralho.quantidadeDeCartoes)}
+      </p>
+      <p id={estadoDoBaralhoId} className="texto-secundario">
+        {temCartoes
+          ? "Pronto para uma Sessão de estudo."
+          : "Adicione Cartões para começar a estudar."}
+      </p>
+      <div className="acoes">
+        <a
+          className="botao botao--secundario"
+          href={hashDaRota({ nome: "baralho", id: baralho.id })}
+          aria-label={`Ver baralho ${baralho.nome}`}
+        >
+          Ver baralho
+        </a>
+        {baralho.elegivel ? (
+          <a
+            className="botao botao--secundario"
+            href={hashDaRota({ nome: "estudo", id: baralho.id })}
+            aria-label={`Estudar ${baralho.nome}`}
+          >
+            Estudar
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="botao botao--secundario"
+            disabled
+            aria-describedby={estadoDoBaralhoId}
+            aria-label={`Estudar ${baralho.nome}`}
+          >
+            Estudar
+          </button>
+        )}
+      </div>
+    </li>
+  );
 }
+
+/** Contagem de Cartões do Baralho, com o plural da língua (FR-144). */
+function contagemDeCartoes(quantidade: number): string {
+  return `${quantidade} ${quantidade === 1 ? "Cartão" : "Cartões"}`;
+}
+

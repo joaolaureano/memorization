@@ -2,14 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
-import { ROTA_DE_ENTRADA, irParaRota, useRota } from "./navegacao";
+import { Moldura } from "./Moldura";
+import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
+import type { Rota } from "./navegacao";
+import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
 import { MENSAGEM_DE_SAIDA, PaginaDeEntrada } from "./PaginaDeEntrada";
 import type { AvisoDaEntrada } from "./PaginaDeEntrada";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
+import { PaginaDeInicio } from "./PaginaDeInicio";
 import { PaginaDoBaralho } from "./PaginaDoBaralho";
+import { PaginaDoFormularioDeBaralho } from "./PaginaDoFormularioDeBaralho";
+import { PaginaDoFormularioDeCartao } from "./PaginaDoFormularioDeCartao";
+import { PaginaDoRegistro } from "./PaginaDoRegistro";
+import {
+  ProvedorDeProtecaoDeSaida,
+  useAcaoProtegida,
+  useDescartarProtecao,
+  useRotaExibida,
+} from "./protecao-de-saida";
 
 /**
  * Casca da aplicação, guarda de Credencial e navegação principal.
@@ -24,14 +37,19 @@ import { PaginaDoBaralho } from "./PaginaDoBaralho";
  * `#/criar-conta`), sem dependência de roteador, e o que aparece na tela é
  * decidido por `interpretarRota` com a guarda de Credencial: sem ela, a única
  * tela alcançável é "Entrar", exceto o Cadastro (FR-097); com ela, `#/entrar`
- * resolve em Cartões (FR-098).
+ * resolve no Início (FR-098, FR-168).
  *
- * Sem Credencial não há navegação principal nem "Sair" (FR-098): ambos
- * aparecem em toda tela alcançável depois de Entrar, com `aria-current="page"`
- * no link da rota corrente e "Sair" como ação de teclado que descarta a
- * Credencial e volta a "Entrar" (FR-094). Numa mudança de rota, o foco é movido
- * para o título da tela — o destino que usuários de teclado e leitor de tela
- * esperam depois de ativar um link de navegação.
+ * Desde a `012`, a casca se divide em duas partes: a de fora é dona da
+ * Credencial e envolve a de dentro no `ProvedorDeProtecaoDeSaida`; a de dentro
+ * lê a rota **exibida** (`useRotaExibida`) e passa toda troca de tela pela
+ * proteção de saída (FR-148, FR-151, FR-154). Sem Credencial não há moldura de
+ * navegação (FR-098): só a marca. Com ela, a `Moldura` oferece Baralhos,
+ * Cartões e "Sair" (FR-139) — "Sair" passa por `useAcaoProtegida` e, quando há
+ * algo a perder, pede confirmação antes (FR-151). Numa mudança de rota, o foco
+ * é movido para o título da tela — o destino que usuários de teclado e leitor
+ * de tela esperam depois de ativar um link de navegação. Uma recusa de
+ * Credencial limpa a proteção antes de descartar a Credencial (FR-157), de modo
+ * que ela sempre vence.
  */
 
 interface PropriedadesDaAplicacao {
@@ -51,34 +69,10 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
   );
 
   const temCredencial = credencial !== null;
-  const rota = useRota(temCredencial);
-  const principal = useRef<HTMLElement>(null);
-  const rotaAnterior = useRef(rota);
 
   const clienteDaCredencial = useMemo(
     () => criarCliente(credencial),
     [criarCliente, credencial],
-  );
-
-  /**
-   * FR-091 e SC-035: recebida a recusa por Credencial, ela é descartada, a tela
-   * "Entrar" volta com a mensagem que explica a recusa e nada aparece como
-   * concluído — a operação recusada continua não concluída nas telas, que saem
-   * de cena com ela.
-   */
-  const recusarCredencial = useCallback((mensagem: string) => {
-    setCredencial(null);
-    setAvisoDaEntrada({ tipo: "falha", texto: mensagem });
-    irParaRota(ROTA_DE_ENTRADA);
-  }, []);
-
-  /**
-   * O cliente que as telas do acervo recebem: o da Credencial corrente, com a
-   * guarda que descarta a Credencial quando ela é recusada.
-   */
-  const cliente = useMemo(
-    () => comGuardaDeCredencial(clienteDaCredencial, recusarCredencial),
-    [clienteDaCredencial, recusarCredencial],
   );
 
   const entrar = useCallback((credencialInformada: Credencial) => {
@@ -91,11 +85,105 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
    * destino do voltar do navegador, que reencontra a tela "Entrar" porque a
    * Credencial não sobreviveu em lugar nenhum.
    */
-  const sair = useCallback(() => {
+  const descartarPorSaida = useCallback(() => {
     setCredencial(null);
     setAvisoDaEntrada({ tipo: "saida", texto: MENSAGEM_DE_SAIDA });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
+
+  /**
+   * FR-091 e SC-035: recebida a recusa por Credencial, ela é descartada, a tela
+   * "Entrar" volta com a mensagem que explica a recusa e nada aparece como
+   * concluído — a operação recusada continua não concluída nas telas, que saem
+   * de cena com ela.
+   */
+  const descartarPorRecusa = useCallback((mensagem: string) => {
+    setCredencial(null);
+    setAvisoDaEntrada({ tipo: "falha", texto: mensagem });
+    irParaRota(ROTA_DE_ENTRADA);
+  }, []);
+
+  return (
+    // A casca externa é dona da Credencial; a interna vive sob a proteção de
+    // saída e é quem decide moldura, tela e guarda do cliente.
+    <ProvedorDeProtecaoDeSaida temCredencial={temCredencial}>
+      <CascaDaAplicacao
+        temCredencial={temCredencial}
+        nomeDeUsuarioDaCredencial={credencial?.nomeDeUsuario ?? ""}
+        clienteDaCredencial={clienteDaCredencial}
+        avisoDaEntrada={avisoDaEntrada}
+        aoEntrar={entrar}
+        aoSair={descartarPorSaida}
+        aoRecusar={descartarPorRecusa}
+      />
+    </ProvedorDeProtecaoDeSaida>
+  );
+}
+
+/** O que a casca interna recebe da casca externa, dona da Credencial. */
+interface PropriedadesDaCasca {
+  temCredencial: boolean;
+  /** O Nome de usuário da Credencial corrente, para a saudação do Início. */
+  nomeDeUsuarioDaCredencial: string;
+  clienteDaCredencial: ClienteDoAcervo;
+  avisoDaEntrada: AvisoDaEntrada | null;
+  aoEntrar: (credencial: Credencial) => void;
+  aoSair: () => void;
+  aoRecusar: (mensagem: string) => void;
+}
+
+/**
+ * A parte da casca que vive **sob** a proteção de saída (FR-148, FR-151,
+ * FR-154): lê a rota exibida e passa cada troca de tela pela política de saída.
+ * A Credencial continua na casca externa; aqui ela só decide a moldura, a tela
+ * e a guarda do cliente.
+ */
+function CascaDaAplicacao({
+  temCredencial,
+  nomeDeUsuarioDaCredencial,
+  clienteDaCredencial,
+  avisoDaEntrada,
+  aoEntrar,
+  aoSair,
+  aoRecusar,
+}: PropriedadesDaCasca) {
+  const rota = useRotaExibida();
+  const protegerAcao = useAcaoProtegida();
+  const descartarProtecao = useDescartarProtecao();
+
+  const principal = useRef<HTMLElement>(null);
+  const rotaAnterior = useRef(rota);
+
+  /**
+   * FR-157: a recusa de Credencial sempre vence. A proteção vigente é limpa
+   * antes de descartar a Credencial e ir para Entrar, para que essa navegação
+   * não seja barrada por uma confirmação de descarte.
+   */
+  const recusarCredencial = useCallback(
+    (mensagem: string) => {
+      descartarProtecao();
+      aoRecusar(mensagem);
+    },
+    [descartarProtecao, aoRecusar],
+  );
+
+  /**
+   * O cliente que as telas do acervo recebem: o da Credencial corrente, com a
+   * guarda que descarta a Credencial quando ela é recusada.
+   */
+  const cliente = useMemo(
+    () => comGuardaDeCredencial(clienteDaCredencial, recusarCredencial),
+    [clienteDaCredencial, recusarCredencial],
+  );
+
+  /**
+   * FR-151: Sair passa pela proteção de saída — com alterações não salvas ou
+   * uma operação em andamento, a confirmação (ou o aviso) vem antes de a
+   * Credencial cair.
+   */
+  const sair = useCallback(() => {
+    protegerAcao(aoSair);
+  }, [protegerAcao, aoSair]);
 
   useEffect(() => {
     // Na montagem o foco permanece onde o navegador o colocou; a partir da
@@ -118,57 +206,114 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
 
   return (
     <>
-      {temCredencial && (
-        // FR-098: a navegação principal para Cartões e Baralhos e o acesso a
-        // "Sair" aparecem somente depois de Entrar, em toda tela alcançável
-        // (FR-094). O link "Criar conta" que a `007` oferecia aqui passou para
-        // a tela "Entrar".
-        <nav aria-label="Principal" className="navegacao-principal">
-          <a
-            href="#/cartoes"
-            aria-current={rota.nome === "cartoes" ? "page" : undefined}
-          >
-            Cartões
-          </a>
-          <a
-            href="#/baralhos"
-            aria-current={
-              rota.nome === "baralhos" ||
-              rota.nome === "baralho" ||
-              rota.nome === "estudo"
-                ? "page"
-                : undefined
-            }
-          >
-            Baralhos
-          </a>
-          <button className="botao-de-saida" type="button" onClick={sair}>
-            Sair
-          </button>
-        </nav>
+      {temCredencial ? (
+        // FR-139: com Credencial, a moldura traz a marca, a navegação principal
+        // e "Sair" em toda tela alcançável.
+        <Moldura rota={rota} aoSair={sair} />
+      ) : (
+        // FR-098: sem Credencial não há navegação nem "Sair" — só a marca.
+        <header className="moldura">
+          <span className="marca">memorization</span>
+        </header>
       )}
 
       <main className="aplicacao" ref={principal}>
-        {rota.nome === "entrar" ? (
-          // A tela "Entrar" recebe o cliente **sem** a guarda: a recusa de
-          // Entrar é dela, e a tela de destino já é esta.
-          <PaginaDeEntrada
-            cliente={clienteDaCredencial}
-            aoEntrar={entrar}
-            aviso={avisoDaEntrada}
-          />
-        ) : rota.nome === "cadastro" ? (
-          <PaginaDeCadastro cliente={clienteDaCredencial} />
-        ) : rota.nome === "baralhos" ? (
-          <PaginaDeBaralhos cliente={cliente} />
-        ) : rota.nome === "baralho" ? (
-          <PaginaDoBaralho cliente={cliente} id={rota.id} />
-        ) : rota.nome === "estudo" ? (
-          <PaginaDeEstudo cliente={cliente} id={rota.id} />
-        ) : (
-          <PaginaDeCartoes cliente={cliente} />
-        )}
+        <TelaDaRota
+          rota={rota}
+          cliente={cliente}
+          clienteSemGuarda={clienteDaCredencial}
+          nomeDeUsuario={nomeDeUsuarioDaCredencial}
+          avisoDaEntrada={avisoDaEntrada}
+          aoEntrar={aoEntrar}
+        />
       </main>
     </>
   );
+}
+
+/**
+ * A tela da rota exibida. O `switch` é exaustivo sobre `Rota`: o `default`
+ * atribui a `never` para que uma rota nova, acrescentada em `navegacao.ts`,
+ * deixe de compilar aqui até ganhar a sua tela. Enquanto as telas próprias das
+ * rotas da `012` não existem, estas reutilizam as páginas atuais.
+ */
+function TelaDaRota({
+  rota,
+  cliente,
+  clienteSemGuarda,
+  nomeDeUsuario,
+  avisoDaEntrada,
+  aoEntrar,
+}: {
+  rota: Rota;
+  cliente: ClienteDoAcervo;
+  clienteSemGuarda: ClienteDoAcervo;
+  nomeDeUsuario: string;
+  avisoDaEntrada: AvisoDaEntrada | null;
+  aoEntrar: (credencial: Credencial) => void;
+}) {
+  switch (rota.nome) {
+    case "inicio":
+      // FR-168: o Início é o destino de quem acabou de Entrar, e saúda o
+      // Usuário que Entrou.
+      return (
+        <PaginaDeInicio cliente={cliente} nomeDeUsuario={nomeDeUsuario} />
+      );
+
+    case "registro":
+      // FR-177: o Registro de uma Sessão concluída tem tela própria.
+      return <PaginaDoRegistro cliente={cliente} id={rota.id} />;
+
+    case "entrar":
+      // A tela "Entrar" recebe o cliente **sem** a guarda: a recusa de Entrar
+      // é dela, e a tela de destino já é esta.
+      return (
+        <PaginaDeEntrada
+          cliente={clienteSemGuarda}
+          aoEntrar={aoEntrar}
+          aviso={avisoDaEntrada}
+        />
+      );
+
+    case "cadastro":
+      return <PaginaDeCadastro cliente={clienteSemGuarda} />;
+
+    case "baralhos":
+      return <PaginaDeBaralhos cliente={cliente} />;
+
+    case "novo-baralho":
+      // FR-140: a criação de Baralho ganha tela própria.
+      return <PaginaDoFormularioDeBaralho cliente={cliente} />;
+
+    case "baralho":
+      return <PaginaDoBaralho cliente={cliente} id={rota.id} />;
+
+    case "editar-baralho":
+      // FR-141: a renomeação de Baralho ganha tela própria.
+      return <PaginaDoFormularioDeBaralho cliente={cliente} id={rota.id} />;
+
+    case "adicionar-cartoes":
+      return <PaginaDeAdicionarCartoes cliente={cliente} id={rota.id} />;
+
+    case "estudo":
+      return <PaginaDeEstudo cliente={cliente} id={rota.id} />;
+
+    case "cartoes":
+      return <PaginaDeCartoes cliente={cliente} />;
+
+    case "novo-cartao":
+      // FR-140: a criação de Cartão ganha tela própria.
+      return <PaginaDoFormularioDeCartao cliente={cliente} />;
+
+    case "editar-cartao":
+      // FR-141: a edição de Cartão ganha tela própria.
+      return <PaginaDoFormularioDeCartao cliente={cliente} id={rota.id} />;
+
+    default: {
+      // Inalcançável enquanto o `switch` cobrir todas as rotas: é a checagem
+      // que obriga a tratar uma rota nova aqui.
+      const exaustivo: never = rota;
+      throw new Error(`Rota sem tela na casca: ${String(exaustivo)}`);
+    }
+  }
 }

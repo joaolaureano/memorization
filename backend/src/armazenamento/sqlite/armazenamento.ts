@@ -9,6 +9,9 @@ import type {
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  ItemRegistrado,
+  RegistroDeSessao,
+  RegistroResumido,
   Usuario,
 } from "../porta.ts";
 import { abrirBanco } from "./esquema.ts";
@@ -63,6 +66,17 @@ const VINCULO_DUPLICADO: Desfecho<never> = {
   erro: "vinculo_duplicado",
 };
 
+/**
+ * Desfecho do `id` de Registro já usado pelo acervo de **outro** Usuário. O
+ * `id` é gerado pelo cliente (FR-163), e a colisão entre donos diferentes é
+ * recusa de domínio — como o Vínculo duplicado —, nunca falha do
+ * armazenamento nem revelação do Registro alheio.
+ */
+const CONFLITO: Desfecho<never> = {
+  ok: false,
+  erro: "conflito",
+};
+
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
 const SEM_CARGA: Desfecho<void> = { ok: true, valor: undefined };
 
@@ -89,6 +103,32 @@ function comDesfecho<T>(operacao: () => Desfecho<T>): Desfecho<T> {
     return operacao();
   } catch {
     return FALHA_INDISPONIVEL;
+  }
+}
+
+/**
+ * Executa `operacao` dentro de uma transação, desfazendo-a por completo em
+ * caso de falha.
+ *
+ * A gravação do Registro de Sessão e dos seus Itens precisa ser atômica: um
+ * Registro sem Itens seria uma Sessão corrompida, e a releitura idempotente do
+ * `id` (FR-163) devolveria um retrato incompleto. O `ROLLBACK` é a mesma
+ * defesa da aplicação de migrações em `esquema.ts`.
+ */
+function emTransacao<T>(banco: DatabaseSync, operacao: () => T): T {
+  banco.exec("BEGIN");
+
+  try {
+    const resultado = operacao();
+    banco.exec("COMMIT");
+    return resultado;
+  } catch (erro) {
+    try {
+      banco.exec("ROLLBACK");
+    } catch {
+      // Sem transação ativa para desfazer; a falha original é a que importa.
+    }
+    throw erro;
   }
 }
 
@@ -147,6 +187,51 @@ function usuarioDaLinha(linha: Record<string, unknown>): Usuario {
     hash: linha.hash as Uint8Array,
     parametros: linha.parametros as string,
   };
+}
+
+/**
+ * Devolve a marca de conclusão como string ISO-8601 UTC. O SQLite a guarda
+ * como texto desde a inserção; normalizar na leitura é o que garante ao Module
+ * sempre a mesma forma, e é esse instante que ordena as listagens.
+ */
+function comoInstanteIso(valor: unknown): string {
+  return new Date(valor as string).toISOString();
+}
+
+/** Lê a linha como Item do Registro, na ordem que o `ORDER BY` garantiu. */
+function itemDaLinha(linha: Record<string, unknown>): ItemRegistrado {
+  return {
+    posicao: Number(linha.posicao),
+    frente: linha.frente as string,
+    verso: linha.verso as string,
+    resultado: linha.resultado as ItemRegistrado["resultado"],
+  };
+}
+
+/**
+ * Lê a linha como Registro **sem** os Itens — a forma das listagens, em que a
+ * Porta troca apenas contagens e a identificação do Baralho.
+ */
+function registroResumidoDaLinha(
+  linha: Record<string, unknown>,
+): RegistroResumido {
+  return {
+    id: linha.id as string,
+    baralhoId: linha.baralho_id as string,
+    nomeDoBaralho: linha.nome_do_baralho as string,
+    concluidaEm: comoInstanteIso(linha.concluida_em),
+    estudados: Number(linha.estudados),
+    acertos: Number(linha.acertos),
+    erros: Number(linha.erros),
+  };
+}
+
+/** Lê a linha como Registro completo, com os Itens na ordem apresentada. */
+function registroDaLinha(
+  linha: Record<string, unknown>,
+  itens: readonly ItemRegistrado[],
+): RegistroDeSessao {
+  return { ...registroResumidoDaLinha(linha), itens };
 }
 
 /**
@@ -269,6 +354,73 @@ export async function abrirArmazenamentoSqlite(
        LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
       WHERE baralho.usuario_id = ?
       GROUP BY baralho.id`,
+  );
+
+  /**
+   * As consultas do histórico de Sessões. A inserção do Registro e dos Itens
+   * é sempre usada dentro de `emTransacao`, de modo que não existe Sessão
+   * meio-gravada; as leituras são sempre escopadas por `usuario_id`, com a
+   * única exceção deliberada de `obterRegistroPorId`.
+   */
+  const inserirRegistro = banco.prepare(
+    `INSERT INTO registro_de_sessao
+       (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+        estudados, acertos, erros)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const inserirItemDoRegistro = banco.prepare(
+    `INSERT INTO item_de_registro
+       (registro_id, posicao, frente, verso, resultado)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  /**
+   * A busca por `id` **sem** escopo de dono é deliberada: é ela que distingue
+   * a reinserção idempotente do mesmo Usuário (FR-163) do `id` que já pertence
+   * a outro Usuário, que é `conflito`. Ela nunca alimenta a resposta do
+   * caminho de conflito — só o booleano do dono atravessa.
+   */
+  const obterRegistroPorId = banco.prepare(
+    `SELECT id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+            estudados, acertos, erros
+       FROM registro_de_sessao
+      WHERE id = ?`,
+  );
+  /**
+   * A leitura escopada: o Registro de outro Usuário é indistinguível de um
+   * `id` que nunca existiu — ausência de linha, como em todo o acervo
+   * (FR-092, SC-030).
+   */
+  const obterRegistroDoUsuario = banco.prepare(
+    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+            estudados, acertos, erros
+       FROM registro_de_sessao
+      WHERE id = ? AND usuario_id = ?`,
+  );
+  const listarItensDoRegistro = banco.prepare(
+    `SELECT posicao, frente, verso, resultado
+       FROM item_de_registro
+      WHERE registro_id = ?
+      ORDER BY posicao`,
+  );
+  /**
+   * A janela e os recentes ordenam pelo texto ISO-8601, que é ordenável como
+   * string por construção; a comparação `>=` faz o corte da janela de 31 dias
+   * sem qualquer conversão.
+   */
+  const listarRegistrosDesde = banco.prepare(
+    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+            estudados, acertos, erros
+       FROM registro_de_sessao
+      WHERE usuario_id = ? AND concluida_em >= ?
+      ORDER BY concluida_em DESC`,
+  );
+  const listarRegistrosRecentes = banco.prepare(
+    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+            estudados, acertos, erros
+       FROM registro_de_sessao
+      WHERE usuario_id = ?
+      ORDER BY concluida_em DESC
+      LIMIT ?`,
   );
 
   const inserirUsuario = banco.prepare(
@@ -442,6 +594,87 @@ export async function abrirArmazenamentoSqlite(
         }));
 
       return contagens;
+    },
+
+    async inserirRegistroDeSessao(usuarioId, registro) {
+      return comDesfecho(() => {
+        const existente = obterRegistroPorId.get(registro.id);
+
+        if (existente !== undefined) {
+          /**
+           * Reinserção do mesmo `id` pelo mesmo Usuário é a retentativa que a
+           * idempotência de FR-163 prevê: o Registro guardado volta intacto,
+           * sem alterar contagens nem Itens. O `id` de **outro** Usuário é
+           * `conflito`, sem que nada do Registro alheio atravesse a Porta.
+           */
+          return (existente.usuario_id as string) === usuarioId
+            ? {
+                ok: true,
+                valor: registroDaLinha(
+                  existente,
+                  listarItensDoRegistro.all(registro.id).map(itemDaLinha),
+                ),
+              }
+            : CONFLITO;
+        }
+
+        /**
+         * Registro e Itens numa transação só: um Registro sem Itens seria uma
+         * Sessão corrompida e inutilizaria a releitura idempotente.
+         */
+        emTransacao(banco, () => {
+          inserirRegistro.run(
+            registro.id,
+            usuarioId,
+            registro.baralhoId,
+            registro.nomeDoBaralho,
+            registro.concluidaEm,
+            registro.estudados,
+            registro.acertos,
+            registro.erros,
+          );
+
+          for (const item of registro.itens) {
+            inserirItemDoRegistro.run(
+              registro.id,
+              item.posicao,
+              item.frente,
+              item.verso,
+              item.resultado,
+            );
+          }
+        });
+
+        return { ok: true, valor: registro };
+      });
+    },
+
+    async listarRegistrosDesde(usuarioId, desde) {
+      return listarRegistrosDesde
+        .all(usuarioId, desde)
+        .map(registroResumidoDaLinha);
+    },
+
+    async listarRegistrosRecentes(usuarioId, limite) {
+      return listarRegistrosRecentes
+        .all(usuarioId, limite)
+        .map(registroResumidoDaLinha);
+    },
+
+    async obterRegistroDeSessao(usuarioId, id) {
+      return comDesfecho(() => {
+        const linha = obterRegistroDoUsuario.get(id, usuarioId);
+
+        return linha === undefined
+          ? NAO_ENCONTRADO
+          : {
+              ok: true,
+              valor: registroDaLinha(
+                linha,
+                listarItensDoRegistro.all(id).map(itemDaLinha),
+              ),
+            };
+      });
     },
   };
 

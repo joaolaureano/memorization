@@ -144,6 +144,36 @@ export const MENSAGEM_DE_NAO_AUTENTICADO =
   "A Credencial não é mais válida. Informe o Nome de usuário e a Senha para Entrar novamente.";
 
 /**
+ * Mensagem em português destinada ao usuário quando o transporte até as rotas
+ * de histórico falha (FR-161, FR-046). Mantida separada das mensagens de
+ * Cartão, Baralho, Vínculo e Usuário para que cada operação anuncie a entidade
+ * que falhou.
+ */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO =
+  "Não foi possível acessar o seu histórico agora. Tente novamente.";
+
+/**
+ * Mensagem da recusa `dados_invalidos` ao registrar uma Sessão (FR-161): o
+ * corpo enviado não respeita as invariantes do contrato.
+ */
+export const MENSAGEM_DE_DADOS_INVALIDOS =
+  "Os dados da Sessão não são válidos.";
+
+/**
+ * Mensagem da recusa `conflito` ao registrar uma Sessão (FR-163): o `id`
+ * enviado já pertence ao histórico de **outro** Usuário. Nunca se sobrescreve
+ * o Registro alheio.
+ */
+export const MENSAGEM_DE_CONFLITO_DE_SESSAO =
+  "O identificador da Sessão já está em uso.";
+
+/**
+ * Mensagem da recusa `nao_encontrado` ao abrir um Registro (FR-166): ele não
+ * existe no histórico deste Usuário.
+ */
+export const MENSAGEM_DE_SESSAO_NAO_ENCONTRADA = "Sessão não encontrada.";
+
+/**
  * Resultado de `entrar`. Sucesso traz exatamente o Usuário que Entrou — `id` e
  * `nomeDeUsuario`, nunca a Senha nem qualquer derivação dela (FR-078, FR-086).
  * A recusa é `nao_autenticado`, com a mensagem única; a falha de transporte
@@ -408,6 +438,134 @@ export type ResultadoDeCriacaoDeUsuario =
     };
 
 /**
+ * O desfecho de um Item apresentado numa Sessão: acertou ou errou (FR-162).
+ */
+export type ResultadoDoItemRegistrado = "acertou" | "errou";
+
+/**
+ * Um Item já registrado, na ordem em que foi apresentado (FR-162, FR-164).
+ *
+ * `posicao` é 0..n-1 e é derivada pelo servidor no momento do registro; o
+ * cliente nunca a envia.
+ */
+export interface ItemRegistrado {
+  posicao: number;
+  frente: string;
+  verso: string;
+  resultado: ResultadoDoItemRegistrado;
+}
+
+/**
+ * Linha de listagem do histórico: o Registro sem os itens (FR-164, FR-165).
+ *
+ * É o que as estatísticas e as listagens transportam — os itens só existem no
+ * Registro completo, obtido por `obterRegistroDeSessao`.
+ */
+export interface RegistroResumido {
+  id: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  concluidaEm: string;
+  estudados: number;
+  acertos: number;
+  erros: number;
+}
+
+/**
+ * O Registro de uma Sessão concluída, com os itens na ordem apresentada
+ * (FR-161, FR-162).
+ *
+ * `baralhoId` é guardado sem chave estrangeira: o Baralho pode ser excluído
+ * depois, e `nomeDoBaralho` é o nome no momento da conclusão — por isso o
+ * Registro sobrevive à exclusão do Baralho (FR-166).
+ */
+export interface RegistroDeSessao extends RegistroResumido {
+  itens: ItemRegistrado[];
+}
+
+/**
+ * O que `registrarSessao` envia: os dados da Sessão concluída (FR-161, FR-163).
+ *
+ * O `id` é gerado pelo cliente (UUID) e é o que torna o registro idempotente:
+ * o mesmo `id` reenviado devolve o mesmo Registro, sem duplicar. Os totais —
+ * `estudados`, `acertos`, `erros` — e a `concluidaEm` são derivados pelo
+ * servidor e nunca vêm do cliente.
+ */
+export interface DadosDeRegistro {
+  id: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  itens: {
+    frente: string;
+    verso: string;
+    resultado: ResultadoDoItemRegistrado;
+  }[];
+}
+
+/**
+ * Os números do Início (FR-164, FR-165): o tamanho atual do acervo e o
+ * histórico da janela pedida.
+ *
+ * `registrosDaJanela` são os Registros com `concluidaEm >= desde`, do mais
+ * recente ao mais antigo; `recentes`, os 5 mais recentes, independentemente da
+ * janela.
+ */
+export interface Estatisticas {
+  cartoes: number;
+  baralhos: number;
+  registrosDaJanela: RegistroResumido[];
+  recentes: RegistroResumido[];
+}
+
+/**
+ * Resultado de `registrarSessao`. Sucesso devolve o Registro criado — ou o já
+ * existente, quando o `id` se repete (FR-163). As recusas de domínio são
+ * `dados_invalidos` (corpo fora das invariantes) e `conflito` (`id` já usado
+ * por outro Usuário).
+ */
+export type ResultadoDeRegistroDeSessao =
+  | { ok: true; registro: RegistroDeSessao }
+  | {
+      ok: false;
+      erro:
+        | "dados_invalidos"
+        | "conflito"
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterEstatisticas`. A leitura não tem recusa de domínio no
+ * contrato do cliente: as falhas são `indisponivel` e `nao_autenticado`, e
+ * nenhum número é entregue sem sucesso.
+ */
+export type ResultadoDeEstatisticas =
+  | { ok: true; estatisticas: Estatisticas }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterRegistroDeSessao`. `baralhoExiste` conta se o Baralho da
+ * Sessão ainda existe no acervo (FR-166), já que o Registro sobrevive à
+ * exclusão dele. Registro inexistente ou de outro Usuário é recusado como
+ * `nao_encontrado` (FR-092).
+ */
+export type ResultadoDeObterRegistro =
+  | { ok: true; registro: RegistroDeSessao; baralhoExiste: boolean }
+  | {
+      ok: false;
+      erro:
+        | "nao_encontrado"
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
  *
  * As operações assíncronas escondem o transporte até a API e a forma dos
@@ -517,4 +675,32 @@ export interface ClienteDoAcervo {
    * aparece em nenhum retorno (FR-076, FR-078).
    */
   criarUsuario(dados: DadosDeUsuario): Promise<ResultadoDeCriacaoDeUsuario>;
+
+  /**
+   * Registra uma Sessão concluída no histórico (FR-161, FR-163). O `id` vem do
+   * cliente: reenviar o mesmo `id` devolve o Registro já existente, sem
+   * duplicar — é o que torna a operação idempotente e segura a uma nova
+   * tentativa depois de uma falha de transporte.
+   *
+   * O corpo fora das invariantes é recusado como `dados_invalidos`; um `id`
+   * já usado por outro Usuário, como `conflito` — nunca se sobrescreve o
+   * Registro alheio.
+   */
+  registrarSessao(
+    dados: DadosDeRegistro,
+  ): Promise<ResultadoDeRegistroDeSessao>;
+
+  /**
+   * Devolve os números do Início (FR-164, FR-165): o tamanho atual do acervo,
+   * os Registros com `concluidaEm >= desde` e os 5 mais recentes. `desde` é um
+   * instante ISO-8601.
+   */
+  obterEstatisticas(desde: string): Promise<ResultadoDeEstatisticas>;
+
+  /**
+   * Abre um Registro do histórico com os itens na ordem apresentada e informa
+   * se o Baralho da Sessão ainda existe (FR-166). Registro inexistente ou de
+   * outro Usuário é `nao_encontrado`.
+   */
+  obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
 }

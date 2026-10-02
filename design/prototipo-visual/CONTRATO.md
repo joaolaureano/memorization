@@ -1,0 +1,13 @@
+# Contrato dos módulos do protótipo
+
+Scripts clássicos, sem build, compatíveis com file://. Cada arquivo atribui `window.Access`, `window.Collection` ou `window.Study` a `{ render(ctx) }`. render devolve HTML ou null se rota não pertence ao módulo; pode chamar `ctx.after(fn)` para ligar eventos após inserção. Rotas são strings sem #, separadas por `/`.
+
+Estado compartilhado: `state = { authenticated:false, user:'joao', cards:[{id,front,back}], decks:[{id,name,cardIds:[]}], accounts:[{name,password}], session:null, dirty:false, scenario:null }`. IDs strings. Sessão definida pelo módulo Study. Não persistir. Exemplo: c1/c2/c3, d1 (Inglês cotidiano, c1/c2), d2 (Viagens, c1/c3), d3 vazio.
+
+Contexto: `{state,route,esc,go,render,after,notify,confirm,operation,button,link,field,notFound}`. `esc(text)` escapa HTML. `go(route)` protege saída de dirty/session. `render()` redesenha. `notify(text,type='success')` região viva global. `confirm({title,message,confirmLabel,onConfirm})` diálogo compartilhado. `operation(button, callback)` desabilita durante 450ms, executa callback e reabilita, retorna Promise<boolean>; se state.scenario==='error', consome cenário, mostra falha e não executa callback. Cenário pending aumenta atraso para 1800ms, depois consome. `button(text, action, variant='secondary')` HTML button data-action; módulos ligam eventos manualmente por after. `link(text,route,variant='')` link data-route. `field` não usar: criar label/input próprios. `notFound()` HTML recurso ausente. `after(fn)` recebe zero argumentos. `state.dirty` deve ser ativado em input/change de formulários e limpo ao salvar. Cancelar usa go. Confirmar mutações com confirm; limpar dirty antes de go bem sucedido.
+
+Classes: page-head, eyebrow, muted, stack, grid, card, actions, btn (primary/secondary/danger), field, helper, notice (error/success), empty, badge, auth, study-card, stats, stat, progress. Layout global e tokens só integrador.
+
+Rotas Acesso: entrar, cadastro, cadastro/sucesso. Acervo: baralhos, baralhos/novo, baralhos/:id, baralhos/:id/editar, baralhos/:id/adicionar, cartoes, cartoes/novo, cartoes/:id/editar. Estudo: estudo/:deckId/configurar, estudo/:deckId/sessao, estudo/:deckId/resumo, exploracoes. Galeria do integrador: galeria. Navegação produto só Cartões/Baralhos. Explorações pela galeria.
+
+Cada módulo usa DOM somente dentro #view. Delegação global de links data-route pelo integrador. Formulários sempre em páginas, nunca modais. Usar textos pt-BR, IDs únicos, HTML escapado, botões min 44px via CSS global. Acesso dono access.js; Acervo dono collection.js; Estudo dono study.js. Integrador dono demais arquivos.

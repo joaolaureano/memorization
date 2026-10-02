@@ -1,14 +1,16 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDeAdicionarCartoes } from "../src/ui/PaginaDeAdicionarCartoes";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
- * T211 — mudanças de Vínculo e de elegibilidade perceptíveis por leitor de
- * tela (specs/003-vincular-cartao-baralho/tasks.md, FR-065).
+ * T211 e T1110/T1111 — mudanças de Vínculo e de elegibilidade perceptíveis por
+ * leitor de tela (FR-065; regra preservada de
+ * specs/003-vincular-cartao-baralho).
  *
  * O jsdom não executa leitor de tela: o anúncio é comprovado pela semântica
  * que o dispara — a mudança é inserida numa região ativa polida
@@ -49,14 +51,34 @@ async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
   };
 }
 
-function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
-  render(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />);
+function renderizarDetalhe(
+  cliente: ClienteEmMemoria,
+  idDoBaralho: string,
+): void {
+  render(
+    comProtecaoDeSaida(
+      <PaginaDoBaralho cliente={cliente} id={idDoBaralho} />,
+      true,
+    ),
+  );
 }
 
-describe("PaginaDoBaralho para leitor de tela", () => {
-  it("vincular e a elegibilidade decorrente são anunciados em região ativa polida (FR-065)", async () => {
+function renderizarAdicionar(
+  cliente: ClienteEmMemoria,
+  idDoBaralho: string,
+): void {
+  render(
+    comProtecaoDeSaida(
+      <PaginaDeAdicionarCartoes cliente={cliente} id={idDoBaralho} />,
+      true,
+    ),
+  );
+}
+
+describe("páginas de Vínculo para leitor de tela", () => {
+  it("vincular na página de adicionar é anunciado em região ativa polida (FR-065)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    renderizar(cliente, idDoBaralho);
+    renderizarAdicionar(cliente, idDoBaralho);
 
     await screen.findByRole("button", { name: "Vincular To walk" });
 
@@ -64,46 +86,55 @@ describe("PaginaDoBaralho para leitor de tela", () => {
       screen.getByRole("button", { name: "Vincular To walk" }),
     );
 
-    const anuncio = await screen.findByRole("status");
+    // Há mais de uma região viva na página — a do provedor de proteção de saída
+    // e a do anúncio de Vínculo —, e a consulta vai pelo nome acessível.
+    const anuncio = await screen.findByRole("status", {
+      name: "Mudança de Vínculo",
+    });
 
     expect(anuncio).toHaveAccessibleName("Mudança de Vínculo");
     expect(anuncio).toHaveAttribute("aria-live", "polite");
     expect(anuncio).toHaveAttribute("aria-atomic", "true");
     expect(anuncio).toHaveTextContent(/Cartão vinculado ao Baralho\./);
-    expect(anuncio).toHaveTextContent(
-      /O Baralho tornou-se elegível para estudo\./,
-    );
+    expect(
+      screen.queryByRole("button", { name: "Vincular To walk" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("desvincular e a perda de elegibilidade são anunciados em região ativa polida (FR-065)", async () => {
+  it("remover do Baralho e a perda de elegibilidade são anunciados em região ativa polida (FR-065)", async () => {
     const { cliente, idDoBaralho, idDoPrimeiroCartao } =
       await criarAcervoDeTeste();
     await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
 
-    renderizar(cliente, idDoBaralho);
+    renderizarDetalhe(cliente, idDoBaralho);
 
-    await screen.findByRole("button", { name: "Desvincular To walk" });
+    await screen.findByRole("button", {
+      name: "Remover To walk deste baralho",
+    });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Desvincular To walk" }),
+      screen.getByRole("button", { name: "Remover To walk deste baralho" }),
     );
 
-    const anuncio = await screen.findByRole("status");
+    // Idem: a consulta vai pelo nome acessível, e não pelo papel sozinho.
+    const anuncio = await screen.findByRole("status", {
+      name: "Mudança de Vínculo",
+    });
 
     expect(anuncio).toHaveAccessibleName("Mudança de Vínculo");
     expect(anuncio).toHaveAttribute("aria-live", "polite");
     expect(anuncio).toHaveAttribute("aria-atomic", "true");
-    expect(anuncio).toHaveTextContent(/Cartão desvinculado do Baralho\./);
+    expect(anuncio).toHaveTextContent(/Cartão removido deste Baralho\./);
     expect(anuncio).toHaveTextContent(
-      /O Baralho deixou de ser elegível para estudo\./,
+      /O Baralho ficou sem Cartões; Estudar está indisponível\./,
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("a falha de Vínculo é um alerta assertivo nomeado, e não um anúncio de sucesso (FR-065, FR-044)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-    renderizar(cliente, idDoBaralho);
+    renderizarAdicionar(cliente, idDoBaralho);
 
     await screen.findByRole("button", { name: "Vincular To walk" });
 
@@ -117,32 +148,29 @@ describe("PaginaDoBaralho para leitor de tela", () => {
     expect(alerta).toHaveAccessibleName("Falha na operação de Vínculo");
     expect(alerta).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS);
     expect(alerta).not.toHaveAttribute("aria-live");
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("status", { name: "Mudança de Vínculo" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("o estado vazio sem Cartões é uma região ativa polida e nomeada (FR-062, FR-065)", async () => {
-    const cliente = clienteDeProva();
-    const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  it("o estado vazio da página de adicionar aparece uma única vez, sem anúncio de Vínculo (FR-062, FR-065)", async () => {
+    const { cliente, idDoBaralho, idDoPrimeiroCartao, idDoSegundoCartao } =
+      await criarAcervoDeTeste();
+    await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
+    await cliente.vincular(idDoSegundoCartao, idDoBaralho);
 
-    if (!baralho.ok) {
-      throw new Error("a criação do Baralho deveria ser aceita");
-    }
+    renderizarAdicionar(cliente, idDoBaralho);
 
-    renderizar(cliente, baralho.baralho.id);
-
-    const estadoVazio = await screen.findByRole("status");
-
-    expect(estadoVazio).toHaveAccessibleName(
-      "Estado vazio da tela de Vínculos",
-    );
-    expect(estadoVazio).toHaveAttribute("aria-live", "polite");
-    expect(estadoVazio).toHaveAttribute("aria-atomic", "true");
-    expect(estadoVazio).toHaveTextContent(
-      "Ainda não há Cartões. Crie um Cartão antes de vincular.",
-    );
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // A mensagem do estado vazio aparece em um lugar só: `findByText` falha se
+    // houver mais de um elemento com o texto.
     expect(
-      within(document.body).getAllByRole("status"),
-    ).toHaveLength(1);
+      await screen.findByText("Todos os seus Cartões já estão neste Baralho."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // O estado vazio não é uma mudança de Vínculo: a região viva de anúncio da
+    // página não entra em cena, e não há duas regiões anunciando a mesma coisa.
+    expect(
+      screen.queryByRole("status", { name: "Mudança de Vínculo" }),
+    ).not.toBeInTheDocument();
   });
 });

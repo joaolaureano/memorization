@@ -109,16 +109,24 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       page.getByRole("heading", { level: 1, name: NOME_ORIGINAL_DO_BARALHO }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Renomear" }).click();
+    // O Baralho detalhado exibe o Cartão vinculado na seção "Cartões do
+    // Baralho", e é dela que sai o link para renomear (spec 012).
     await expect(
-      page.getByText("Este Baralho tem 1 Cartão vinculado."),
+      page.getByRole("button", {
+        name: `Remover ${CARTAO.frente} deste baralho`,
+      }),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Renomear" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Renomear Baralho" }),
     ).toBeVisible();
 
     await page.getByLabel("Nome").fill(NOME_RENOMEADO_DO_BARALHO);
-    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await page.getByRole("button", { name: "Salvar" }).click();
 
     await expect(
-      page.getByRole("heading", { level: 1, name: NOME_RENOMEADO_DO_BARALHO }),
+      page.getByRole("heading", { name: NOME_RENOMEADO_DO_BARALHO }),
     ).toBeVisible();
 
     // A renomeação chegou ao SQLite real e preservou o Vínculo.
@@ -158,16 +166,30 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     ]);
 
     // Edita o Cartão pela tela real e confere a persistência direto na API.
-    await itemAposRenomeacao.getByRole("button", { name: "Editar" }).click();
+    await itemAposRenomeacao
+      .getByRole("link", { name: `Editar ${CARTAO.frente}` })
+      .click();
+
     await expect(
-      page.getByText("Este Cartão está vinculado a 1 Baralho."),
+      page.getByRole("heading", { level: 1, name: "Editar Cartão" }),
     ).toBeVisible();
 
-    await page.getByLabel("Frente do Cartão").fill("To run");
-    await page.getByLabel("Verso do Cartão").fill("Correr");
-    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await page.getByLabel("Frente").fill("To run");
+    await page.getByLabel("Verso").fill("Correr");
+    await page.getByRole("button", { name: "Salvar" }).click();
 
-    await expect(page.getByText("Cartão editado.")).toBeVisible();
+    // A edição bem-sucedida volta para a lista de Cartões (spec 012): a tela
+    // do formulário não exibe mais "Cartão editado.", e o Cartão aparece
+    // atualizado na listagem.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "To run" }),
+    ).toContainText("Correr");
+
+    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
 
     const itemEditado = page
       .getByRole("listitem")
@@ -184,30 +206,44 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     expect(cartoesEditados[0].frente).toBe("To run");
     expect(cartoesEditados[0].verso).toBe("Correr");
 
-    // Descarte de edição suja: recusar mantém a edição aberta com o conteúdo
-    // digitado; confirmar descarta as alterações.
-    await itemEditado.getByRole("button", { name: "Editar" }).click();
-    await page.getByLabel("Frente do Cartão").fill("To sprint");
-    await page.getByRole("button", { name: "Cancelar" }).click();
+    // Descarte de edição suja: sair do formulário sujo pergunta "Descartar as
+    // alterações?" (spec 012); recusar mantém a edição aberta com o conteúdo
+    // digitado e confirmar descarta as alterações.
+    await itemEditado
+      .getByRole("link", { name: "Editar To run" })
+      .click();
+    await page.getByLabel("Frente").fill("To sprint");
+
+    const linkParaCartoes = page
+      .getByRole("navigation", { name: "Principal" })
+      .getByRole("link", { name: "Cartões" });
+
+    await linkParaCartoes.click();
 
     const dialogoDeDescarte = page.getByRole("dialog");
     await expect(dialogoDeDescarte).toBeVisible();
-    await expect(dialogoDeDescarte).toContainText(
-      "Você tem alterações não salvas neste Cartão.",
-    );
+    await expect(dialogoDeDescarte).toContainText("Descartar as alterações?");
 
-    await page.getByRole("button", { name: "Continuar editando" }).click();
-    await expect(page.getByLabel("Frente do Cartão")).toHaveValue("To sprint");
+    await dialogoDeDescarte.getByRole("button", { name: "Cancelar" }).click();
+    await expect(page.getByLabel("Frente")).toHaveValue("To sprint");
 
-    await page.getByRole("button", { name: "Cancelar" }).click();
-    await page.getByRole("button", { name: "Descartar alterações" }).click();
-    await expect(page.getByLabel("Frente do Cartão")).toHaveCount(0);
+    await linkParaCartoes.click();
+    await dialogoDeDescarte
+      .getByRole("button", { name: "Descartar" })
+      .click();
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Frente")).toHaveCount(0);
     await expect(itemEditado).toContainText("To run");
 
     // Falha de transporte: apenas o PUT é abortado uma única vez. O conteúdo
     // digitado permanece e a nova tentativa conclui a edição contra a API real.
-    await itemEditado.getByRole("button", { name: "Editar" }).click();
-    await page.getByLabel("Frente do Cartão").fill("To jog");
+    await itemEditado
+      .getByRole("link", { name: "Editar To run" })
+      .click();
+    await page.getByLabel("Frente").fill("To jog");
 
     await page.route(
       /\/cartoes\/[^/]+$/,
@@ -222,14 +258,25 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       { times: 1 },
     );
 
-    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await page.getByRole("button", { name: "Salvar" }).click();
     await expect(
       page.getByText("Não foi possível acessar os Cartões. Tente novamente."),
     ).toBeVisible();
-    await expect(page.getByLabel("Frente do Cartão")).toHaveValue("To jog");
+    await expect(page.getByLabel("Frente")).toHaveValue("To jog");
 
-    await page.getByRole("button", { name: "Salvar alterações" }).click();
-    await expect(page.getByText("Cartão editado.")).toBeVisible();
+    await page.getByRole("button", { name: "Salvar" }).click();
+
+    // A nova tentativa também volta para a lista de Cartões com o Cartão
+    // atualizado (spec 012), sem mensagem de sucesso na tela do formulário.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "To jog" }),
+    ).toContainText("Correr");
+
+    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await entrarSeNecessario(page);
 
     const itemReeditado = page
       .getByRole("listitem")
