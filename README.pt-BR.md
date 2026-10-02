@@ -1,6 +1,6 @@
 # Memorization
 
-**[Read this in English / Leia em inglês](README.en.md)**
+**[Read this in English / Leia em inglês](README.md)**
 
 Trabalho da cadeira **AGL11091 - Tendências em Engenharia de Software**.
 

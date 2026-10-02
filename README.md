@@ -1,6 +1,6 @@
 # Memorization
 
-**[Leia em português / Read this in Portuguese](README.md)**
+**[Leia em português / Read this in Portuguese](README.pt-BR.md)**
 
 Assignment for the course **AGL11091 - Trends in Software Engineering**.
 
