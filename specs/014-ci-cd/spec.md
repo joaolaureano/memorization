@@ -11,7 +11,7 @@
 - **FR-182**: O deploy MUST usar credenciais de curta duração por OIDC, numa role com privilégio mínimo (`memorization-deploy-ci`), assumível apenas pelo environment `production` deste repositório (subject imutável). Nenhuma chave AWS é guardada no GitHub.
 - **FR-183**: Depois do CD, o Tofu MUST NOT reverter o código da Lambda (`ignore_changes` em `filename`/`source_code_hash`); ele continua dono da configuração.
 - **FR-184**: Segredos (URL do Neon) MUST ficar só como secret do environment `production` e MUST NOT aparecer em logs.
-- **FR-185**: Enquanto o environment não estiver configurado (`vars.AWS_ROLE_ARN` vazio), o workflow de deploy MUST ser ignorado, sem falhar.
+- **FR-185**: Enquanto a variável de repositório `DEPLOY_HABILITADO` não for `true`, o workflow de deploy MUST ser ignorado, sem falhar.
 
 ## Configuração única do operador
 

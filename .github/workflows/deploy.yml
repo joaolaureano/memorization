@@ -22,9 +22,11 @@ concurrency:
 jobs:
   deploy:
     name: Publicar em produção
-    # Só com CI verde, e só depois de configurado o environment (vars.AWS_ROLE_ARN).
+    # Só com CI verde e com o deploy habilitado. O `if` do job só enxerga
+    # variáveis do repositório (as do environment chegam depois), por isso a
+    # trava é a variável de repositório DEPLOY_HABILITADO.
     if: >-
-      vars.AWS_ROLE_ARN != '' &&
+      vars.DEPLOY_HABILITADO == 'true' &&
       (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
