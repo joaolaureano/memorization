@@ -5140,3 +5140,173 @@ Verificado em `main`: backend 596, frontend 340, e2e 18, `typecheck`,
 
 - **Commit**: hash registrado no próximo evento auditável.
 - **Sanitização**: Confirmada. Nenhum valor sensível identificado ou registrado.
+
+
+---
+
+## EVT-101
+
+> **SPEC KIT** — Etapa: specify | Fluxo local: `.claude/skills/speckit-specify/SKILL.md` | Artefatos: `specs/012-interface-visual-navegavel/spec.md` e `checklists/requirements.md`
+
+- **Data**: 2026-10-02
+- **Ator**: usuário → agente de especificação
+- **Feature**: `012-interface-visual-navegavel`
+- **Pedido sanitizado**: “Agora crie uma Spec usando o framework GitHub Spec Kit, sem codificar, apenas planejamento criando a spec”, em continuidade ao protótipo visual.
+
+Ações verificáveis:
+- Lidos o template e o fluxo specify locais, a constituição, o glossário, o guia do protótipo e os requisitos pertinentes de acesso, Vínculos, edição, exclusão e estudo.
+- Aplicada a skill `domain-modeling`, obrigatória para especificação: conferidos Frente/Verso, independência de Cartão e Baralho, Vínculos, descarte e transitoriedade da Sessão. Nenhum novo termo foi necessário; `CONTEXT.md` foi preservado. O formato de ADR é inaplicável conforme a constituição.
+- Executado `create-new-feature.sh --json --short-name interface-visual-navegavel`, que resolveu o template, criou a feature 012 e atualizou `.specify/feature.json`. Nenhuma branch foi criada ou trocada pelo script local.
+- Elaborados cinco percursos de usuário, 26 requisitos específicos (FR-135 a FR-160), quatro transversais reutilizados e nove critérios de sucesso (SC-062 a SC-070).
+- Explicitados destino Baralhos após Entrar, páginas próprias para formulários, confirmação de interrupção, percentual do Resumo e apresentação opcional da Senha digitada no campo atual. Não foi aprovada nem executada alteração de autenticação ou persistência.
+- Mantidos os termos do glossário; a linguagem incidental do protótipo não foi adotada como autoridade normativa. Galeria, dados simulados, reinício e Explorações futuras permanecem artefatos de design, fora do aplicativo real.
+- Checklist documental revisado: 21/21 critérios. Resultado indica qualidade da especificação, não implementação, testes do aplicativo ou aprovação do Product Owner.
+
+Decisões e limites:
+- A adoção no aplicativo real é o escopo inferido da continuidade do pedido; nesta etapa foram escritos somente artefatos de especificação e auditoria.
+- Copiar integralmente o comportamento da demonstração foi descartado por conflitar com persistência, isolamento, terminologia e ausência de dados fictícios no produto.
+- Premissas de disposição a 600 px, arredondamento e abrangência do descarte ficam explícitas para revisão. A spec permanece Draft; próximas etapas do Spec Kit não foram executadas.
+- Nenhum código de aplicação, teste executável ou artefato visual foi alterado nesta etapa. Nenhum commit ou publicação foi realizado.
+- **Sanitização**: nenhum valor de Credencial, segredo ou dado sensível foi registrado.
+
+
+---
+
+## EVT-102
+
+> **SPEC KIT** — Etapa: specify, conferência do procedimento | Fluxo: `.claude/skills/speckit-specify/SKILL.md`
+
+- **Data**: 2026-10-02
+- **Pedido**: “Você deve invocar, ou ler e atuar do modo que está ali.”
+- Relidas integralmente as instruções locais e conferidos a spec 012, seu checklist, a feature ativa e a ausência de hooks de extensão antes e depois da revisão.
+- Corrigida a correspondência explícita entre Resultados e percentuais em SC-067; checklist documental permanece 21/21.
+- Esclarecimento sobre o relato anterior: ler e executar as instruções locais é o modo adotado para aplicar o fluxo. Não houve invocação literal de slash command, e essa ausência por si só não significa que o fluxo deixou de ser seguido. O relato anterior criou uma distinção indevida entre executar as instruções e usar o framework.
+- Mantida a mesma feature; nenhum código de aplicação, commit ou publicação. Próxima etapa indicada: clarify.
+- **Sanitização**: nenhum segredo ou valor de Credencial registrado.
+
+
+---
+
+## EVT-103
+
+> **SPEC KIT** — Etapas: clarify, plan, checklist ux, tasks, analyze | Fluxo local: `.claude/skills/speckit-{clarify,plan,checklist,tasks,analyze}` | Artefatos: `specs/012-interface-visual-navegavel/{spec,plan,research,data-model,quickstart,tasks}.md`, `contracts/rotas-da-interface.md`, `checklists/ux.md`
+
+- **Data**: 2026-10-02
+- **Ator**: PRODUCT OWNER → ARCHITECT
+- **Branch**: `012-interface-visual-navegavel` (criada nesta etapa; sem commits até aprovação final, por decisão do Product Owner)
+
+Decisões do Product Owner:
+- **Escopo**: a 012 fica como especificada. Estatísticas e listas de acertos/erros no Resumo vão para feature futura.
+- **Clarify**: disposição móvel até 600 px; percentual inteiro arredondado; confirmação de descarte em Cadastro, acervo e configuração de estudo, não em Entrar.
+- **Redação**: o Product Owner pediu que os artefatos de planejamento fossem redigidos pelo Arquiteto em contexto, sem delegação.
+
+Skills aplicadas:
+- **domain-modeling** (clarify): nenhum termo novo. O percentual é derivação do Resumo.
+- **codebase-design** (plan): dois Modules profundos. `protecao-de-saida.ts` concentra a política de saída de FR-148, FR-151 e FR-154. `navegacao.ts` concentra o mapa de rotas. A deleção espalharia a lógica por cerca de 8 páginas. Nenhuma seam hipotética.
+
+Analyze:
+- cada FR-135..160 está mapeado a teste (research R9) e a tarefa (T1101–T1120);
+- nenhuma mudança em `backend/`;
+- sem dependência nova.
+
+Próximo passo: implement, Fase 1, por worker DeepSeek.
+- **Sanitização**: nenhum segredo ou valor de Credencial registrado.
+
+
+---
+
+## EVT-104
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek/deepseek-v4-flash` via Aider (`--no-auto-commits`, formato diff) | Feature: `012-interface-visual-navegavel` | Fase 1: T1101–T1105
+
+- **Data**: 2026-10-02
+- **Ator**: ARCHITECT → WORKER (o Product Owner rodou parte dos workers pelo prompt, porque o modo automático bloqueia agentes com `--yes-always`)
+
+Entregue:
+- `estilos.css` reescrito a partir de `design/prototipo-visual/styles.css`, com os mesmos tokens e as classes em português.
+- `navegacao.ts` com o contrato de rotas, `hashDaRota`, `destinoAtivo` e Baralhos como destino.
+- `protecao-de-saida.tsx`, que concentra descarte, pendência e o Voltar do navegador.
+- Os componentes `Moldura`, `CampoDeSenha` e `EstadoDaCarga`.
+- `Aplicacao` integrada: casca externa e interna, Sair protegido e recusa de Credencial que ignora a proteção.
+
+Revisão do Arquiteto:
+- A primeira rodada de CSS foi descartada antes de ir para disco, porque o pedido descrevia o protótipo antigo. Foi refeita a partir do protótipo novo do Product Owner.
+- Correções devolvidas ao worker:
+  - offset de foco de 2 px;
+  - remoção de `outline: none`;
+  - limpeza da proteção restrita à instância que a registrou (corrida entre desmontagem e montagem);
+  - reanúncio da mesma pendência.
+- Testes reescritos, não removidos, por codificarem comportamento substituído pelo FR-138: destino Cartões e Sair dentro do `nav`.
+- O formato "whole" do Aider falhou com o modelo. O worker passou a usar o formato `diff`.
+
+Verificado:
+- frontend 385/386, lint e build verdes;
+- a falha restante (`teclado-e-foco-de-cadastro`, que acopla à classe antiga `.formulario-de-cadastro`) é reescrita na T1107.
+
+- **Commit**: nenhum, por decisão do Product Owner (aprovação no fim).
+- **Sanitização**: nenhum segredo registrado.
+
+
+---
+
+## EVT-105
+
+> **SPEC KIT** — Comando: implement | Invocação: worker `deepseek/deepseek-v4-flash` via Aider (formato diff) | Feature: `012-interface-visual-navegavel` | Fase 2: T1106–T1107
+
+- **Data**: 2026-10-02
+- **Ator**: ARCHITECT → WORKER
+
+Entregue:
+- Entrar e Criar conta no visual novo (`acesso`, `cartao`, `formulario`), com `CampoDeSenha` e envio pendente desativado.
+- Cadastro com a proteção de descarte "Descartar o Cadastro?" e a pendência que bloqueia a saída.
+- `comProtecaoDeSaida` em `apoio-de-prova.ts`.
+
+Revisão do Arquiteto:
+- A T1107 rodou duas vezes em paralelo, por um disparo duplicado. Conferi que não ficou código duplicado.
+- Correção devolvida ao worker (T1107b):
+  - erro de tipo em `createElement` (que derrubava o build e os testes de endereço de produção);
+  - teste de sucesso ambíguo depois da região viva do provedor;
+  - teste de pendência que não aguardava o anúncio.
+- O teste de foco acoplado a `.formulario-de-cadastro` foi reescrito para a regra global de `:focus-visible`, mantendo a intenção (FR-081).
+
+Verificado: frontend 396/396, lint e build verdes.
+- **Sanitização**: nenhum segredo registrado.
+
+
+---
+
+## EVT-106
+
+> **SPEC KIT** — Comando: implement + converge | Invocação: workers `deepseek/deepseek-v4-flash` via Aider em cópias isoladas e paralelas (`paralelo.sh`: um worker por tarefa, patch aplicado ao fim, conflito barrado) | Feature: `012-interface-visual-navegavel` | Fases 3–7: T1108–T1119
+
+- **Data**: 2026-10-02
+- **Ator**: ARCHITECT → WORKERS (o Product Owner autorizou a execução autônoma até o fim)
+
+Entregue:
+- Baralhos: lista em cartões, com "Ver baralho" e Estudar desativado com explicação. Formulário próprio de criar e renomear. Detalhe com "Estudar este Baralho" no topo. Página "Adicionar cartões existentes".
+- Cartões: lista e formulário próprio de criar e editar, com os Baralhos afetados informados.
+- Estudo: configuração com aviso de excedente, Sessão com "Revelar verso" e Acertei/Errei, confirmação "Interromper a Sessão?", Resumo com percentual (`percentualDeAcertos`) e três estatísticas.
+- E2E:
+  - as 12 specs foram atualizadas para os fluxos novos;
+  - `percurso-por-teclado.spec.ts` (SC-062, em 390 e 1440, só teclado);
+  - `visual-e-contraste.spec.ts` (larguras 360/390/768/1440 e zoom de 200%, alvos de 44 px, 16 px, contraste WCAG calculado dos tokens, barra inferior, ausência de demonstração).
+
+Processo:
+- Por pedido do Product Owner, as tarefas passaram a ser isoladas e paralelas, com arquivos disjuntos. Os pontos compartilhados ficaram em tarefas de integração depois (T1105b).
+- Duas execuções duplicadas e quedas da API DeepSeek anularam a T1108. Ela foi refeita em duas metades paralelas, com streaming.
+- Rodadas corretivas: C1–C4, c4b, r2-* (e2e) e v1–v3.
+
+Revisão do Arquiteto:
+- Um teste exigia foco inicial em "Descartar". Foi reescrito para Cancelar, conforme FR-159.
+- Falha real achada pelo e2e visual: o link da marca tinha 32 px de altura. Corrigido para 44 px.
+- Acabamento visto nas capturas: o texto "Elegível para estudo" foi removido (pedido do PO); botões de Resultado largos; Resumo em 3 colunas; espaçamentos ajustados.
+- A spec de teclado foi gravada pelo worker em `e2e/e2e/` e movida para `e2e/`, sem alteração de conteúdo.
+- Capturas finais (390 e 1440) em `specs/012-interface-visual-navegavel/capturas/`.
+
+Verificado em `012-interface-visual-navegavel`:
+- frontend 432/432, lint e build verdes;
+- backend 596/596, sem alterações;
+- e2e 21/21.
+
+Pendente: aprovação do Product Owner (T1120). Nenhum commit foi feito.
+- **Sanitização**: nenhum segredo ou valor de Credencial registrado.
