@@ -1,0 +1,20 @@
+# Varredura de segredos (gitleaks) usada pela CI: regras padrão + URL de banco
+# com senha embutida, o vazamento mais provável neste projeto (Neon).
+[extend]
+useDefault = true
+
+[[rules]]
+id = "url-de-banco-com-senha"
+description = "URL PostgreSQL com usuário e senha embutidos"
+regex = '''postgres(?:ql)?://[^:/\s"'`<>$]+:[^@\s"'`<>$]+@[^\s"'`<>]+'''
+keywords = ["postgres://", "postgresql://"]
+
+# Placeholders de documentação e de teste, conferidos um a um em 2026-10-02:
+# nenhum é credencial real.
+[[rules.allowlists]]
+regexes = [
+  '''usuario:senha@''',
+  '''@exemplo\.invalid''',
+  '''@base\.exemplo\.invalid''',
+  '''ep-exemplo-123456''',
+]
