@@ -50,3 +50,4 @@ graphify-out/
 # Logs
 *.log
 npm-debug.log*
+.serena
