@@ -23,9 +23,14 @@ import { hashDaRota } from "./navegacao";
  *
  * Cada Baralho é uma linha fina (FR-144 revisado, SC-079): o nome é o próprio
  * link do detalhe — sem rótulo de tipo, linha de status ou botão separado —,
- * a contagem fica logo abaixo e a elegibilidade se comunica pelo controle
- * Estudar: link quando o Baralho tem Cartões, botão desabilitado descrito
- * pelo motivo quando não tem (FR-144).
+ * com a contagem logo abaixo, dentro do mesmo link, e a elegibilidade se
+ * comunica pelo controle Estudar: link quando o Baralho tem Cartões, botão
+ * desabilitado descrito pelo motivo quando não tem (FR-144).
+ *
+ * O link do nome envolve o nome e a contagem para que o par fique centralizado
+ * na linha sem que a contagem mude o nome acessível: ela é `aria-hidden` e
+ * chega à tecnologia assistiva como descrição do link (`aria-describedby`).
+ * Assim o nome acessível do link é exatamente o nome do Baralho (FR-144).
  */
 
 interface PropriedadesDaPaginaDeBaralhos {
@@ -121,14 +126,18 @@ export function PaginaDeBaralhos({
 /**
  * Um Baralho na linha compacta da lista (FR-144 revisado, SC-079).
  *
- * O nome é o próprio link do detalhe: sem `aria-label` e sem texto extra
- * dentro do link, o nome acessível é exatamente o nome do Baralho, e a
- * contagem fica fora dele, logo abaixo. O controle Estudar mantém um nome
- * acessível único e, quando não há Cartões, é um botão desabilitado descrito
- * pelo motivo em texto — nunca apenas pela cor.
+ * O link do detalhe envolve as duas linhas do bloco — o nome e a contagem —
+ * de modo que o par fique centralizado verticalmente na linha e o alvo de
+ * toque cubra ambos, sem rótulo extra nem `aria-label`. A contagem, porém, é
+ * decoração para a tecnologia assistiva (`aria-hidden`): por isso o nome
+ * acessível do link continua sendo exatamente o nome do Baralho, e a contagem
+ * chega como descrição do link, pelo `aria-describedby`. O controle Estudar
+ * mantém um nome acessível único e, quando não há Cartões, é um botão
+ * desabilitado descrito pelo motivo em texto — nunca apenas pela cor.
  */
 function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
   const motivoSemCartoesId = `motivo-sem-cartoes-${baralho.id}`;
+  const contagemId = `contagem-de-cartoes-${baralho.id}`;
   const temCartoes = baralho.quantidadeDeCartoes > 0;
 
   return (
@@ -137,12 +146,17 @@ function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
         <a
           className="linha-de-baralho__nome"
           href={hashDaRota({ nome: "baralho", id: baralho.id })}
+          aria-describedby={contagemId}
         >
-          {baralho.nome}
+          <span className="linha-de-baralho__nome-texto">{baralho.nome}</span>
+          <span
+            id={contagemId}
+            className="linha-de-baralho__contagem"
+            aria-hidden="true"
+          >
+            {contagemDeCartoes(baralho.quantidadeDeCartoes)}
+          </span>
         </a>
-        <p className="texto-secundario linha-de-baralho__contagem">
-          {contagemDeCartoes(baralho.quantidadeDeCartoes)}
-        </p>
       </div>
       {temCartoes ? (
         <a

@@ -152,6 +152,25 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     ).toBeDisabled();
   });
 
+  it("o nome acessível do link é só o nome; a contagem é a sua descrição (FR-144)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Inglês", ["Hello", "Goodbye"]);
+
+    render(<PaginaDeBaralhos cliente={cliente} />);
+
+    await screen.findByRole("listitem");
+
+    const item = itemDoBaralho("Inglês");
+    const linkDoNome = within(item).getByRole("link", { name: "Inglês" });
+
+    // A contagem está dentro do link e é decoração: não entra no nome.
+    expect(linkDoNome).toHaveAccessibleName("Inglês");
+    expect(linkDoNome).toHaveAccessibleDescription("2 Cartões");
+
+    // A linha continua com exatamente dois controles: o nome e o Estudar.
+    expect(within(item).getAllByRole("link")).toHaveLength(2);
+  });
+
   it("o Estudar desabilitado expõe o motivo em texto, não só pela cor (FR-144)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");

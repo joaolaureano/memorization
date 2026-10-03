@@ -121,7 +121,7 @@ describe("PaginaDeBaralhos", () => {
     ).toHaveAttribute("href", "#/baralhos/novo");
   });
 
-  it("lista cada Baralho em uma linha: o nome abre o detalhe e a contagem fica fora do link (FR-144, SC-079)", async () => {
+  it("lista cada Baralho em uma linha: o nome abre o detalhe e a contagem acompanha o link (FR-144, SC-079)", async () => {
     const cliente = clienteDeProva();
     const idDeIngles = await semearBaralho(cliente, "Inglês", [
       "Hello",
@@ -140,6 +140,9 @@ describe("PaginaDeBaralhos", () => {
 
     expect(nomeDeIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
     expect(itemDeIngles).toHaveTextContent("2 Cartões");
+
+    // A contagem acompanha o link do nome, logo abaixo dele.
+    expect(nomeDeIngles).toHaveTextContent("2 Cartões");
 
     const itemDeAlemao = itemDoBaralho("Alemão");
 

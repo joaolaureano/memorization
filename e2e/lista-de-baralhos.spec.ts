@@ -73,6 +73,9 @@ const ALTURA_MINIMA_DO_ALVO = 44;
 /** Cada linha traz exatamente dois controles: o nome e "Estudar" (FR-144). */
 const CONTROLES_POR_LINHA = 2;
 
+/** O bloco do nome fica a no máximo 4px do centro vertical da linha (FR-144). */
+const TOLERANCIA_DE_CENTRALIZACAO = 4;
+
 /** Na primeira tela do telefone, ao menos seis linhas inteiras (SC-079). */
 const LINHAS_NA_PRIMEIRA_TELA = 6;
 
@@ -162,7 +165,9 @@ for (const largura of LARGURAS) {
         (elementos, nomeLongo) =>
           elementos.findIndex(
             (elemento) =>
-              elemento.querySelector("a")?.textContent?.trim() === nomeLongo,
+              elemento
+                .querySelector(".linha-de-baralho__nome-texto")
+                ?.textContent?.trim() === nomeLongo,
           ),
         NOME_LONGO,
       );
@@ -192,7 +197,12 @@ for (const largura of LARGURAS) {
         exact: true,
       });
 
-      await expect(linkDoNomeLongo).toHaveText(NOME_LONGO);
+      // O nome vive no `.linha-de-baralho__nome-texto`, dentro do link: o
+      // texto do link inteiro também traria a contagem, que é `aria-hidden`
+      // (FR-144).
+      await expect(
+        linkDoNomeLongo.locator(".linha-de-baralho__nome-texto"),
+      ).toHaveText(NOME_LONGO);
 
       const textOverflowDoNomeLongo = await linkDoNomeLongo.evaluate(
         (elemento) => getComputedStyle(elemento).textOverflow,
@@ -228,7 +238,8 @@ for (const largura of LARGURAS) {
       // detalhe, e "Estudar" —, e ambos são alvos de toque de no mínimo 44px
       // (FR-144).
       for (let indice = 0; indice < QUANTIDADE_DE_BARALHOS; indice += 1) {
-        const controles = linhas.nth(indice).locator("a, button");
+        const linha = linhas.nth(indice);
+        const controles = linha.locator("a, button");
 
         await expect(controles).toHaveCount(CONTROLES_POR_LINHA);
 
@@ -239,6 +250,28 @@ for (const largura of LARGURAS) {
         for (const altura of alturasDosControles) {
           expect(altura).toBeGreaterThanOrEqual(ALTURA_MINIMA_DO_ALVO);
         }
+
+        // O bloco do nome — o link com o nome e a contagem, juntos — fica
+        // verticalmente centrado na linha: o centro do link está a no máximo
+        // 4px do centro da linha (FR-144). Se o bloco do nome não existir, o
+        // desvio infinito reprova a asserção.
+        const desvioDoNome = await linha.evaluate((elemento) => {
+          const nome = elemento.querySelector(".linha-de-baralho__nome");
+
+          if (nome === null) {
+            return Number.POSITIVE_INFINITY;
+          }
+
+          const caixaDaLinha = elemento.getBoundingClientRect();
+          const caixaDoNome = nome.getBoundingClientRect();
+
+          const centroDaLinha = caixaDaLinha.top + caixaDaLinha.height / 2;
+          const centroDoNome = caixaDoNome.top + caixaDoNome.height / 2;
+
+          return Math.abs(centroDoNome - centroDaLinha);
+        });
+
+        expect(desvioDoNome).toBeLessThanOrEqual(TOLERANCIA_DE_CENTRALIZACAO);
       }
 
       // Nenhuma rolagem horizontal na largura testada (FR-144, SC-079).

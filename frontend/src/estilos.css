@@ -834,12 +834,15 @@ dialog .acoes {
   min-width: 0;
 }
 
-/* O nome é o próprio link do detalhe: bloco com alvo de 44px, sem rótulo
- * extra. A contagem cabe dentro do mesmo bloco, logo abaixo do nome, de modo
- * que a linha não passe de 72px com nomes de até 40 caracteres. */
+/* O nome é o próprio link do detalhe: coluna com alvo de 44px, sem rótulo
+ * extra. O nome e a contagem ficam empilhados e colados um no outro, e o par
+ * é centralizado na linha — sem afundar no rodapé da linha. A contagem cabe
+ * dentro do mesmo bloco, de modo que a linha não passe de 72px com nomes de
+ * uma linha; nomes longos continuam quebrando, sem rolagem horizontal. */
 .linha-de-baralho__nome {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: center;
   min-height: 44px;
   color: var(--accent);
   font-weight: 650;
@@ -849,10 +852,19 @@ dialog .acoes {
   text-decoration: none;
 }
 
+.linha-de-baralho__nome-texto {
+  overflow-wrap: anywhere;
+}
+
+/* A contagem é decoração do link (aria-hidden no markup): retoma o tom
+ * secundário e o peso normal que herdaria se estivesse fora dele. */
 .linha-de-baralho__contagem {
   margin: 0;
+  color: var(--muted);
   font-size: 0.875rem;
+  font-weight: 400;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .linha-de-baralho > .botao {
