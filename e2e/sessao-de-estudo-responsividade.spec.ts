@@ -27,7 +27,7 @@ const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
 const CARTOES = [
   { id: 'c1', frente: 'To walk', verso: 'Caminhar' },
   { id: 'c2', frente: 'Frente longa '.repeat(76), verso: 'Verso longo '.repeat(83) },
-  { id: 'c3', frente: 'To read', verso: 'Ler' },
+  { id: 'c3', frente: 'Outra frente '.repeat(76), verso: 'Outro verso '.repeat(83) },
 ];
 
 test.use({
@@ -151,3 +151,41 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
 });
 }
 
+
+for (const largura of [360, 1440]) {
+  test(`Revisão do dia mantém cartão e ações fixos em ${largura}px`, async ({ page }) => {
+    await page.setViewportSize({ width: largura, height: 1000 });
+    const credencial = await prepararEntradaInterceptada(page);
+    const data = new Date(Date.now() + 86400000).toISOString();
+    await page.route(/\/revisao\/lote\?/, async rota => {
+      await rota.fulfill({ json: { itens: CARTOES.map(cartao => ({
+        cartao, previa: { errei: data, dificil: data, bom: data, facil: data },
+      })) } });
+    });
+    await page.goto(`${ENDERECO_DO_FRONTEND}/#/revisao`);
+    await entrarPelaUi(page, credencial);
+    const cartao = page.getByRole('article');
+    await expect(cartao).toHaveAccessibleName('Item 1 de 3');
+    const medir = () => cartao.evaluate(elemento => {
+      const { width, height, top } = elemento.getBoundingClientRect();
+      return { width, height, top: top + window.scrollY };
+    });
+    const inicial = await medir();
+    await page.getByRole('button', { name: 'Revelar verso' }).click();
+    const acoes = await page.locator('.botoes-de-resultado').boundingBox();
+    expect(await medir()).toEqual(inicial);
+    await page.getByRole('button', { name: /^Bom/ }).click();
+    await expect(cartao).toHaveAccessibleName('Item 2 de 3');
+    expect(await medir()).toEqual(inicial);
+    const frente = page.locator('.conteudo-do-cartao').first();
+    await frente.focus();
+    await page.keyboard.press('End');
+    await expect.poll(() => frente.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Revelar verso' }).click();
+    expect(await medir()).toEqual(inicial);
+    expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(acoes);
+    await page.getByRole('button', { name: /^Bom/ }).click();
+    await expect(cartao).toHaveAccessibleName('Item 3 de 3');
+    expect(await frente.evaluate(el => el.scrollTop)).toBe(0);
+  });
+}

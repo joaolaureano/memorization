@@ -18,8 +18,8 @@ import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
  * concluir, para o Resumo.
  *
  * A 015 substitui Acertei/Errei pelas quatro Avaliações (FR-192), então a
- * ordem de tabulação depois da Revelação passa a ser Interromper, Errei,
- * Difícil, Bom e Fácil; a Sessão é percorrida escolhendo "Bom".
+ * ordem de tabulação depois da Revelação inclui o texto rolável do Verso,
+ * Errei, Difícil, Bom e Fácil; a Sessão é percorrida escolhendo "Bom".
  */
 
 const SELETOR_DE_CONTROLES_INTERATIVOS = [
@@ -46,7 +46,12 @@ function apertarTab(): void {
   const indice = controles.findIndex(
     (controle) => controle === document.activeElement,
   );
-  const proximo = controles[(indice + 1) % controles.length];
+  const ativo = document.activeElement;
+  const proximo = indice >= 0
+    ? controles[(indice + 1) % controles.length]
+    : controles.find((controle) => ativo !== null && Boolean(
+        ativo.compareDocumentPosition(controle) & Node.DOCUMENT_POSITION_FOLLOWING,
+      )) ?? controles[0];
 
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Tab" });
   proximo.focus();
@@ -159,12 +164,10 @@ describe("PaginaDeEstudo por teclado", () => {
       screen.getByRole("article", { name: "Item 1 de 2" }),
     ).toBeInTheDocument();
 
-    // Interromper e Revelar verso são os próximos controles na ordem de
-    // tabulação.
+    // O texto da Frente recebe foco para permitir rolagem pelo teclado;
+    // depois vem Revelar verso.
     apertarTab();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Interromper" }),
-    );
+    expect(document.activeElement).toHaveClass("conteudo-do-cartao");
 
     apertarTab();
     const botaoDeRevelacao = screen.getByRole("button", {
@@ -179,12 +182,10 @@ describe("PaginaDeEstudo por teclado", () => {
     });
     expect(document.activeElement).toBe(primeiroVerso);
 
-    // Depois do Verso, as quatro Avaliações são os próximos controles, na
-    // ordem Errei, Difícil, Bom e Fácil (FR-192).
+    // O texto do Verso permite rolagem pelo teclado; depois vêm as quatro
+    // Avaliações na ordem Errei, Difícil, Bom e Fácil (FR-192).
     apertarTab();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Interromper" }),
-    );
+    expect(document.activeElement).toHaveClass("conteudo-do-cartao");
 
     apertarTab();
     expect(document.activeElement).toBe(
@@ -211,9 +212,7 @@ describe("PaginaDeEstudo por teclado", () => {
     ).toBeInTheDocument();
 
     apertarTab();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Interromper" }),
-    );
+    expect(document.activeElement).toHaveClass("conteudo-do-cartao");
 
     apertarTab();
     const segundaRevelacao = screen.getByRole("button", {
@@ -225,9 +224,7 @@ describe("PaginaDeEstudo por teclado", () => {
     await screen.findByRole("heading", { name: "Verso" });
 
     apertarTab();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Interromper" }),
-    );
+    expect(document.activeElement).toHaveClass("conteudo-do-cartao");
 
     apertarTab();
     expect(document.activeElement).toBe(

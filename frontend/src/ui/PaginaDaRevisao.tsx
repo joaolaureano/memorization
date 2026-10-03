@@ -231,6 +231,9 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
     alvoDeFoco.current = null;
 
     if (alvo === "frente") {
+      conteinerDaSessao.current?.querySelectorAll(".conteudo-do-cartao").forEach((texto) => {
+        texto.scrollTop = 0;
+      });
       frenteRef.current?.focus({ preventScroll: true });
     } else if (alvo === "verso") {
       versoRef.current?.focus({ preventScroll: true });
