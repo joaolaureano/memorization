@@ -203,9 +203,9 @@ export function PaginaDeEstudo({
     alvoDeFoco.current = null;
 
     if (alvo === "frente") {
-      frenteRef.current?.focus({ preventScroll: true });
+      frenteRef.current?.focus();
     } else if (alvo === "verso") {
-      versoRef.current?.focus({ preventScroll: true });
+      versoRef.current?.focus();
     } else if (alvo === "resumo") {
       resumoRef.current?.focus();
     } else {
@@ -746,7 +746,7 @@ export function PaginaDeEstudo({
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.frente}</p>
+        <p className="conteudo-do-cartao">{estado.itemAtual.frente}</p>
 
         {!estado.itemAtual.revelado ? (
           <>
@@ -766,7 +766,7 @@ export function PaginaDeEstudo({
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
               Verso
             </h2>
-            <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
+            <p className="conteudo-do-cartao">{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
               {NIVEIS_DE_AVALIACAO.map(({ avaliacao, rotulo, atalho }) => {
                 const previa = previaDaAvaliacao(

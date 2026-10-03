@@ -10,7 +10,7 @@
 
 **Depende de**: `001` a `012`. Usa o visual, a navegação e os componentes da `012` e a persistência por Usuário de `008` a `010`.
 
-### Objetivo e escopo
+## Objetivo e escopo
 
 O Memorization deixa de ser POC. A Sessão de estudo **concluída** passa a ser lembrada como **Registro de sessão** (veja `CONTEXT.md`), e o conjunto desses registros forma o **Histórico de estudo** de cada Usuário. A partir dele:
 
@@ -18,10 +18,6 @@ O Memorization deixa de ser POC. A Sessão de estudo **concluída** passa a ser 
 - O **Resumo da sessão** ganha os botões **Acertos** e **Erros**, que mostram quais Cartões foram acertados e quais foram errados. Isso vale tanto ao concluir uma Sessão quanto ao abrir um registro antigo.
 
 A Sessão **interrompida** continua sendo descartada sem rastro (FR-039 mantido). O registro guarda o Resultado de cada Item, com a Frente, o Verso e o nome do Baralho como eram ao concluir. Essa decisão do Product Owner prepara funcionalidades futuras, como repetição espaçada e "Cartões que você mais erra", sem incluí-las agora.
-
-## Clarifications
-
-Nenhuma sessão de esclarecimento registrada separadamente; decisões constam dos requisitos.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -40,6 +36,8 @@ A pessoa conclui uma Sessão de estudo. O Resumo aparece como hoje, e a Sessão 
 3. **Given** a conclusão de uma Sessão, **When** o registro falha por indisponibilidade, **Then** o Resumo continua visível, a falha é explicada e existe "Tentar registrar novamente". Sair da tela sem registrar pede confirmação, e nada é apresentado como registrado sem ter sido.
 4. **Given** dois Usuários, **When** cada um conclui Sessões, **Then** cada um vê somente o próprio Histórico.
 
+---
+
 ### User Story 2 - Ver as Estatísticas em Início (Priority: P1)
 
 Depois de Entrar, a pessoa chega em Início e vê, de relance, o tamanho do acervo e como tem estudado.
@@ -55,6 +53,8 @@ Depois de Entrar, a pessoa chega em Início e vê, de relance, o tamanho do acer
 3. **Given** nenhuma Sessão registrada, **When** Início abre, **Then** os números do acervo aparecem, a Taxa de acerto aparece como "—" (sem dados, nunca 0%), e há um próximo passo que leva a Baralhos para estudar.
 4. **Given** o gráfico de 7 dias, **When** lido por leitor de tela ou sem cor, **Then** cada dia tem rótulo e valor em texto. O gráfico nunca é a única forma de obter os números.
 
+---
+
 ### User Story 3 - Saber o que acertou e o que errou (Priority: P2)
 
 No Resumo, a pessoa usa os botões Acertos e Erros para ver a lista dos Cartões de cada grupo, com Frente e Verso.
@@ -69,6 +69,8 @@ No Resumo, a pessoa usa os botões Acertos e Erros para ver a lista dos Cartões
 2. **Given** uma lista aberta, **When** a pessoa aciona o mesmo botão, **Then** a lista se recolhe. Os dois botões funcionam de forma independente.
 3. **Given** um grupo vazio (por exemplo, 0 erros), **When** o Resumo abre, **Then** o botão fica indisponível com a explicação "Nenhum erro nesta Sessão".
 4. A seção "Itens estudados" (ladrilho de estudados) é removida do Resumo, porque o total continua dito no texto do percentual ("2 de 3 Itens"). Os ladrilhos Acertos e Erros passam a ser os botões.
+
+---
 
 ### User Story 4 - Rever uma Sessão antiga (Priority: P2)
 
@@ -131,15 +133,6 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 
 **Transversais reutilizados**: FR-042, FR-044, FR-045, FR-046, FR-135–FR-137, FR-153–FR-159 (`012`) valem para todas as telas novas.
 
-### Verificação dos Requisitos Negativos
-
-| Requisito | Afirmação | Como é verificado |
-|---|---|---|
-| FR-162 | Sessão interrompida não gera registro | Interromper, recarregar e Sair durante uma Sessão; conferir Histórico inalterado. |
-| FR-163 | Reenvio não duplica registro | Reenviar a mesma conclusão e conferir exatamente um registro. |
-| FR-165 | Alterações do acervo não alteram registros | Editar e excluir o acervo após concluir; conferir os textos originais. |
-| FR-166 | Histórico não expõe outro Usuário | Consultar lista e registro com Credenciais de outro Usuário. |
-
 ### Key Entities
 
 - **Registro de sessão**: instante de conclusão; Baralho (identidade e nome no momento); totais (estudados, acertos, erros); Itens na ordem, cada um com Frente, Verso e Resultado no momento. Pertence a um Usuário e é imutável.
@@ -147,6 +140,8 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 - **Estatísticas**: valores derivados do acervo atual e do Histórico. Não são armazenados como verdade própria.
 
 ## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
 
 - **SC-071**: Em 100% das conclusões, inclusive com falha seguida de nova tentativa, o Histórico contém exatamente um registro por Sessão concluída. Nenhuma Sessão interrompida gera registro.
 - **SC-072**: Os números de Início conferem com os registros em todos os cenários de teste: 0 registros; 1 registro; vários no mesmo dia; registros nos 7 dias; registros fora da janela; Sessão concluída perto da meia-noite.
@@ -156,7 +151,7 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 - **SC-076**: As telas novas atendem SC-062/063/068 da `012`: percurso por teclado, larguras de 360 a 1440 px, zoom de 200%, alvos de 44 px e contraste.
 - **SC-077**: Início abre com Estatísticas visíveis em até 1 s num Histórico de 500 registros, no ambiente local de testes.
 
-### Compatibilidade com specs anteriores
+## Compatibilidade com specs anteriores
 
 | Tema | Mudança |
 | --- | --- |
@@ -166,15 +161,7 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 | Resumo (`004` FR-037, `012` FR-152) | Ganha o detalhe por grupo (FR-174). O ladrilho "Itens estudados" sai (FR-176). |
 | Fora do escopo do produto (`012`) | "Estatísticas acumuladas", "histórico persistente" e "resumo detalhado por Cartão" saem do fora de escopo e entram nesta feature. |
 
-## Invariantes de Domínio
-
-1. Uma conclusão gera no máximo um Registro de sessão (FR-163).
-2. Sessão interrompida não gera Registro de sessão (FR-162).
-3. Registros são imutáveis e pertencem a um único Usuário (FR-165/166).
-4. Estatísticas são derivadas do acervo e dos registros (FR-169/170).
-
-## Funcionalidades Adiadas
-
+**Fora do escopo**:
 - repetição espaçada;
 - "Cartões que você mais erra";
 - filtros e paginação do Histórico completo;
