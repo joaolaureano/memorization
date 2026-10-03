@@ -43,7 +43,11 @@ export type Rota =
   | { nome: "estudo"; id: string }
   | { nome: "cadastro" }
   | { nome: "revisao" }
-  | { nome: "preferencias" };
+  | { nome: "preferencias" }
+  | { nome: "agenda" }
+  | { nome: "nova-rotina" }
+  | { nome: "editar-rotina"; id: string }
+  | { nome: "estudo-da-agenda" };
 
 /**
  * Interpreta o hash corrente como uma `Rota`, já sob a guarda de Credencial
@@ -129,6 +133,12 @@ function interpretarCaminho(hash: string): Rota {
           return { nome: "preferencias" };
         }
 
+        // Gerenciar agenda (FR-237): destino de segundo nível, alcançado pelo
+        // bloco da Agenda em Início, sem novo item na navegação principal.
+        if (primeiro === "agenda") {
+          return { nome: "agenda" };
+        }
+
         return { nome: "inicio" };
       }
 
@@ -143,6 +153,17 @@ function interpretarCaminho(hash: string): Rota {
 
         if (colecao === "cartoes" && segundo === "novo") {
           return { nome: "novo-cartao" };
+        }
+
+        // Agendar estudo (FR-242): `novo` é palavra reservada, nunca um id.
+        if (colecao === "agenda" && segundo === "nova") {
+          return { nome: "nova-rotina" };
+        }
+
+        // A Sessão autorizada de um Compromisso (FR-231): o snapshot vive só na
+        // memória da casca, e recarregar abandona a Sessão e volta a Início.
+        if (colecao === "agenda" && segundo === "estudo") {
+          return { nome: "estudo-da-agenda" };
         }
 
         // O Registro de uma Sessão concluída é alcançado pelo id do registro, e
@@ -173,6 +194,10 @@ function interpretarCaminho(hash: string): Rota {
 
         if (colecao === "cartoes" && acao === "editar") {
           return { nome: "editar-cartao", id: decodificar(id) };
+        }
+
+        if (colecao === "agenda" && acao === "editar") {
+          return { nome: "editar-rotina", id: decodificar(id) };
         }
 
         return { nome: "inicio" };
@@ -216,6 +241,18 @@ export function hashDaRota(rota: Rota): string {
 
     case "preferencias":
       return "#/preferencias";
+
+    case "agenda":
+      return "#/agenda";
+
+    case "nova-rotina":
+      return "#/agenda/nova";
+
+    case "estudo-da-agenda":
+      return "#/agenda/estudo";
+
+    case "editar-rotina":
+      return `#/agenda/${encodeURIComponent(rota.id)}/editar`;
 
     case "cartoes":
       return "#/cartoes";
@@ -261,6 +298,10 @@ export function destinoAtivo(
     case "inicio":
     case "registro":
     case "revisao":
+    case "agenda":
+    case "nova-rotina":
+    case "editar-rotina":
+    case "estudo-da-agenda":
       return "inicio";
 
     case "cartoes":

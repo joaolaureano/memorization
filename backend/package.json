@@ -16,7 +16,9 @@
     "start:local": "node dist/sqlite/servidor.mjs",
     "start:cloud": "node dist/postgresql/servidor.mjs",
     "migrate:cloud": "node dist/postgresql/migrar.mjs",
-    "test": "vitest run",
+    "test": "npm run test:geral && npm run test:postgresql",
+    "test:geral": "vitest run",
+    "test:postgresql": "vitest run --config vitest.postgresql.config.ts",
     "lint": "eslint ."
   },
   "dependencies": {

@@ -4,7 +4,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 # Tasks: Acesso temporário
 
-**Somente planejamento: nenhuma tarefa é executada sem aprovação do Product Owner.**
+**Status**: Implementada em 2026-10-03 na branch `implementacao-016-018`, a pedido explícito do Product Owner («implemente o PLAN.md completamente»). A aprovação para implementar foi assumida a partir desse pedido. As tarefas foram executadas pelo Arquiteto diretamente (workers DeepSeek não estavam disponíveis); evidências e desvios estão na seção «Execução» ao final.
 
 **Executor**: workers DeepSeek via a ferramenta `delegate`, em cópias isoladas. Dentro de cada onda, os arquivos são disjuntos. Portões ao fim de cada onda — backend: `npm test`, `npm run typecheck`, `npm run lint`; frontend: `npm test`, `npm run build`, `npm run lint`; nas ondas finais, também os e2e. O Arquiteto revisa cada diff (constitution VI) e roda `graphify update .` ao fim.
 
@@ -33,7 +33,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 **Purpose**: Linha de base antes de qualquer código novo.
 
-- [ ] T1801 Linha de base: rodar os portões de backend (`npm test`, `npm run typecheck`, `npm run lint`) e de frontend (`npm test`, `npm run build`, `npm run lint`) antes de começar; registrar o resultado bruto no relatório da feature.
+- [X] T1801 Linha de base: rodar os portões de backend (`npm test`, `npm run typecheck`, `npm run lint`) e de frontend (`npm test`, `npm run build`, `npm run lint`) antes de começar; registrar o resultado bruto no relatório da feature.
   - **Sem código.** Se algum portão já estiver vermelho, parar e reportar ao Arquiteto antes de iniciar a Onda 1 (constitution VI e X).
 
 **Checkpoint**: Base verde; Onda 1 liberada.
@@ -48,14 +48,14 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 ### Onda 1 (paralelo)
 
-- [ ] T1802 [P] Porta `ArmazenamentoDeAcessos` (§1) — `backend/src/armazenamento/porta.ts`.
+- [X] T1802 [P] Porta `ArmazenamentoDeAcessos` (§1) — `backend/src/armazenamento/porta.ts`.
   - Definir a nova Interface `ArmazenamentoDeAcessos` com `criar(digest, usuarioId, expiraEm)`, `obterValido(digest, agora)`, `renovar(digest, novoExpiraEm)`, `encerrar(digest)`, `encerrarTodosDoUsuario(usuarioId)` e `removerExpirados(agora)` (§1).
   - Tipos de saída: `{ usuarioId }` em sucesso; `nao_encontrado`, `expirado`, `indisponivel` (§1.2); `void`, `nao_encontrado`, `indisponivel` (§1.3); `void`, `indisponivel` (§1.4/§1.5); número de removidas, `indisponivel` (§1.6).
   - O valor em claro NUNCA entra na Porta: só o digest SHA-256 é persistido (§1; FR-297, SC-116).
   - Sem implementação: só tipos e Interface. Testes: nenhum nesta tarefa (a cobertura vem pela bateria em T1806). O typecheck dos dois Adapters falha até a Onda 2 (T1804, T1805), que implementa os métodos novos; isso é esperado e não bloqueia o portão da Onda 1.
   - FR-289, FR-297, FR-301; SC-115, SC-116, SC-122; §1.
 
-- [ ] T1803 [P] Module puro `atividade.ts` (§6) — `frontend/src/acesso/atividade.ts`, `frontend/tests/atividade.test.ts`.
+- [X] T1803 [P] Module puro `atividade.ts` (§6) — `frontend/src/acesso/atividade.ts`, `frontend/tests/atividade.test.ts`.
   - Module puro, sem I/O: recebe o instante de uma interação e o instante da última renovação e devolve a decisão de renovar ou aguardar. `Aplicacao.tsx` observa teclado, clique e toque e chama `POST /acesso/renovar` somente quando receber a decisão de renovar, no máximo uma vez a cada 60 s (§6; FR-291; SC-124).
   - A Aplicação deve fornecer ao Module cada interação da pessoa com a página — teclado, clique ou toque —, inclusive digitar num formulário, Revelar o Verso, Avaliar um Item e navegar entre telas, mesmo quando nada é gravado (§6; FR-291).
   - Testes: decisão na primeira interação; throttle de 60 s; nenhuma decisão de renovar sem interação. O vínculo dos eventos reais fica em T1813 (FR-291, SC-124).
@@ -65,7 +65,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 ### Onda 2 (paralelo; depende da Onda 1)
 
-- [ ] T1804 [P] Adapter SQLite da nova Porta e migração nova — `backend/src/armazenamento/sqlite/armazenamento.ts`, `backend/src/armazenamento/sqlite/migracoes.ts`.
+- [X] T1804 [P] Adapter SQLite da nova Porta e migração nova — `backend/src/armazenamento/sqlite/armazenamento.ts`, `backend/src/armazenamento/sqlite/migracoes.ts`.
   - Implementar `criar`, `obterValido`, `renovar`, `encerrar`, `encerrarTodosDoUsuario`, `removerExpirados` (§1; FR-289, FR-297, FR-301).
   - Nova tabela `acesso_temporario(digest PK, usuario_id REFERENCES usuario(id) ON DELETE CASCADE, criado_em, expira_em, ultima_acao_em)`, com índice `(usuario_id)`; o banco guarda apenas o digest SHA-256, nunca o valor em claro (§1; FR-297, SC-116).
   - Migração nova: número **8 ou 9**, decidido na implementação conforme D1 (9 se a migração 8 da 016 já estiver aplicada; caso contrário, 8) — registrar a decisão no relatório.
@@ -73,14 +73,14 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - Testes pela bateria compartilhada (T1806), rodada em `backend/tests/armazenamento/sqlite.test.ts`.
   - FR-289, FR-297, FR-301; SC-115, SC-116, SC-122; §1.
 
-- [ ] T1805 [P] Adapter PostgreSQL da nova Porta e migração nova — `backend/src/armazenamento/postgresql/armazenamento.ts`, `backend/src/armazenamento/postgresql/migracoes.ts`.
+- [X] T1805 [P] Adapter PostgreSQL da nova Porta e migração nova — `backend/src/armazenamento/postgresql/armazenamento.ts`, `backend/src/armazenamento/postgresql/migracoes.ts`.
   - Equivalentes aos de T1804, com tradução `TIMESTAMPTZ` ↔ ISO-8601 UTC como nas features anteriores.
   - A tabela `acesso_temporario` e o índice `(usuario_id)` seguem o mesmo contrato; a FK `usuario_id REFERENCES usuario(id) ON DELETE CASCADE` remove os Acessos ao excluir o Usuário (§1; FR-296).
   - Migração nova: número **8 ou 9**, decidido na implementação conforme D1 — registrar a decisão.
   - Testes pela bateria compartilhada (T1806), rodada em `backend/tests/armazenamento/postgresql/bateria.test.ts`.
   - FR-289, FR-296, FR-297, FR-301; SC-115, SC-116, SC-120, SC-122; §1.
 
-- [ ] T1806 [P] Bateria compartilhada da nova Porta (§1) — `backend/tests/armazenamento/bateria-da-porta.ts`.
+- [X] T1806 [P] Bateria compartilhada da nova Porta (§1) — `backend/tests/armazenamento/bateria-da-porta.ts`.
   - Cenário de **só digest guardado**: após `criar`, a linha contém apenas o digest SHA-256; o valor em claro não aparece no banco (FR-297, SC-116).
   - **Cascata ao excluir Usuário**: com dois Usuários, excluir um remove todos os Acessos dele e não toca no outro (FR-296, FR-299; SC-120).
   - **Expiração**: `obterValido` devolve `expirado` quando `expira_em <= agora`, e `nao_encontrado` quando a linha não existe (§1.2; FR-294).
@@ -90,7 +90,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - A bateria roda nos dois Adapters (SQLite e PostgreSQL) com o mesmo arquivo.
   - FR-289, FR-291, FR-293, FR-294, FR-296, FR-297, FR-298, FR-299, FR-301; SC-115, SC-116, SC-117, SC-120, SC-122; §1.
 
-- [ ] T1807 [P] Cliente do frontend: Acesso temporário (§6) — `frontend/src/acervo-cliente/cliente.ts`, `frontend/src/acervo-cliente/cliente-http.ts`, `frontend/src/acervo-cliente/cliente-em-memoria.ts`, `frontend/src/ui/guarda-de-credencial.ts`, `frontend/tests/acervo-cliente/acesso.test.ts`.
+- [X] T1807 [P] Cliente do frontend: Acesso temporário (§6) — `frontend/src/acervo-cliente/cliente.ts`, `frontend/src/acervo-cliente/cliente-http.ts`, `frontend/src/acervo-cliente/cliente-em-memoria.ts`, `frontend/src/ui/guarda-de-credencial.ts`, `frontend/tests/acervo-cliente/acesso.test.ts`.
   - `ClienteDoAcervo` ganha `obterAcesso(): Promise<ResultadoDeObterAcesso>`, `renovarAcesso(): Promise<ResultadoDeRenovarAcesso>`, `sair(): Promise<ResultadoDeSair>` e `entrar(dados)` com `continuarConectado?: boolean` (§6; FR-289, FR-290, FR-292, FR-293, FR-294, FR-295).
   - `cliente-http.ts` usa `fetch` com **`credentials: "include"`** em todas as chamadas, para o navegador enviar e receber o cookie do Acesso (§6; FR-297, FR-305).
   - `guarda-de-credencial.ts` passa a **descartar a Credencial** quando o Acesso for recusado por expiração, Sair ou eventos da 017, e a **manter a Credencial apenas em memória** quando a continuidade estiver desmarcada (FR-089 e FR-091 revisados).
@@ -102,7 +102,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 ### Onda 3 (depende da Onda 2)
 
-- [ ] T1808 Hook e rotas do Acesso temporário (§2, §3, §4) — `backend/src/http/credencial.ts`, `backend/src/http/rotas.ts`, `backend/src/http/servidor.ts`, `backend/src/entradas/local.ts`, `e2e/servidores-locais.ts`, `backend/tests/http/acesso.test.ts`, `backend/tests/http/credencial.test.ts`, `backend/tests/http/cors.test.ts`.
+- [X] T1808 Hook e rotas do Acesso temporário (§2, §3, §4) — `backend/src/http/credencial.ts`, `backend/src/http/rotas.ts`, `backend/src/http/servidor.ts`, `backend/src/entradas/local.ts`, `e2e/servidores-locais.ts`, `backend/tests/http/acesso.test.ts`, `backend/tests/http/credencial.test.ts`, `backend/tests/http/cors.test.ts`.
   - **Origem do frontend no ambiente local (obrigatório)**: com `credentials: "include"`, o navegador recusa `Access-Control-Allow-Origin: *`. A entrada local lê a variável `ORIGEM_DO_FRONTEND` (padrão `http://127.0.0.1:5173`, a origem do `npm run dev`) e a usa no CORS com `Access-Control-Allow-Credentials: true`. Em `e2e/servidores-locais.ts`, `iniciarApi` passa à API a origem do Vite do teste. Sem isso, toda chamada do navegador local falha e a suíte e2e inteira quebra (§4).
   - Hook de Credencial aceita **EITHER** um Acesso temporário válido no cookie **OR** uma Credencial Basic válida (FR-090 revisado; §3).
   - Acesso válido: renova `expira_em` e prossegue, decorando `usuarioQueEntrou` (§3; FR-291).
@@ -120,13 +120,13 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - `backend/tests/http/credencial.test.ts`: hook aceita Acesso OU Basic; `401` por Acesso expirado; `401` por Basic ausente; `503` por falha de armazenamento sem limpar cookie (FR-079 revisado, FR-090 revisado, FR-091 revisado, FR-294, FR-301).
   - FR-079 revisado, FR-089 revisado, FR-090 revisado, FR-091 revisado, FR-289, FR-290, FR-291, FR-292, FR-293, FR-294, FR-295, FR-297, FR-301, FR-305, FR-306; SC-114..SC-124; §2, §3, §4.
 
-- [ ] T1809 [P] Paridade local/nuvem das rotas novas (§2; D4) — `backend/tests/funcao/funcao.test.ts`, `backend/src/funcao/funcao.ts` (só o tipo).
+- [X] T1809 [P] Paridade local/nuvem das rotas novas (§2; D4) — `backend/tests/funcao/funcao.test.ts`, `backend/src/funcao/funcao.ts` (só o tipo).
   - **Cookies na Function URL**: no evento da nuvem, os cookies chegam no campo `cookies` (e não no cabeçalho `cookie`), e o `Set-Cookie` sai no campo `cookies` da resposta. O evento sintético do teste traz `cookies` e confere que `POST /entrar` devolve `cookies` com o Acesso e que `GET /acesso` reconhece o Acesso recebido assim. O tipo `RespostaDaFuncao` ganha `cookies?: string[]`, sem mudar comportamento (a `@fastify/aws-lambda` já faz a tradução).
   - Cada rota nova precisa ser chamada pela função da nuvem (`backend/src/funcao/funcao.ts`): `GET /acesso`, `POST /acesso/renovar`, `POST /sair` e o `POST /entrar` estendido.
   - O teste deve **falhar se uma rota nova não estiver em `registrarRotasDaAplicacao`** (lição do bug `9251ae0` da 013).
   - FR-090 revisado, FR-301; §2.
 
-- [ ] T1810 [P] Integração com a 017 (§5) — `backend/src/identidade/identidade.ts`, `backend/tests/identidade/acesso-e-conta.test.ts`.
+- [X] T1810 [P] Integração com a 017 (§5) — `backend/src/identidade/identidade.ts`, `backend/tests/identidade/acesso-e-conta.test.ts`.
   - Trocar Senha e alterar Nome de usuário chamam `encerrarTodosDoUsuario` e emitem um **NOVO** Acesso para a requisição atual via `Set-Cookie` quando ela foi autenticada por Acesso (FR-296; §5).
   - Excluir Usuário remove os Acessos por cascade e limpa o cookie; nenhum novo Acesso é emitido nesse caso (FR-296; SC-120).
   - Dois Navegadores: o outro é recusado na próxima operação; o navegador da alteração continua com novo Acesso (SC-120; §5).
@@ -146,13 +146,13 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 **Onda 4 (paralelo):**
 
-- [ ] T1811 [P] [US1] `PaginaDeEntrada.tsx`: opção «Continuar conectado neste navegador» (§6) — `frontend/src/ui/PaginaDeEntrada.tsx`, `frontend/tests/pagina-de-entrada.test.tsx`.
+- [X] T1811 [P] [US1] `PaginaDeEntrada.tsx`: opção «Continuar conectado neste navegador» (§6) — `frontend/src/ui/PaginaDeEntrada.tsx`, `frontend/tests/pagina-de-entrada.test.tsx`.
   - A opção MUST vir **marcada por padrão** e MUST ser acessível por teclado, com foco visível que não dependa apenas de cor (FR-292, FR-302, FR-303; SC-121).
   - Ao concluir Entrar, enviar `continuarConectado` ao cliente; quando desmarcada, nenhum Acesso temporário é emitido e recarregar/fechar exige Entrar de novo (FR-292).
   - Testes: marcação padrão; alternar por teclado; Entrar com a opção marcada e desmarcada, inclusive desmarcar depois de uma entrada anterior com Acesso e confirmar que a recarga exige Entrar (FR-292, FR-302, FR-303). Larguras de 360 a 1440 px e zoom de 200 % ficam no e2e T1817 (`visual-e-contraste.spec.ts`; SC-121).
   - FR-292, FR-302, FR-303; SC-121; §6.
 
-- [ ] T1812 [P] [US1] `Aplicacao.tsx`: carga com `GET /acesso` (§6) — `frontend/src/ui/Aplicacao.tsx`, `frontend/tests/aplicacao-acesso.test.tsx`.
+- [X] T1812 [P] [US1] `Aplicacao.tsx`: carga com `GET /acesso` (§6) — `frontend/src/ui/Aplicacao.tsx`, `frontend/tests/aplicacao-acesso.test.tsx`.
   - Na carga, chamar `GET /acesso`: válido → Início sem Entrar; `401 acesso_expirado` → Entrar com a mensagem **«Seu acesso expirou. Entre novamente.»**; `401 sem_acesso` → Entrar (FR-290, FR-294; SC-118, SC-123).
   - A reabertura dentro da validade no ambiente local volta ao Início em até 2 s (SC-118).
   - O Acesso temporário nunca aparece no endereço/URL nem em campo visível da interface (FR-305).
@@ -171,7 +171,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 **Onda 5:**
 
-- [ ] T1813 [US2] Expiração durante o uso (§6) — `frontend/src/ui/Aplicacao.tsx`, `frontend/tests/expiracao-do-acesso.test.tsx`.
+- [X] T1813 [US2] Expiração durante o uso (§6) — `frontend/src/ui/Aplicacao.tsx`, `frontend/tests/expiracao-do-acesso.test.tsx`.
   - Qualquer `401 acesso_expirado` durante o uso leva a Entrar com a mensagem **«Seu acesso expirou. Entre novamente.»**, sem apresentar a operação como concluída (FR-294, FR-091 revisado; SC-115, SC-123).
   - Sessão de estudo em andamento é descartada conforme FR-151/FR-157 de `012`, sem registrar estudo parcial nem apresentar conclusão (FR-151, FR-157; SC-124).
   - A renovação é ligada a `frontend/src/acesso/atividade.ts` na aplicação, para que teclado, clique e toque renovem o Acesso no máximo a cada 60 s (FR-291; SC-124).
@@ -191,7 +191,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 **Onda 5 (paralelo com T1813 e T1815):**
 
-- [ ] T1814 [P] [US3] Sair com Acesso (§6) — `frontend/src/ui/Moldura.tsx`, `frontend/tests/sair-com-acesso.test.tsx`.
+- [X] T1814 [P] [US3] Sair com Acesso (§6) — `frontend/src/ui/Moldura.tsx`, `frontend/tests/sair-com-acesso.test.tsx`.
   - Sair chama `POST /sair`; em `204`, descarta a Credencial e vai a Entrar (FR-293, FR-295).
   - Depois de Sair, reabrir o navegador não dá acesso, e o Acesso encerrado é recusado mesmo que copiado (FR-295; SC-119).
   - O Acesso encerrado por Sair não pode ser reutilizado; a operação não aparece como concluída (FR-295, FR-044).
@@ -210,7 +210,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 **Onda 5 (paralelo com T1813 e T1814):**
 
-- [ ] T1815 [P] [US4] Tela: após troca/alteração da 017 a página segue com o novo Acesso; outra aba é recusada (§5, §6) — `frontend/tests/acesso-e-minha-conta.test.tsx`.
+- [X] T1815 [P] [US4] Tela: após troca/alteração da 017 a página segue com o novo Acesso; outra aba é recusada (§5, §6) — `frontend/tests/acesso-e-minha-conta.test.tsx`.
   - Após troca de Senha ou alteração de Nome de usuário, o navegador da alteração continua operando com o novo Acesso, sem novo Entrar (FR-296; SC-120).
   - Outra aba ou outro navegador com o Acesso antigo é recusado na próxima operação e volta a Entrar com mensagem explicativa (FR-296, FR-091 revisado; SC-120).
   - Exclusão do Usuário encerra todos os Acessos e não emite nenhum novo; a tela leva a Entrar (FR-296; SC-120).
@@ -240,14 +240,14 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 ### Onda 6 (paralelo)
 
-- [ ] T1816 [P] e2e novo `e2e/acesso-temporario.spec.ts` com `ACESSO_VALIDADE_SEGUNDOS=5` — `e2e/acesso-temporario.spec.ts`.
+- [X] T1816 [P] e2e novo `e2e/acesso-temporario.spec.ts` com `ACESSO_VALIDADE_SEGUNDOS=5` — `e2e/acesso-temporario.spec.ts`.
   - O e2e MUST usar `ACESSO_VALIDADE_SEGUNDOS=5` para tornar a validade observável; a variável é de teste e não é exposta à pessoa (plan.md; FR-291).
   - Cenários: recarregar dentro do TTL (SC-114, SC-118); ociosidade além do TTL leva a Entrar com a mensagem exata (FR-294, SC-123); Sair e reabrir exige Entrar (FR-295, SC-119); dois contextos de navegador (US5, FR-299); troca de Senha pela 017 encerra o outro contexto (FR-296, SC-120); inspeção do armazenamento do navegador sem Senha (SC-116, FR-297); Sessão de estudo maior que o TTL com interações (SC-124, FR-291).
   - O Acesso temporário nunca aparece no endereço/URL nem em registros da aplicação (FR-297, FR-305; SC-116).
   - `e2e/servidores-locais.ts` já recebe a origem do frontend na T1808; aqui só se passa `ACESSO_VALIDADE_SEGUNDOS=5` à API do teste, se ainda faltar.
   - FR-291, FR-294, FR-295, FR-296, FR-297, FR-299, FR-305; SC-114, SC-116, SC-118, SC-119, SC-120, SC-123, SC-124.
 
-- [ ] T1817 [P] e2e existentes que dependem de Entrar a cada recarga passam a considerar o Acesso — `e2e/*.spec.ts` afetados.
+- [X] T1817 [P] e2e existentes que dependem de Entrar a cada recarga passam a considerar o Acesso — `e2e/*.spec.ts` afetados.
   - Candidatos a revisão: `entrar-e-acervo-por-usuario.spec.ts`, `navegacao.spec.ts`, `percurso-por-teclado.spec.ts`, `visual-e-contraste.spec.ts` (Entrar com a caixa marcada, conforme o novo fluxo).
   - Onde o teste recarrega esperando Entrar, deve passar a considerar que, com a opção «Continuar conectado neste navegador» marcada por padrão, o Acesso temporário pode manter a pessoa no Início (FR-290, FR-292).
   - A revisão não pode enfraquecer a cobertura já existente de Entrar/Sair; quando o cenário exigir Entrar de novo, desmarcar a caixa ou Sair primeiro (FR-292).
@@ -256,7 +256,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 
 ### Onda 7
 
-- [ ] T1818 Converge — portões completos, `graphify update .`, quickstart ([quickstart.md](./quickstart.md)) percorrido de ponta a ponta, relatório ao PO.
+- [X] T1818 Converge — portões completos, `graphify update .`, quickstart ([quickstart.md](./quickstart.md)) percorrido de ponta a ponta, relatório ao PO.
   - Portões completos: backend (`npm test`, `npm run typecheck`, `npm run lint`), frontend (`npm test`, `npm run build`, `npm run lint`) e e2e.
   - `graphify update .` ao fim, revisão de cada diff (constitution VI) e relatório ao Product Owner.
   - **Sem commit sem pedido explícito.**
@@ -403,3 +403,27 @@ Com workers DeepSeek via `delegate`:
 - Sem novos arquivos fora do esqueleto. Sem alterar assinaturas dos contratos (constitution I).
 - A migração nova é obrigatória pela tabela `acesso_temporario`; o número 8 ou 9 é decidido no momento da implementação, conforme D1.
 - O Acesso temporário nunca aparece em URL, corpo de resposta ou log; a Senha nunca é guardada no navegador (FR-078, FR-297, FR-305).
+
+
+## Execução (2026-10-03)
+
+**Resultado**: T1801–T1818 concluídas. Backend, frontend e E2E conforme a seção
+equivalente de `specs/017-gerenciar-conta-usuario/tasks.md` (mesmos portões, mesma
+limitação do PostgreSQL).
+
+**Decisões e desvios**
+
+- **Migração**: a migração do Acesso temporário é a **9** (a 8 é a da Agenda, 016),
+  nos dois Adapters, conforme D1.
+- **Variáveis**: `ORIGEM_DO_FRONTEND` (padrão `http://127.0.0.1:5173`),
+  `ACESSO_VALIDADE_SEGUNDOS` (padrão 300) e `ORIGENS_LOCAIS_DE_TESTE` (só para os
+  E2E, porque o frontend sobe depois da API); documentadas nos READMEs.
+- **T1810**: a integração com a 017 é provada em `backend/tests/http/acesso.test.ts`
+  e `backend/tests/http/conta.test.ts`, onde a revogação vive (camada de rotas);
+  `backend/tests/identidade/acesso-e-conta.test.ts` não foi criado.
+- **Primeira recusa vence**: pedidos em voo que voltam recusados depois da
+  primeira recusa por Credencial não trocam a mensagem «Seu acesso expirou» pela
+  genérica (`Aplicacao.tsx`, `recusaJaTratada`).
+- **T1817**: os E2E existentes que dependiam de Entrar a cada recarga passaram a
+  considerar o Acesso (`prepararAcessoAusente`, `continuarConectado: false`).
+- **PostgreSQL** e **graphify**: como na 017.

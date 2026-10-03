@@ -99,8 +99,10 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
     await expect(page.getByRole("listitem")).toHaveCount(0);
     // Na UI de 012 a lista não tem formulário inline: criar é uma página
     // própria, alcançada pelo link "Criar baralho".
+    // `.first()`: o link existe no cabeçalho e, na lista vazia, também no estado
+    // vazio — e qual dos dois já está na tela depende de a lista ter carregado.
     await expect(
-      page.getByRole("link", { name: "Criar baralho" }),
+      page.getByRole("link", { name: "Criar baralho" }).first(),
     ).toBeVisible();
 
     // Dois Baralhos com o mesmo nome, como no roteiro da spec: o nome é
@@ -211,7 +213,7 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
  * detalhe do Baralho novo, cujo título assume o nome informado.
  */
 async function criarBaralhoPelaUi(page: Page, nome: string): Promise<void> {
-  await page.getByRole("link", { name: "Criar baralho" }).click();
+  await page.getByRole("link", { name: "Criar baralho" }).first().click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Criar baralho" }),
   ).toBeVisible();

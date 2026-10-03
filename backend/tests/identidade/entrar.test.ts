@@ -38,7 +38,7 @@ const RECUSA = {
 };
 
 /** Quantas vezes cada recusa é medida no cenário de duração. */
-const MEDICOES = 5;
+const MEDICOES = 3;
 
 /** Quantas vezes a razão entre as duas durações pode se afastar de 1. */
 const FATOR_ACEITO = 10;

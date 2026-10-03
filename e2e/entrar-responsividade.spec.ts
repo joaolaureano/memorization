@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { prepararAcessoAusente } from './servidores-locais';
+
 // T714 — a tela "Entrar" permanece utilizável em largura de telefone
 // (FR-042; specs/008-entrar/tasks.md).
 //
@@ -28,6 +30,10 @@ test.use({
 test('a tela Entrar permanece utilizável e sem rolagem horizontal em telefone (FR-042)', async ({ page, browserName }) => {
   // Navegador real: Chromium em viewport de telefone, não um DOM simulado.
   expect(browserName).toBe('chromium');
+
+  // 018: a carga pergunta se há Acesso temporário; sem API, a resposta é a de
+  // quem não tem Acesso.
+  await prepararAcessoAusente(page);
 
   // A recusa de Entrar vem do contrato: uma só mensagem, sem revelar qual
   // parte da Credencial falhou (FR-088).

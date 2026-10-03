@@ -386,6 +386,30 @@ CREATE INDEX indice_inicio_de_compromisso_por_usuario_rotina_data
 `;
 
 /**
+ * A migração 9 cria a tabela do **Acesso temporário** — a feature `018` —, com
+ * o **mesmo número de versão** da migração do Adapter local. A migração 8 da
+ * `016` já está aplicada, e por isso esta é a **9** (D1 de
+ * `specs/018-acesso-temporario/research.md`).
+ *
+ * Só cria tabela nova. `digest` é o SHA-256 do valor opaco, e o valor em claro
+ * **nunca** é guardado (FR-297). `ON DELETE CASCADE` em `usuario_id` remove
+ * todos os Acessos junto com o Usuário (FR-296); os instantes são
+ * `TIMESTAMPTZ`, traduzidos de e para ISO-8601 UTC pelo Adapter.
+ */
+const ESQUEMA_ACESSO_TEMPORARIO = `
+CREATE TABLE acesso_temporario (
+  digest         TEXT        PRIMARY KEY,
+  usuario_id     TEXT        NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  criado_em      TIMESTAMPTZ NOT NULL,
+  expira_em      TIMESTAMPTZ NOT NULL,
+  ultima_acao_em TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX indice_acesso_temporario_por_usuario
+  ON acesso_temporario (usuario_id);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -399,4 +423,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 6, sql: ESQUEMA_REGISTRO_DE_SESSAO },
   { versao: 7, sql: ESQUEMA_REPETICAO_ESPACADA },
   { versao: 8, sql: ESQUEMA_AGENDA_DE_ESTUDO },
+  { versao: 9, sql: ESQUEMA_ACESSO_TEMPORARIO },
 ];

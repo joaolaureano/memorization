@@ -1,17 +1,36 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
+import { MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO } from "../acervo-cliente/cliente";
+import type {
+  ClienteDoAcervo,
+  Credencial,
+  InicioDeCompromisso,
+} from "../acervo-cliente/cliente";
+import { decidirRenovacao } from "../acesso/atividade";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
 import { Moldura } from "./Moldura";
 import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
 import type { Rota } from "./navegacao";
+import { PaginaDaAgenda } from "./PaginaDaAgenda";
+import { PaginaDoFormularioDeRotina } from "./PaginaDoFormularioDeRotina";
 import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
 import { PaginaDaRevisao } from "./PaginaDaRevisao";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
-import { MENSAGEM_DE_SAIDA, PaginaDeEntrada } from "./PaginaDeEntrada";
-import type { AvisoDaEntrada } from "./PaginaDeEntrada";
+import {
+  MENSAGEM_DE_CONTA_EXCLUIDA,
+  MENSAGEM_DE_SAIDA,
+  PaginaDeEntrada,
+} from "./PaginaDeEntrada";
+import type { AvisoDaEntrada, EscolhaDeEntrada } from "./PaginaDeEntrada";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
 import { PaginaDeInicio } from "./PaginaDeInicio";
 import { PaginaDePreferencias } from "./PaginaDePreferencias";
@@ -54,56 +73,235 @@ import {
  * que ela sempre vence.
  */
 
+/**
+ * Como a casca opera o cliente (018): com o **Acesso temporário** no cookie do
+ * navegador — a Credencial já não está na memória — ou com a Credencial em
+ * memória, quando a pessoa desmarcou «Continuar conectado neste navegador».
+ */
+export interface OpcoesDoCliente {
+  usaAcesso: boolean;
+}
+
 interface PropriedadesDaAplicacao {
   /**
    * Produz o `ClienteDoAcervo` para uma Credencial, ou para `null` enquanto
    * ninguém tiver entrado. É uma fábrica, e não um cliente pronto, porque a
    * Credencial chega **na construção** do Adapter (FR-089): trocá-la — ao
-   * Entrar, ao Sair ou ao descartá-la numa recusa — troca o cliente.
+   * Entrar, ao Sair ou ao descartá-la numa recusa — troca o cliente. Com
+   * `usaAcesso`, o cliente não tem Credencial e opera pelo cookie (018).
    */
-  criarCliente: (credencial: Credencial | null) => ClienteDoAcervo;
+  criarCliente: (
+    credencial: Credencial | null,
+    opcoes?: OpcoesDoCliente,
+  ) => ClienteDoAcervo;
+}
+
+/**
+ * Quem está operando: o Nome de usuário e, só quando a continuidade foi
+ * desmarcada, a Credencial que vive na memória desta página. Com o Acesso
+ * temporário, a Senha **não** fica na memória depois do Entrar (FR-078,
+ * FR-089 revisado).
+ */
+interface Sessao {
+  nomeDeUsuario: string;
+  credencial: Credencial | null;
 }
 
 export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
-  const [credencial, setCredencial] = useState<Credencial | null>(null);
+  const [sessao, setSessao] = useState<Sessao | null>(null);
   const [avisoDaEntrada, setAvisoDaEntrada] = useState<AvisoDaEntrada | null>(
     null,
   );
+  // FR-290: na carga, o servidor diz se este navegador tem Acesso válido antes
+  // de qualquer tela aparecer — e é isso que evita o lampejo de «Entrar».
+  const [verificacao, setVerificacao] = useState<
+    "verificando" | "concluida" | "falhou"
+  >("verificando");
+  const [numeroDaTentativa, setNumeroDaTentativa] = useState(0);
 
-  const temCredencial = credencial !== null;
+  const temCredencial = sessao !== null;
+  const credencial = sessao?.credencial ?? null;
+  const usaAcesso = sessao !== null && credencial === null;
 
   const clienteDaCredencial = useMemo(
-    () => criarCliente(credencial),
-    [criarCliente, credencial],
+    () => criarCliente(credencial, { usaAcesso }),
+    [criarCliente, credencial, usaAcesso],
   );
 
-  const entrar = useCallback((credencialInformada: Credencial) => {
-    setAvisoDaEntrada(null);
-    setCredencial(credencialInformada);
-  }, []);
+  /**
+   * FR-290, FR-294: a carga consulta `GET /acesso`. Válido leva ao Início sem
+   * Entrar; `acesso_expirado` leva a Entrar com «Seu acesso expirou. Entre
+   * novamente.»; `sem_acesso` leva a Entrar. A falha do armazenamento **não** é
+   * expiração e não descarta o Acesso (FR-301): a tela oferece nova tentativa.
+   */
+  useEffect(() => {
+    let ativo = true;
+
+    setVerificacao("verificando");
+
+    void criarCliente(null, { usaAcesso: true })
+      .obterAcesso()
+      .then((resultado) => {
+        if (!ativo) {
+          return;
+        }
+
+        if (resultado.ok) {
+          setSessao({ nomeDeUsuario: resultado.nomeDeUsuario, credencial: null });
+          setVerificacao("concluida");
+        } else if (resultado.erro === "indisponivel") {
+          setVerificacao("falhou");
+        } else {
+          if (resultado.erro === "acesso_expirado") {
+            setAvisoDaEntrada({ tipo: "falha", texto: resultado.mensagem });
+          }
+
+          setVerificacao("concluida");
+        }
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [criarCliente, numeroDaTentativa]);
+
+  /**
+   * A recusa por Credencial já tratada desde a última Entrada: pedidos que
+   * estavam em voo quando a Credencial foi recusada voltam recusados também, e a
+   * mensagem da **primeira** recusa — por exemplo «Seu acesso expirou» — não pode
+   * ser trocada pela genérica (FR-294).
+   */
+  const recusaJaTratada = useRef(false);
+
+  const entrar = useCallback(
+    (credencialInformada: Credencial, escolha: EscolhaDeEntrada) => {
+      recusaJaTratada.current = false;
+      setAvisoDaEntrada(null);
+      setSessao({
+        nomeDeUsuario: escolha.usuario.nomeDeUsuario,
+        // FR-089 revisado: com a continuidade, o Acesso autoriza e a Senha sai
+        // da memória; sem ela, a Credencial fica só nesta página aberta.
+        credencial: escolha.continuarConectado ? null : credencialInformada,
+      });
+    },
+    [],
+  );
 
   /**
    * FR-094 e SC-034: Sair descarta a Credencial e volta a "Entrar" — o mesmo
    * destino do voltar do navegador, que reencontra a tela "Entrar" porque a
-   * Credencial não sobreviveu em lugar nenhum.
+   * Credencial não sobreviveu em lugar nenhum. O Acesso do navegador já foi
+   * encerrado no servidor por `POST /sair` (FR-293, FR-295).
    */
   const descartarPorSaida = useCallback(() => {
-    setCredencial(null);
+    // Uma requisição iniciada antes de Sair pode terminar depois que o servidor
+    // descartou o Acesso. A decisão explícita de sair vence essa recusa tardia:
+    // ela não pode trocar a confirmação de saída por uma falha genérica.
+    recusaJaTratada.current = true;
+    setSessao(null);
     setAvisoDaEntrada({ tipo: "saida", texto: MENSAGEM_DE_SAIDA });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
 
   /**
-   * FR-091 e SC-035: recebida a recusa por Credencial, ela é descartada, a tela
-   * "Entrar" volta com a mensagem que explica a recusa e nada aparece como
-   * concluído — a operação recusada continua não concluída nas telas, que saem
-   * de cena com ela.
+   * FR-091 e SC-035: recebida a recusa por Credencial — ou por Acesso expirado,
+   * FR-294 —, ela é descartada, a tela "Entrar" volta com a mensagem que
+   * explica a recusa e nada aparece como concluído — a operação recusada
+   * continua não concluída nas telas, que saem de cena com ela.
    */
   const descartarPorRecusa = useCallback((mensagem: string) => {
-    setCredencial(null);
+    if (recusaJaTratada.current) {
+      return;
+    }
+
+    recusaJaTratada.current = true;
+    setSessao(null);
     setAvisoDaEntrada({ tipo: "falha", texto: mensagem });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
+
+  /**
+   * FR-263 e FR-270: renomear ou trocar a Senha **substitui** a Credencial em
+   * memória pela nova — a pessoa segue na tela, sem Entrar de novo — e a
+   * Credencial antiga, recusada pelo servidor, não vale mais em nenhuma outra
+   * página (FR-264). Com o Acesso temporário não há Credencial a substituir: o
+   * servidor já emitiu um Acesso novo a este navegador (FR-296), e só o nome
+   * mostrado muda.
+   */
+  const substituirCredencial = useCallback((nova: Credencial) => {
+    setSessao((atual) =>
+      atual === null
+        ? null
+        : {
+            nomeDeUsuario: nova.nomeDeUsuario,
+            credencial: atual.credencial === null ? null : nova,
+          },
+    );
+  }, []);
+
+  /**
+   * FR-276: a conta excluída leva a Credencial junto. A Credencial é descartada
+   * e a tela "Entrar" volta com «Conta excluída».
+   */
+  const descartarPorExclusao = useCallback(() => {
+    setSessao(null);
+    setAvisoDaEntrada({
+      tipo: "conta-excluida",
+      texto: MENSAGEM_DE_CONTA_EXCLUIDA,
+    });
+    irParaRota(ROTA_DE_ENTRADA);
+  }, []);
+
+  /**
+   * FR-282: quando o resultado de uma ação da conta é desconhecido, «Ir para
+   * Entrar» descarta a Credencial — que pode já não valer — e leva a pessoa a
+   * Entrar, onde o estado real se revela.
+   */
+  const irParaEntrar = useCallback(() => {
+    setSessao(null);
+    setAvisoDaEntrada({
+      tipo: "falha",
+      texto:
+        "Entre novamente para conferir o estado da sua conta: a última alteração não pôde ser confirmada.",
+    });
+    irParaRota(ROTA_DE_ENTRADA);
+  }, []);
+
+  if (verificacao !== "concluida") {
+    return (
+      <>
+        <header className="moldura">
+          <span className="marca">memorization</span>
+        </header>
+        <main className="aplicacao">
+          {verificacao === "verificando" ? (
+            <p className="carregando" role="status">
+              Verificando o acesso…
+            </p>
+          ) : (
+            <section className="cartao">
+              <p
+                className="aviso aviso--erro"
+                role="alert"
+                aria-label="Falha ao verificar o acesso"
+              >
+                {MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO}
+              </p>
+              <div className="acoes">
+                <button
+                  className="botao botao--primario"
+                  type="button"
+                  onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            </section>
+          )}
+        </main>
+      </>
+    );
+  }
 
   return (
     // A casca externa é dona da Credencial; a interna vive sob a proteção de
@@ -111,12 +309,16 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
     <ProvedorDeProtecaoDeSaida temCredencial={temCredencial}>
       <CascaDaAplicacao
         temCredencial={temCredencial}
-        nomeDeUsuarioDaCredencial={credencial?.nomeDeUsuario ?? ""}
+        usaAcesso={usaAcesso}
+        nomeDeUsuarioDaCredencial={sessao?.nomeDeUsuario ?? ""}
         clienteDaCredencial={clienteDaCredencial}
         avisoDaEntrada={avisoDaEntrada}
         aoEntrar={entrar}
         aoSair={descartarPorSaida}
         aoRecusar={descartarPorRecusa}
+        aoSubstituirCredencial={substituirCredencial}
+        aoExcluirConta={descartarPorExclusao}
+        aoIrParaEntrar={irParaEntrar}
       />
     </ProvedorDeProtecaoDeSaida>
   );
@@ -125,13 +327,18 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
 /** O que a casca interna recebe da casca externa, dona da Credencial. */
 interface PropriedadesDaCasca {
   temCredencial: boolean;
+  /** A página opera pelo Acesso temporário, e não por Credencial em memória (018). */
+  usaAcesso: boolean;
   /** O Nome de usuário da Credencial corrente, para a saudação do Início. */
   nomeDeUsuarioDaCredencial: string;
   clienteDaCredencial: ClienteDoAcervo;
   avisoDaEntrada: AvisoDaEntrada | null;
-  aoEntrar: (credencial: Credencial) => void;
+  aoEntrar: (credencial: Credencial, escolha: EscolhaDeEntrada) => void;
   aoSair: () => void;
   aoRecusar: (mensagem: string) => void;
+  aoSubstituirCredencial: (nova: Credencial) => void;
+  aoExcluirConta: () => void;
+  aoIrParaEntrar: () => void;
 }
 
 /**
@@ -142,12 +349,16 @@ interface PropriedadesDaCasca {
  */
 function CascaDaAplicacao({
   temCredencial,
+  usaAcesso,
   nomeDeUsuarioDaCredencial,
   clienteDaCredencial,
   avisoDaEntrada,
   aoEntrar,
   aoSair,
   aoRecusar,
+  aoSubstituirCredencial,
+  aoExcluirConta,
+  aoIrParaEntrar,
 }: PropriedadesDaCasca) {
   const rota = useRotaExibida();
   const protegerAcao = useAcaoProtegida();
@@ -155,6 +366,34 @@ function CascaDaAplicacao({
 
   const principal = useRef<HTMLElement>(null);
   const rotaAnterior = useRef(rota);
+
+  /**
+   * O início autorizado de uma Sessão da Agenda (016, FR-231): o snapshot dos
+   * Cartões fica só na memória da casca, nunca no armazenamento do navegador.
+   * Sair da rota da Sessão — ou recarregar — o descarta, e a Sessão não
+   * registra estudo parcial (FR-234).
+   */
+  const [inicioDaAgenda, setInicioDaAgenda] =
+    useState<InicioDeCompromisso | null>(null);
+
+  const iniciarEstudoDaAgenda = useCallback(
+    (inicio: InicioDeCompromisso) => {
+      setInicioDaAgenda(inicio);
+      irParaRota("#/agenda/estudo");
+    },
+    [],
+  );
+
+  const sairDoEstudoDaAgenda = useCallback(() => {
+    setInicioDaAgenda(null);
+    irParaRota("#/inicio");
+  }, []);
+
+  useEffect(() => {
+    if (rota.nome !== "estudo-da-agenda") {
+      setInicioDaAgenda(null);
+    }
+  }, [rota.nome]);
 
   /**
    * FR-157: a recusa de Credencial sempre vence. A proteção vigente é limpa
@@ -179,13 +418,84 @@ function CascaDaAplicacao({
   );
 
   /**
+   * FR-276 e FR-282: excluir a conta e «Ir para Entrar» são decisões explícitas
+   * que vencem a proteção de saída — a tela que os pediu ainda a mantém
+   * (operação em andamento ou formulário preenchido), e ela não pode barrar a
+   * ida a Entrar, como acontece com a recusa de Credencial (FR-157).
+   */
+  const excluirConta = useCallback(() => {
+    descartarProtecao();
+    aoExcluirConta();
+  }, [descartarProtecao, aoExcluirConta]);
+
+  const irParaEntrar = useCallback(() => {
+    descartarProtecao();
+    aoIrParaEntrar();
+  }, [descartarProtecao, aoIrParaEntrar]);
+
+  /**
    * FR-151: Sair passa pela proteção de saída — com alterações não salvas ou
    * uma operação em andamento, a confirmação (ou o aviso) vem antes de a
    * Credencial cair.
    */
+  const [falhaDeSaida, setFalhaDeSaida] = useState<string | null>(null);
+
+  /**
+   * FR-293 e FR-295: Sair encerra o Acesso **no servidor** antes de descartar a
+   * Credencial. Se o armazenamento falha, o Acesso pode continuar valendo, e a
+   * tela não apresenta o Sair como concluído (FR-044): a pessoa segue onde está,
+   * com a falha anunciada, e pode tentar de novo.
+   */
   const sair = useCallback(() => {
-    protegerAcao(aoSair);
-  }, [protegerAcao, aoSair]);
+    protegerAcao(() => {
+      setFalhaDeSaida(null);
+
+      void clienteDaCredencial.sair().then((resultado) => {
+        if (resultado.ok) {
+          aoSair();
+        } else {
+          setFalhaDeSaida(resultado.mensagem);
+        }
+      });
+    });
+  }, [protegerAcao, clienteDaCredencial, aoSair]);
+
+  /**
+   * FR-291, SC-124: com o Acesso temporário, a pessoa ativa não pode perder o
+   * Acesso no meio de uma Sessão de estudo só porque Revelar, Avaliar e digitar
+   * não fazem requisição. A casca observa teclado, clique e toque, informa o
+   * instante a `atividade.ts` e, quando ele manda, renova o Acesso — no máximo
+   * uma vez a cada 60 s. A recusa vinda da renovação passa pela guarda e leva a
+   * Entrar (FR-294).
+   */
+  useEffect(() => {
+    if (!usaAcesso) {
+      return;
+    }
+
+    let ultimaRenovacaoEm = Date.now();
+
+    function aoInteragir(): void {
+      const agora = Date.now();
+
+      if (decidirRenovacao(agora, ultimaRenovacaoEm) === "renovar") {
+        ultimaRenovacaoEm = agora;
+        void cliente.renovarAcesso();
+      }
+    }
+
+    const eventos = ["keydown", "click", "touchstart"] as const;
+
+    for (const evento of eventos) {
+      window.addEventListener(evento, aoInteragir, { capture: true, passive: true });
+    }
+
+    return () => {
+      for (const evento of eventos) {
+        window.removeEventListener(evento, aoInteragir, { capture: true });
+      }
+    };
+  }, [usaAcesso, cliente]);
 
   // Layout effect, e não effect: a troca de rota desabilita ou remove o
   // controle que foi ativado, e mover o foco só depois da pintura deixa o foco
@@ -227,6 +537,18 @@ function CascaDaAplicacao({
       )}
 
       <main className="aplicacao" ref={principal}>
+        {falhaDeSaida !== null && (
+          // FR-044, FR-295: o Sair que não se concluiu é anunciado, e não
+          // apresentado como feito.
+          <p
+            className="aviso aviso--erro"
+            role="alert"
+            aria-label="Falha ao Sair"
+          >
+            {falhaDeSaida}
+          </p>
+        )}
+
         <TelaDaRota
           rota={rota}
           cliente={cliente}
@@ -234,6 +556,12 @@ function CascaDaAplicacao({
           nomeDeUsuario={nomeDeUsuarioDaCredencial}
           avisoDaEntrada={avisoDaEntrada}
           aoEntrar={aoEntrar}
+          aoSubstituirCredencial={aoSubstituirCredencial}
+          aoExcluirConta={excluirConta}
+          aoIrParaEntrar={irParaEntrar}
+          inicioDaAgenda={inicioDaAgenda}
+          aoIniciarEstudoDaAgenda={iniciarEstudoDaAgenda}
+          aoSairDoEstudoDaAgenda={sairDoEstudoDaAgenda}
         />
       </main>
     </>
@@ -253,20 +581,61 @@ function TelaDaRota({
   nomeDeUsuario,
   avisoDaEntrada,
   aoEntrar,
+  aoSubstituirCredencial,
+  aoExcluirConta,
+  aoIrParaEntrar,
+  inicioDaAgenda,
+  aoIniciarEstudoDaAgenda,
+  aoSairDoEstudoDaAgenda,
 }: {
   rota: Rota;
   cliente: ClienteDoAcervo;
   clienteSemGuarda: ClienteDoAcervo;
   nomeDeUsuario: string;
   avisoDaEntrada: AvisoDaEntrada | null;
-  aoEntrar: (credencial: Credencial) => void;
+  aoEntrar: (credencial: Credencial, escolha: EscolhaDeEntrada) => void;
+  aoSubstituirCredencial: (nova: Credencial) => void;
+  aoExcluirConta: () => void;
+  aoIrParaEntrar: () => void;
+  inicioDaAgenda: InicioDeCompromisso | null;
+  aoIniciarEstudoDaAgenda: (inicio: InicioDeCompromisso) => void;
+  aoSairDoEstudoDaAgenda: () => void;
 }) {
   switch (rota.nome) {
     case "inicio":
       // FR-168: o Início é o destino de quem acabou de Entrar, e saúda o
       // Usuário que Entrou.
       return (
-        <PaginaDeInicio cliente={cliente} nomeDeUsuario={nomeDeUsuario} />
+        <PaginaDeInicio
+          cliente={cliente}
+          nomeDeUsuario={nomeDeUsuario}
+          aoIniciarEstudo={aoIniciarEstudoDaAgenda}
+        />
+      );
+
+    case "agenda":
+      // FR-237: Gerenciar agenda, alcançada pelo bloco da Agenda em Início.
+      return <PaginaDaAgenda cliente={cliente} />;
+
+    case "nova-rotina":
+      // FR-242: Agendar estudo.
+      return <PaginaDoFormularioDeRotina cliente={cliente} />;
+
+    case "editar-rotina":
+      return <PaginaDoFormularioDeRotina cliente={cliente} id={rota.id} />;
+
+    case "estudo-da-agenda":
+      // FR-231, FR-234: a Sessão autorizada só existe enquanto o início está na
+      // memória da casca; recarregar a abandona e volta a Início.
+      return inicioDaAgenda === null ? (
+        <VoltarParaInicio />
+      ) : (
+        <PaginaDeEstudo
+          cliente={cliente}
+          id={inicioDaAgenda.baralhoId}
+          inicioDaAgenda={inicioDaAgenda}
+          aoSair={aoSairDoEstudoDaAgenda}
+        />
       );
 
     case "registro":
@@ -325,7 +694,15 @@ function TelaDaRota({
 
     case "preferencias":
       // FR-212: as Preferências têm tela própria, alcançável pela Moldura.
-      return <PaginaDePreferencias cliente={cliente} />;
+      // FR-257: a seção «Minha conta» vive dentro das Preferências.
+      return (
+        <PaginaDePreferencias
+          cliente={cliente}
+          aoSubstituirCredencial={aoSubstituirCredencial}
+          aoExcluirConta={aoExcluirConta}
+          aoIrParaEntrar={aoIrParaEntrar}
+        />
+      );
 
     default: {
       // Inalcançável enquanto o `switch` cobrir todas as rotas: é a checagem
@@ -334,4 +711,17 @@ function TelaDaRota({
       throw new Error(`Rota sem tela na casca: ${String(exaustivo)}`);
     }
   }
+}
+
+/**
+ * A Sessão da Agenda sem início na memória — depois de recarregar — não tem o
+ * que apresentar: a Sessão é abandonada, o Compromisso segue pendente e a
+ * pessoa volta a Início (FR-234).
+ */
+function VoltarParaInicio() {
+  useEffect(() => {
+    window.location.replace("#/inicio");
+  }, []);
+
+  return <p className="carregando">Voltando para Início…</p>;
 }

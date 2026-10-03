@@ -39,23 +39,17 @@ const RAIZ_DO_BACKEND = resolve(
   "..",
 );
 
-/** A raiz do repositório: é o que é versionado, e nada dela pode ter segredo. */
-const RAIZ_DO_REPOSITORIO = resolve(RAIZ_DO_BACKEND, "..");
-
 /** O próprio arquivo desta varredura, que carrega os marcadores como guarda. */
 const ARQUIVO_DA_VARREDURA = fileURLToPath(import.meta.url);
 
 /**
- * Pastas que não são código versionado e ficam fora da varredura de segredos.
- * O `.terraform` guarda os binários dos providers baixados pelo `tofu init`:
- * são centenas de megabytes de cache local, ignorados pelo Git, e não código
- * do repositório.
+ * Pastas locais geradas por testes ou pela construção. A varredura cobre os
+ * fontes do backend, onde o Adapter e suas credenciais poderiam existir.
  */
 const PASTAS_IGNORADAS = new Set([
   "node_modules",
   "dist",
   "coverage",
-  ".git",
   ".terraform",
 ]);
 
@@ -76,18 +70,16 @@ afterAll(async () => {
   await (await servidorDeTeste()).encerrar();
 });
 
-/** Todos os arquivos versionados, recursivamente, a partir do diretório dado. */
-function arquivosVersionados(diretorio: string): string[] {
+/** Arquivos regulares dos fontes do backend, recursivamente. */
+function arquivosDoBackend(diretorio: string): string[] {
   return readdirSync(diretorio, { withFileTypes: true }).flatMap((entrada) => {
     if (entrada.isDirectory()) {
       return PASTAS_IGNORADAS.has(entrada.name)
         ? []
-        : arquivosVersionados(join(diretorio, entrada.name));
+        : arquivosDoBackend(join(diretorio, entrada.name));
     }
 
-    const caminho = join(diretorio, entrada.name);
-
-    return [caminho];
+    return entrada.isFile() ? [join(diretorio, entrada.name)] : [];
   });
 }
 
@@ -171,7 +163,7 @@ describe("a conexão de teste é cifrada e verificada", () => {
 describe("nenhum segredo é versionado", () => {
   it("não guarda a senha gerada, chave privada nem certificado em arquivo versionado", async () => {
     const senha = (await servidorDeTeste()).configuracao.senha;
-    const arquivos = arquivosVersionados(RAIZ_DO_REPOSITORIO).filter(
+    const arquivos = arquivosDoBackend(RAIZ_DO_BACKEND).filter(
       (caminho) => caminho !== ARQUIVO_DA_VARREDURA,
     );
 
@@ -182,7 +174,7 @@ describe("nenhum segredo é versionado", () => {
     );
 
     expect(
-      comSenha.map((caminho) => relative(RAIZ_DO_REPOSITORIO, caminho)),
+      comSenha.map((caminho) => relative(RAIZ_DO_BACKEND, caminho)),
     ).toEqual([]);
 
     const comMarcador = arquivos.filter((caminho) => {
@@ -194,7 +186,7 @@ describe("nenhum segredo é versionado", () => {
     });
 
     expect(
-      comMarcador.map((caminho) => relative(RAIZ_DO_REPOSITORIO, caminho)),
+      comMarcador.map((caminho) => relative(RAIZ_DO_BACKEND, caminho)),
     ).toEqual([]);
   });
 

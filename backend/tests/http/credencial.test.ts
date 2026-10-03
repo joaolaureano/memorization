@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   CORPO_INVALIDO,
+  registrarRotaDeEntrada,
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
   registrarRotasDeUsuarios,
@@ -38,10 +39,11 @@ let servidor: FastifyInstance;
 
 beforeEach(async () => {
   contrato = await montarServidorDeContrato(
-    ({ servidor, acervoDe, identidade }) => {
+    ({ servidor, acervoDe, identidade, acessos }) => {
       registrarRotasDeCartoes(servidor, acervoDe);
       registrarRotasDeBaralhos(servidor, acervoDe);
       registrarRotasDeUsuarios(servidor, identidade);
+      registrarRotaDeEntrada(servidor, identidade, acessos);
     },
   );
   servidor = contrato.servidor;

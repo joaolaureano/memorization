@@ -54,10 +54,11 @@ const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
 
 test.setTimeout(120_000);
 
-test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a migração não reaplica (FR-040, SC-003)", async ({ page, browserName }) => {
+test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a migração não reaplica (FR-040, SC-003)", async ({ page: paginaInicial, browserName }) => {
   // Navegador real: Chromium, sem DOM simulado.
   expect(browserName).toBe("chromium");
 
+  let page = paginaInicial;
   const pasta = await criarPastaTemporaria("vinculos-t214-");
   const caminhoDoBanco = join(pasta, "vinculos.sqlite");
 
@@ -229,7 +230,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     // SC-031). O recarregamento é explícito — um `goto` que só muda o
     // fragmento não recarrega o documento — para que a sessão autenticada seja
     // restabelecida de forma determinística antes das telas do acervo.
-    await recarregarAutenticado(page, enderecoDoFrontend);
+    page = await recarregarAutenticado(page, enderecoDoFrontend);
 
     // A tela desejada é alcançada pela navegação "Principal", e não por um
     // fragmento posto às cegas: depois de Entrar a aplicação abre o Início.
@@ -311,10 +312,15 @@ async function abrirRotaAutenticada(
 async function recarregarAutenticado(
   page: Page,
   enderecoDoFrontend: string,
-): Promise<void> {
-  await page.goto(`${enderecoDoFrontend}/`);
-  await page.reload();
-  await entrarSeNecessario(page);
+): Promise<Page> {
+  // A página antiga pode manter o cliente de recarga do Vite e restaurar o
+  // hash ativo quando o servidor volta, interrompendo `goto`. Uma página nova
+  // no mesmo contexto preserva cookies e começa sem navegação pendente.
+  const paginaReaberta = await page.context().newPage();
+  await page.close();
+  await paginaReaberta.goto(`${enderecoDoFrontend}/`);
+  await entrarSeNecessario(paginaReaberta);
+  return paginaReaberta;
 }
 
 /**
@@ -327,7 +333,7 @@ async function criarCartaoPelaUi(
   page: Page,
   cartao: { frente: string; verso: string },
 ): Promise<void> {
-  await page.getByRole("link", { name: "Criar cartão" }).click();
+  await page.getByRole("link", { name: "Criar cartão" }).first().click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Criar cartão" }),
   ).toBeVisible();
@@ -344,7 +350,7 @@ async function criarCartaoPelaUi(
  * Baralho novo.
  */
 async function criarBaralhoPelaUi(page: Page, nome: string): Promise<void> {
-  await page.getByRole("link", { name: "Criar baralho" }).click();
+  await page.getByRole("link", { name: "Criar baralho" }).first().click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Criar baralho" }),
   ).toBeVisible();

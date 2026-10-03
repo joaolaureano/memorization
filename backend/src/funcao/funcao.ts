@@ -1,5 +1,6 @@
 import awsLambdaFastify from "@fastify/aws-lambda";
 
+import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
 import { criarAcervo } from "../acervo/acervo.ts";
 import {
   abrirArmazenamentoPostgresql,
@@ -68,6 +69,11 @@ export interface RespostaDaFuncao {
   headers: Record<string, string>;
   body: string;
   isBase64Encoded?: boolean;
+  /**
+   * Os `Set-Cookie` da resposta, no formato da Function URL (payload v2): o
+   * Acesso temporário sai aqui, e não em `headers` (018, §4.1).
+   */
+  cookies?: string[];
 }
 
 /** O que o `handler` exportado é: o evento v2 entra, a resposta sai. */
@@ -257,15 +263,26 @@ export function criarFuncao(
     const aberto = await abrirArmazenamentoDaNuvem(configuracao);
     const identidade = criarIdentidade(aberto.usuarios, segredoDasSenhas);
 
+    /**
+     * Os Acessos temporários (018): na nuvem o cookie leva `Secure` — há HTTPS
+     * no CloudFront —, e a validade vem de `ACESSO_VALIDADE_SEGUNDOS`, que não é
+     * segredo e tem padrão de 5 minutos.
+     */
+    const acessos = criarAcessos(aberto.acessos, {
+      validadeEmSegundos: validadeConfigurada(process.env),
+      cookieSeguro: true,
+    });
+
     const servidor = criarServidor(identidade, {
       segredoDeOrigem: segredos.segredoDeOrigem,
       politicaDeOutraOrigem: false,
+      acessos,
     });
 
     const acervoDe = (usuarioId: string) =>
       criarAcervo(aberto.armazenamento, usuarioId);
 
-    registrarRotasDaAplicacao(servidor, identidade, acervoDe);
+    registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
 
     /**
      * O Adaptador do evento é criado **antes** do `ready()`: ele decora a

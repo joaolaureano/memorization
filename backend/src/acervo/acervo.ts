@@ -5,6 +5,7 @@ import type {
   ArmazenamentoDoAcervo,
   Baralho,
   Cartao,
+  CompromissoPersistido,
   ItemRegistrado,
   Preferencias,
   RegistroDeSessao,
@@ -286,6 +287,14 @@ export interface DadosDeRegistro {
   baralhoId: unknown;
   nomeDoBaralho: unknown;
   itens: unknown;
+  /**
+   * Identificador do Início autorizado pela Agenda (FR-254). Quando presente, o
+   * Registro é a conclusão **daquela** Sessão: `id` precisa ser igual a ele,
+   * Frente, Verso e nome do Baralho vêm do snapshot do servidor, o conjunto de
+   * Cartões precisa ser exatamente o autorizado, e só as Avaliações vêm do
+   * cliente.
+   */
+  inicioAgendaId?: unknown;
 }
 
 /**
@@ -1137,6 +1146,137 @@ export function criarAcervo(
     }));
   }
 
+  /**
+   * Conclui a Sessão iniciada pela Agenda (FR-233–FR-236, FR-254, FR-256).
+   *
+   * Tudo o que prova a Sessão vem do **Início autorizado** guardado no
+   * servidor: o `id` do Registro é o do Início; Baralho, nome, Frente e Verso
+   * vêm do snapshot; o conjunto de Cartões precisa ser exatamente o autorizado,
+   * sem repetição; só as Avaliações vêm do cliente. O limite legado de 1000
+   * Itens não vale aqui — o máximo é o snapshot. Registro, Agendamentos (a
+   * partir do estado lido na mesma transação) e conclusão do Compromisso são
+   * gravados juntos pela Porta.
+   */
+  async function registrarSessaoDaAgenda(
+    dados: DadosDeRegistro,
+    agora: Date,
+  ): Promise<ResultadoDeRegistroDeSessao> {
+    const { id, origem, baralhoId, itens, inicioAgendaId } = dados;
+
+    if (
+      typeof id !== "string" ||
+      !IDENTIFICADOR_UNICO_UNIVERSAL.test(id) ||
+      typeof inicioAgendaId !== "string" ||
+      id !== inicioAgendaId ||
+      origem !== "baralho" ||
+      !Array.isArray(itens)
+    ) {
+      return { ok: false, ...DADOS_INVALIDOS };
+    }
+
+    const lido = await armazenamento.obterInicio(usuarioId, inicioAgendaId);
+
+    if (!lido.ok) {
+      return lido.erro === "nao_encontrado"
+        ? { ok: false, ...DADOS_INVALIDOS }
+        : { ok: false, ...HISTORICO_INDISPONIVEL };
+    }
+
+    const inicio = lido.valor;
+
+    if (
+      itens.length !== inicio.cartoes.length ||
+      (typeof baralhoId === "string" && baralhoId !== inicio.baralhoId)
+    ) {
+      return { ok: false, ...DADOS_INVALIDOS };
+    }
+
+    const avaliacoes = new Map<string, Avaliacao>();
+
+    for (const item of itens) {
+      if (
+        !ehObjeto(item) ||
+        typeof item.cartaoId !== "string" ||
+        !ehAvaliacao(item.avaliacao) ||
+        avaliacoes.has(item.cartaoId)
+      ) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      avaliacoes.set(item.cartaoId, item.avaliacao);
+    }
+
+    const registrados: ItemRegistrado[] = [];
+
+    for (const [posicao, cartao] of inicio.cartoes.entries()) {
+      const avaliacao = avaliacoes.get(cartao.id);
+
+      // Cartão fora do conjunto autorizado ou sem Avaliação: a Sessão enviada
+      // não é a que foi iniciada (FR-254).
+      if (avaliacao === undefined) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      registrados.push({
+        posicao,
+        frente: cartao.frente,
+        verso: cartao.verso,
+        resultado: resultadoDaAvaliacao(avaliacao),
+        cartaoId: cartao.id,
+        avaliacao,
+      });
+    }
+
+    const acertos = registrados.filter(
+      (item) => item.resultado === "acertou",
+    ).length;
+    const registro: RegistroDeSessao = {
+      id: inicio.id,
+      baralhoId: inicio.baralhoId,
+      nomeDoBaralho: inicio.nomeDoBaralho,
+      origem: "baralho",
+      concluidaEm: agora.toISOString(),
+      estudados: registrados.length,
+      acertos,
+      erros: registrados.length - acertos,
+      itens: registrados,
+    };
+    const compromisso: CompromissoPersistido = {
+      rotinaId: inicio.rotinaId,
+      data: inicio.data,
+      estado: "concluido",
+      registroId: inicio.id,
+      baralhoId: inicio.baralhoId,
+      nomeDoBaralho: inicio.nomeDoBaralho,
+      quantidade: inicio.quantidade,
+    };
+
+    const gravado = await armazenamento.inserirRegistroDaAgenda(
+      usuarioId,
+      registro,
+      compromisso,
+      ({ agendamentos, preferencias }) =>
+        aplicarAvaliacoes(
+          agendamentos,
+          registrados.flatMap((item) =>
+            item.cartaoId != null && item.avaliacao != null
+              ? [{ cartaoId: item.cartaoId, avaliacao: item.avaliacao }]
+              : [],
+          ),
+          resolverAlgoritmo(preferencias.algoritmo),
+          agora,
+        ),
+    );
+
+    if (!gravado.ok) {
+      return gravado.erro === "conflito"
+        ? { ok: false, ...REGISTRO_EM_CONFLITO }
+        : { ok: false, ...HISTORICO_INDISPONIVEL };
+    }
+
+    return { ok: true, registro: gravado.valor.registro };
+  }
+
   return {
     async criarCartao(dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
@@ -1366,6 +1506,11 @@ export function criarAcervo(
 
     async registrarSessao(dados) {
       const agora = new Date();
+
+      if (dados.inicioAgendaId !== undefined) {
+        return registrarSessaoDaAgenda(dados, agora);
+      }
+
       const registro = interpretarRegistro(dados, agora);
 
       if (registro === null) {

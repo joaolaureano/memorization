@@ -395,9 +395,23 @@ async function irParaTela(
 ): Promise<void> {
   await irParaRota(pagina, rota);
 
-  await expect(
-    pagina.getByRole("heading", { level: 1, name: titulo }),
-  ).toBeVisible({ timeout: ESPERA_DA_TELA });
+  const destino = pagina.getByRole("heading", { level: 1, name: titulo });
+  const confirmacao = pagina.getByRole("dialog");
+
+  // Sair de uma Sessão ou Revisão já iniciada pede confirmação de descarte
+  // (FR-151): se a Revisão acabou de carregar quando a travessia a deixa, a
+  // prova confirma a saída em vez de depender da ordem do carregamento.
+  await expect(destino.or(confirmacao)).toBeVisible({
+    timeout: ESPERA_DA_TELA,
+  });
+
+  if (await confirmacao.isVisible()) {
+    await confirmacao
+      .getByRole("button", { name: /^(Interromper|Descartar)/ })
+      .click();
+  }
+
+  await expect(destino).toBeVisible({ timeout: ESPERA_DA_TELA });
 }
 
 /**
@@ -650,6 +664,10 @@ async function visitarAsTelas(
   // Início vazio: o de um Usuário que ainda não concluiu nenhuma Sessão
   // (FR-172). Sair e Entrar com a outra Credencial troca quem está logado.
   await pagina.getByRole("button", { name: "Sair", exact: true }).click();
+  // 018: Sair passa por `POST /sair`; só depois dele a tela "Entrar" volta.
+  await expect(
+    pagina.getByRole("heading", { level: 1, name: "Entrar", exact: true }),
+  ).toBeVisible({ timeout: ESPERA_DA_TELA });
   await entrarSeNecessario(pagina, ambiente.semRegistros);
   await irParaTela(
     pagina,

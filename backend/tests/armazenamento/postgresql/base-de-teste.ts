@@ -14,6 +14,7 @@ import {
 } from "../../../src/armazenamento/postgresql/conexao.ts";
 import { aplicarMigracoes } from "../../../src/armazenamento/postgresql/esquema.ts";
 import type {
+  ArmazenamentoDeAcessos,
   ArmazenamentoDeUsuarios,
   ArmazenamentoDoAcervo,
 } from "../../../src/armazenamento/porta.ts";
@@ -54,6 +55,8 @@ export interface BaseDeTeste {
   readonly armazenamento: ArmazenamentoDoAcervo;
   /** A segunda Porta, sobre a mesma base: os Usuários da identidade. */
   readonly usuarios: ArmazenamentoDeUsuarios;
+  /** A terceira Porta, sobre a mesma base: os Acessos temporários (018). */
+  readonly acessos: ArmazenamentoDeAcessos;
   /** Fecha o conjunto de conexões e descarta a base; em dobro não falha. */
   encerrar(): Promise<void>;
 }
@@ -145,6 +148,7 @@ export async function abrirBaseDeTeste(
     nomeDaBase,
     armazenamento: aberto.armazenamento,
     usuarios: aberto.usuarios,
+    acessos: aberto.acessos,
 
     async encerrar() {
       if (encerrado) {

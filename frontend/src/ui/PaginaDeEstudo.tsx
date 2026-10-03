@@ -6,6 +6,7 @@ import type {
   BaralhoComCartoes,
   ClienteDoAcervo,
   DadosDeRegistro,
+  InicioDeCompromisso,
   Previa,
   ResultadoDasPrevias,
 } from "../acervo-cliente/cliente";
@@ -91,6 +92,18 @@ interface PropriedadesDaPaginaDeEstudo {
   cliente: ClienteDoAcervo;
   id: string;
   aleatoriedade?: Aleatoriedade;
+  /**
+   * O início autorizado pela Agenda (016, FR-231): a Sessão começa direto, com
+   * os Cartões que o servidor selecionou, sem configuração de quantidade, e
+   * conclui o Compromisso pelo mesmo `id` (FR-254). O snapshot vive só na
+   * memória — nunca no armazenamento do navegador.
+   */
+  inicioDaAgenda?: InicioDeCompromisso;
+  /**
+   * Chamada ao sair de uma Sessão da Agenda (interromper ou voltar): a casca
+   * descarta o início e volta a Início. Sem ela, vale a navegação por hash.
+   */
+  aoSair?: () => void;
 }
 
 type AlvoDeFoco = "frente" | "verso" | "resumo" | "quantidade";
@@ -111,6 +124,8 @@ export function PaginaDeEstudo({
   cliente,
   id,
   aleatoriedade,
+  inicioDaAgenda,
+  aoSair,
 }: PropriedadesDaPaginaDeEstudo) {
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
@@ -163,6 +178,40 @@ export function PaginaDeEstudo({
     idDoRegistroDeSessao.current = null;
     alvoDeFoco.current = null;
 
+    if (inicioDaAgenda !== undefined) {
+      // Sessão da Agenda (FR-231, FR-232): começa direto, na ordem e com o
+      // conteúdo capturados pelo servidor; o Registro usa o id do início.
+      const iniciada = SessaoDeEstudo.iniciarDaRevisao(inicioDaAgenda.cartoes);
+
+      setBaralho({
+        id: inicioDaAgenda.baralhoId,
+        nome: inicioDaAgenda.nomeDoBaralho,
+        elegivel: true,
+        cartoes: inicioDaAgenda.cartoes,
+      });
+
+      if (iniciada.ok) {
+        const estadoInicial = iniciada.sessao.estadoAtual();
+
+        idDoRegistroDeSessao.current = inicioDaAgenda.id;
+        setSessao(iniciada.sessao);
+        setEstado(estadoInicial);
+        carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
+        alvoDeFoco.current = "frente";
+        anunciar(
+          `Sessão iniciada com ${estadoInicial.total} ${
+            estadoInicial.total === 1 ? "Item" : "Itens"
+          }.`,
+        );
+      } else {
+        setFalhaDeCarregamento(iniciada.mensagem);
+      }
+
+      setCarregando(false);
+
+      return;
+    }
+
     void cliente.obterBaralho(id).then((resultado) => {
       if (!ativo) {
         return;
@@ -184,7 +233,7 @@ export function PaginaDeEstudo({
     return () => {
       ativo = false;
     };
-  }, [cliente, id]);
+  }, [cliente, id, inicioDaAgenda]);
 
   // Movimentação de foco que reage a uma mudança de fase precisa ser um efeito
   // de layout: `useEffect` roda depois da pintura, então por um instante o foco
@@ -320,6 +369,24 @@ export function PaginaDeEstudo({
     setPrevias({});
     idDoRegistroDeSessao.current = null;
     alvoDeFoco.current = null;
+    sairDaPagina();
+  }
+
+  /**
+   * Sai da página: Sessão da Agenda volta a Início pela casca (que descarta o
+   * início); a do Baralho volta ao Baralho.
+   */
+  function sairDaPagina(): void {
+    if (inicioDaAgenda !== undefined) {
+      if (aoSair !== undefined) {
+        aoSair();
+      } else {
+        irParaRota("#/inicio");
+      }
+
+      return;
+    }
+
     irParaRota(`#/baralhos/${id}`);
   }
 
@@ -464,6 +531,9 @@ export function PaginaDeEstudo({
         origem: "baralho",
         baralhoId: id,
         nomeDoBaralho: baralho.nome,
+        ...(inicioDaAgenda !== undefined
+          ? { inicioAgendaId: inicioDaAgenda.id }
+          : {}),
         itens,
       })
       .then((resultado) => {
@@ -544,6 +614,13 @@ export function PaginaDeEstudo({
       </a>
     </p>
   );
+  const ehDaAgenda = inicioDaAgenda !== undefined;
+  const avisoDaAgenda =
+    inicioDaAgenda !== undefined &&
+    inicioDaAgenda.quantidadeSolicitada !== null &&
+    inicioDaAgenda.cartoes.length < inicioDaAgenda.quantidadeSolicitada
+      ? `A Rotina pede ${inicioDaAgenda.quantidadeSolicitada} Cartões, mas este Baralho tem ${inicioDaAgenda.cartoes.length}. A Sessão terá ${inicioDaAgenda.cartoes.length} ${inicioDaAgenda.cartoes.length === 1 ? "Item" : "Itens"}.`
+      : null;
 
   if (!baralho.elegivel) {
     return (
@@ -658,7 +735,8 @@ export function PaginaDeEstudo({
               aria-label="Situação do registro da Sessão"
               className="aviso aviso--sucesso"
             >
-              <span aria-hidden="true">✓</span> Registrada no seu histórico{" "}
+              <span aria-hidden="true">✓</span> Registrada no seu histórico
+              {ehDaAgenda ? ". O estudo programado de hoje foi concluído." : ""}{" "}
               <a href="#/inicio">Ver em Início</a>
             </p>
           )}
@@ -681,25 +759,31 @@ export function PaginaDeEstudo({
           )}
 
           <div className="acoes resumo__acoes">
-            <button
-              className="botao botao--primario"
-              type="button"
-              onClick={estudarNovamente}
-            >
-              Estudar novamente
-            </button>
+            {!ehDaAgenda && (
+              <button
+                className="botao botao--primario"
+                type="button"
+                onClick={estudarNovamente}
+              >
+                Estudar novamente
+              </button>
+            )}
             <a
-              className="botao botao--secundario"
-              href={`#/baralhos/${id}`}
+              className={
+                ehDaAgenda
+                  ? "botao botao--primario"
+                  : "botao botao--secundario"
+              }
+              href={ehDaAgenda ? "#/inicio" : `#/baralhos/${id}`}
               onClick={(evento) => {
                 // Sair do Resumo é uma ação da própria página: sem proteção
                 // ativa, navega normalmente; com o Registro pendente ou
                 // falhado, passa pela confirmação (FR-164).
                 evento.preventDefault();
-                protegerAcao(() => irParaRota(`#/baralhos/${id}`));
+                protegerAcao(sairDaPagina);
               }}
             >
-              Voltar para o Baralho
+              {ehDaAgenda ? "Voltar para Início" : "Voltar para o Baralho"}
             </a>
           </div>
         </ResumoDaSessao>
@@ -728,6 +812,8 @@ export function PaginaDeEstudo({
       {estado.avisoDeLimite !== null && (
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
+
+      {avisoDaAgenda !== null && <p className="aviso">{avisoDaAgenda}</p>}
 
       {anuncio !== null && (
         <p

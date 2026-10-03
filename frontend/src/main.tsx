@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import type { Credencial } from "./acervo-cliente/cliente";
 import { ClienteHttp } from "./acervo-cliente/cliente-http";
 import { Aplicacao } from "./ui/Aplicacao";
+import type { OpcoesDoCliente } from "./ui/Aplicacao";
 import "./estilos.css";
 
 /**
@@ -21,8 +22,11 @@ const enderecoDaApi: string =
  * entrado, o cliente existe sem Credencial e só serve à tela "Entrar" — as
  * rotas de acervo recusariam qualquer operação sua (FR-090).
  */
-function criarCliente(credencial: Credencial | null): ClienteHttp {
-  return new ClienteHttp(enderecoDaApi, credencial);
+function criarCliente(
+  credencial: Credencial | null,
+  opcoes?: OpcoesDoCliente,
+): ClienteHttp {
+  return new ClienteHttp(enderecoDaApi, credencial, opcoes?.usaAcesso ?? false);
 }
 
 const raiz = document.getElementById("raiz");

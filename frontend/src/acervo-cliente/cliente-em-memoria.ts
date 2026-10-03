@@ -1,5 +1,6 @@
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_ACESSO_EXPIRADO,
   MENSAGEM_DE_AGENDA_INDISPONIVEL,
   MENSAGEM_DE_CONFLITO_DE_SESSAO,
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
@@ -10,9 +11,12 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
+  MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
+  MENSAGEM_DE_SENHA_ATUAL_INCORRETA,
   MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
   NAO_AUTENTICADO,
 } from "./cliente";
@@ -22,10 +26,15 @@ import type {
   BaralhoComCartoes,
   Cartao,
   ClienteDoAcervo,
+  ContagensDaConta,
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeEntrada,
+  DadosDeExclusaoDeConta,
   DadosDeInicioDeCompromisso,
+  DadosDeNovoNomeDeUsuario,
+  DadosDeTrocaDeSenha,
   DadosDeRegistro,
   DadosDeRotina,
   DadosDeUsuario,
@@ -34,7 +43,14 @@ import type {
   Previa,
   RegistroDeSessao,
   RegistroResumido,
+  RecusaDeConta,
   ResultadoDasPrevias,
+  ResultadoDeAcaoDeConta,
+  ResultadoDeAlteracaoDeNomeDeUsuario,
+  ResultadoDeObterAcesso,
+  ResultadoDeObterConta,
+  ResultadoDeRenovarAcesso,
+  ResultadoDeSair,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
@@ -61,6 +77,18 @@ import type {
   ResultadoDoLoteDeRevisao,
   ResultadoDoResumoDaRevisao,
 } from "./cliente";
+import {
+  concluirCompromissoEmMemoria,
+  contarAgendaEmMemoria,
+  excluirAgendaEmMemoria,
+  inicioDaConclusao,
+  iniciarCompromissoEmMemoria,
+  listarRotinasEmMemoria,
+  novaAgendaBase,
+  obterAgendaEmMemoria,
+  salvarRotinaEmMemoria,
+} from "./agenda-em-memoria";
+import type { AgendaBase, ContextoDaAgenda } from "./agenda-em-memoria";
 import {
   NOME_DE_USUARIO_EXISTENTE,
   validarFrente,
@@ -130,6 +158,20 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   private indisponivel = false;
 
   /**
+   * O "navegador" deste cliente: o cookie do Acesso temporário (018). Clientes
+   * criados por `comoUsuario` **compartilham** o navegador — são abas do mesmo
+   * navegador —; `outroNavegador` cria um à parte, sobre o mesmo servidor
+   * simulado, como o de outro aparelho (FR-298, FR-299).
+   */
+  private navegador: NavegadorSimulado = { cookie: null };
+
+  /**
+   * A última recusa por Credencial foi por Acesso **expirado** (018): é o que
+   * troca a mensagem de `nao_autenticado` pela de expiração (FR-294).
+   */
+  private recusadoPorExpiracao = false;
+
+  /**
    * Cria o Adapter sobre uma base nova.
    *
    * `usuariosJaCadastrados` são os Usuários que a base já tem — o Cadastro
@@ -146,7 +188,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     this.base = novaBaseEmMemoria(usuariosJaCadastrados);
   }
 
-  async entrar(credencial: Credencial): Promise<ResultadoDeEntrar> {
+  async entrar(dados: DadosDeEntrada): Promise<ResultadoDeEntrar> {
     if (this.indisponivel) {
       return {
         ok: false,
@@ -160,7 +202,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     // (FR-087, SC-036). A recusa é a mesma nos dois casos, com a mensagem
     // única do contrato (FR-088), e nada da Senha atravessa a Interface
     // (FR-078).
-    const usuario = this.usuarioDaCredencial(credencial);
+    const usuario = this.usuarioDaCredencial(dados);
 
     if (usuario === null) {
       return {
@@ -170,10 +212,93 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
+    // 018: o Acesso do "navegador" deste stand-in é substituído por um novo — ou
+    // apenas revogado, quando a continuidade foi desmarcada (FR-292). Sem a
+    // escolha explícita, vale o modo do cliente: com Credencial, não emite.
+    const continuar = dados.continuarConectado ?? this.credencial === null;
+
+    this.revogarAcessoDoNavegador();
+
+    if (continuar) {
+      this.emitirAcessoNoNavegador(usuario.id);
+    }
+
     return {
       ok: true,
       usuario: { id: usuario.id, nomeDeUsuario: usuario.nomeDeUsuario },
     };
+  }
+
+  /**
+   * O Acesso do navegador simulado, como `GET /acesso` o reconhece (FR-290):
+   * válido, expirado — que limpa o cookie, como a API — ou ausente.
+   */
+  async obterAcesso(): Promise<ResultadoDeObterAcesso> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
+      };
+    }
+
+    const situacao = this.situacaoDoAcesso();
+
+    if (situacao.tipo === "valido") {
+      return { ok: true, nomeDeUsuario: situacao.usuario.nomeDeUsuario };
+    }
+
+    return situacao.tipo === "expirado"
+      ? {
+          ok: false,
+          erro: "acesso_expirado",
+          mensagem: MENSAGEM_DE_ACESSO_EXPIRADO,
+        }
+      : {
+          ok: false,
+          erro: "sem_acesso",
+          mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+        };
+  }
+
+  async renovarAcesso(): Promise<ResultadoDeRenovarAcesso> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
+      };
+    }
+
+    const situacao = this.situacaoDoAcesso();
+
+    if (situacao.tipo === "valido") {
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      erro: NAO_AUTENTICADO,
+      mensagem:
+        situacao.tipo === "expirado"
+          ? MENSAGEM_DE_ACESSO_EXPIRADO
+          : MENSAGEM_DE_NAO_AUTENTICADO,
+    };
+  }
+
+  /** Sair encerra o Acesso deste navegador e só dele (FR-293, FR-299). */
+  async sair(): Promise<ResultadoDeSair> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
+      };
+    }
+
+    this.revogarAcessoDoNavegador();
+
+    return { ok: true };
   }
 
   async criarCartao(
@@ -674,44 +799,114 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
    * Registro alheio. Os totais e a `concluidaEm` são derivados aqui, como o
    * servidor os derivaria, e nunca aceitos do cliente.
    */
-  /**
-   * Stubs da Agenda (FR-248, FR-250): o comportamento completo chega na Onda B
-   * (T1606+). Até lá, nenhuma das quatro operações é concluída nem grava.
-   */
   async obterAgenda(
-    _inicio: string,
-    _fuso: string,
+    inicio: string,
+    fuso: string,
   ): Promise<ResultadoDeObterAgenda> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+    const dono = this.donoDaAgenda();
+
+    return "ok" in dono
+      ? dono
+      : obterAgendaEmMemoria(
+          this.base.agenda,
+          this.contextoDaAgenda(dono.usuario),
+          inicio,
+          fuso,
+        );
   }
 
   async listarRotinas(): Promise<ResultadoDeListarRotinas> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+    const dono = this.donoDaAgenda();
+
+    return "ok" in dono
+      ? dono
+      : listarRotinasEmMemoria(
+          this.base.agenda,
+          this.contextoDaAgenda(dono.usuario),
+        );
   }
 
-  async salvarRotina(_dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+  async salvarRotina(dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
+    const dono = this.donoDaAgenda();
+
+    return "ok" in dono
+      ? dono
+      : salvarRotinaEmMemoria(
+          this.base.agenda,
+          this.contextoDaAgenda(dono.usuario),
+          dados,
+        );
   }
 
   async iniciarCompromisso(
-    _dados: DadosDeInicioDeCompromisso,
+    dados: DadosDeInicioDeCompromisso,
   ): Promise<ResultadoDeIniciarCompromisso> {
+    const dono = this.donoDaAgenda();
+
+    return "ok" in dono
+      ? dono
+      : iniciarCompromissoEmMemoria(
+          this.base.agenda,
+          this.contextoDaAgenda(dono.usuario),
+          dados,
+        );
+  }
+
+  /**
+   * O dono das operações da Agenda, ou a recusa que a rota daria: transporte
+   * indisponível ou Credencial/Acesso recusado.
+   */
+  private donoDaAgenda():
+    | { usuario: UsuarioDaBase }
+    | {
+        ok: false;
+        erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+        mensagem: string;
+      } {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+      };
+    }
+
+    const dono = this.dono();
+
+    return dono === null
+      ? this.falhaDeNaoAutenticado()
+      : { usuario: dono };
+  }
+
+  /** O acervo do dono, no instante do relógio do servidor simulado. */
+  private contextoDaAgenda(usuario: UsuarioDaBase): ContextoDaAgenda {
+    const baralhos = new Map<string, { nome: string; cartoes: Cartao[] }>();
+
+    for (const baralho of this.base.baralhos) {
+      if (baralho.usuarioId !== usuario.id) {
+        continue;
+      }
+
+      const cartoes = this.base.vinculos
+        .filter(
+          (vinculo) =>
+            vinculo.usuarioId === usuario.id && vinculo.baralhoId === baralho.id,
+        )
+        .flatMap((vinculo) => {
+          const cartao = this.base.cartoes.find(
+            (item) => item.id === vinculo.cartaoId,
+          );
+
+          return cartao === undefined ? [] : [cartaoSemDono(cartao)];
+        });
+
+      baralhos.set(baralho.id, { nome: baralho.nome, cartoes });
+    }
+
     return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+      usuarioId: usuario.id,
+      agora: new Date(this.base.relogio()),
+      baralhos,
     };
   }
 
@@ -728,7 +923,32 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return this.falhaDeNaoAutenticado();
     }
 
-    if (!dadosDeRegistroValidos(dados)) {
+    // Sessão da Agenda (FR-254): o Registro é a conclusão **do Início
+    // autorizado** — id igual, conjunto exato de Cartões, Frente e Verso do
+    // snapshot — e o limite de 1000 Itens não vale (o máximo é o snapshot).
+    const inicioDaAgenda =
+      dados.inicioAgendaId === undefined
+        ? null
+        : inicioDaConclusao(this.base.agenda, dono.id, {
+            ...dados,
+            inicioAgendaId: dados.inicioAgendaId,
+          });
+
+    if (
+      dados.inicioAgendaId !== undefined &&
+      (inicioDaAgenda === null || !itensDaAgendaValidos(dados))
+    ) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: MENSAGEM_DE_DADOS_INVALIDOS,
+      };
+    }
+
+    if (
+      dados.inicioAgendaId === undefined &&
+      !dadosDeRegistroValidos(dados)
+    ) {
       return {
         ok: false,
         erro: "dados_invalidos",
@@ -766,22 +986,35 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       // Na Revisão do dia, o Baralho é derivado: sem Baralho e com o nome
       // fixo (FR-196, D5).
       baralhoId: ehRevisao ? "" : dados.baralhoId,
-      nomeDoBaralho: ehRevisao ? "Revisão do dia" : dados.nomeDoBaralho,
+      nomeDoBaralho: ehRevisao
+        ? "Revisão do dia"
+        : (inicioDaAgenda?.nomeDoBaralho ?? dados.nomeDoBaralho),
       concluidaEm: agora.toISOString(),
       estudados,
       acertos,
       erros: estudados - acertos,
-      itens: dados.itens.map((item, posicao) => ({
-        posicao,
-        frente: item.frente,
-        verso: item.verso,
-        resultado: resultadoDaAvaliacao(item.avaliacao),
-        cartaoId: item.cartaoId,
-        avaliacao: item.avaliacao,
-      })),
+      itens: dados.itens.map((item, posicao) => {
+        // Na Agenda, Frente e Verso vêm do snapshot do servidor.
+        const doSnapshot = inicioDaAgenda?.cartoes.find(
+          (cartao) => cartao.id === item.cartaoId,
+        );
+
+        return {
+          posicao,
+          frente: doSnapshot?.frente ?? item.frente,
+          verso: doSnapshot?.verso ?? item.verso,
+          resultado: resultadoDaAvaliacao(item.avaliacao),
+          cartaoId: item.cartaoId,
+          avaliacao: item.avaliacao,
+        };
+      }),
     };
 
     this.base.registros.push(registro);
+
+    if (inicioDaAgenda !== null) {
+      concluirCompromissoEmMemoria(this.base.agenda, inicioDaAgenda);
+    }
 
     // Só no Registro novo as Avaliações alcançam os Agendamentos (FR-210,
     // SC-085): o reenvio do mesmo `id` não reaplica nada.
@@ -1055,6 +1288,192 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     return { ok: true, preferencias: this.preferenciasDoDono(dono.id) };
   }
 
+  /** Nome de usuário atual e contagens do dono (FR-257, FR-258, FR-272). */
+  async obterConta(): Promise<ResultadoDeObterConta> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    return {
+      ok: true,
+      dados: {
+        nomeDeUsuario: dono.nomeDeUsuario,
+        contagens: this.contagensDoDono(dono.id),
+      },
+    };
+  }
+
+  /**
+   * Altera o Nome de usuário com as regras da API (FR-259..FR-265): valida o
+   * novo nome, confere a Senha atual, recusa o mesmo nome e o nome de outro
+   * Usuário sem distinguir maiúsculas de minúsculas.
+   */
+  async alterarNomeDeUsuario(
+    dados: DadosDeNovoNomeDeUsuario,
+  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const novoNome = dados.novoNomeDeUsuario.trim();
+    const invalido = validarNomeDeUsuario(novoNome);
+
+    if (invalido !== null) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: invalido.mensagem,
+        campo: "nomeDeUsuario",
+      };
+    }
+
+    if (dono.senha !== dados.senhaAtual) {
+      return this.recusaDeSenhaAtual();
+    }
+
+    if (dono.nomeDeUsuario === novoNome) {
+      return {
+        ok: false,
+        erro: "mesmo_nome",
+        mensagem: "O novo nome de usuário é igual ao atual.",
+      };
+    }
+
+    const chave = novoNome.toLowerCase();
+    const emUso = this.base.usuarios.some(
+      (usuario) =>
+        usuario.id !== dono.id && usuario.nomeDeUsuario.toLowerCase() === chave,
+    );
+
+    if (emUso) {
+      return {
+        ok: false,
+        erro: "nome_indisponivel",
+        mensagem: "Este nome de usuário já existe. Escolha outro.",
+      };
+    }
+
+    dono.nomeDeUsuario = novoNome;
+    this.renovarOsAcessosDoDono(dono.id, this.credencial === null);
+
+    return { ok: true, nomeDeUsuario: novoNome };
+  }
+
+  /** Troca a Senha com as regras da API (FR-266..FR-271). */
+  async trocarSenha(
+    dados: DadosDeTrocaDeSenha,
+  ): Promise<ResultadoDeAcaoDeConta> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const invalida = validarSenha(dados.novaSenha);
+
+    if (invalida !== null) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: invalida.mensagem,
+        campo: "novaSenha",
+      };
+    }
+
+    if (dados.novaSenha !== dados.confirmacaoDaSenha) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: "A confirmação da Senha não confere com a nova Senha.",
+        campo: "confirmacaoDaSenha",
+      };
+    }
+
+    if (dono.senha !== dados.senhaAtual) {
+      return this.recusaDeSenhaAtual();
+    }
+
+    if (dados.novaSenha === dados.senhaAtual) {
+      return {
+        ok: false,
+        erro: "mesma_senha",
+        mensagem: "A nova Senha é igual à atual.",
+      };
+    }
+
+    dono.senha = dados.novaSenha;
+    this.renovarOsAcessosDoDono(dono.id, this.credencial === null);
+
+    return { ok: true };
+  }
+
+  /**
+   * Exclui o Usuário e tudo o que é dele, sem tocar no outro (FR-274,
+   * FR-275): a Credencial dele deixa de valer.
+   */
+  async excluirConta(
+    dados: DadosDeExclusaoDeConta,
+  ): Promise<ResultadoDeAcaoDeConta> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    if (dono.senha !== dados.senhaAtual) {
+      return this.recusaDeSenhaAtual();
+    }
+
+    const base = this.base;
+    const doOutro = <T extends { usuarioId: string }>(itens: T[]): T[] =>
+      itens.filter((item) => item.usuarioId !== dono.id);
+
+    base.cartoes = doOutro(base.cartoes);
+    base.baralhos = doOutro(base.baralhos);
+    base.vinculos = doOutro(base.vinculos);
+    base.registros = doOutro(base.registros);
+    base.agendamentos = doOutro(base.agendamentos);
+    base.preferencias = doOutro(base.preferencias);
+    excluirAgendaEmMemoria(base.agenda, dono.id);
+    base.usuarios = base.usuarios.filter((usuario) => usuario.id !== dono.id);
+
+    // Os Acessos caem com o Usuário, e nenhum novo é emitido (FR-296).
+    for (const [valor, acesso] of base.acessos) {
+      if (acesso.usuarioId === dono.id) {
+        base.acessos.delete(valor);
+      }
+    }
+
+    if (
+      this.navegador.cookie !== null &&
+      !base.acessos.has(this.navegador.cookie)
+    ) {
+      this.navegador.cookie = null;
+    }
+
+    return { ok: true };
+  }
+
   /**
    * Simula a indisponibilidade do transporte (uso de teste). Enquanto
    * simulada, nenhuma operação é concluída nem gravada.
@@ -1082,8 +1501,34 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     );
 
     if (indice >= 0) {
-      this.base.usuarios.splice(indice, 1);
+      const [removido] = this.base.usuarios.splice(indice, 1);
+
+      // O Acesso cai junto com o Usuário, como pela cascata do esquema (FR-296).
+      for (const [valor, acesso] of this.base.acessos) {
+        if (acesso.usuarioId === removido?.id) {
+          this.base.acessos.delete(valor);
+        }
+      }
     }
+  }
+
+  /**
+   * Avança o relógio do servidor simulado (uso de prova): é assim que a
+   * validade deslizante e a expiração do Acesso são exercitadas sem esperar
+   * (FR-291, FR-294).
+   */
+  avancarRelogio(milissegundos: number): void {
+    this.base.deslocamentoDoRelogioEmMs += milissegundos;
+  }
+
+  /** Define a validade do Acesso do servidor simulado, em segundos (uso de prova). */
+  definirValidadeDoAcesso(segundos: number): void {
+    this.base.validadeDoAcessoEmMs = segundos * 1000;
+  }
+
+  /** Diz se o "navegador" simulado guarda um Acesso (uso de prova, FR-295). */
+  temAcessoNoNavegador(): boolean {
+    return this.navegador.cookie !== null;
   }
 
   /**
@@ -1093,6 +1538,20 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
    * conversam com o mesmo acervo (FR-092, SC-030).
    */
   comoUsuario(credencial: Credencial | null): ClienteEmMemoria {
+    const outro = new ClienteEmMemoria(credencial);
+
+    outro.base = this.base;
+    outro.navegador = this.navegador;
+
+    return outro;
+  }
+
+  /**
+   * Outro cliente sobre o **mesmo servidor** simulado, mas num navegador à
+   * parte, sem cookie algum (uso de prova): é como o segundo navegador ou
+   * aparelho de um Usuário, cujo Acesso é próprio e independente (018, FR-299).
+   */
+  outroNavegador(credencial: Credencial | null = null): ClienteEmMemoria {
     const outro = new ClienteEmMemoria(credencial);
 
     outro.base = this.base;
@@ -1107,10 +1566,93 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
    */
   private dono(): UsuarioDaBase | null {
     if (this.credencial === null) {
-      return null;
+      // Sem Credencial na memória, o que autoriza é o Acesso temporário do
+      // "navegador" — e cada operação o renova (018, FR-291).
+      const situacao = this.situacaoDoAcesso();
+
+      return situacao.tipo === "valido" ? situacao.usuario : null;
     }
 
     return this.usuarioDaCredencial(this.credencial);
+  }
+
+  /**
+   * O estado do Acesso do navegador simulado. Válido **renova** a validade;
+   * expirado limpa o cookie, como a API faz em `401 acesso_expirado`, e deixa
+   * a marca que `falhaDeNaoAutenticado` lê para usar a mensagem de expiração.
+   */
+  private situacaoDoAcesso():
+    | { tipo: "valido"; usuario: UsuarioDaBase }
+    | { tipo: "expirado" }
+    | { tipo: "ausente" } {
+    const valor = this.navegador.cookie;
+    const acesso = valor === null ? undefined : this.base.acessos.get(valor);
+
+    if (valor === null || acesso === undefined) {
+      return { tipo: "ausente" };
+    }
+
+    if (acesso.expiraEm <= this.base.relogio()) {
+      this.base.acessos.delete(valor);
+      this.navegador.cookie = null;
+      this.recusadoPorExpiracao = true;
+
+      return { tipo: "expirado" };
+    }
+
+    const usuario = this.base.usuarios.find(
+      (candidato) => candidato.id === acesso.usuarioId,
+    );
+
+    if (usuario === undefined) {
+      return { tipo: "ausente" };
+    }
+
+    acesso.expiraEm = this.base.relogio() + this.base.validadeDoAcessoEmMs;
+
+    return { tipo: "valido", usuario };
+  }
+
+  /** Revoga o Acesso do cookie atual e o limpa do navegador simulado. */
+  private revogarAcessoDoNavegador(): void {
+    if (this.navegador.cookie !== null) {
+      this.base.acessos.delete(this.navegador.cookie);
+    }
+
+    this.navegador.cookie = null;
+  }
+
+  /** Emite um Acesso novo para o Usuário e o entrega ao navegador simulado. */
+  private emitirAcessoNoNavegador(usuarioId: string): void {
+    const valor = `acesso-${++this.base.sequenciaDeAcessos}`;
+
+    this.base.acessos.set(valor, {
+      usuarioId,
+      expiraEm: this.base.relogio() + this.base.validadeDoAcessoEmMs,
+    });
+    this.navegador.cookie = valor;
+  }
+
+  /**
+   * 018, FR-296: uma alteração da conta encerra **todos** os Acessos do
+   * Usuário e, quando a operação foi autenticada por Acesso, emite um novo para
+   * este navegador.
+   */
+  private renovarOsAcessosDoDono(usuarioId: string, viaAcesso: boolean): void {
+    for (const [valor, acesso] of this.base.acessos) {
+      if (acesso.usuarioId === usuarioId) {
+        this.base.acessos.delete(valor);
+      }
+    }
+
+    if (viaAcesso) {
+      this.emitirAcessoNoNavegador(usuarioId);
+    } else if (
+      this.navegador.cookie !== null &&
+      !this.base.acessos.has(this.navegador.cookie)
+    ) {
+      this.navegador.cookie = null;
+    }
   }
 
   /**
@@ -1220,15 +1762,55 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     };
   }
 
+  /** As contagens do dono: o que `excluirConta` removeria (SC-113). */
+  private contagensDoDono(usuarioId: string): ContagensDaConta {
+    return {
+      cartoes: this.base.cartoes.filter((c) => c.usuarioId === usuarioId)
+        .length,
+      baralhos: this.base.baralhos.filter((b) => b.usuarioId === usuarioId)
+        .length,
+      registrosDeSessao: this.base.registros.filter(
+        (r) => r.usuarioId === usuarioId,
+      ).length,
+      agenda: contarAgendaEmMemoria(this.base.agenda, usuarioId),
+    };
+  }
+
+  private recusaDeSenhaAtual(): RecusaDeConta {
+    return {
+      ok: false,
+      erro: "senha_atual_incorreta",
+      mensagem: MENSAGEM_DE_SENHA_ATUAL_INCORRETA,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDaConta(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
+    };
+  }
+
   private falhaDeNaoAutenticado(): {
     ok: false;
     erro: typeof NAO_AUTENTICADO;
     mensagem: string;
   } {
+    const expirado = this.recusadoPorExpiracao;
+
+    this.recusadoPorExpiracao = false;
+
     return {
       ok: false,
       erro: NAO_AUTENTICADO,
-      mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+      mensagem: expirado
+        ? MENSAGEM_DE_ACESSO_EXPIRADO
+        : MENSAGEM_DE_NAO_AUTENTICADO,
     };
   }
 
@@ -1325,6 +1907,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 }
 
+/** O cookie do Acesso temporário de um navegador simulado (018). */
+interface NavegadorSimulado {
+  cookie: string | null;
+}
+
 /**
  * O estado do stand-in: os Usuários e o acervo que os clientes de prova
  * compartilham, mais a sequência de ids opacos.
@@ -1337,9 +1924,21 @@ interface BaseEmMemoria {
   registros: RegistroDaBase[];
   agendamentos: AgendamentoDoDono[];
   preferencias: PreferenciasDoDono[];
+  /** A Agenda de estudo (016): Rotinas, Compromissos persistidos e Inícios. */
+  agenda: AgendaBase;
   sequenciaDeCartoes: number;
   sequenciaDeBaralhos: number;
   sequenciaDeUsuarios: number;
+  /**
+   * Os Acessos temporários do servidor simulado (018) e o relógio — controlável
+   * pela prova — com que a validade deslizante é decidida (FR-291, FR-297). O
+   * cookie não é do servidor: é do `Navegador`, que cada cliente referencia.
+   */
+  acessos: Map<string, { usuarioId: string; expiraEm: number }>;
+  sequenciaDeAcessos: number;
+  deslocamentoDoRelogioEmMs: number;
+  validadeDoAcessoEmMs: number;
+  relogio: () => number;
 }
 
 /**
@@ -1405,9 +2004,15 @@ function novaBaseEmMemoria(
     registros: [],
     agendamentos: [],
     preferencias: [],
+    agenda: novaAgendaBase(),
     sequenciaDeCartoes: 0,
     sequenciaDeBaralhos: 0,
     sequenciaDeUsuarios: 0,
+    acessos: new Map(),
+    sequenciaDeAcessos: 0,
+    deslocamentoDoRelogioEmMs: 0,
+    validadeDoAcessoEmMs: 300_000,
+    relogio: () => Date.now() + base.deslocamentoDoRelogioEmMs,
   };
 
   for (const dados of usuariosJaCadastrados) {
@@ -1557,6 +2162,19 @@ function dadosDeRegistroValidos(dados: DadosDeRegistro): boolean {
   }
 
   return dados.itens.every(itemDeRegistroValido);
+}
+
+/**
+ * Os Itens de uma conclusão da Agenda: só a forma de cada um — o conjunto de
+ * Cartões já foi conferido contra o Início — e o `id` em UUID (FR-254).
+ */
+function itensDaAgendaValidos(dados: DadosDeRegistro): boolean {
+  return (
+    ehUuid(dados.id) &&
+    Array.isArray(dados.itens) &&
+    dados.itens.length >= 1 &&
+    dados.itens.every(itemDeRegistroValido)
+  );
 }
 
 /**

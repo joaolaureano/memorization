@@ -2,13 +2,19 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type {
   Agendamento,
+  ArmazenamentoDeAcessos,
   ArmazenamentoDoAcervo,
   ArmazenamentoDeUsuarios,
   Baralho,
   Cartao,
   CompromissoPersistido,
   ContagemPorBaralho,
+  ContagensDaConta,
   Desfecho,
+  DesfechoDeAcesso,
+  DesfechoDeAcessoValido,
+  DesfechoDeAlteracaoDeNome,
+  DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
   DesfechoDeRotina,
@@ -52,6 +58,8 @@ export interface ArmazenamentoSqliteAberto {
   armazenamento: ArmazenamentoDoAcervo;
   /** A segunda Porta, sobre o mesmo arquivo: os Usuários da identidade. */
   usuarios: ArmazenamentoDeUsuarios;
+  /** A terceira Porta, sobre o mesmo arquivo: os Acessos temporários (018). */
+  acessos: ArmazenamentoDeAcessos;
   /** Encerra a conexão com o arquivo. O conteúdo gravado permanece nele. */
   encerrar(): Promise<void>;
 }
@@ -103,6 +111,9 @@ const NOME_DE_USUARIO_EXISTENTE = {
   erro: "nome_de_usuario_existente",
 } as const;
 
+/** Desfecho do Nome de usuário em uso por outro Usuário, na alteração. */
+const NOME_EM_USO = { ok: false, erro: "nome_em_uso" } as const;
+
 /** Desfecho de falha do armazenamento na Porta de Usuários. */
 const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
 
@@ -132,8 +143,12 @@ function comDesfecho<T>(operacao: () => Desfecho<T>): Desfecho<T> {
  * `id` (FR-163) devolveria um retrato incompleto. O `ROLLBACK` é a mesma
  * defesa da aplicação de migrações em `esquema.ts`.
  */
-function emTransacao<T>(banco: DatabaseSync, operacao: () => T): T {
-  banco.exec("BEGIN");
+function emTransacao<T>(
+  banco: DatabaseSync,
+  operacao: () => T,
+  modo: "BEGIN" | "BEGIN IMMEDIATE" = "BEGIN",
+): T {
+  banco.exec(modo);
 
   try {
     const resultado = operacao();
@@ -625,6 +640,17 @@ export async function abrirArmazenamentoSqlite(
        FROM preferencias
       WHERE usuario_id = ?`,
   );
+  /** As Preferências do Usuário, com o padrão sintetizado quando não há linha (D5). */
+  function preferenciasDoUsuario(usuarioId: string): Preferencias {
+    const linha = obterPreferenciasDoUsuario.get(usuarioId);
+
+    return linha === undefined
+      ? PREFERENCIAS_PADRAO
+      : {
+          algoritmo: linha.algoritmo as string,
+          limiteDeNovosPorDia: Number(linha.limite_de_novos_por_dia),
+        };
+  }
   const gravarPreferencias = banco.prepare(
     `INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
      VALUES (?, ?, ?)
@@ -664,6 +690,33 @@ export async function abrirArmazenamentoSqlite(
     `SELECT id, nome_de_usuario, sal, hash, parametros
        FROM usuario
       WHERE nome_de_usuario = ?`,
+  );
+  const obterUsuarioPorId = banco.prepare(
+    `SELECT id, nome_de_usuario, sal, hash, parametros
+       FROM usuario
+      WHERE id = ?`,
+  );
+  const atualizarNomeDoUsuario = banco.prepare(
+    "UPDATE usuario SET nome_de_usuario = ? WHERE id = ?",
+  );
+  const atualizarSenhaDoUsuario = banco.prepare(
+    "UPDATE usuario SET sal = ?, hash = ?, parametros = ? WHERE id = ?",
+  );
+  /**
+   * Um único `DELETE`: as chaves estrangeiras `ON DELETE CASCADE` removem, na
+   * mesma instrução atômica, tudo o que pertence ao Usuário (FR-274, FR-275).
+   */
+  const excluirUsuarioPorId = banco.prepare("DELETE FROM usuario WHERE id = ?");
+  const contarDadosDoUsuario = banco.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM cartao WHERE usuario_id = ?1) AS cartoes,
+       (SELECT COUNT(*) FROM baralho WHERE usuario_id = ?1) AS baralhos,
+       (SELECT COUNT(*) FROM registro_de_sessao WHERE usuario_id = ?1)
+         AS registros,
+       (SELECT COUNT(*) FROM rotina_de_estudo WHERE usuario_id = ?1)
+       + (SELECT COUNT(*) FROM compromisso_de_estudo WHERE usuario_id = ?1)
+       + (SELECT COUNT(*) FROM inicio_de_compromisso WHERE usuario_id = ?1)
+         AS agenda`,
   );
 
   /**
@@ -721,6 +774,16 @@ export async function abrirArmazenamentoSqlite(
      VALUES (?, ?, ?, ?, ?)`,
   );
 
+  /**
+   * A reativação (FR-239) remove só a exceção `cancelado`: a linha `concluido`
+   * nunca é apagada (FR-245).
+   */
+  const removerCompromissoCancelado = banco.prepare(
+    `DELETE FROM compromisso_de_estudo
+      WHERE rotina_id = ? AND data = ? AND usuario_id = ?
+        AND estado = 'cancelado'`,
+  );
+
   const inserirCompromisso = banco.prepare(
     `INSERT INTO compromisso_de_estudo
        (rotina_id, data, usuario_id, estado, registro_id, baralho_id,
@@ -768,6 +831,34 @@ export async function abrirArmazenamentoSqlite(
             nome_do_baralho, quantidade, cartoes
        FROM inicio_de_compromisso
       WHERE id = ? AND usuario_id = ?`,
+  );
+
+  /**
+   * O Acesso temporário (018): só o digest do valor é guardado. As datas são
+   * texto ISO-8601 UTC e se comparam como string. `ON DELETE CASCADE` em
+   * `usuario_id` remove os Acessos junto com o Usuário (FR-296).
+   */
+  const inserirAcesso = banco.prepare(
+    `INSERT INTO acesso_temporario
+       (digest, usuario_id, criado_em, expira_em, ultima_acao_em)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const obterAcesso = banco.prepare(
+    "SELECT usuario_id, expira_em FROM acesso_temporario WHERE digest = ?",
+  );
+  const renovarAcesso = banco.prepare(
+    `UPDATE acesso_temporario
+        SET expira_em = ?, ultima_acao_em = ?
+      WHERE digest = ?`,
+  );
+  const encerrarAcesso = banco.prepare(
+    "DELETE FROM acesso_temporario WHERE digest = ?",
+  );
+  const encerrarAcessosDoUsuario = banco.prepare(
+    "DELETE FROM acesso_temporario WHERE usuario_id = ?",
+  );
+  const removerAcessosExpirados = banco.prepare(
+    "DELETE FROM acesso_temporario WHERE expira_em < ?",
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
@@ -1249,6 +1340,41 @@ export async function abrirArmazenamentoSqlite(
           }
 
           /**
+           * Cancelamentos e reativações de hoje entram na mesma transação da
+           * Rotina (FR-238, FR-239). O cancelamento só cria a linha quando
+           * ainda não há nenhuma para `(rotina, data)`: a conclusão existente
+           * prevalece (FR-245).
+           */
+          for (const cancelado of gravacao.cancelamentos ?? []) {
+            if (
+              obterCompromissoDoUsuario.get(
+                cancelado.rotinaId,
+                cancelado.data,
+                usuarioId,
+              ) === undefined
+            ) {
+              inserirCompromisso.run(
+                cancelado.rotinaId,
+                cancelado.data,
+                usuarioId,
+                "cancelado",
+                null,
+                cancelado.baralhoId,
+                cancelado.nomeDoBaralho,
+                cancelado.quantidade,
+              );
+            }
+          }
+
+          for (const data of gravacao.reativacoes ?? []) {
+            removerCompromissoCancelado.run(
+              gravacao.rotina.id,
+              data,
+              usuarioId,
+            );
+          }
+
+          /**
            * A operação guarda o JSON da Rotina gravada: é ele que o reenvio
            * idempotente devolve como resultado (FR-248).
            */
@@ -1266,6 +1392,22 @@ export async function abrirArmazenamentoSqlite(
           };
         }),
       );
+    },
+
+    async obterOperacaoDeRotina(usuarioId, operacaoId) {
+      return comDesfecho(() => {
+        const linha = obterOperacaoDeRotina.get(usuarioId, operacaoId);
+
+        return linha === undefined
+          ? NAO_ENCONTRADO
+          : {
+              ok: true,
+              valor: {
+                intencao: linha.intencao as string,
+                rotina: JSON.parse(linha.resultado as string) as RotinaArmazenada,
+              },
+            };
+      });
     },
 
     async obterRotina(usuarioId, id) {
@@ -1435,6 +1577,124 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
+    async inserirRegistroDaAgenda(usuarioId, registro, compromisso, calcular) {
+      return comDesfecho<{ registro: RegistroDeSessao; novo: boolean }>(() =>
+        /**
+         * Transação imediata: a leitura dos Agendamentos e a gravação ficam
+         * serializadas por Usuário também entre processos que compartilhem o
+         * arquivo, e o cálculo parte do estado mais recente (FR-233, FR-256).
+         */
+        emTransacao(
+          banco,
+          () => {
+            const existente = obterRegistroPorId.get(registro.id);
+
+            if (existente !== undefined) {
+              return (existente.usuario_id as string) === usuarioId
+                ? {
+                    ok: true,
+                    valor: {
+                      registro: registroDaLinha(
+                        existente,
+                        listarItensDoRegistro
+                          .all(registro.id)
+                          .map(itemDaLinha),
+                      ),
+                      novo: false,
+                    },
+                  }
+                : CONFLITO;
+            }
+
+            const agendamentos = calcular({
+              agendamentos: listarAgendamentos
+                .all(usuarioId)
+                .map(agendamentoDaLinha),
+              preferencias: preferenciasDoUsuario(usuarioId),
+            });
+
+            inserirRegistro.run(
+              registro.id,
+              usuarioId,
+              registro.baralhoId,
+              registro.nomeDoBaralho,
+              registro.origem,
+              registro.concluidaEm,
+              registro.estudados,
+              registro.acertos,
+              registro.erros,
+            );
+
+            for (const item of registro.itens) {
+              inserirItemDoRegistro.run(
+                registro.id,
+                item.posicao,
+                item.frente,
+                item.verso,
+                item.resultado,
+                item.cartaoId ?? null,
+                item.avaliacao ?? null,
+              );
+            }
+
+            for (const agendamento of agendamentos) {
+              gravarAgendamento.run(
+                usuarioId,
+                agendamento.cartaoId,
+                agendamento.algoritmo,
+                agendamento.versaoDoAlgoritmo,
+                JSON.stringify(agendamento.estado),
+                agendamento.proximaRevisaoEm,
+                agendamento.ultimaAvaliacao,
+                agendamento.revisadoEm,
+                agendamento.criadoEm,
+                agendamento.cartaoId,
+                usuarioId,
+              );
+            }
+
+            /**
+             * A conclusão do Compromisso: a linha `concluido` existente
+             * permanece com o primeiro Registro (FR-235); `cancelado` passa a
+             * `concluido` (FR-245); ausente é inserida.
+             */
+            const atual = obterCompromissoDoUsuario.get(
+              compromisso.rotinaId,
+              compromisso.data,
+              usuarioId,
+            );
+
+            if (atual === undefined) {
+              inserirCompromisso.run(
+                compromisso.rotinaId,
+                compromisso.data,
+                usuarioId,
+                "concluido",
+                compromisso.registroId,
+                compromisso.baralhoId,
+                compromisso.nomeDoBaralho,
+                compromisso.quantidade,
+              );
+            } else if ((atual.estado as string) !== "concluido") {
+              atualizarCompromisso.run(
+                "concluido",
+                compromisso.registroId,
+                compromisso.baralhoId,
+                compromisso.nomeDoBaralho,
+                compromisso.quantidade,
+                compromisso.rotinaId,
+                compromisso.data,
+                usuarioId,
+              );
+            }
+
+            return { ok: true, valor: { registro, novo: true } };
+          },
+          "BEGIN IMMEDIATE",
+        ),
+      );
+    },
+
     async listarItensAvaliados(usuarioId) {
       return listarItensAvaliados.all(usuarioId).map(itemAvaliadoDaLinha);
     },
@@ -1484,11 +1744,178 @@ export async function abrirArmazenamentoSqlite(
         USUARIO_INDISPONIVEL,
       );
     },
+
+    async obterUsuarioPorId(id) {
+      return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
+        () => {
+          const linha = obterUsuarioPorId.get(id);
+
+          return linha === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(linha) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async atualizarNomeDeUsuario(id, nome) {
+      return comDesfechoDeUsuario<DesfechoDeAlteracaoDeNome>(
+        () => {
+          try {
+            if (Number(atualizarNomeDoUsuario.run(nome, id).changes) === 0) {
+              return USUARIO_NAO_ENCONTRADO;
+            }
+          } catch (erro) {
+            if (ehNomeDeUsuarioExistente(erro)) {
+              return NOME_EM_USO;
+            }
+
+            throw erro;
+          }
+
+          const linha = obterUsuarioPorId.get(id);
+
+          return linha === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(linha) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async atualizarSenha(id, derivacao) {
+      return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
+        () =>
+          Number(
+            atualizarSenhaDoUsuario.run(
+              derivacao.sal,
+              derivacao.hash,
+              derivacao.parametros,
+              id,
+            ).changes,
+          ) === 0
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: undefined },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async excluirUsuario(id) {
+      return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
+        () =>
+          Number(excluirUsuarioPorId.run(id).changes) === 0
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: undefined },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async contarDadosDoUsuario(id) {
+      return comDesfechoDeUsuario<
+        DesfechoDeOperacaoDeConta<ContagensDaConta>
+      >(() => {
+        const linha = contarDadosDoUsuario.get(id);
+
+        if (linha === undefined) {
+          return USUARIO_NAO_ENCONTRADO;
+        }
+
+        return {
+          ok: true,
+          valor: {
+            cartoes: Number(linha.cartoes),
+            baralhos: Number(linha.baralhos),
+            registrosDeSessao: Number(linha.registros),
+            agenda: Number(linha.agenda),
+          },
+        };
+      }, USUARIO_INDISPONIVEL);
+    },
+  };
+
+  /**
+   * A terceira Porta, sobre a mesma conexão: o Acesso temporário. Nenhum erro
+   * do driver atravessa — a falha é `indisponivel`, e jamais Acesso ausente ou
+   * expirado (FR-301).
+   */
+  const SEM_CARGA_DE_ACESSO: DesfechoDeAcesso<void> = {
+    ok: true,
+    valor: undefined,
+  };
+  const ACESSO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
+
+  function comDesfechoDeAcesso<D>(operacao: () => D): D | typeof ACESSO_INDISPONIVEL {
+    try {
+      return operacao();
+    } catch {
+      return ACESSO_INDISPONIVEL;
+    }
+  }
+
+  const acessos: ArmazenamentoDeAcessos = {
+    async criar(digest, usuarioId, expiraEm) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(() => {
+        const agora = new Date().toISOString();
+
+        inserirAcesso.run(digest, usuarioId, agora, expiraEm, agora);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async obterValido(digest, agora) {
+      return comDesfechoDeAcesso<DesfechoDeAcessoValido>(() => {
+        const linha = obterAcesso.get(digest);
+
+        if (linha === undefined) {
+          return { ok: false, erro: "nao_encontrado" };
+        }
+
+        return (linha.expira_em as string) > agora
+          ? { ok: true, valor: { usuarioId: linha.usuario_id as string } }
+          : { ok: false, erro: "expirado" };
+      });
+    },
+
+    async renovar(digest, novoExpiraEm) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(() =>
+        Number(
+          renovarAcesso.run(novoExpiraEm, new Date().toISOString(), digest)
+            .changes,
+        ) === 0
+          ? { ok: false, erro: "nao_encontrado" }
+          : SEM_CARGA_DE_ACESSO,
+      );
+    },
+
+    async encerrar(digest) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(() => {
+        encerrarAcesso.run(digest);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async encerrarTodosDoUsuario(usuarioId) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(() => {
+        encerrarAcessosDoUsuario.run(usuarioId);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async removerExpirados(agora) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<number>>(() => ({
+        ok: true,
+        valor: Number(removerAcessosExpirados.run(agora).changes),
+      }));
+    },
   };
 
   return {
     armazenamento,
     usuarios,
+    acessos,
 
     async encerrar() {
       banco.close();

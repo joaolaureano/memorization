@@ -96,7 +96,11 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
     // Ana entra e cria o Cartão dela pela tela real. Depois de Entrar o
     // destino é Início (spec 013); o Cartão nasce no formulário dedicado,
     // alcançado pelo link "Criar cartão" da lista de Cartões.
-    await entrarPelaUi(page, credencialDaAna);
+    //
+    // 018: a continuidade é desmarcada — esta prova é a da Credencial que vive
+    // só na memória da página (FR-089, SC-031); o Acesso temporário tem a sua
+    // prova própria em `acesso-temporario.spec.ts`.
+    await entrarPelaUi(page, credencialDaAna, { continuarConectado: false });
 
     await expect(
       page.getByRole("heading", {
@@ -193,18 +197,25 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
     );
     expect(estadoDoNavegador.endereco).not.toContain(credencialDaAna.senha);
 
-    // A resposta de Entrar não publica credencial reutilizável — nenhum
-    // `Set-Cookie` — nem o diálogo nativo de autenticação, e a rota de acervo
-    // sem Credencial é recusada sem convidar o navegador a guardá-la
-    // (FR-079, FR-089).
+    // A resposta de Entrar não publica o diálogo nativo de autenticação, e o
+    // único valor que ela entrega — o Acesso temporário, quando a continuidade
+    // vale — vai em cookie `HttpOnly` e `SameSite=Strict`, nunca no corpo
+    // (FR-079 revisado, FR-297). A rota de acervo sem Credencial é recusada sem
+    // convidar o navegador a guardá-la (FR-089).
     const respostaDoEntrar = await fetch(`${enderecoDaApi}/entrar`, {
       method: "POST",
       headers: cabecalhoDeCredencial(credencialDaAna),
     });
 
     expect(respostaDoEntrar.status).toBe(200);
-    expect(respostaDoEntrar.headers.get("set-cookie")).toBeNull();
+    expect(respostaDoEntrar.headers.get("set-cookie")).toMatch(/HttpOnly/);
+    expect(respostaDoEntrar.headers.get("set-cookie")).toMatch(
+      /SameSite=Strict/,
+    );
     expect(respostaDoEntrar.headers.get("www-authenticate")).toBeNull();
+    expect(JSON.stringify(await respostaDoEntrar.json())).not.toMatch(
+      /acesso=/,
+    );
 
     const semCredencial = await fetch(`${enderecoDaApi}/cartoes`);
 
@@ -323,11 +334,16 @@ test("duas abas mantêm Credenciais independentes: Sair numa não descarta a da 
     // um navegador —, e Entra com a sua própria Credencial.
     const segundaAba = await context.newPage();
 
+    // 018: abas do mesmo navegador dividem o cookie do Acesso; para a
+    // Credencial ser independente em cada aba (FR-089), a continuidade é
+    // desmarcada nas duas.
     await page.goto(enderecoDoFrontend);
-    await entrarPelaUi(page, credencialDaAna);
+    await entrarPelaUi(page, credencialDaAna, { continuarConectado: false });
 
     await segundaAba.goto(enderecoDoFrontend);
-    await entrarPelaUi(segundaAba, credencialDoBruno);
+    await entrarPelaUi(segundaAba, credencialDoBruno, {
+      continuarConectado: false,
+    });
 
     // Sair numa aba não descarta a Credencial da outra.
     await page.getByRole("button", { name: "Sair" }).click();

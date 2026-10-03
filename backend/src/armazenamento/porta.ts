@@ -319,7 +319,42 @@ export interface GravacaoDeRotina {
   readonly versaoEsperada: number | null;
   /** Estado completo a gravar; o Module já incrementou `versao`. */
   readonly rotina: RotinaArmazenada;
+  /**
+   * Compromissos de hoje que a alteração cancela (FR-238, FR-239). Gravados
+   * como `cancelado` **na mesma transação** da Rotina, e só quando ainda não há
+   * linha para `(rotinaId, data)`: uma conclusão nunca é sobrescrita (FR-245).
+   */
+  readonly cancelamentos?: readonly CompromissoPersistido[];
+  /**
+   * Datas cujo Compromisso `cancelado` volta a valer (FR-239): a linha
+   * `cancelado` de `(rotina.id, data)` é removida na mesma transação. Linha
+   * `concluido` nunca é removida.
+   */
+  readonly reativacoes?: readonly string[];
 }
+
+/** Operação de Rotina já gravada: a intenção e a Rotina que ela produziu. */
+export interface OperacaoDeRotinaGravada {
+  readonly intencao: string;
+  readonly rotina: RotinaArmazenada;
+}
+
+/**
+ * Estado lido **dentro** da transação de conclusão de uma Sessão da Agenda: os
+ * Agendamentos e as Preferências vigentes (FR-233, FR-256).
+ */
+export interface EstadoDeAgendamentoLido {
+  readonly agendamentos: readonly Agendamento[];
+  readonly preferencias: Preferencias;
+}
+
+/**
+ * Função de domínio que a Porta chama com o estado lido na transação para obter
+ * os Agendamentos a gravar. A Porta não expõe conexão, SQL ou driver ao Module.
+ */
+export type CalculoDeAgendamentos = (
+  estado: EstadoDeAgendamentoLido,
+) => readonly Agendamento[];
 
 /**
  * Códigos de falha tipada da Porta. São vocabulário de armazenamento, nunca
@@ -395,6 +430,41 @@ export type DesfechoDeLeituraDeUsuario =
   | { ok: false; erro: CodigoDeFalhaDeLeituraDeUsuario };
 
 /**
+ * Contagens do que pertence a um Usuário — o que `excluirUsuario` remove e o
+ * que o diálogo de «Excluir conta» anuncia (FR-272, SC-113). `agenda` soma os
+ * registros persistidos da Agenda do Usuário (Rotinas, Compromissos e Inícios);
+ * versões guardadas dentro de uma Rotina não contam separadamente. É `null`
+ * apenas num armazenamento sem as tabelas da Agenda.
+ */
+export interface ContagensDaConta {
+  cartoes: number;
+  baralhos: number;
+  registrosDeSessao: number;
+  agenda: number | null;
+}
+
+/** Transformação irreversível da Senha, como a Porta a troca (FR-078). */
+export interface DerivacaoGuardada {
+  sal: Uint8Array;
+  hash: Uint8Array;
+  parametros: string;
+}
+
+/**
+ * Códigos de falha tipada da alteração do Nome de usuário: `nome_em_uso` é a
+ * unicidade sem distinção de caixa do esquema, reconhecida pelo Adapter; o
+ * `Identidade` a traduz em `nome_indisponivel` (FR-262, SC-112).
+ */
+export type DesfechoDeAlteracaoDeNome =
+  | { ok: true; valor: Usuario }
+  | { ok: false; erro: "nome_em_uso" | "nao_encontrado" | "indisponivel" };
+
+/** Desfecho das demais operações de conta sobre o Usuário. */
+export type DesfechoDeOperacaoDeConta<T> =
+  | { ok: true; valor: T }
+  | { ok: false; erro: "nao_encontrado" | "indisponivel" };
+
+/**
  * Segunda Porta: a Interface por onde o `Identidade` lê e grava Usuários.
  *
  * É implementada pelos **mesmos** Adapters da `ArmazenamentoDoAcervo`, e as
@@ -424,6 +494,101 @@ export interface ArmazenamentoDeUsuarios {
   obterUsuarioPorNomeDeUsuario(
     nomeDeUsuario: string,
   ): Promise<DesfechoDeLeituraDeUsuario>;
+
+  /**
+   * Devolve o Usuário de `id`; ausente é `nao_encontrado`. É a leitura que a
+   * gestão da conta usa para conferir a Senha atual de quem já Entrou (017).
+   */
+  obterUsuarioPorId(id: string): Promise<DesfechoDeLeituraDeUsuario>;
+
+  /**
+   * Grava o novo Nome de usuário, já normalizado e validado pelo Module. O
+   * Nome em uso por outro Usuário — sem distinguir maiúsculas de minúsculas — é
+   * `nome_em_uso` (FR-262). Devolve o Usuário com o novo nome.
+   */
+  atualizarNomeDeUsuario(
+    id: string,
+    nome: string,
+  ): Promise<DesfechoDeAlteracaoDeNome>;
+
+  /**
+   * Substitui `sal`, `hash` e `parametros` do Usuário pela nova derivação. A
+   * Senha em texto claro nunca entra na Porta (FR-078, FR-267).
+   */
+  atualizarSenha(
+    id: string,
+    derivacao: DerivacaoGuardada,
+  ): Promise<DesfechoDeOperacaoDeConta<void>>;
+
+  /**
+   * Exclui o Usuário e, pelas cascatas `ON DELETE CASCADE` do esquema, tudo o
+   * que lhe pertence, numa única instrução transacional: ou tudo desaparece, ou
+   * nada é aplicado (FR-274, FR-275, SC-108).
+   */
+  excluirUsuario(id: string): Promise<DesfechoDeOperacaoDeConta<void>>;
+
+  /** Conta o que pertence ao Usuário, como `excluirUsuario` removeria (SC-113). */
+  contarDadosDoUsuario(
+    id: string,
+  ): Promise<DesfechoDeOperacaoDeConta<ContagensDaConta>>;
+}
+
+/**
+ * Terceira Porta: a Interface por onde o Module `Acessos` guarda o **Acesso
+ * temporário** (018) — o comprovante emitido ao Entrar que permite continuar
+ * operando no mesmo navegador sem reapresentar a Credencial.
+ *
+ * O **valor em claro nunca entra na Porta**: quem chama informa o digest
+ * SHA-256 do valor, e é só ele que se persiste (FR-297). A validade é decidida
+ * aqui, pelo servidor, a partir do `expiraEm` gravado — o relógio do aparelho
+ * não participa. Os instantes são ISO-8601 UTC.
+ *
+ * Como nas demais Portas, nenhum erro do driver atravessa a Interface: a falha
+ * do armazenamento é `indisponivel`, e jamais se confunde com Acesso ausente ou
+ * expirado (FR-301).
+ */
+export type DesfechoDeAcesso<T> =
+  | { ok: true; valor: T }
+  | { ok: false; erro: "nao_encontrado" | "indisponivel" };
+
+/** Desfecho de `obterValido`: o dono do Acesso, ou por que ele não vale. */
+export type DesfechoDeAcessoValido =
+  | { ok: true; valor: { usuarioId: string } }
+  | { ok: false; erro: "nao_encontrado" | "expirado" | "indisponivel" };
+
+export interface ArmazenamentoDeAcessos {
+  /** Grava o digest, o dono e o vencimento de um Acesso novo. */
+  criar(
+    digest: string,
+    usuarioId: string,
+    expiraEm: string,
+  ): Promise<DesfechoDeAcesso<void>>;
+
+  /**
+   * Devolve o dono do Acesso quando a linha existe e `expiraEm > agora`;
+   * `expirado` quando existe e `expiraEm <= agora` — para autorizar, conta como
+   * ausente, mas o código permite responder `acesso_expirado` —; e
+   * `nao_encontrado` quando não existe (FR-294, FR-301).
+   */
+  obterValido(
+    digest: string,
+    agora: string,
+  ): Promise<DesfechoDeAcessoValido>;
+
+  /** Atualiza `expiraEm` e `ultimaAcaoEm` do Acesso; ausente é `nao_encontrado`. */
+  renovar(
+    digest: string,
+    novoExpiraEm: string,
+  ): Promise<DesfechoDeAcesso<void>>;
+
+  /** Remove o Acesso do digest; ausente também é sucesso (idempotente). */
+  encerrar(digest: string): Promise<DesfechoDeAcesso<void>>;
+
+  /** Remove **todos** os Acessos do Usuário — outros navegadores incluídos (FR-296). */
+  encerrarTodosDoUsuario(usuarioId: string): Promise<DesfechoDeAcesso<void>>;
+
+  /** Remove os Acessos com `expiraEm < agora` e devolve quantos eram (D7). */
+  removerExpirados(agora: string): Promise<DesfechoDeAcesso<number>>;
 }
 
 /**
@@ -671,6 +836,16 @@ export interface ArmazenamentoDoAcervo {
   ): Promise<DesfechoDeRotina<{ rotina: RotinaArmazenada; repetida: boolean }>>;
 
   /**
+   * Devolve a operação de Rotina `operacaoId` de `usuarioId` (FR-249), para que
+   * o reenvio seja reconhecido **antes** de qualquer verificação que dependa do
+   * estado atual; ausente é `nao_encontrado`.
+   */
+  obterOperacaoDeRotina(
+    usuarioId: string,
+    operacaoId: string,
+  ): Promise<Desfecho<OperacaoDeRotinaGravada>>;
+
+  /**
    * Devolve a Rotina de `id` no acervo de `usuarioId` (FR-248); ausente —
    * inclusive quando é de outro Usuário — é `nao_encontrado`.
    */
@@ -737,4 +912,24 @@ export interface ArmazenamentoDoAcervo {
     usuarioId: string,
     id: string,
   ): Promise<Desfecho<InicioAutorizado>>;
+
+  /**
+   * Numa **única transação** serializada por Usuário, guarda o Registro de uma
+   * Sessão iniciada pela Agenda, aplica os Agendamentos calculados por
+   * `calcular` sobre o estado lido na mesma transação e conclui o Compromisso
+   * (FR-233, FR-235, FR-256).
+   *
+   * Reenvio do mesmo `registro.id` pelo mesmo Usuário devolve o Registro
+   * guardado com `novo: false`, sem recalcular nem gravar nada; `id` de outro
+   * Usuário é `conflito`. O Compromisso `concluido` já guardado nunca é
+   * substituído (o primeiro Registro permanece); `cancelado` passa a
+   * `concluido`; ausente é inserido. Falha de qualquer gravação desfaz tudo e
+   * chega como `indisponivel`.
+   */
+  inserirRegistroDaAgenda(
+    usuarioId: string,
+    registro: RegistroDeSessao,
+    compromisso: CompromissoPersistido,
+    calcular: CalculoDeAgendamentos,
+  ): Promise<Desfecho<{ registro: RegistroDeSessao; novo: boolean }>>;
 }

@@ -153,6 +153,8 @@ interface OpcoesDoEvento {
   segredoDeOrigem?: string;
   credencial?: string;
   corpo?: unknown;
+  /** Os cookies do navegador, no formato do evento v2: `["nome=valor"]` (018, §4.1). */
+  cookies?: string[];
 }
 
 /**
@@ -200,6 +202,9 @@ function eventoV2(metodo: string, caminho: string, opcoes: OpcoesDoEvento) {
     rawQueryString: consulta,
     queryStringParameters: parametrosDaConsulta,
     headers,
+    // Na Function URL os cookies chegam no campo `cookies`, e não no cabeçalho
+    // `cookie` (018, §4.1).
+    ...(opcoes.cookies === undefined ? {} : { cookies: opcoes.cookies }),
     requestContext: {
       http: { method: metodo, path: caminhoBase, protocol: "HTTP/1.1" },
     },
@@ -212,6 +217,8 @@ interface RespostaMedida {
   readonly status: number;
   readonly corpo: unknown;
   readonly cabecalhos: Record<string, string>;
+  /** Os `Set-Cookie` da resposta, no campo `cookies` do payload v2 (018, §4.1). */
+  readonly cookies: string[];
   readonly bruto: string;
 }
 
@@ -244,6 +251,7 @@ async function pedir(
     JSON.stringify({
       status: resposta.statusCode,
       headers: resposta.headers,
+      cookies: resposta.cookies ?? [],
       body: resposta.body,
     }),
   );
@@ -252,6 +260,7 @@ async function pedir(
     status: resposta.statusCode,
     corpo: corpoLido(resposta.body),
     cabecalhos: resposta.headers,
+    cookies: resposta.cookies ?? [],
     bruto: resposta.body,
   };
 }
@@ -273,6 +282,7 @@ function semCabecalhoPermissivo(resposta: RespostaMedida): void {
 /** Nenhum cookie e nenhum valor reutilizável entre requisições (FR-079). */
 function semCookie(resposta: RespostaMedida): void {
   expect(resposta.cabecalhos["set-cookie"]).toBeUndefined();
+  expect(resposta.cookies).toEqual([]);
 }
 
 describe("as guardas da função, por eventos sintéticos (T1005)", () => {
@@ -379,7 +389,14 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
     expect(entrou.status).toBe(200);
     expect(entrou.corpo).toMatchObject({ nomeDeUsuario });
     expect(entrou.bruto).not.toContain(senha);
-    semCookie(entrou);
+    // 018: o Acesso sai no campo `cookies` do payload v2, `HttpOnly` e `Secure`,
+    // e nunca no corpo (FR-289, FR-297).
+    expect(entrou.cabecalhos["set-cookie"]).toBeUndefined();
+    expect(entrou.cookies).toHaveLength(1);
+    expect(entrou.cookies[0]).toMatch(/^acesso=[A-Za-z0-9_-]{43};/);
+    expect(entrou.cookies[0]).toContain("HttpOnly");
+    expect(entrou.cookies[0]).toContain("Secure");
+    expect(entrou.cookies[0]).toContain("SameSite=Strict");
 
     const cartao = await pedir(funcao, "POST", "/cartoes", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
@@ -739,6 +756,322 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
   }, 60_000);
 });
 
+describe("a paridade das rotas da Agenda (016)", () => {
+  /**
+   * T1605/T1608/T1611 — cada rota da Agenda é chamada **pela função da nuvem**:
+   * a Função monta somente o que `registrarRotasDaAplicacao` registra, e uma
+   * rota fora dela responderia `404 Route ... not found` na AWS (lição da
+   * regressão `9251ae0`). O `bruto` de cada resposta é conferido.
+   */
+  it("roteia /agenda, /agenda/rotinas e /agenda/inicios na função da nuvem, e nunca com 404 de rota", async () => {
+    const nomeDeUsuario = `agenda.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+    const credencial = credencialDe(nomeDeUsuario, senha);
+
+    expect(
+      (
+        await pedir(funcao, "POST", "/usuarios", {
+          segredoDeOrigem: SEGREDO_DE_ORIGEM,
+          corpo: { nomeDeUsuario, senha },
+        })
+      ).status,
+    ).toBe(201);
+
+    const cartao = await pedir(funcao, "POST", "/cartoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { frente: "To walk", verso: "Caminhar" },
+    });
+    const cartaoId = (cartao.corpo as { id: string }).id;
+    const baralho = await pedir(funcao, "POST", "/baralhos", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { nome: "Inglês" },
+    });
+    const baralhoId = (baralho.corpo as { id: string }).id;
+
+    await pedir(funcao, "POST", `/baralhos/${baralhoId}/vinculos`, {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { cartaoId },
+    });
+
+    const rotina = await pedir(funcao, "POST", "/agenda/rotinas", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: {
+        operacaoId: randomUUID(),
+        acao: "criar",
+        baralhoId,
+        dias: [1, 2, 3, 4, 5, 6, 7],
+        quantidade: null,
+        fuso: "UTC",
+      },
+    });
+
+    expect(rotina.status).toBe(201);
+    expect(rotina.bruto).not.toMatch(/Route .* not found/);
+
+    const lista = await pedir(funcao, "GET", "/agenda/rotinas", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(lista.status).toBe(200);
+    expect(lista.corpo).toMatchObject({ rotinas: [{ nomeDoBaralho: "Inglês" }] });
+
+    const hoje = new Date();
+    const segunda = new Date(
+      Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()),
+    );
+
+    segunda.setUTCDate(segunda.getUTCDate() - ((segunda.getUTCDay() + 6) % 7));
+
+    const dataDeHoje = hoje.toISOString().slice(0, 10);
+    const semana = await pedir(
+      funcao,
+      "GET",
+      `/agenda?inicio=${segunda.toISOString().slice(0, 10)}&fuso=UTC`,
+      { segredoDeOrigem: SEGREDO_DE_ORIGEM, credencial },
+    );
+
+    expect(semana.status).toBe(200);
+    expect(semana.corpo).toMatchObject({ hoje: dataDeHoje });
+    expect(semana.bruto).not.toMatch(/Route .* not found/);
+
+    const inicio = await pedir(funcao, "POST", "/agenda/inicios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: {
+        rotinaId: (rotina.corpo as { rotina: { id: string } }).rotina.id,
+        data: dataDeHoje,
+        fuso: "UTC",
+      },
+    });
+
+    expect(inicio.status).toBe(201);
+    expect(inicio.bruto).not.toMatch(/Route .* not found/);
+
+    const inicioId = (inicio.corpo as { inicio: { id: string } }).inicio.id;
+    const conclusao = await pedir(funcao, "POST", "/sessoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: {
+        id: inicioId,
+        inicioAgendaId: inicioId,
+        origem: "baralho",
+        baralhoId,
+        nomeDoBaralho: "Inglês",
+        itens: [
+          {
+            frente: "To walk",
+            verso: "Caminhar",
+            cartaoId,
+            avaliacao: "bom",
+          },
+        ],
+      },
+    });
+
+    expect(conclusao.status).toBe(201);
+
+    /** Sem Credencial, cada rota existe e recusa pela Credencial: `401`, nunca `404`. */
+    const semCredencial = [
+      await pedir(funcao, "GET", "/agenda?inicio=2026-10-05&fuso=UTC", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      }),
+      await pedir(funcao, "GET", "/agenda/rotinas", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      }),
+      await pedir(funcao, "POST", "/agenda/rotinas", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: {},
+      }),
+      await pedir(funcao, "POST", "/agenda/inicios", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: {},
+      }),
+    ];
+
+    for (const resposta of semCredencial) {
+      expect(resposta.status).toBe(401);
+      expect(resposta.bruto).not.toMatch(/Route .* not found/);
+    }
+  }, 60_000);
+});
+
+describe("a paridade das rotas de conta (017)", () => {
+  /**
+   * T1710 — cada rota de conta é chamada **pela função da nuvem**: a Função
+   * monta somente o que `registrarRotasDaAplicacao` registra, e uma rota fora
+   * dela responderia `404 Route ... not found` na AWS (lição da regressão
+   * `9251ae0`). O `bruto` de cada resposta é conferido para que o `404` do
+   * roteador não passe por acidente.
+   */
+  it("roteia GET/PUT/DELETE de /conta na função da nuvem, e nunca com 404 de rota", async () => {
+    const nomeDeUsuario = `conta.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+    const credencial = credencialDe(nomeDeUsuario, senha);
+
+    const cadastro = await pedir(funcao, "POST", "/usuarios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      corpo: { nomeDeUsuario, senha },
+    });
+
+    expect(cadastro.status).toBe(201);
+
+    const leitura = await pedir(funcao, "GET", "/conta", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(leitura.status).toBe(200);
+    expect(leitura.corpo).toMatchObject({
+      nomeDeUsuario,
+      contagens: { cartoes: 0, baralhos: 0, registrosDeSessao: 0, agenda: 0 },
+    });
+    expect(leitura.bruto).not.toMatch(/Route .* not found/);
+
+    const novoNome = `${nomeDeUsuario}.novo`;
+    const renomeado = await pedir(funcao, "PUT", "/conta/nome-de-usuario", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { senhaAtual: senha, novoNomeDeUsuario: novoNome },
+    });
+
+    expect(renomeado.status).toBe(200);
+    expect(renomeado.corpo).toEqual({ nomeDeUsuario: novoNome });
+    expect(renomeado.bruto).not.toMatch(/Route .* not found/);
+
+    const credencialNova = credencialDe(novoNome, senha);
+    const novaSenha = randomBytes(12).toString("base64url");
+    const trocada = await pedir(funcao, "PUT", "/conta/senha", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial: credencialNova,
+      corpo: {
+        senhaAtual: senha,
+        novaSenha,
+        confirmacaoDaSenha: novaSenha,
+      },
+    });
+
+    expect(trocada.status).toBe(204);
+    expect(trocada.bruto).not.toMatch(/Route .* not found/);
+
+    const errada = await pedir(funcao, "DELETE", "/conta", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial: credencialDe(novoNome, novaSenha),
+      corpo: { senhaAtual: senha },
+    });
+
+    expect(errada.status).toBe(403);
+    expect(errada.corpo).toMatchObject({ erro: "senha_atual_incorreta" });
+
+    const excluida = await pedir(funcao, "DELETE", "/conta", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial: credencialDe(novoNome, novaSenha),
+      corpo: { senhaAtual: novaSenha },
+    });
+
+    expect(excluida.status).toBe(204);
+    expect(excluida.bruto).not.toMatch(/Route .* not found/);
+
+    /** Sem Credencial, cada rota existe e recusa pela Credencial: `401`, nunca `404`. */
+    for (const [metodo, caminho] of [
+      ["GET", "/conta"],
+      ["PUT", "/conta/nome-de-usuario"],
+      ["PUT", "/conta/senha"],
+      ["DELETE", "/conta"],
+    ] as const) {
+      const semCredencial = await pedir(funcao, metodo, caminho, {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: {},
+      });
+
+      expect(semCredencial.status, `${metodo} ${caminho}`).toBe(401);
+      expect(semCredencial.bruto).not.toMatch(/Route .* not found/);
+    }
+  }, 60_000);
+});
+
+describe("a paridade das rotas do Acesso temporário (018)", () => {
+  /**
+   * T1809 — o `POST /entrar` estendido, `GET /acesso`, `POST /acesso/renovar` e
+   * `POST /sair` são chamados **pela função da nuvem**, com o cookie no campo
+   * `cookies` do evento v2 — e é por ele que a função devolve o Acesso. O
+   * `bruto` de cada resposta é conferido: o `404` do roteador não pode passar
+   * por acidente (lição da regressão `9251ae0`).
+   */
+  it("roteia Entrar, GET /acesso, renovar e Sair na função da nuvem, com o cookie em `cookies`", async () => {
+    const nomeDeUsuario = `acesso.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+    const credencial = credencialDe(nomeDeUsuario, senha);
+
+    const cadastro = await pedir(funcao, "POST", "/usuarios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      corpo: { nomeDeUsuario, senha },
+    });
+
+    expect(cadastro.status).toBe(201);
+
+    const entrou = await pedir(funcao, "POST", "/entrar", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { continuarConectado: true },
+    });
+
+    expect(entrou.status).toBe(200);
+    expect(entrou.bruto).not.toMatch(/Route .* not found/);
+    expect(entrou.cookies).toHaveLength(1);
+
+    const cookie = (entrou.cookies[0] ?? "").split(";")[0] ?? "";
+
+    expect(cookie).toMatch(/^acesso=/);
+    expect(entrou.bruto).not.toContain(cookie.slice("acesso=".length));
+
+    const reconhecido = await pedir(funcao, "GET", "/acesso", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      cookies: [cookie],
+    });
+
+    expect(reconhecido.status).toBe(200);
+    expect(reconhecido.corpo).toEqual({ nomeDeUsuario });
+
+    /** O Acesso sozinho autoriza o acervo, sem Credencial Basic (FR-090 revisado). */
+    const lista = await pedir(funcao, "GET", "/cartoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      cookies: [cookie],
+    });
+
+    expect(lista.status).toBe(200);
+
+    const renovado = await pedir(funcao, "POST", "/acesso/renovar", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      cookies: [cookie],
+    });
+
+    expect(renovado.status).toBe(204);
+    expect(renovado.bruto).not.toMatch(/Route .* not found/);
+
+    const saiu = await pedir(funcao, "POST", "/sair", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      cookies: [cookie],
+    });
+
+    expect(saiu.status).toBe(204);
+    expect(saiu.bruto).not.toMatch(/Route .* not found/);
+    expect(saiu.cookies[0]).toMatch(/Max-Age=0/);
+
+    const encerrado = await pedir(funcao, "GET", "/acesso", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      cookies: [cookie],
+    });
+
+    expect(encerrado.status).toBe(401);
+    expect(encerrado.corpo).toMatchObject({ erro: "sem_acesso" });
+  }, 60_000);
+});
+
 describe("a inicialização é memorizada e descartável (SC-054)", () => {
   it("compartilha a mesma promise entre invocações concorrentes", async () => {
     let liberar: () => void = () => {};
@@ -957,10 +1290,23 @@ describe("as garantias da função", () => {
       expect(saidas).not.toContain(valor);
     }
 
-    /** Nenhuma resposta trouxe cookie nem valor reutilizável (FR-079). */
+    /**
+     * FR-079 revisado: nenhuma resposta traz cabeçalho `set-cookie` nem
+     * permissivo de outra origem, e o único cookie possível é o do Acesso
+     * temporário, `HttpOnly`, `Secure` e `SameSite=Strict` (018).
+     */
     for (const resposta of respostasObservadas) {
       expect(resposta).not.toMatch(/set-cookie/i);
       expect(resposta).not.toMatch(/access-control-/i);
+
+      const { cookies } = JSON.parse(resposta) as { cookies: string[] };
+
+      for (const cookie of cookies) {
+        expect(cookie).toMatch(/^acesso=/);
+        expect(cookie).toContain("HttpOnly");
+        expect(cookie).toContain("Secure");
+        expect(cookie).toContain("SameSite=Strict");
+      }
     }
   });
 });

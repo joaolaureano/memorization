@@ -8,16 +8,39 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
+  MENSAGEM_DE_ACESSO_EXPIRADO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
+  MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
   NAO_AUTENTICADO,
 } from "./cliente";
 import type {
   Avaliacao,
+  CampoDeConta,
+  CodigoDeErroDeConta,
+  ContagensDaConta,
+  DadosDaConta,
+  DadosDeEntrada,
+  DadosDeExclusaoDeConta,
+  DadosDeNovoNomeDeUsuario,
+  DadosDeTrocaDeSenha,
+  RecusaDeConta,
+  ResultadoDeAcaoDeConta,
+  ResultadoDeAlteracaoDeNomeDeUsuario,
+  ResultadoDeObterAcesso,
+  ResultadoDeObterConta,
+  ResultadoDeRenovarAcesso,
+  ResultadoDeSair,
   Baralho,
   BaralhoComCartoes,
   BaralhoListado,
   Cartao,
+  CodigoDeErroDeAgenda,
+  CompromissoDeEstudo,
+  InicioDeCompromisso,
+  RotinaDeEstudo,
+  SemanaDaAgenda,
   CartaoListado,
   ClienteDoAcervo,
   Credencial,
@@ -102,9 +125,32 @@ export class ClienteHttp implements ClienteDoAcervo {
    */
   private readonly credencial: Credencial | null;
 
-  constructor(enderecoDaApi: string, credencial: Credencial | null = null) {
+  /**
+   * Verdadeiro quando a página opera pelo **Acesso temporário** (018): a
+   * Credencial já não está na memória, e o navegador apresenta o cookie. É o
+   * valor de `continuarConectado` quando uma chamada a `entrar` não o informa —
+   * a verificação de um resultado incerto (017) repete o modo da página.
+   */
+  private readonly usaAcesso: boolean;
+
+  constructor(
+    enderecoDaApi: string,
+    credencial: Credencial | null = null,
+    usaAcesso = false,
+  ) {
     this.endereco = enderecoDaApi.replace(/\/+$/, "");
     this.credencial = credencial;
+    this.usaAcesso = usaAcesso;
+  }
+
+  /**
+   * O único ponto por onde o cliente fala com a rede: **toda** chamada leva
+   * `credentials: "include"`, para o navegador enviar e receber o cookie do
+   * Acesso temporário (018, FR-297). O cookie é `HttpOnly`: nenhum script — este
+   * inclusive — consegue lê-lo.
+   */
+  private pedir(url: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(url, { ...init, credentials: "include" });
   }
 
   /**
@@ -117,11 +163,24 @@ export class ClienteHttp implements ClienteDoAcervo {
    * de usuário existe (FR-088) —, e nenhuma resposta carrega a Senha
    * (FR-078).
    */
-  async entrar(credencial: Credencial): Promise<ResultadoDeEntrar> {
+  async entrar(dados: DadosDeEntrada): Promise<ResultadoDeEntrar> {
+    const credencial: Credencial = {
+      nomeDeUsuario: dados.nomeDeUsuario,
+      senha: dados.senha,
+    };
+
     try {
-      const resposta = await fetch(`${this.endereco}/entrar`, {
+      const resposta = await this.pedir(`${this.endereco}/entrar`, {
         method: "POST",
-        headers: { authorization: cabecalhoDeCredencial(credencial) },
+        headers: {
+          "content-type": "application/json",
+          authorization: cabecalhoDeCredencial(credencial),
+        },
+        // A Credencial vai no cabeçalho; o corpo só diz se um Acesso temporário
+        // deve ser emitido (FR-292), e nunca carrega a Senha.
+        body: JSON.stringify({
+          continuarConectado: dados.continuarConectado ?? this.usaAcesso,
+        }),
       });
 
       if (resposta.status === 200) {
@@ -148,18 +207,105 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  /**
+   * Pergunta se este navegador tem Acesso temporário válido (FR-290):
+   * `200 { nomeDeUsuario }`, ou `401` com `sem_acesso` ou `acesso_expirado`.
+   * Qualquer outra resposta — inclusive o `503` — é `indisponivel`, que **não**
+   * é expiração e não descarta o Acesso (FR-301).
+   */
+  async obterAcesso(): Promise<ResultadoDeObterAcesso> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/acesso`);
+
+      if (resposta.status === 200) {
+        const corpo: unknown = await resposta.json();
+
+        if (
+          typeof corpo === "object" &&
+          corpo !== null &&
+          typeof (corpo as Record<string, unknown>).nomeDeUsuario === "string"
+        ) {
+          return {
+            ok: true,
+            nomeDeUsuario: (corpo as { nomeDeUsuario: string }).nomeDeUsuario,
+          };
+        }
+      }
+
+      if (resposta.status === 401) {
+        const motivo = await this.motivoDoAcesso(resposta);
+
+        if (motivo === "acesso_expirado") {
+          return {
+            ok: false,
+            erro: "acesso_expirado",
+            mensagem: MENSAGEM_DE_ACESSO_EXPIRADO,
+          };
+        }
+
+        if (motivo === "sem_acesso") {
+          return {
+            ok: false,
+            erro: "sem_acesso",
+            mensagem: MENSAGEM_DE_NAO_AUTENTICADO,
+          };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDoAcesso();
+    } catch {
+      return this.falhaDeIndisponibilidadeDoAcesso();
+    }
+  }
+
+  /** Renova o Acesso por uma interação (FR-291): `204`, ou `401`/`503`. */
+  async renovarAcesso(): Promise<ResultadoDeRenovarAcesso> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/acesso/renovar`, {
+        method: "POST",
+      });
+
+      if (resposta.status === 204) {
+        return { ok: true };
+      }
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      return this.falhaDeIndisponibilidadeDoAcesso();
+    } catch {
+      return this.falhaDeIndisponibilidadeDoAcesso();
+    }
+  }
+
+  /** Sair: encerra o Acesso deste navegador (FR-293); só `204` conclui. */
+  async sair(): Promise<ResultadoDeSair> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/sair`, {
+        method: "POST",
+      });
+
+      return resposta.status === 204
+        ? { ok: true }
+        : this.falhaDeIndisponibilidadeDoAcesso();
+    } catch {
+      return this.falhaDeIndisponibilidadeDoAcesso();
+    }
+  }
+
   async criarCartao(
     dados: DadosDeCartao,
   ): Promise<ResultadoDeCriacaoDeCartao> {
     try {
-      const resposta = await fetch(`${this.endereco}/cartoes`, {
+      const resposta = await this.pedir(`${this.endereco}/cartoes`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({ frente: dados.frente, verso: dados.verso }),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 201) {
@@ -184,12 +330,12 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async listarCartoes(): Promise<ResultadoDeListagemDeCartoes> {
     try {
-      const resposta = await fetch(`${this.endereco}/cartoes`, {
+      const resposta = await this.pedir(`${this.endereco}/cartoes`, {
         headers: this.cabecalho(),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -212,14 +358,14 @@ export class ClienteHttp implements ClienteDoAcervo {
     dados: DadosDeBaralho,
   ): Promise<ResultadoDeCriacaoDeBaralho> {
     try {
-      const resposta = await fetch(`${this.endereco}/baralhos`, {
+      const resposta = await this.pedir(`${this.endereco}/baralhos`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({ nome: dados.nome }),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 201) {
@@ -244,12 +390,12 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async listarBaralhos(): Promise<ResultadoDeListagemDeBaralhos> {
     try {
-      const resposta = await fetch(`${this.endereco}/baralhos`, {
+      const resposta = await this.pedir(`${this.endereco}/baralhos`, {
         headers: this.cabecalho(),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -270,13 +416,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async obterBaralho(id: string): Promise<ResultadoDeObterBaralho> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
         { headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -308,7 +454,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     baralhoId: string,
   ): Promise<ResultadoDeVinculacao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
         {
           method: "POST",
@@ -318,7 +464,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 201) {
@@ -352,13 +498,13 @@ export class ClienteHttp implements ClienteDoAcervo {
     baralhoId: string,
   ): Promise<ResultadoDeDesvinculacao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos/${encodeURIComponent(cartaoId)}`,
         { method: "DELETE", headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 204) {
@@ -385,7 +531,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     verso: string,
   ): Promise<ResultadoDeEdicaoDeCartao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/cartoes/${encodeURIComponent(id)}`,
         {
           method: "PUT",
@@ -395,7 +541,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -431,7 +577,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     nome: string,
   ): Promise<ResultadoDeRenomeacaoDeBaralho> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
         {
           method: "PUT",
@@ -441,7 +587,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -474,13 +620,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async excluirCartao(id: string): Promise<ResultadoDeExclusaoDeCartao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/cartoes/${encodeURIComponent(id)}`,
         { method: "DELETE", headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 204) {
@@ -503,13 +649,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/baralhos/${encodeURIComponent(id)}`,
         { method: "DELETE", headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 204) {
@@ -534,7 +680,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     dados: DadosDeUsuario,
   ): Promise<ResultadoDeCriacaoDeUsuario> {
     try {
-      const resposta = await fetch(`${this.endereco}/usuarios`, {
+      const resposta = await this.pedir(`${this.endereco}/usuarios`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({
@@ -575,40 +721,161 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
-  /**
-   * Stubs da Agenda (FR-248, FR-250): o transporte completo chega na Onda B
-   * (T1606+). Até lá, nenhuma das quatro operações é concluída.
-   */
   async obterAgenda(
-    _inicio: string,
-    _fuso: string,
+    inicio: string,
+    fuso: string,
   ): Promise<ResultadoDeObterAgenda> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+    const resultado = await this.pedirAgenda(
+      `/agenda?inicio=${encodeURIComponent(inicio)}&fuso=${encodeURIComponent(fuso)}`,
+      { method: "GET" },
+      [200],
+      lerSemanaDaAgenda,
+    );
+
+    return resultado.ok
+      ? { ok: true, agenda: resultado.valor }
+      : resultado;
   }
 
   async listarRotinas(): Promise<ResultadoDeListarRotinas> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+    const resultado = await this.pedirAgenda(
+      "/agenda/rotinas",
+      { method: "GET" },
+      [200],
+      (corpo) => {
+        const lista =
+          typeof corpo === "object" && corpo !== null
+            ? (corpo as Record<string, unknown>).rotinas
+            : null;
+
+        if (!Array.isArray(lista)) {
+          return null;
+        }
+
+        const rotinas = lista.map(lerRotinaDeEstudo);
+
+        return rotinas.every((rotina) => rotina !== null)
+          ? (rotinas as RotinaDeEstudo[])
+          : null;
+      },
+    );
+
+    return resultado.ok
+      ? { ok: true, rotinas: resultado.valor }
+      : resultado;
   }
 
-  async salvarRotina(_dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
-    };
+  async salvarRotina(dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
+    const resultado = await this.pedirAgenda(
+      "/agenda/rotinas",
+      { method: "POST", body: JSON.stringify(dados) },
+      [200, 201],
+      (corpo) =>
+        typeof corpo === "object" && corpo !== null
+          ? lerRotinaDeEstudo((corpo as Record<string, unknown>).rotina)
+          : null,
+    );
+
+    return resultado.ok
+      ? { ok: true, rotina: resultado.valor }
+      : resultado;
   }
 
   async iniciarCompromisso(
-    _dados: DadosDeInicioDeCompromisso,
+    dados: DadosDeInicioDeCompromisso,
   ): Promise<ResultadoDeIniciarCompromisso> {
+    const resultado = await this.pedirAgenda(
+      "/agenda/inicios",
+      { method: "POST", body: JSON.stringify(dados) },
+      [201],
+      (corpo) =>
+        typeof corpo === "object" && corpo !== null
+          ? lerInicioDeCompromisso((corpo as Record<string, unknown>).inicio)
+          : null,
+    );
+
+    return resultado.ok
+      ? { ok: true, inicio: resultado.valor }
+      : resultado;
+  }
+
+  /**
+   * O transporte comum das quatro operações da Agenda: Credencial no cabeçalho,
+   * `401` vira `nao_autenticado`, os status de sucesso do contrato devolvem o
+   * corpo validado por `ler`, e `400`, `404` e `409` carregam o código estável
+   * do contrato com a mensagem em português. Qualquer outra resposta — corpo
+   * fora do contrato, `503`, falha de rede — vira `indisponivel`, e a operação
+   * **nunca** é apresentada como concluída (FR-251).
+   */
+  private async pedirAgenda<T>(
+    caminho: string,
+    init: { method: "GET" | "POST"; body?: string },
+    sucessos: readonly number[],
+    ler: (corpo: unknown) => T | null,
+  ): Promise<
+    | { ok: true; valor: T }
+    | { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string }
+  > {
+    try {
+      const resposta = await this.pedir(`${this.endereco}${caminho}`, {
+        ...init,
+        headers: {
+          ...(init.body === undefined
+            ? {}
+            : { "content-type": "application/json" }),
+          ...this.cabecalho(),
+        },
+      });
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      if (sucessos.includes(resposta.status)) {
+        const valor = ler(await resposta.json());
+
+        return valor === null
+          ? this.falhaDaAgenda()
+          : { ok: true, valor };
+      }
+
+      const codigoDoStatus: Record<number, readonly CodigoDeErroDeAgenda[]> = {
+        400: ["dados_invalidos"],
+        404: ["nao_encontrado"],
+        409: ["conflito", "sobreposicao"],
+      };
+      const permitidos = codigoDoStatus[resposta.status];
+
+      if (permitidos !== undefined) {
+        const corpo: unknown = await resposta.json();
+
+        if (
+          typeof corpo === "object" &&
+          corpo !== null &&
+          typeof (corpo as Record<string, unknown>).mensagem === "string" &&
+          permitidos.includes(
+            (corpo as Record<string, unknown>).erro as CodigoDeErroDeAgenda,
+          )
+        ) {
+          return {
+            ok: false,
+            erro: (corpo as { erro: CodigoDeErroDeAgenda }).erro,
+            mensagem: (corpo as { mensagem: string }).mensagem,
+          };
+        }
+      }
+
+      return this.falhaDaAgenda();
+    } catch {
+      return this.falhaDaAgenda();
+    }
+  }
+
+  private falhaDaAgenda(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
     return {
       ok: false,
       erro: INDISPONIVEL,
@@ -620,7 +887,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     dados: DadosDeRegistro,
   ): Promise<ResultadoDeRegistroDeSessao> {
     try {
-      const resposta = await fetch(`${this.endereco}/sessoes`, {
+      const resposta = await this.pedir(`${this.endereco}/sessoes`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({
@@ -641,7 +908,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       // 201 é o registro novo e 200 é o mesmo registro reenviado com o mesmo
@@ -681,13 +948,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async obterEstatisticas(desde: string): Promise<ResultadoDeEstatisticas> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/estatisticas?desde=${encodeURIComponent(desde)}`,
         { headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -708,13 +975,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
   async obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/sessoes/${encodeURIComponent(id)}`,
         { headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -755,13 +1022,13 @@ export class ClienteHttp implements ClienteDoAcervo {
     fimDoDia: string,
   ): Promise<ResultadoDoResumoDaRevisao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/revisao?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
         { headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -789,13 +1056,13 @@ export class ClienteHttp implements ClienteDoAcervo {
     fimDoDia: string,
   ): Promise<ResultadoDoLoteDeRevisao> {
     try {
-      const resposta = await fetch(
+      const resposta = await this.pedir(
         `${this.endereco}/revisao/lote?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
         { headers: this.cabecalho() },
       );
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -820,14 +1087,14 @@ export class ClienteHttp implements ClienteDoAcervo {
    */
   async obterPrevias(cartaoIds: string[]): Promise<ResultadoDasPrevias> {
     try {
-      const resposta = await fetch(`${this.endereco}/previas`, {
+      const resposta = await this.pedir(`${this.endereco}/previas`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({ cartaoIds }),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -849,12 +1116,12 @@ export class ClienteHttp implements ClienteDoAcervo {
   /** As Preferências do Usuário mais a lista de algoritmos (FR-212). */
   async obterPreferencias(): Promise<ResultadoDePreferencias> {
     try {
-      const resposta = await fetch(`${this.endereco}/preferencias`, {
+      const resposta = await this.pedir(`${this.endereco}/preferencias`, {
         headers: this.cabecalho(),
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -883,7 +1150,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     limiteDeNovosPorDia: number;
   }): Promise<ResultadoDeSalvarPreferencias> {
     try {
-      const resposta = await fetch(`${this.endereco}/preferencias`, {
+      const resposta = await this.pedir(`${this.endereco}/preferencias`, {
         method: "PUT",
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({
@@ -893,7 +1160,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       });
 
       if (resposta.status === 401) {
-        return this.falhaDeNaoAutenticado();
+        return await this.falhaDeNaoAutenticadoDe(resposta);
       }
 
       if (resposta.status === 200) {
@@ -918,6 +1185,177 @@ export class ClienteHttp implements ClienteDoAcervo {
     } catch {
       return this.falhaDeIndisponibilidadeDePreferencias();
     }
+  }
+
+  /** Nome de usuário atual e contagens (FR-257, FR-258). */
+  async obterConta(): Promise<ResultadoDeObterConta> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/conta`, {
+        headers: this.cabecalho(),
+      });
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      if (resposta.status === 200) {
+        const dados = lerDadosDaConta(await resposta.json());
+
+        if (dados !== null) {
+          return { ok: true, dados };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDaConta();
+    } catch {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+  }
+
+  /**
+   * Altera o Nome de usuário (FR-259..FR-265). `200` traz o nome gravado; as
+   * recusas do contrato são `400` (`dados_invalidos`, `mesmo_nome`), `403`
+   * (`senha_atual_incorreta`) e `409` (`nome_indisponivel`). O `401` é a
+   * Credencial recusada — outra coisa, e distinta do `403` (FR-279).
+   */
+  async alterarNomeDeUsuario(
+    dados: DadosDeNovoNomeDeUsuario,
+  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/conta/nome-de-usuario`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({
+          senhaAtual: dados.senhaAtual,
+          novoNomeDeUsuario: dados.novoNomeDeUsuario,
+        }),
+      });
+
+      if (resposta.status === 200) {
+        const corpo: unknown = await resposta.json();
+
+        if (
+          typeof corpo === "object" &&
+          corpo !== null &&
+          typeof (corpo as Record<string, unknown>).nomeDeUsuario === "string"
+        ) {
+          return {
+            ok: true,
+            nomeDeUsuario: (corpo as { nomeDeUsuario: string }).nomeDeUsuario,
+          };
+        }
+
+        return this.falhaDeIndisponibilidadeDaConta();
+      }
+
+      return await this.traduzirRecusaDeConta(resposta, {
+        400: ["dados_invalidos", "mesmo_nome"],
+        403: ["senha_atual_incorreta"],
+        409: ["nome_indisponivel"],
+      });
+    } catch {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+  }
+
+  /** Troca a Senha (FR-266..FR-271): `204`, ou `400`/`403` do contrato. */
+  async trocarSenha(
+    dados: DadosDeTrocaDeSenha,
+  ): Promise<ResultadoDeAcaoDeConta> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/conta/senha`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({
+          senhaAtual: dados.senhaAtual,
+          novaSenha: dados.novaSenha,
+          confirmacaoDaSenha: dados.confirmacaoDaSenha,
+        }),
+      });
+
+      if (resposta.status === 204) {
+        return { ok: true };
+      }
+
+      return await this.traduzirRecusaDeConta(resposta, {
+        400: ["dados_invalidos", "mesma_senha"],
+        403: ["senha_atual_incorreta"],
+      });
+    } catch {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+  }
+
+  /** Exclui a conta (FR-272..FR-278): `204`, ou `403` do contrato. */
+  async excluirConta(
+    dados: DadosDeExclusaoDeConta,
+  ): Promise<ResultadoDeAcaoDeConta> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/conta`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({ senhaAtual: dados.senhaAtual }),
+      });
+
+      if (resposta.status === 204) {
+        return { ok: true };
+      }
+
+      return await this.traduzirRecusaDeConta(resposta, {
+        403: ["senha_atual_incorreta"],
+      });
+    } catch {
+      return this.falhaDeIndisponibilidadeDaConta();
+    }
+  }
+
+  /**
+   * Traduz a recusa de uma ação da conta: `401` é a Credencial recusada
+   * (`nao_autenticado`); os códigos permitidos por status são os do contrato,
+   * e qualquer outra resposta — outro status, outro código, corpo ilegível —
+   * é `indisponivel`, e a ação continua não concluída (FR-044).
+   */
+  private async traduzirRecusaDeConta(
+    resposta: Response,
+    permitidos: Readonly<Record<number, readonly CodigoDeErroDeConta[]>>,
+  ): Promise<RecusaDeConta> {
+    if (resposta.status === 401) {
+      return await this.falhaDeNaoAutenticadoDe(resposta);
+    }
+
+    const codigos = permitidos[resposta.status];
+
+    if (codigos !== undefined) {
+      const corpo: unknown = await resposta.json();
+
+      if (typeof corpo === "object" && corpo !== null) {
+        const campos = corpo as Record<string, unknown>;
+        const codigo = codigos.find((candidato) => candidato === campos.erro);
+
+        if (codigo !== undefined && typeof campos.mensagem === "string") {
+          return {
+            ok: false,
+            erro: codigo,
+            mensagem: campos.mensagem,
+            ...(ehCampoDeConta(campos.campo) ? { campo: campos.campo } : {}),
+          };
+        }
+      }
+    }
+
+    return this.falhaDeIndisponibilidadeDaConta();
+  }
+
+  private falhaDeIndisponibilidadeDaConta(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
+    };
   }
 
   /**
@@ -967,6 +1405,59 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
 
     return { authorization: cabecalhoDeCredencial(this.credencial) };
+  }
+
+  /**
+   * A recusa por Credencial (`401`), com a mensagem certa: `acesso_expirado`
+   * leva a mensagem de expiração (FR-294), e qualquer outro `401` a mensagem
+   * geral. O corpo ilegível não impede a recusa — ela é `nao_autenticado` de
+   * todo modo.
+   */
+  private async falhaDeNaoAutenticadoDe(resposta: Response): Promise<{
+    ok: false;
+    erro: typeof NAO_AUTENTICADO;
+    mensagem: string;
+  }> {
+    return (await this.motivoDoAcesso(resposta)) === "acesso_expirado"
+      ? {
+          ok: false,
+          erro: NAO_AUTENTICADO,
+          mensagem: MENSAGEM_DE_ACESSO_EXPIRADO,
+        }
+      : this.falhaDeNaoAutenticado();
+  }
+
+  /** O código do Acesso numa recusa `401`: `acesso_expirado`, `sem_acesso` ou nenhum. */
+  private async motivoDoAcesso(
+    resposta: Response,
+  ): Promise<"acesso_expirado" | "sem_acesso" | null> {
+    try {
+      const corpo: unknown = await resposta.json();
+
+      if (typeof corpo === "object" && corpo !== null) {
+        const erro = (corpo as Record<string, unknown>).erro;
+
+        if (erro === "acesso_expirado" || erro === "sem_acesso") {
+          return erro;
+        }
+      }
+    } catch {
+      // Corpo ilegível: sem código de Acesso.
+    }
+
+    return null;
+  }
+
+  private falhaDeIndisponibilidadeDoAcesso(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
+    };
   }
 
   private falhaDeNaoAutenticado(): {
@@ -1170,6 +1661,55 @@ function base64DeTexto(texto: string): string {
   }
 
   return btoa(binario);
+}
+
+/** Reconhece o campo de formulário que a API nomeia numa recusa de validação. */
+function ehCampoDeConta(valor: unknown): valor is CampoDeConta {
+  return (
+    valor === "nomeDeUsuario" ||
+    valor === "senhaAtual" ||
+    valor === "novaSenha" ||
+    valor === "confirmacaoDaSenha"
+  );
+}
+
+function lerContagensDaConta(corpo: unknown): ContagensDaConta | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.cartoes !== "number" ||
+    typeof campos.baralhos !== "number" ||
+    typeof campos.registrosDeSessao !== "number" ||
+    (campos.agenda !== null && typeof campos.agenda !== "number")
+  ) {
+    return null;
+  }
+
+  return {
+    cartoes: campos.cartoes,
+    baralhos: campos.baralhos,
+    registrosDeSessao: campos.registrosDeSessao,
+    agenda: campos.agenda,
+  };
+}
+
+function lerDadosDaConta(corpo: unknown): DadosDaConta | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+  const contagens = lerContagensDaConta(campos.contagens);
+
+  if (typeof campos.nomeDeUsuario !== "string" || contagens === null) {
+    return null;
+  }
+
+  return { nomeDeUsuario: campos.nomeDeUsuario, contagens };
 }
 
 function lerCartao(corpo: unknown): Cartao | null {
@@ -1704,5 +2244,164 @@ function lerPreferencias(corpo: unknown): Preferencias | null {
     algoritmo: campos.algoritmo,
     limiteDeNovosPorDia: campos.limiteDeNovosPorDia,
     algoritmos,
+  };
+}
+
+const ESTADOS_DA_ROTINA = ["ativa", "pausada", "excluida"] as const;
+const ESTADOS_DO_COMPROMISSO = [
+  "pendente",
+  "programado",
+  "nao_realizado",
+  "concluido",
+  "cancelado",
+] as const;
+
+function ehData(valor: unknown): valor is string {
+  return typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor);
+}
+
+function lerRotinaDeEstudo(corpo: unknown): RotinaDeEstudo | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.id !== "string" ||
+    typeof campos.baralhoId !== "string" ||
+    typeof campos.nomeDoBaralho !== "string" ||
+    !Array.isArray(campos.dias) ||
+    !campos.dias.every(
+      (dia) => typeof dia === "number" && Number.isInteger(dia),
+    ) ||
+    (campos.quantidade !== null && typeof campos.quantidade !== "number") ||
+    !ESTADOS_DA_ROTINA.includes(campos.estado as never) ||
+    typeof campos.versao !== "number" ||
+    typeof campos.criadaEm !== "string" ||
+    typeof campos.indisponivel !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    id: campos.id,
+    baralhoId: campos.baralhoId,
+    nomeDoBaralho: campos.nomeDoBaralho,
+    dias: campos.dias as number[],
+    quantidade: campos.quantidade as number | null,
+    estado: campos.estado as RotinaDeEstudo["estado"],
+    versao: campos.versao,
+    criadaEm: campos.criadaEm,
+    indisponivel: campos.indisponivel,
+  };
+}
+
+function lerCompromissoDeEstudo(corpo: unknown): CompromissoDeEstudo | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.rotinaId !== "string" ||
+    !ehData(campos.data) ||
+    typeof campos.baralhoId !== "string" ||
+    typeof campos.nomeDoBaralho !== "string" ||
+    (campos.quantidade !== null && typeof campos.quantidade !== "number") ||
+    !ESTADOS_DO_COMPROMISSO.includes(campos.estado as never) ||
+    typeof campos.indisponivel !== "boolean" ||
+    (campos.registroId !== null && typeof campos.registroId !== "string")
+  ) {
+    return null;
+  }
+
+  return {
+    rotinaId: campos.rotinaId,
+    data: campos.data,
+    baralhoId: campos.baralhoId,
+    nomeDoBaralho: campos.nomeDoBaralho,
+    quantidade: campos.quantidade as number | null,
+    estado: campos.estado as CompromissoDeEstudo["estado"],
+    indisponivel: campos.indisponivel,
+    registroId: campos.registroId as string | null,
+  };
+}
+
+function lerListaDeCompromissos(corpo: unknown): CompromissoDeEstudo[] | null {
+  if (!Array.isArray(corpo)) {
+    return null;
+  }
+
+  const lidos = corpo.map(lerCompromissoDeEstudo);
+
+  return lidos.every((compromisso) => compromisso !== null)
+    ? (lidos as CompromissoDeEstudo[])
+    : null;
+}
+
+function lerSemanaDaAgenda(corpo: unknown): SemanaDaAgenda | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+  const compromissos = lerListaDeCompromissos(campos.compromissos);
+  const deHoje = lerListaDeCompromissos(campos.compromissosDeHoje);
+
+  if (
+    !ehData(campos.inicio) ||
+    !ehData(campos.hoje) ||
+    typeof campos.fuso !== "string" ||
+    compromissos === null ||
+    deHoje === null
+  ) {
+    return null;
+  }
+
+  return {
+    inicio: campos.inicio,
+    hoje: campos.hoje,
+    fuso: campos.fuso,
+    compromissos,
+    compromissosDeHoje: deHoje,
+  };
+}
+
+function lerInicioDeCompromisso(corpo: unknown): InicioDeCompromisso | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.id !== "string" ||
+    typeof campos.rotinaId !== "string" ||
+    !ehData(campos.data) ||
+    typeof campos.baralhoId !== "string" ||
+    typeof campos.nomeDoBaralho !== "string" ||
+    !Array.isArray(campos.cartoes) ||
+    (campos.quantidadeSolicitada !== null &&
+      typeof campos.quantidadeSolicitada !== "number")
+  ) {
+    return null;
+  }
+
+  const cartoes = campos.cartoes.map(lerCartao);
+
+  if (!cartoes.every((cartao) => cartao !== null)) {
+    return null;
+  }
+
+  return {
+    id: campos.id,
+    rotinaId: campos.rotinaId,
+    data: campos.data,
+    baralhoId: campos.baralhoId,
+    nomeDoBaralho: campos.nomeDoBaralho,
+    cartoes: cartoes as Cartao[],
+    quantidadeSolicitada: campos.quantidadeSolicitada as number | null,
   };
 }

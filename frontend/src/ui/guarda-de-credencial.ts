@@ -1,10 +1,13 @@
 import { NAO_AUTENTICADO } from "../acervo-cliente/cliente";
 import type {
   ClienteDoAcervo,
-  Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeEntrada,
+  DadosDeExclusaoDeConta,
   DadosDeInicioDeCompromisso,
+  DadosDeNovoNomeDeUsuario,
+  DadosDeTrocaDeSenha,
   DadosDeRegistro,
   DadosDeRotina,
   DadosDeUsuario,
@@ -62,7 +65,7 @@ export function comGuardaDeCredencial(
   }
 
   return {
-    entrar: (credencial: Credencial) => cliente.entrar(credencial),
+    entrar: (dados: DadosDeEntrada) => cliente.entrar(dados),
 
     criarCartao: async (dados: DadosDeCartao) =>
       vigiar(await cliente.criarCartao(dados)),
@@ -131,5 +134,26 @@ export function comGuardaDeCredencial(
 
     iniciarCompromisso: async (dados: DadosDeInicioDeCompromisso) =>
       vigiar(await cliente.iniciarCompromisso(dados)),
+
+    obterConta: async () => vigiar(await cliente.obterConta()),
+
+    alterarNomeDeUsuario: async (dados: DadosDeNovoNomeDeUsuario) =>
+      vigiar(await cliente.alterarNomeDeUsuario(dados)),
+
+    trocarSenha: async (dados: DadosDeTrocaDeSenha) =>
+      vigiar(await cliente.trocarSenha(dados)),
+
+    excluirConta: async (dados: DadosDeExclusaoDeConta) =>
+      vigiar(await cliente.excluirConta(dados)),
+
+    // O Acesso temporário (018): a carga e a renovação passam pela guarda, de
+    // modo que a recusa por Acesso expirado leva a Entrar (FR-091 revisado,
+    // FR-294); `obterAcesso` e `sair` são da casca, que trata os próprios
+    // resultados.
+    obterAcesso: () => cliente.obterAcesso(),
+
+    renovarAcesso: async () => vigiar(await cliente.renovarAcesso()),
+
+    sair: () => cliente.sair(),
   };
 }

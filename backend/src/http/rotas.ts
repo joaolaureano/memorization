@@ -1,8 +1,13 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { ACESSO_EXPIRADO, SEM_ACESSO } from "../acesso/acesso.ts";
+import type { Acessos } from "../acesso/acesso.ts";
 import type { Acervo } from "../acervo/acervo.ts";
+import type { AcaoDeRotina } from "../agenda/tipos.ts";
+import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 import type { Identidade } from "../identidade/identidade.ts";
+import { credencialDoCabecalho } from "./credencial.ts";
 
 /**
  * O construtor do `Acervo` de **um** Usuário. As rotas o chamam por
@@ -95,6 +100,12 @@ const corpoDeUsuario = z.object({
  */
 const corpoDeRegistro = z.object({
   id: z.string(),
+  /**
+   * Identificador do Início autorizado pela Agenda, quando a Sessão foi iniciada
+   * por um Compromisso (FR-254). A correspondência com o snapshot do servidor é
+   * julgada pelo `Acervo`.
+   */
+  inicioAgendaId: z.string().optional(),
   origem: z.string(),
   baralhoId: z.string(),
   nomeDoBaralho: z.string(),
@@ -106,6 +117,40 @@ const corpoDeRegistro = z.object({
       avaliacao: z.string(),
     }),
   ),
+});
+
+/**
+ * Forma da consulta de `GET /agenda`: o início da semana e o fuso IANA do
+ * navegador (contrato da `016`). Datas e fuso válidos são julgados pelo
+ * `Acervo`.
+ */
+const consultaDaAgenda = z.object({
+  inicio: z.string(),
+  fuso: z.string(),
+});
+
+/**
+ * Forma do corpo de `POST /agenda/rotinas`: a intenção completa da operação
+ * (contrato da `016`). O esquema confere só a forma; dias, quantidade, versão,
+ * ação e fuso são julgados pelo `Acervo`, com o mesmo código `dados_invalidos`.
+ */
+const corpoDeRotina = z.object({
+  operacaoId: z.string(),
+  id: z.string().optional(),
+  versao: z.number().optional(),
+  acao: z.string(),
+  baralhoId: z.string().optional(),
+  dias: z.array(z.number()).optional(),
+  quantidade: z.number().nullable().optional(),
+  confirmarSobreposicao: z.boolean().optional(),
+  fuso: z.string(),
+});
+
+/** Forma do corpo de `POST /agenda/inicios` (contrato da `016`). */
+const corpoDeInicio = z.object({
+  rotinaId: z.string(),
+  data: z.string(),
+  fuso: z.string(),
 });
 
 /**
@@ -599,6 +644,118 @@ export function registrarRotasDeSessoes(
 }
 
 /**
+ * Código HTTP de cada recusa da Agenda (contrato da `016`): entrada inválida
+ * 400, recurso ausente — ou de outro dono — 404, versão ou estado em conflito
+ * 409, sobreposição a confirmar 409 e armazenamento indisponível 503. O corpo é
+ * sempre `{ erro, mensagem }`, com a mensagem em português do `Acervo`.
+ */
+const STATUS_DA_AGENDA = {
+  dados_invalidos: 400,
+  nao_encontrado: 404,
+  conflito: 409,
+  sobreposicao: 409,
+  indisponivel: INDISPONIVEL,
+} as const;
+
+const DADOS_DA_AGENDA_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados da Agenda são inválidos.",
+} as const;
+
+/**
+ * Registra as rotas da Agenda de estudo sobre o `Acervo` de quem Entrou:
+ * `GET /agenda`, `GET /agenda/rotinas`, `POST /agenda/rotinas` e
+ * `POST /agenda/inicios` (contrato da `016`).
+ *
+ * Mesma estrutura fina das demais rotas: a Credencial já foi exigida pelo hook
+ * (FR-090), o `Acervo` é construído **dentro** de cada handler com o dono da
+ * requisição — o `usuarioId` nunca vem do corpo (FR-248) — e toda regra é
+ * julgada pelo `Acervo`. `POST /agenda/rotinas` responde 201 ao **criar** e 200
+ * nas demais ações e no reenvio idempotente (FR-249).
+ */
+export function registrarRotasDeAgenda(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  servidor.get("/agenda", async (requisicao, resposta) => {
+    const consulta = consultaDaAgenda.safeParse(requisicao.query);
+
+    if (!consulta.success) {
+      return resposta.status(400).send(DADOS_DA_AGENDA_INVALIDOS);
+    }
+
+    const resultado = await acervoDe(
+      requisicao.usuarioQueEntrou.id,
+    ).obterAgenda(consulta.data.inicio, consulta.data.fuso);
+
+    if (!resultado.ok) {
+      return resposta
+        .status(STATUS_DA_AGENDA[resultado.erro])
+        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+    }
+
+    return resposta.status(200).send(resultado.agenda);
+  });
+
+  servidor.get("/agenda/rotinas", async (requisicao, resposta) => {
+    const resultado = await acervoDe(
+      requisicao.usuarioQueEntrou.id,
+    ).listarRotinas();
+
+    if (!resultado.ok) {
+      return resposta
+        .status(STATUS_DA_AGENDA[resultado.erro])
+        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+    }
+
+    return resposta.status(200).send({ rotinas: resultado.rotinas });
+  });
+
+  servidor.post("/agenda/rotinas", async (requisicao, resposta) => {
+    const corpo = corpoDeRotina.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_AGENDA_INVALIDOS);
+    }
+
+    const { acao, ...resto } = corpo.data;
+    const resultado = await acervoDe(
+      requisicao.usuarioQueEntrou.id,
+    ).salvarRotina({ ...resto, acao: acao as AcaoDeRotina });
+
+    if (!resultado.ok) {
+      return resposta
+        .status(STATUS_DA_AGENDA[resultado.erro])
+        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+    }
+
+    return resposta
+      .status(resultado.criada ? 201 : 200)
+      .send({ rotina: resultado.rotina });
+  });
+
+  servidor.post("/agenda/inicios", async (requisicao, resposta) => {
+    const corpo = corpoDeInicio.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_AGENDA_INVALIDOS);
+    }
+
+    const resultado = await acervoDe(
+      requisicao.usuarioQueEntrou.id,
+    ).iniciarCompromisso(corpo.data);
+
+    if (!resultado.ok) {
+      return resposta
+        .status(STATUS_DA_AGENDA[resultado.erro])
+        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+    }
+
+    return resposta.status(201).send({ inicio: resultado.inicio });
+  });
+}
+
+/**
  * Registra as rotas de Revisão do contrato sobre o `Acervo` de quem Entrou:
  * `GET /revisao?inicioDoDia=<ISO>&fimDoDia=<ISO>`, `GET /revisao/lote` com a
  * mesma consulta e `POST /previas` (contrato da `015`, §4).
@@ -797,25 +954,374 @@ export function registrarRotasDeUsuarios(
 }
 
 /**
- * Registra a rota de Entrar do contrato: `POST /entrar`
- * (`specs/008-entrar/contracts/api-entrar.md`).
- *
- * A verificação da Credencial **já aconteceu** no hook `onRequest`, que é o
- * ponto único onde ela é conferida (FR-090): quando este handler roda, a
- * Credencial existe e confere, e a requisição carrega o Usuário que Entrou.
- * Por isso a rota não tem corpo de requisição, não valida forma alguma e não
- * tem caminho de recusa próprio — ela apenas **responde quem entrou**, com
- * exatamente `id` e `nomeDeUsuario` (FR-086, FR-046).
- *
- * O `401` de Credencial que não confere, ausente ou malformada é do hook, com a
- * mensagem única de recusa (FR-088), e nenhuma resposta desta rota carrega
- * `Set-Cookie` ou valor reutilizável (FR-079).
+ * Forma dos corpos das rotas de conta (017): textos, e nada mais é exigido na
+ * borda. O descarte de espaços, o alfabeto, o intervalo e a Senha atual são
+ * julgados exclusivamente pelo `Identidade`; forma inválida usa o mesmo código
+ * `dados_invalidos` da recusa de regra, para o cliente ter um só caminho.
  */
-export function registrarRotaDeEntrada(servidor: FastifyInstance): void {
-  servidor.post("/entrar", async (requisicao, resposta) =>
-    resposta.status(200).send({
-      id: requisicao.usuarioQueEntrou.id,
-      nomeDeUsuario: requisicao.usuarioQueEntrou.nomeDeUsuario,
-    }),
-  );
+const corpoDeNovoNomeDeUsuario = z.object({
+  senhaAtual: z.string(),
+  novoNomeDeUsuario: z.string(),
+});
+const corpoDeTrocaDeSenha = z.object({
+  senhaAtual: z.string(),
+  novaSenha: z.string(),
+  confirmacaoDaSenha: z.string(),
+});
+const corpoDeExclusaoDeConta = z.object({
+  senhaAtual: z.string(),
+});
+
+const DADOS_DA_CONTA_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados informados são inválidos.",
+} as const;
+
+/**
+ * Traduz a recusa da gestão da conta em resposta: `400` para regra violada,
+ * `403` para a Senha atual incorreta — e não `401`, que é reservado à Credencial
+ * recusada e dispararia o descarte da Credencial (FR-091, FR-279) —, `409` para
+ * o Nome de usuário indisponível e `503` para a falha do armazenamento. A
+ * resposta carrega apenas código, mensagem e campo: nunca a Senha (FR-078).
+ */
+function responderRecusaDeConta(
+  resposta: FastifyReply,
+  recusa: {
+    erro: string;
+    mensagem: string;
+    campo?: string;
+  },
+) {
+  const status =
+    recusa.erro === "senha_atual_incorreta"
+      ? 403
+      : recusa.erro === "nome_indisponivel"
+        ? 409
+        : recusa.erro === "indisponivel"
+          ? INDISPONIVEL
+          : 400;
+
+  return resposta.status(status).send({
+    erro: recusa.erro,
+    mensagem: recusa.mensagem,
+    ...(recusa.campo === undefined ? {} : { campo: recusa.campo }),
+  });
+}
+
+/**
+ * Registra as rotas de gestão da conta do Usuário (017): `GET /conta`,
+ * `PUT /conta/nome-de-usuario`, `PUT /conta/senha` e `DELETE /conta`. Operam
+ * sempre sobre o Usuário da Credencial apresentada, que o hook decorou na
+ * requisição — não há como alcançar a conta de outro Usuário (FR-287).
+ */
+export function registrarRotasDeConta(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+  acessos: Acessos,
+): void {
+  /**
+   * 018 (FR-296): trocar a Senha ou alterar o Nome de usuário **encerra todos os
+   * Acessos** do Usuário — outros navegadores incluídos — e, quando a requisição
+   * foi autenticada por Acesso, emite um Acesso **novo** para este navegador,
+   * que segue operando sem Entrar de novo. Devolve `false` quando o
+   * armazenamento falha: a mudança já foi aplicada, mas os Acessos antigos
+   * podem continuar valendo, e a resposta não pode ser de sucesso.
+   */
+  async function renovarOsAcessos(
+    requisicao: FastifyRequest,
+    resposta: FastifyReply,
+  ): Promise<boolean> {
+    const usuarioId = requisicao.usuarioQueEntrou.id;
+    const encerrados = await acessos.encerrarTodosDoUsuario(usuarioId);
+
+    if (!encerrados.ok) {
+      return false;
+    }
+
+    if (requisicao.acessoDaRequisicao === null) {
+      return true;
+    }
+
+    const emitido = await acessos.emitir(usuarioId);
+
+    if (!emitido.ok) {
+      return false;
+    }
+
+    resposta.header("set-cookie", acessos.cookieDeAcesso(emitido.valor));
+
+    return true;
+  }
+
+  servidor.get("/conta", async (requisicao, resposta) => {
+    const resultado = await identidade.obterConta(
+      requisicao.usuarioQueEntrou.id,
+    );
+
+    if (!resultado.ok) {
+      return responderIndisponivel(resposta, resultado);
+    }
+
+    return resposta.status(200).send({
+      nomeDeUsuario: resultado.conta.nomeDeUsuario,
+      contagens: resultado.conta.contagens,
+    });
+  });
+
+  servidor.put("/conta/nome-de-usuario", async (requisicao, resposta) => {
+    const corpo = corpoDeNovoNomeDeUsuario.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_CONTA_INVALIDOS);
+    }
+
+    const resultado = await identidade.alterarNomeDeUsuario(
+      requisicao.usuarioQueEntrou.id,
+      corpo.data,
+    );
+
+    if (!resultado.ok) {
+      return responderRecusaDeConta(resposta, resultado);
+    }
+
+    if (!(await renovarOsAcessos(requisicao, resposta))) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta
+      .status(200)
+      .send({ nomeDeUsuario: resultado.nomeDeUsuario });
+  });
+
+  servidor.put("/conta/senha", async (requisicao, resposta) => {
+    const corpo = corpoDeTrocaDeSenha.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_CONTA_INVALIDOS);
+    }
+
+    const resultado = await identidade.trocarSenha(
+      requisicao.usuarioQueEntrou.id,
+      corpo.data,
+    );
+
+    if (!resultado.ok) {
+      return responderRecusaDeConta(resposta, resultado);
+    }
+
+    if (!(await renovarOsAcessos(requisicao, resposta))) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(204).send();
+  });
+
+  servidor.delete("/conta", async (requisicao, resposta) => {
+    const corpo = corpoDeExclusaoDeConta.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_CONTA_INVALIDOS);
+    }
+
+    const resultado = await identidade.excluirConta(
+      requisicao.usuarioQueEntrou.id,
+      corpo.data,
+    );
+
+    if (!resultado.ok) {
+      return responderRecusaDeConta(resposta, resultado);
+    }
+
+    // Os Acessos caíram por cascata com o Usuário; o cookie deste navegador é
+    // limpo, e nenhum Acesso novo é emitido (FR-296).
+    return resposta
+      .header("set-cookie", acessos.cookieDeLimpeza())
+      .status(204)
+      .send();
+  });
+}
+
+/**
+ * Forma do corpo **opcional** de `POST /entrar` (018): a Credencial pode vir pelo
+ * corpo, além do cabeçalho, e `continuarConectado` — padrão `true` — decide se
+ * um Acesso temporário é emitido (FR-292).
+ */
+const corpoDeEntrada = z.object({
+  nomeDeUsuario: z.string().optional(),
+  senha: z.string().optional(),
+  continuarConectado: z.boolean().optional(),
+});
+
+/**
+ * Registra a rota de Entrar do contrato: `POST /entrar`
+ * (`specs/008-entrar/contracts/api-entrar.md`, estendido pela `018`).
+ *
+ * A rota é isenta do hook de Credencial: ela mesma verifica a Credencial — pelo
+ * cabeçalho `Authorization: Basic` ou pelo corpo `{ nomeDeUsuario, senha }` —
+ * com a mesma recusa única de sempre (FR-088), `401 credencial_invalida`, e
+ * `503` quando o armazenamento falha (FR-044, FR-045).
+ *
+ * No sucesso, responde `200` com `id` e `nomeDeUsuario` — nunca a Senha, nunca o
+ * Acesso no corpo (FR-078, FR-297). Com `continuarConectado` verdadeiro (o
+ * padrão), **revoga** o Acesso do cookie atual, se houver, emite um novo e o
+ * entrega em `Set-Cookie` `HttpOnly` (FR-289, FR-292); com `false`, revoga e
+ * limpa o do cookie atual e **não** emite outro — a Credencial segue valendo só
+ * na memória da página aberta (FR-090 revisado).
+ */
+export function registrarRotaDeEntrada(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+  acessos: Acessos,
+): void {
+  servidor.post("/entrar", async (requisicao, resposta) => {
+    const corpo = corpoDeEntrada.safeParse(requisicao.body ?? {});
+
+    if (!corpo.success) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    const credencial =
+      credencialDoCabecalho(requisicao.headers.authorization) ??
+      (corpo.data.nomeDeUsuario !== undefined &&
+      corpo.data.senha !== undefined
+        ? {
+            nomeDeUsuario: corpo.data.nomeDeUsuario,
+            senha: corpo.data.senha,
+          }
+        : null);
+
+    if (credencial === null) {
+      return resposta.status(401).send(CREDENCIAL_INVALIDA);
+    }
+
+    const verificada = await identidade.autenticar(credencial);
+
+    if (!verificada.ok) {
+      if (verificada.erro === "indisponivel") {
+        return responderIndisponivel(resposta, verificada);
+      }
+
+      return resposta.status(401).send(CREDENCIAL_INVALIDA);
+    }
+
+    const valorAtual = acessos.valorDoCookie(requisicao.headers.cookie);
+
+    // O novo Entrar **substitui** o Acesso deste navegador: o anterior é
+    // revogado antes de qualquer outro passo (D4, A2).
+    const revogado = await acessos.encerrar(valorAtual);
+
+    if (!revogado.ok) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    if (corpo.data.continuarConectado ?? true) {
+      const emitido = await acessos.emitir(verificada.usuario.id);
+
+      if (!emitido.ok) {
+        return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+      }
+
+      resposta.header("set-cookie", acessos.cookieDeAcesso(emitido.valor));
+    } else if (valorAtual !== undefined) {
+      resposta.header("set-cookie", acessos.cookieDeLimpeza());
+    }
+
+    return resposta.status(200).send({
+      id: verificada.usuario.id,
+      nomeDeUsuario: verificada.usuario.nomeDeUsuario,
+    });
+  });
+}
+
+/**
+ * Registra as rotas do Acesso temporário (018): `GET /acesso`,
+ * `POST /acesso/renovar` e `POST /sair`.
+ *
+ * Todas leem o cookie e respondem por conta própria — são isentas do hook —,
+ * porque cada recusa tem o seu código e **limpa o cookie**, que é `HttpOnly` e
+ * não pode ser apagado por script (A3): `401 sem_acesso` quando não há Acesso,
+ * `401 acesso_expirado` quando a linha existe e venceu. A falha do
+ * armazenamento é `503` e **nunca** limpa o cookie: não é expiração (FR-301).
+ * O Acesso nunca aparece no corpo (FR-297, FR-305).
+ */
+export function registrarRotasDeAcesso(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+  acessos: Acessos,
+): void {
+  /** Valida e renova o Acesso do cookie e resolve o Usuário dele. */
+  async function autorizarCookie(requisicao: FastifyRequest) {
+    const autorizado = await acessos.autorizar(
+      acessos.valorDoCookie(requisicao.headers.cookie),
+    );
+
+    if (!autorizado.ok) {
+      return autorizado;
+    }
+
+    const usuario = await identidade.obterUsuario(autorizado.usuarioId);
+
+    if (!usuario.ok) {
+      return {
+        ok: false as const,
+        erro:
+          usuario.erro === "indisponivel"
+            ? ("indisponivel" as const)
+            : ("sem_acesso" as const),
+      };
+    }
+
+    return { ok: true as const, usuario: usuario.usuario };
+  }
+
+  function recusar(
+    resposta: FastifyReply,
+    erro: "sem_acesso" | "acesso_expirado" | "indisponivel",
+  ) {
+    if (erro === "indisponivel") {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta
+      .header("set-cookie", acessos.cookieDeLimpeza())
+      .status(401)
+      .send(erro === "acesso_expirado" ? ACESSO_EXPIRADO : SEM_ACESSO);
+  }
+
+  servidor.get("/acesso", async (requisicao, resposta) => {
+    const autorizado = await autorizarCookie(requisicao);
+
+    if (!autorizado.ok) {
+      return recusar(resposta, autorizado.erro);
+    }
+
+    return resposta
+      .status(200)
+      .send({ nomeDeUsuario: autorizado.usuario.nomeDeUsuario });
+  });
+
+  servidor.post("/acesso/renovar", async (requisicao, resposta) => {
+    const autorizado = await autorizarCookie(requisicao);
+
+    if (!autorizado.ok) {
+      return recusar(resposta, autorizado.erro);
+    }
+
+    return resposta.status(204).send();
+  });
+
+  servidor.post("/sair", async (requisicao, resposta) => {
+    const encerrado = await acessos.encerrar(
+      acessos.valorDoCookie(requisicao.headers.cookie),
+    );
+
+    if (!encerrado.ok) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta
+      .header("set-cookie", acessos.cookieDeLimpeza())
+      .status(204)
+      .send();
+  });
 }

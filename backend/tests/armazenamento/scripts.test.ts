@@ -195,7 +195,11 @@ describe("scripts de inicialização do backend", () => {
     expect(SCRIPTS.typecheck).toBe("tsc --noEmit");
     expect(SCRIPTS.build).toBe("node scripts/construir.mjs");
     expect(SCRIPTS.lint).toBe("eslint .");
-    expect(SCRIPTS.test).toBe("vitest run");
+    expect(SCRIPTS.test).toBe("npm run test:geral && npm run test:postgresql");
+    expect(SCRIPTS["test:geral"]).toBe("vitest run");
+    expect(SCRIPTS["test:postgresql"]).toBe(
+      "vitest run --config vitest.postgresql.config.ts",
+    );
   });
 });
 

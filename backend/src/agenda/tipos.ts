@@ -34,6 +34,12 @@ export interface RotinaDeEstudo {
   versao: number;
   /** ISO-8601 UTC da criação. */
   criadaEm: string;
+  /**
+   * `true` quando o Baralho da Rotina foi excluído ou está sem Cartões
+   * (FR-243): a Rotina continua programada, mas novos inícios não são possíveis
+   * até o ajuste.
+   */
+  indisponivel: boolean;
 }
 
 /**

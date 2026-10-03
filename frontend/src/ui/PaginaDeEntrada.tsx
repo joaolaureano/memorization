@@ -1,7 +1,11 @@
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
+import type {
+  ClienteDoAcervo,
+  Credencial,
+  Usuario,
+} from "../acervo-cliente/cliente";
 import { CampoDeSenha } from "./CampoDeSenha";
 
 /**
@@ -40,9 +44,16 @@ import { CampoDeSenha } from "./CampoDeSenha";
  * de uma operação (FR-091) ou a conclusão de Sair (FR-096).
  */
 export interface AvisoDaEntrada {
-  tipo: "falha" | "saida";
+  tipo: "falha" | "saida" | "conta-excluida";
   texto: string;
 }
+
+/**
+ * A conclusão de «Excluir conta», anunciada na tela "Entrar" (017, FR-276):
+ * a Credencial foi descartada junto com a conta.
+ */
+export const MENSAGEM_DE_CONTA_EXCLUIDA =
+  "Conta excluída. Todos os dados do Usuário foram removidos.";
 
 /**
  * A conclusão de Sair, anunciada na tela "Entrar" (FR-096). O texto nomeia a
@@ -51,9 +62,19 @@ export interface AvisoDaEntrada {
 export const MENSAGEM_DE_SAIDA =
   "Você saiu. A Credencial foi descartada; informe o Nome de usuário e a Senha para Entrar novamente.";
 
+/**
+ * O que a tela entrega a quem passará a manter o acesso (018): quem entrou e se
+ * a pessoa escolheu **continuar conectado neste navegador** — com o Acesso
+ * temporário no cookie — ou operar só com a Credencial na memória da página.
+ */
+export interface EscolhaDeEntrada {
+  continuarConectado: boolean;
+  usuario: Usuario;
+}
+
 interface PropriedadesDaPaginaDeEntrada {
   cliente: ClienteDoAcervo;
-  aoEntrar: (credencial: Credencial) => void;
+  aoEntrar: (credencial: Credencial, escolha: EscolhaDeEntrada) => void;
   aviso?: AvisoDaEntrada | null;
 }
 
@@ -64,6 +85,9 @@ export function PaginaDeEntrada({
 }: PropriedadesDaPaginaDeEntrada) {
   const [nomeDeUsuario, setNomeDeUsuario] = useState("");
   const [senha, setSenha] = useState("");
+  // FR-292: a continuidade vem marcada por padrão; desmarcá-la é escolha da
+  // pessoa, e nenhum Acesso é emitido.
+  const [continuarConectado, setContinuarConectado] = useState(true);
   const [submetendo, setSubmetendo] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
 
@@ -78,7 +102,10 @@ export function PaginaDeEntrada({
     // A Credencial é montada aqui, apresentada ao cliente e — no sucesso —
     // entregue a quem passará a mantê-la (FR-089).
     const credencial: Credencial = { nomeDeUsuario, senha };
-    const resultado = await cliente.entrar(credencial);
+    const resultado = await cliente.entrar({
+      ...credencial,
+      continuarConectado,
+    });
 
     setSubmetendo(false);
 
@@ -86,7 +113,7 @@ export function PaginaDeEntrada({
       // A Senha sai do estado da tela assim que deixa de ser necessária
       // (FR-078).
       setSenha("");
-      aoEntrar(credencial);
+      aoEntrar(credencial, { continuarConectado, usuario: resultado.usuario });
       return;
     }
 
@@ -114,16 +141,19 @@ export function PaginaDeEntrada({
         <h1>Entrar</h1>
 
         {aviso !== null &&
-          (aviso.tipo === "saida" ? (
+          (aviso.tipo !== "falha" ? (
             // FR-096: a conclusão de Sair é anunciada por região ativa polida. O
             // papel já implica o anúncio; os atributos vêm explícitos para que a
-            // semântica seja asseverável por teste.
+            // semântica seja asseverável por teste. A de «Excluir conta» segue
+            // o mesmo caminho (017, FR-276).
             <p
               className="aviso aviso--sucesso"
               role="status"
               aria-live="polite"
               aria-atomic="true"
-              aria-label="Saída concluída"
+              aria-label={
+                aviso.tipo === "saida" ? "Saída concluída" : "Conta excluída"
+              }
             >
               {aviso.texto}
             </p>
@@ -180,6 +210,27 @@ export function PaginaDeEntrada({
             autoComplete="current-password"
             referencia={campoDaSenha}
           />
+
+          {/* FR-292, FR-302, FR-303: a opção é uma caixa de seleção nativa —
+              alcançável por Tab, alternada por Espaço, com o foco visível por
+              contorno e não só por cor —, marcada por padrão. */}
+          <div className="campo campo--opcao">
+            <label className="opcao" htmlFor="campo-continuar-conectado">
+              <input
+                id="campo-continuar-conectado"
+                type="checkbox"
+                checked={continuarConectado}
+                onChange={(evento) => setContinuarConectado(evento.target.checked)}
+                aria-describedby="ajuda-continuar-conectado"
+              />
+              <span>Continuar conectado neste navegador</span>
+            </label>
+            <p id="ajuda-continuar-conectado" className="ajuda">
+              {continuarConectado
+                ? "Você volta direto ao Início ao recarregar ou reabrir, até 5 minutos sem usar a aplicação."
+                : "Ao recarregar ou fechar a página, será preciso Entrar de novo."}
+            </p>
+          </div>
 
           <button
             className="botao botao--primario"

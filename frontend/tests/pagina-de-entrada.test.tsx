@@ -6,7 +6,11 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
 } from "../src/acervo-cliente/cliente";
 import type { Credencial } from "../src/acervo-cliente/cliente";
-import { MENSAGEM_DE_SAIDA, PaginaDeEntrada } from "../src/ui/PaginaDeEntrada";
+import {
+  MENSAGEM_DE_SAIDA,
+  PaginaDeEntrada,
+  type EscolhaDeEntrada,
+} from "../src/ui/PaginaDeEntrada";
 import {
   CREDENCIAL_DE_PROVA,
   SENHA_DE_PROVA,
@@ -105,7 +109,7 @@ function apertarEnter(elemento: HTMLElement): void {
 
 /** Renderiza a tela "Entrar" sobre o Adapter de memória. */
 function renderizarEntrada(
-  aoEntrar: (credencial: Credencial) => void = () => {},
+  aoEntrar: (credencial: Credencial, escolha: EscolhaDeEntrada) => void = () => {},
 ): ReturnType<typeof clienteDeProva> {
   const cliente = clienteDeProva();
 
@@ -148,7 +152,10 @@ describe("PaginaDeEntrada — campos, acesso e Credencial", () => {
 
     // A Credencial que entrou é entregue a quem passa a mantê-la (FR-089).
     await waitFor(() =>
-      expect(aoEntrar).toHaveBeenCalledWith(CREDENCIAL_DE_PROVA),
+      expect(aoEntrar).toHaveBeenCalledWith(
+        CREDENCIAL_DE_PROVA,
+        expect.objectContaining({ continuarConectado: true }),
+      ),
     );
 
     // E a Senha sai da tela assim que deixa de ser necessária (FR-078).
@@ -215,6 +222,12 @@ describe("PaginaDeEntrada — recusa de Entrar", () => {
     apertarTab();
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Mostrar Senha" }),
+    );
+
+    // FR-292, FR-302: a opção de continuidade vem entre a Senha e o Entrar.
+    apertarTab();
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("Continuar conectado neste navegador"),
     );
 
     apertarTab();
@@ -312,7 +325,7 @@ describe("PaginaDeEntrada — aviso inicial e anúncios", () => {
     expect(alerta).not.toHaveAttribute("aria-live");
   });
 
-  it("a conclusão de Sair é anunciada por região ativa polida, com nome (FR-096)", () => {
+  it("a conclusão de Sair é anunciada por região ativa polida (FR-096)", () => {
     render(
       <PaginaDeEntrada
         cliente={clienteDeProva()}
@@ -321,8 +334,9 @@ describe("PaginaDeEntrada — aviso inicial e anúncios", () => {
       />,
     );
 
-    const conclusao = screen.getByRole("status", { name: "Saída concluída" });
+    const conclusao = screen.getByText(MENSAGEM_DE_SAIDA);
 
+    expect(conclusao).toHaveAttribute("role", "status");
     expect(conclusao).toHaveAttribute("aria-live", "polite");
     expect(conclusao).toHaveAttribute("aria-atomic", "true");
     expect(conclusao).toHaveTextContent(/você saiu/i);
@@ -403,17 +417,22 @@ describe("PaginaDeEntrada por teclado", () => {
     const botaoDeVisibilidade = screen.getByRole("button", {
       name: "Mostrar Senha",
     });
+    const caixaDeContinuidade = screen.getByLabelText(
+      "Continuar conectado neste navegador",
+    );
     const botaoDeEntrada = screen.getByRole("button", { name: "Entrar" });
     const acessoAoCadastro = screen.getByRole("link", { name: "Criar conta" });
 
     // A ordem de tabulação é a ordem visual da coluna única: os dois campos, o
-    // botão que revela a Senha, a submissão e o acesso a "Criar conta".
+    // botão que revela a Senha, a opção de continuidade (FR-292, FR-302), a
+    // submissão e o acesso a "Criar conta".
     const controles = controlesInterativos();
 
     expect(controles).toEqual([
       campoDoNome,
       campoDaSenha,
       botaoDeVisibilidade,
+      caixaDeContinuidade,
       botaoDeEntrada,
       acessoAoCadastro,
     ]);
@@ -430,18 +449,24 @@ describe("PaginaDeEntrada por teclado", () => {
     expect(document.activeElement).toBe(botaoDeVisibilidade);
 
     apertarTab();
+    expect(document.activeElement).toBe(caixaDeContinuidade);
+
+    apertarTab();
     expect(document.activeElement).toBe(botaoDeEntrada);
 
     // Shift+Tab volta um passo da ordem, como no navegador.
     apertarShiftTab();
-    expect(document.activeElement).toBe(botaoDeVisibilidade);
+    expect(document.activeElement).toBe(caixaDeContinuidade);
 
     apertarTab();
     expect(document.activeElement).toBe(botaoDeEntrada);
     apertarEnter(botaoDeEntrada);
 
     await waitFor(() =>
-      expect(aoEntrar).toHaveBeenCalledWith(CREDENCIAL_DE_PROVA),
+      expect(aoEntrar).toHaveBeenCalledWith(
+        CREDENCIAL_DE_PROVA,
+        expect.objectContaining({ continuarConectado: true }),
+      ),
     );
   });
 });
@@ -519,8 +544,100 @@ describe("PaginaDeEntrada — campo de Senha e envio pendente", () => {
 
     // Concluída a operação, o botão volta a Entrar e a Credencial é entregue.
     await waitFor(() =>
-      expect(aoEntrar).toHaveBeenCalledWith(CREDENCIAL_DE_PROVA),
+      expect(aoEntrar).toHaveBeenCalledWith(
+        CREDENCIAL_DE_PROVA,
+        expect.objectContaining({ continuarConectado: true }),
+      ),
     );
     expect(screen.getByRole("button", { name: "Entrar" })).toBeEnabled();
+  });
+});
+
+describe("PaginaDeEntrada — Continuar conectado neste navegador (018)", () => {
+  function entrarComA(opcao: "marcada" | "desmarcada") {
+    const aoEntrar = vi.fn();
+    const cliente = renderizarEntrada(aoEntrar);
+
+    if (opcao === "desmarcada") {
+      fireEvent.click(
+        screen.getByLabelText("Continuar conectado neste navegador"),
+      );
+    }
+
+    fireEvent.change(screen.getByLabelText("Nome de usuário"), {
+      target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
+    });
+    fireEvent.change(screen.getByLabelText("Senha", { exact: true }), {
+      target: { value: CREDENCIAL_DE_PROVA.senha },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+
+    return { aoEntrar, cliente };
+  }
+
+  it("a opção vem marcada por padrão, com nome acessível e explicação (FR-292, FR-302)", () => {
+    renderizarEntrada();
+
+    const caixa = screen.getByLabelText("Continuar conectado neste navegador");
+
+    expect(caixa).toBeChecked();
+    expect(caixa).toHaveAttribute("type", "checkbox");
+    expect(caixa).toHaveAccessibleDescription(/volta direto ao Início/);
+  });
+
+  it("alterna por clique e a explicação acompanha o estado, sem depender de cor (FR-292, FR-303)", () => {
+    renderizarEntrada();
+
+    const caixa = screen.getByLabelText("Continuar conectado neste navegador");
+
+    fireEvent.click(caixa);
+
+    expect(caixa).not.toBeChecked();
+    expect(caixa).toHaveAccessibleDescription(/será preciso Entrar de novo/);
+
+    fireEvent.click(caixa);
+
+    expect(caixa).toBeChecked();
+  });
+
+  it("marcada, entrega continuarConectado verdadeiro e o Usuário que entrou", async () => {
+    const { aoEntrar, cliente } = entrarComA("marcada");
+
+    await waitFor(() => expect(aoEntrar).toHaveBeenCalledTimes(1));
+
+    const escolha = aoEntrar.mock.calls[0]?.[1] as EscolhaDeEntrada;
+
+    expect(escolha.continuarConectado).toBe(true);
+    expect(escolha.usuario.nomeDeUsuario).toBe(
+      CREDENCIAL_DE_PROVA.nomeDeUsuario,
+    );
+    // O "navegador" simulado guarda o Acesso.
+    expect(cliente.temAcessoNoNavegador()).toBe(true);
+  });
+
+  it("desmarcada, entrega continuarConectado falso e nenhum Acesso é emitido (FR-292)", async () => {
+    const { aoEntrar, cliente } = entrarComA("desmarcada");
+
+    await waitFor(() => expect(aoEntrar).toHaveBeenCalledTimes(1));
+
+    expect(
+      (aoEntrar.mock.calls[0]?.[1] as EscolhaDeEntrada).continuarConectado,
+    ).toBe(false);
+    expect(cliente.temAcessoNoNavegador()).toBe(false);
+  });
+
+  it("desmarcar depois de uma entrada com Acesso revoga o anterior: recarregar exige Entrar (FR-292, A2)", async () => {
+    const cliente = clienteDeProva();
+
+    await cliente.entrar({ ...CREDENCIAL_DE_PROVA, continuarConectado: true });
+    expect(cliente.temAcessoNoNavegador()).toBe(true);
+
+    await cliente.entrar({ ...CREDENCIAL_DE_PROVA, continuarConectado: false });
+
+    expect(cliente.temAcessoNoNavegador()).toBe(false);
+    expect(await cliente.obterAcesso()).toMatchObject({
+      ok: false,
+      erro: "sem_acesso",
+    });
   });
 });

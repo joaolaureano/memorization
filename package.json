@@ -8,7 +8,10 @@
   },
   "scripts": {
     "demo": "node scripts/demo.mjs",
-    "test:e2e": "playwright test --config=e2e/playwright.config.ts"
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "verificar:ci": "node scripts/verificar-ci.mjs",
+    "instalar-hooks": "node scripts/instalar-hooks.mjs",
+    "prepare": "npm run instalar-hooks"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

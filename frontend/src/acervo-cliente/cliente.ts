@@ -740,6 +740,8 @@ export interface RotinaDeEstudo {
   estado: EstadoDaRotina;
   versao: number;
   criadaEm: string;
+  /** `true` com o Baralho excluído ou vazio: a Rotina precisa de ajuste (FR-243). */
+  indisponivel: boolean;
 }
 
 /**
@@ -865,7 +867,159 @@ export type ResultadoDeIniciarCompromisso =
  * (FR-248, FR-250).
  */
 export const MENSAGEM_DE_AGENDA_INDISPONIVEL =
-  "A Agenda ainda não está disponível.";
+  "A Agenda não está disponível agora. Tente novamente.";
+
+/**
+ * Contagens do que pertence ao Usuário, como `GET /conta` as informa (FR-272,
+ * SC-113): o que a exclusão da conta removerá. `agenda` é a soma dos registros
+ * persistidos da Agenda (Rotinas, Compromissos e Inícios), e `null` quando o
+ * servidor não conhece a Agenda.
+ */
+export interface ContagensDaConta {
+  cartoes: number;
+  baralhos: number;
+  registrosDeSessao: number;
+  agenda: number | null;
+}
+
+/**
+ * Os dados da seção «Minha conta» (FR-257, FR-258): o Nome de usuário atual e
+ * as contagens. Nunca a Senha nem qualquer derivado dela. «Conta» é só o
+ * rótulo da interface; o termo de domínio é Usuário.
+ */
+export interface DadosDaConta {
+  nomeDeUsuario: string;
+  contagens: ContagensDaConta;
+}
+
+/** Resultado de `obterConta`: as falhas são `indisponivel` e `nao_autenticado`. */
+export type ResultadoDeObterConta =
+  | { ok: true; dados: DadosDaConta }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/** O que `alterarNomeDeUsuario` envia (FR-259): a Senha atual e o novo nome. */
+export interface DadosDeNovoNomeDeUsuario {
+  senhaAtual: string;
+  novoNomeDeUsuario: string;
+}
+
+/** O que `trocarSenha` envia (FR-266): a Senha atual, a nova e a Confirmação. */
+export interface DadosDeTrocaDeSenha {
+  senhaAtual: string;
+  novaSenha: string;
+  confirmacaoDaSenha: string;
+}
+
+/** O que `excluirConta` envia (FR-273): a Senha atual. */
+export interface DadosDeExclusaoDeConta {
+  senhaAtual: string;
+}
+
+/**
+ * Códigos de recusa de domínio da gestão da conta (017, §2.5). A Senha atual
+ * incorreta é `403 senha_atual_incorreta`, e não `nao_autenticado`: a Credencial
+ * que autentica a requisição continua válida (FR-279).
+ */
+export type CodigoDeErroDeConta =
+  | "dados_invalidos"
+  | "mesmo_nome"
+  | "mesma_senha"
+  | "nome_indisponivel"
+  | "senha_atual_incorreta";
+
+/** Campo do formulário a que uma recusa de validação se refere. */
+export type CampoDeConta =
+  | "nomeDeUsuario"
+  | "senhaAtual"
+  | "novaSenha"
+  | "confirmacaoDaSenha";
+
+/** A recusa de uma ação da conta: código estável, mensagem e campo a corrigir. */
+export interface RecusaDeConta {
+  ok: false;
+  erro: CodigoDeErroDeConta | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+  mensagem: string;
+  campo?: CampoDeConta;
+}
+
+/** Resultado de `alterarNomeDeUsuario`: traz o nome gravado (FR-263). */
+export type ResultadoDeAlteracaoDeNomeDeUsuario =
+  | { ok: true; nomeDeUsuario: string }
+  | RecusaDeConta;
+
+/** Resultado de `trocarSenha` e de `excluirConta`. */
+export type ResultadoDeAcaoDeConta = { ok: true } | RecusaDeConta;
+
+/** Mensagem quando o transporte até as rotas de conta falha (FR-046). */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA =
+  "Não foi possível acessar a sua conta agora. Tente novamente.";
+
+/** A mensagem única da Senha atual incorreta (FR-279), igual à da API. */
+export const MENSAGEM_DE_SENHA_ATUAL_INCORRETA =
+  "A Senha atual está incorreta.";
+
+/**
+ * O que `entrar` recebe (018): a Credencial e a escolha de **continuar
+ * conectado neste navegador** (FR-292). Verdadeira, o servidor emite um Acesso
+ * temporário em cookie `HttpOnly`; falsa, nenhum Acesso é emitido, e a
+ * Credencial só vale na memória da página aberta. Ausente, vale o modo em que o
+ * cliente já opera: com Acesso, verdadeira; com Credencial em memória, falsa —
+ * é o que impede uma verificação (resultado incerto da 017) de criar um Acesso
+ * que a pessoa não pediu.
+ */
+export interface DadosDeEntrada extends Credencial {
+  continuarConectado?: boolean;
+}
+
+/**
+ * A mensagem de Acesso expirado (FR-294): exibida tal qual na tela «Entrar»,
+ * igual à que a API devolve em `401 acesso_expirado`.
+ */
+export const MENSAGEM_DE_ACESSO_EXPIRADO = "Seu acesso expirou. Entre novamente.";
+
+/** Mensagem quando o transporte até as rotas do Acesso falha (FR-046, FR-301). */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO =
+  "Não foi possível verificar o seu acesso agora. Tente novamente.";
+
+/**
+ * Resultado de `obterAcesso` (018, FR-290): o Nome de usuário de quem tem
+ * Acesso válido neste navegador, ou por que não há. `sem_acesso` e
+ * `acesso_expirado` levam a Entrar; `indisponivel` **não** é expiração — o
+ * Acesso pode ainda valer (FR-301).
+ */
+export type ResultadoDeObterAcesso =
+  | { ok: true; nomeDeUsuario: string }
+  | {
+      ok: false;
+      erro: "sem_acesso" | "acesso_expirado" | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `renovarAcesso`: a recusa por Acesso ausente ou expirado chega
+ * como `nao_autenticado`, com a mensagem de expiração quando é o caso, e é a
+ * guarda de Credencial que a leva a Entrar (FR-091 revisado, FR-294).
+ */
+export type ResultadoDeRenovarAcesso =
+  | { ok: true }
+  | {
+      ok: false;
+      erro: typeof NAO_AUTENTICADO | typeof INDISPONIVEL;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `sair` (FR-293, FR-295): encerrar o Acesso deste navegador. A
+ * falha do armazenamento é `indisponivel` e **não** conclui o Sair — o Acesso
+ * pode continuar valendo (FR-044).
+ */
+export type ResultadoDeSair =
+  | { ok: true }
+  | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
 
 /**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
@@ -886,7 +1040,7 @@ export interface ClienteDoAcervo {
    * devolvem `nao_autenticado` com a mesma mensagem, sem revelar qual parte
    * falhou (FR-088) —, e a Senha nunca aparece em nenhum retorno (FR-078).
    */
-  entrar(credencial: Credencial): Promise<ResultadoDeEntrar>;
+  entrar(dados: DadosDeEntrada): Promise<ResultadoDeEntrar>;
 
   criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
 
@@ -1074,4 +1228,51 @@ export interface ClienteDoAcervo {
   iniciarCompromisso(
     dados: DadosDeInicioDeCompromisso,
   ): Promise<ResultadoDeIniciarCompromisso>;
+
+  /**
+   * Devolve o Nome de usuário atual e as contagens do Usuário (FR-257,
+   * FR-258): o que a seção «Minha conta» exibe e o que o diálogo de exclusão
+   * anuncia (FR-272).
+   */
+  obterConta(): Promise<ResultadoDeObterConta>;
+
+  /**
+   * Altera o Nome de usuário (FR-259..FR-265). Exige a Senha atual; as regras
+   * do novo nome são as do Cadastro. `mesmo_nome`, `nome_indisponivel` e
+   * `senha_atual_incorreta` são recusas de domínio.
+   */
+  alterarNomeDeUsuario(
+    dados: DadosDeNovoNomeDeUsuario,
+  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario>;
+
+  /**
+   * Troca a Senha (FR-266..FR-271). Exige a Senha atual; a nova segue o
+   * Cadastro, difere da atual (`mesma_senha`) e confere com a Confirmação.
+   */
+  trocarSenha(dados: DadosDeTrocaDeSenha): Promise<ResultadoDeAcaoDeConta>;
+
+  /**
+   * Exclui o Usuário e tudo o que lhe pertence (FR-272..FR-278). Exige a
+   * Senha atual.
+   */
+  excluirConta(dados: DadosDeExclusaoDeConta): Promise<ResultadoDeAcaoDeConta>;
+
+  /**
+   * Pergunta ao servidor se este navegador tem Acesso temporário válido
+   * (018, FR-290): é o que a carga da aplicação usa para voltar ao Início sem
+   * Entrar. Valendo, o servidor também renova a validade.
+   */
+  obterAcesso(): Promise<ResultadoDeObterAcesso>;
+
+  /**
+   * Renova o Acesso por uma interação sem requisição (018, FR-291) — chamada
+   * pela casca, no máximo uma vez a cada 60 s, conforme `atividade.ts`.
+   */
+  renovarAcesso(): Promise<ResultadoDeRenovarAcesso>;
+
+  /**
+   * Sair: encerra o Acesso deste navegador e limpa o cookie (018, FR-293,
+   * FR-295). Outros navegadores do mesmo Usuário não são afetados (FR-299).
+   */
+  sair(): Promise<ResultadoDeSair>;
 }

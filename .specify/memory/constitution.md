@@ -89,6 +89,14 @@ registra a pendência como dívida para depois. O portão é binário: enquanto 
 análise estiver inconsistente ou o checklist reprovado, a implementação não
 começa.
 
+Antes de integrar ou enviar alterações, o Arquiteto executa `npm run
+verificar:ci` na raiz. O comando exige Gitleaks, os portões de backend e
+frontend e a suíte Playwright. Qualquer falha bloqueia commit de integração e
+push até a correção e nova execução completa. O hook versionado
+`.githooks/pre-push` executa a mesma verificação no clone configurado, sem
+substituir a responsabilidade explícita do Arquiteto. A CI remota permanece a
+verificação final em ambiente limpo.
+
 ### XI. Delegação Obrigatória de Código (NÃO NEGOCIÁVEL)
 
 Todo código de aplicação é criado por subagentes DeepSeek. O Arquiteto não
@@ -179,7 +187,7 @@ explícita do Product Owner, registro no commit da emenda e nota de versão abai
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 3.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-10-03
+**Version**: 3.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-10-03
 
 **Nota da versão 3.0.0 (2026-10-03)**: emenda aprovada pelo Product Owner. O
 Princípio II mantém a auditabilidade append-only, mas o registro deixa de ser o
@@ -187,3 +195,7 @@ SESSION.md, preservado apenas na tag `v1.0.0`, e passa a ser o `research.md` de
 cada feature, as notas de revisão dos artefatos do Spec Kit e as mensagens de
 commit. As regras que citavam o SESSION.md (skills obrigatórias, ADRs, fluxo de
 commits e governança) foram ajustadas da mesma forma.
+
+**Nota da versão 3.1.0 (2026-10-03)**: emenda aprovada pelo Product Owner. O
+fluxo de integração de IA passa a exigir `npm run verificar:ci` antes de todo
+push, com hook versionado como defesa adicional.

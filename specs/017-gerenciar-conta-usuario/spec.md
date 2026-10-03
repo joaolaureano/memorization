@@ -2,7 +2,7 @@
 
 **Feature Branch**: `017-gerenciar-conta-usuario`
 **Created**: 2026-10-03
-**Status**: Draft
+**Status**: Implementada em 2026-10-03 (branch `implementacao-016-018`), a pedido do Product Owner
 **Input**: Completar a interação do Usuário com os próprios dados (CRUD): consultar, atualizar dados e excluir definitivamente (hard-delete).
 
 **Depende de**: `007-criar-usuario` (Usuário, Nome de usuário, Senha e regras de validação), `008-entrar` (Credencial, acervo por usuário, recusa por Credencial e Sair), `013` (Registro de sessão e Histórico de estudo), `015` (Preferências e Agendamento do cartão) e `016-agendamento-de-estudo` (Agenda de estudo, quando existir). Glossário normativo em `CONTEXT.md`.

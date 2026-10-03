@@ -358,7 +358,10 @@ async function percursoPorTeclado(
 
 /** Locator de link pelo nome acessível exato. */
 function linkExato(page: Page, nome: string): Locator {
-  return page.getByRole("link", { name: nome, exact: true });
+  // `.first()`: "Criar baralho" existe no cabeçalho e, na lista vazia, também no
+  // estado vazio — e qual dos dois já está na tela depende de a lista ter
+  // carregado. O do cabeçalho vem primeiro na ordem do documento e existe sempre.
+  return page.getByRole("link", { name: nome, exact: true }).first();
 }
 
 /** Locator que casa o link **ou** o botão com o nome acessível exato. */

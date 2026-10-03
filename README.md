@@ -232,6 +232,14 @@ for both to respond and prints the address to open: **<http://127.0.0.1:5173>**.
 The data lives in `backend/memorizacao.sqlite`, so the collection from one demo
 carries over to the next, and `Ctrl+C` stops the API and the frontend together.
 
+### Optional environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | The exact origin the API grants CORS (with credentials) to, for the temporary Access cookie. |
+| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Sliding validity of the temporary Access, in seconds (a positive integer). It is an environment setting, never a user choice. |
+| `ORIGENS_LOCAIS_DE_TESTE` | unset | `sim` lets any loopback port through CORS. **Only for the end-to-end tests**, where the frontend starts after the API. |
+
 ## Verification
 
 ```bash

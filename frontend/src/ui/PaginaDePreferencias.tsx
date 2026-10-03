@@ -3,8 +3,10 @@ import type { FormEvent } from "react";
 
 import type {
   ClienteDoAcervo,
+  Credencial,
   Preferencias,
 } from "../acervo-cliente/cliente";
+import { SecaoMinhaConta } from "./SecaoMinhaConta";
 import {
   useDescartarProtecao,
   useProtecaoDeSaida,
@@ -54,9 +56,23 @@ const MENSAGEM_DE_SUCESSO = "Preferências salvas.";
 
 interface PropriedadesDePreferencias {
   cliente: ClienteDoAcervo;
+  /**
+   * A seção «Minha conta» (017, FR-257) vive nesta tela e só aparece quando a
+   * casca informa o que fazer com a Credencial: substituí-la depois de renomear
+   * ou trocar a Senha, descartá-la depois de excluir a conta e ir a Entrar
+   * quando um resultado é desconhecido.
+   */
+  aoSubstituirCredencial?: (nova: Credencial) => void;
+  aoExcluirConta?: () => void;
+  aoIrParaEntrar?: () => void;
 }
 
-export function PaginaDePreferencias({ cliente }: PropriedadesDePreferencias) {
+export function PaginaDePreferencias({
+  cliente,
+  aoSubstituirCredencial,
+  aoExcluirConta,
+  aoIrParaEntrar,
+}: PropriedadesDePreferencias) {
   const [preferencias, setPreferencias] = useState<Preferencias | null>(null);
   const [algoritmo, setAlgoritmo] = useState("");
   const [algoritmoInicial, setAlgoritmoInicial] = useState("");
@@ -276,6 +292,17 @@ export function PaginaDePreferencias({ cliente }: PropriedadesDePreferencias) {
           </form>
         </section>
       ) : null}
+
+      {aoSubstituirCredencial !== undefined &&
+        aoExcluirConta !== undefined &&
+        aoIrParaEntrar !== undefined && (
+          <SecaoMinhaConta
+            cliente={cliente}
+            aoSubstituirCredencial={aoSubstituirCredencial}
+            aoExcluirConta={aoExcluirConta}
+            aoIrParaEntrar={aoIrParaEntrar}
+          />
+        )}
     </div>
   );
 }

@@ -45,9 +45,11 @@ let contrato: ServidorDeContrato;
 let servidor: FastifyInstance;
 
 beforeEach(async () => {
-  contrato = await montarServidorDeContrato(({ servidor }) => {
-    registrarRotaDeEntrada(servidor);
-  });
+  contrato = await montarServidorDeContrato(
+    ({ servidor, identidade, acessos }) => {
+      registrarRotaDeEntrada(servidor, identidade, acessos);
+    },
+  );
   servidor = contrato.servidor;
 });
 
@@ -96,15 +98,33 @@ describe("POST /entrar — o Usuário que entrou", () => {
     });
   });
 
-  it("responde 200 sem corpo de requisição e sem efeito colateral algum", async () => {
+  it("responde 200 sem corpo de requisição, com a continuidade como padrão (018, FR-292)", async () => {
     const resposta = await pedirComCredencial(servidor, contrato.credencial, {
       method: "POST",
       url: "/entrar",
     });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.headers["set-cookie"]).toBeUndefined();
+    // O padrão é continuar conectado: o Acesso vai **só** no cookie HttpOnly.
+    const cookie = String(resposta.headers["set-cookie"]);
+
+    expect(cookie).toMatch(/^acesso=[A-Za-z0-9_-]{43};/);
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("SameSite=Strict");
+    expect(cookie).toContain("Path=/");
     expect(resposta.body).not.toContain(contrato.credencial.senha);
+    expect(resposta.body).not.toContain(cookie.split(";")[0]?.slice(7) ?? "x");
+  });
+
+  it("com continuarConectado falso, não emite Acesso algum (018, FR-292)", async () => {
+    const resposta = await pedirComCredencial(servidor, contrato.credencial, {
+      method: "POST",
+      url: "/entrar",
+      payload: { continuarConectado: false },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers["set-cookie"]).toBeUndefined();
   });
 });
 
@@ -161,15 +181,17 @@ describe("POST /entrar — a mesma recusa de toda Credencial", () => {
     expect(resposta.json()).toEqual(CREDENCIAL_INVALIDA);
   });
 
-  it("não devolve nada reutilizável: nenhuma resposta traz token, sessão ou cookie (FR-079, SC-033)", async () => {
+  it("não devolve nada reutilizável no corpo: o Acesso só vai em cookie HttpOnly, e só no sucesso (FR-079 revisado, FR-297, SC-033)", async () => {
     const recusa = await servidor.inject({ method: "POST", url: "/entrar" });
     const sucesso = await pedirComCredencial(servidor, contrato.credencial, {
       method: "POST",
       url: "/entrar",
     });
 
+    expect(recusa.headers["set-cookie"]).toBeUndefined();
+    expect(sucesso.headers["set-cookie"]).toBeDefined();
+
     for (const resposta of [recusa, sucesso]) {
-      expect(resposta.headers["set-cookie"]).toBeUndefined();
       expect(resposta.body).not.toMatch(/token|sessao|session|cookie/i);
       expect(resposta.body).not.toContain(contrato.credencial.senha);
       expect(resposta.body).not.toContain(

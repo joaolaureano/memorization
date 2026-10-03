@@ -135,6 +135,7 @@ describe("base nova e vazia", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome).sort()).toEqual([
+        "acesso_temporario",
         "agendamento",
         "baralho",
         "cartao",
@@ -449,6 +450,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+        "acesso_temporario",
         "agendamento",
         "baralho",
         "cartao",
@@ -615,6 +617,7 @@ describe("migração 4 — tabela usuario", () => {
       );
 
       expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "acesso_temporario",
         "agendamento",
         "baralho",
         "cartao",
@@ -694,6 +697,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+        "acesso_temporario",
         "agendamento",
         "baralho",
         "cartao",
@@ -849,6 +853,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
       );
 
       expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "acesso_temporario",
         "agendamento",
         "baralho",
         "cartao",
@@ -1008,6 +1013,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     );
 
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "acesso_temporario",
       "agendamento",
       "baralho",
       "cartao",
@@ -1062,6 +1068,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect(gravado).toEqual([{ id: "c1" }]);
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "acesso_temporario",
       "agendamento",
       "baralho",
       "cartao",
@@ -1090,6 +1097,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect([primeiro.codigo, segundo.codigo]).toEqual([0, 0]);
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "acesso_temporario",
       "agendamento",
       "baralho",
       "cartao",

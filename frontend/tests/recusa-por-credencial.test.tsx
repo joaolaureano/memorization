@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Credencial } from "../src/acervo-cliente/cliente";
 import { Aplicacao } from "../src/ui/Aplicacao";
-import { CREDENCIAL_DE_PROVA, clienteDeProva } from "./apoio-de-prova";
+import { CREDENCIAL_DE_PROVA, clienteDeProva,
+  aguardarVerificacaoDoAcesso,
+} from "./apoio-de-prova";
 
 /**
  * Recusa por Credencial na interface (T710; FR-044, FR-091, SC-035, e as
@@ -76,6 +78,7 @@ describe("recusa por Credencial", () => {
     await servidor.criarBaralho({ nome: "Inglês" });
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
+    await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
     // A tela de Cartões carrega com a Credencial ainda válida.
@@ -112,6 +115,7 @@ describe("recusa por Credencial", () => {
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
+    await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
     // O acervo do Usuário aparece: a Credencial ainda vale nesta operação.
@@ -154,6 +158,7 @@ describe("recusa por Credencial", () => {
     const servidor = clienteDeProva();
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
+    await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
     await waitFor(() =>
@@ -209,6 +214,7 @@ describe("recusa por Credencial", () => {
     const servidor = clienteDeProva();
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
+    await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
     expect(

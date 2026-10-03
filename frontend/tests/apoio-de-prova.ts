@@ -1,5 +1,8 @@
 import { randomBytes } from "node:crypto";
 
+import { screen, waitFor } from "@testing-library/react";
+import { expect } from "vitest";
+
 import { createElement } from "react";
 import type { ReactElement } from "react";
 
@@ -91,5 +94,17 @@ export function comProtecaoDeSaida(
   return createElement(ProvedorDeProtecaoDeSaida, {
     temCredencial,
     children: ui,
+  });
+}
+
+/**
+ * Espera a casca terminar a **verificação do Acesso** da carga (018, FR-290):
+ * enquanto `GET /acesso` não responde, a tela é «Verificando o acesso…», e só
+ * depois aparece «Entrar» — ou o Início, quando há Acesso válido. As provas de
+ * `Aplicacao` chamam isto logo depois de renderizar.
+ */
+export async function aguardarVerificacaoDoAcesso(): Promise<void> {
+  await waitFor(() => {
+    expect(screen.queryByText("Verificando o acesso…")).not.toBeInTheDocument();
   });
 }

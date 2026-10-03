@@ -249,6 +249,7 @@ export async function aguardarApiPronta(
 export function iniciarApi(
   caminhoDoBanco: string,
   porta: number,
+  ambienteExtra: NodeJS.ProcessEnv = {},
 ): ProcessoIniciado {
   return iniciarProcesso({
     rotulo: "API",
@@ -262,6 +263,14 @@ export function iniciarApi(
       CAMINHO_DO_BANCO: caminhoDoBanco,
       /** Sem o segredo a API recusa iniciar (FR-077): ele vai em toda subida. */
       SEGREDO_DAS_SENHAS,
+      /**
+       * 018: com `credentials: include` o navegador recusa `Access-Control-Allow-Origin: *`,
+       * e a API local concede a origem do frontend. O frontend do teste sobe
+       * **depois** da API, numa porta livre, e a origem exata não existe ainda:
+       * esta chave **só de teste** faz a API aceitar qualquer porta do loopback.
+       */
+      ORIGENS_LOCAIS_DE_TESTE: "sim",
+      ...ambienteExtra,
     },
   });
 }
@@ -606,11 +615,19 @@ export async function criarUsuarioDeProva(
 export async function entrarPelaUi(
   page: Page,
   credencial: CredencialDeProva = credencialDeProva(),
+  opcoes: { continuarConectado?: boolean } = {},
 ): Promise<void> {
   await page
     .getByLabel("Nome de usuário", { exact: true })
     .fill(credencial.nomeDeUsuario);
   await page.getByLabel("Senha", { exact: true }).fill(credencial.senha);
+
+  // 018: «Continuar conectado neste navegador» vem marcada por padrão. As provas
+  // que dependem de a Credencial existir só na memória da página — recarregar
+  // exige Entrar, duas abas independentes — a desmarcam.
+  if (opcoes.continuarConectado === false) {
+    await page.getByLabel("Continuar conectado neste navegador").uncheck();
+  }
 
   await Promise.all([
     page.waitForResponse(
@@ -636,6 +653,7 @@ export async function entrarPelaUi(
 export async function entrarSeNecessario(
   page: Page,
   credencial: CredencialDeProva = credencialDeProva(),
+  opcoes: { continuarConectado?: boolean } = {},
 ): Promise<void> {
   await page.waitForFunction(
     () => document.querySelector("main h1") !== null,
@@ -650,7 +668,31 @@ export async function entrarSeNecessario(
     return;
   }
 
-  await entrarPelaUi(page, credencial);
+  await entrarPelaUi(page, credencial, opcoes);
+}
+
+/**
+ * Responde `GET /acesso` com `401 sem_acesso`: a carga da aplicação (018,
+ * FR-290) pergunta ao servidor se o navegador tem Acesso temporário antes de
+ * mostrar qualquer tela, e as provas que **não** sobem a API precisam que essa
+ * pergunta tenha resposta — sem Acesso, a tela inicial é Entrar.
+ */
+export async function prepararAcessoAusente(page: Page): Promise<void> {
+  await page.route(/\/acesso$/, async (rota) => {
+    if (rota.request().method() === "GET") {
+      await rota.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          erro: "sem_acesso",
+          mensagem: "Não há acesso neste navegador. Entre para continuar.",
+        }),
+      });
+      return;
+    }
+
+    await rota.fallback();
+  });
 }
 
 /**
@@ -666,6 +708,8 @@ export async function prepararEntradaInterceptada(
     nomeDeUsuario,
     senha: gerarSenhaDeProva(),
   };
+
+  await prepararAcessoAusente(page);
 
   await page.route(/\/entrar$/, async (rota) => {
     if (rota.request().method() === "POST") {

@@ -11,7 +11,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { Aplicacao } from "../src/ui/Aplicacao";
 import { interpretarRota } from "../src/ui/navegacao";
-import { CREDENCIAL_DE_PROVA, clienteDeProva } from "./apoio-de-prova";
+import { CREDENCIAL_DE_PROVA, clienteDeProva,
+  aguardarVerificacaoDoAcesso,
+} from "./apoio-de-prova";
 
 /**
  * Navegação da Sessão de estudo (T304; specs/004-sessao-de-estudo/tasks.md).
@@ -87,6 +89,7 @@ describe("Aplicacao — rota de estudo", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     // A casca nasce sem Credencial: a Sessão de estudo só aparece depois de
     // Entrar, pela tela "Entrar" (FR-097).
@@ -132,6 +135,7 @@ describe("Aplicacao — rota de estudo", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     fireEvent.change(screen.getByLabelText("Nome de usuário"), {
       target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
@@ -194,6 +198,7 @@ describe("Aplicacao — rota de estudo", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     fireEvent.change(screen.getByLabelText("Nome de usuário"), {
       target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
@@ -252,6 +257,7 @@ describe("Aplicacao — rota de estudo", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     fireEvent.change(screen.getByLabelText("Nome de usuário"), {
       target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
@@ -305,14 +311,18 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrar();
 
+    // O primeiro render da suíte é frio (carga dos módulos, JIT): o prazo é
+    // folgado para a prova não depender da máquina.
     expect(
-      await screen.findByRole("heading", {
-        level: 1,
-        name: "Revisão do dia",
-      }),
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: "Revisão do dia" },
+        { timeout: 5000 },
+      ),
     ).toBeInTheDocument();
     // A Revisão do dia pertence ao Início (`destinoAtivo`, §7).
     expect(screen.getByRole("link", { name: "Início" })).toHaveAttribute(
@@ -330,6 +340,7 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrar();
 
@@ -354,6 +365,7 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
         criarCliente={(credencial) => cliente.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrar();
 

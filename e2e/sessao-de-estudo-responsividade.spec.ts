@@ -180,12 +180,21 @@ for (const largura of [360, 1440]) {
     const frente = page.locator('.conteudo-do-cartao').first();
     await frente.focus();
     await page.keyboard.press('End');
-    await expect.poll(() => frente.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    // Espera a rolagem terminar (o End anima): só então o próximo Item prova que a
+    // posição é reposta, sem competir com uma animação ainda em curso sob carga.
+    await expect
+      .poll(async () => {
+        const antes = await frente.evaluate(el => el.scrollTop);
+        await page.waitForTimeout(150);
+        const depois = await frente.evaluate(el => el.scrollTop);
+        return antes > 0 && antes === depois;
+      })
+      .toBe(true);
     await page.getByRole('button', { name: 'Revelar verso' }).click();
     expect(await medir()).toEqual(inicial);
     expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(acoes);
     await page.getByRole('button', { name: /^Bom/ }).click();
     await expect(cartao).toHaveAccessibleName('Item 3 de 3');
-    expect(await frente.evaluate(el => el.scrollTop)).toBe(0);
+    await expect.poll(() => frente.evaluate(el => el.scrollTop)).toBe(0);
   });
 }

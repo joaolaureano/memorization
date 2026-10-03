@@ -4,6 +4,8 @@ import type {
   LightMyRequestResponse,
 } from "fastify";
 
+import { criarAcessos } from "../../src/acesso/acesso.ts";
+import type { Acessos, OpcoesDosAcessos } from "../../src/acesso/acesso.ts";
 import { criarAcervo } from "../../src/acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
@@ -37,6 +39,8 @@ export interface RotasDeContrato {
   readonly identidade: Identidade;
   /** O construtor do `Acervo` de um Usuário, como na aplicação (FR-092). */
   readonly acervoDe: AcervoDeUsuario;
+  /** Os Acessos temporários (018), sobre o mesmo armazenamento. */
+  readonly acessos: Acessos;
 }
 
 /**
@@ -47,6 +51,7 @@ export interface ServidorDeContrato {
   readonly servidor: FastifyInstance;
   readonly aberto: ArmazenamentoSqliteAberto;
   readonly identidade: Identidade;
+  readonly acessos: Acessos;
   /** O Usuário que entrou: a Credencial que acompanha as requisições. */
   readonly credencial: CredencialDeTeste;
   readonly acervoDe: AcervoDeUsuario;
@@ -67,14 +72,16 @@ export interface ServidorDeContrato {
 export async function montarServidorDeContrato(
   registrarRotas: (rotas: RotasDeContrato) => void,
   opcoesDoServidor: OpcoesDoServidor = {},
+  opcoesDosAcessos: OpcoesDosAcessos = {},
 ): Promise<ServidorDeContrato> {
   const aberto = await abrirArmazenamentoSqlite(":memory:");
   const identidade = criarIdentidade(aberto.usuarios, segredoGerado());
-  const servidor = criarServidor(identidade, opcoesDoServidor);
+  const acessos = criarAcessos(aberto.acessos, opcoesDosAcessos);
+  const servidor = criarServidor(identidade, { acessos, ...opcoesDoServidor });
   const acervoDe: AcervoDeUsuario = (usuarioId) =>
     criarAcervo(aberto.armazenamento, usuarioId);
 
-  registrarRotas({ servidor, identidade, acervoDe });
+  registrarRotas({ servidor, identidade, acervoDe, acessos });
 
   const credencial = await cadastrarUsuarioDeTeste(identidade);
 
@@ -82,6 +89,7 @@ export async function montarServidorDeContrato(
     servidor,
     aberto,
     identidade,
+    acessos,
     credencial,
     acervoDe,
 

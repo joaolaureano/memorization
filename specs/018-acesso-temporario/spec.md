@@ -2,7 +2,7 @@
 
 **Feature Branch**: `018-acesso-temporario`
 **Created**: 2026-10-03
-**Status**: Draft
+**Status**: Implementada em 2026-10-03 (branch `implementacao-016-018`), a pedido do Product Owner
 **Input**: O Usuário Entra e, de modo temporário, consegue ficar ainda conectado, para não precisar Entrar o tempo todo. Baseado em tempo: o acesso expira.
 
 **Depende de**: `007-criar-usuario` (Usuário, Nome de usuário, Senha e Cadastro), `008-entrar` (Credencial, Entrar, Sair, FR-078, FR-079, FR-089, FR-090, FR-091), `012` (FR-157) e `017-gerenciar-conta-usuario` (alteração de Nome de usuário/Senha e exclusão do Usuário). Glossário normativo em `CONTEXT.md`.

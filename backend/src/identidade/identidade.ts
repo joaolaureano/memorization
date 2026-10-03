@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type {
   ArmazenamentoDeUsuarios,
+  ContagensDaConta,
   Usuario,
 } from "../armazenamento/porta.ts";
 import {
@@ -119,7 +120,20 @@ export type ResultadoDeEntrada =
  * descartável que torna indistinguível a recusa de um Nome de usuário
  * inexistente (FR-088).
  */
-export interface Identidade {
+export interface Identidade extends GestaoDeConta {
+  /**
+   * Devolve o Usuário de `usuarioId` — `id` e `nomeDeUsuario`, nunca a Senha —,
+   * para quem já provou o direito de agir como ele por outro caminho: é o que o
+   * Acesso temporário usa para saber quem entrou (018). Usuário inexistente —
+   * excluído depois da emissão — é `nao_encontrado`.
+   */
+  obterUsuario(
+    usuarioId: string,
+  ): Promise<
+    | { ok: true; usuario: UsuarioCadastrado }
+    | { ok: false; erro: "nao_encontrado" | "indisponivel" }
+  >;
+
   /**
    * Cadastra um Usuário com Nome de usuário e Senha.
    *
@@ -151,6 +165,138 @@ export interface Identidade {
    * (FR-078).
    */
   autenticar(dados: DadosDeEntrada): Promise<ResultadoDeEntrada>;
+}
+
+/**
+ * Gestão da conta do Usuário (017). Os verbos recebem o `usuarioId` de quem
+ * Entrou — decorado pelo hook da Credencial — e a Senha atual como confirmação
+ * da ação: a Credencial do cabeçalho prova quem chama; a Senha atual no corpo
+ * prova que a pessoa, e não uma página esquecida aberta, quer a mudança
+ * (FR-259, FR-266, FR-273).
+ */
+export type { ContagensDaConta } from "../armazenamento/porta.ts";
+
+/** O que `obterConta` devolve: o Nome de usuário atual e as contagens (FR-258). */
+export interface DadosDaConta {
+  nomeDeUsuario: string;
+  contagens: ContagensDaConta;
+}
+
+/**
+ * Códigos de recusa da gestão da conta. `senha_atual_incorreta` é único para as
+ * três ações (FR-279); `dados_invalidos` carrega a regra violada na mensagem e,
+ * em `campo`, o campo a corrigir.
+ */
+export type CodigoDeErroDeConta =
+  | "dados_invalidos"
+  | "mesmo_nome"
+  | "mesma_senha"
+  | "nome_indisponivel"
+  | "senha_atual_incorreta"
+  | "indisponivel";
+
+/** Campo do formulário a que a recusa de validação se refere. */
+export type CampoDeConta =
+  | "nomeDeUsuario"
+  | "senhaAtual"
+  | "novaSenha"
+  | "confirmacaoDaSenha";
+
+/** A recusa da gestão da conta: código estável e mensagem em português. */
+export interface RecusaDeConta {
+  ok: false;
+  erro: CodigoDeErroDeConta;
+  mensagem: string;
+  campo?: CampoDeConta;
+}
+
+export type ResultadoDeObterConta =
+  | { ok: true; conta: DadosDaConta }
+  | { ok: false; erro: "indisponivel"; mensagem: string };
+
+export type ResultadoDeAlteracaoDeNome =
+  | { ok: true; nomeDeUsuario: string }
+  | RecusaDeConta;
+
+export type ResultadoDeConta = { ok: true } | RecusaDeConta;
+
+export interface DadosDeAlteracaoDeNome {
+  senhaAtual: string;
+  novoNomeDeUsuario: string;
+}
+
+export interface DadosDeTrocaDeSenha {
+  senhaAtual: string;
+  novaSenha: string;
+  confirmacaoDaSenha: string;
+}
+
+export interface DadosDeExclusaoDeConta {
+  senhaAtual: string;
+}
+
+/**
+ * A recusa única da Senha atual (FR-279): a mesma frase para renomear, trocar a
+ * Senha e excluir, sem revelar a Senha, qualquer derivado ou outro Usuário.
+ */
+export const SENHA_ATUAL_INCORRETA = {
+  erro: "senha_atual_incorreta",
+  mensagem: "A Senha atual está incorreta.",
+} as const;
+
+const MESMO_NOME = {
+  erro: "mesmo_nome",
+  mensagem: "O novo nome de usuário é igual ao atual.",
+} as const;
+
+const MESMA_SENHA = {
+  erro: "mesma_senha",
+  mensagem: "A nova Senha é igual à atual.",
+} as const;
+
+const NOME_INDISPONIVEL = {
+  erro: "nome_indisponivel",
+  mensagem: "Este nome de usuário já existe. Escolha outro.",
+} as const;
+
+/**
+ * Extensão da Interface do `Identidade` com a gestão da conta: quatro verbos
+ * que escondem validação, normalização, derivação da Senha, tradução da
+ * unicidade e a falha do armazenamento (017, D1). Nenhum retorno carrega Senha,
+ * `sal`, `hash` ou `parametros` (FR-258, FR-078).
+ */
+export interface GestaoDeConta {
+  /** Devolve o Nome de usuário atual e as contagens do Usuário (FR-258). */
+  obterConta(usuarioId: string): Promise<ResultadoDeObterConta>;
+
+  /**
+   * Altera o Nome de usuário. As regras são as do Cadastro: espaços ao redor
+   * descartados, 3 a 50 caracteres do alfabeto permitido (FR-260); igual ao
+   * atual é `mesmo_nome` (FR-261); em uso por outro Usuário, mesmo diferindo só
+   * em maiúsculas, é `nome_indisponivel` (FR-262).
+   */
+  alterarNomeDeUsuario(
+    usuarioId: string,
+    dados: DadosDeAlteracaoDeNome,
+  ): Promise<ResultadoDeAlteracaoDeNome>;
+
+  /**
+   * Troca a Senha: a nova segue o Cadastro (FR-267), difere da atual
+   * (`mesma_senha`, FR-268) e confere com a Confirmação (FR-269).
+   */
+  trocarSenha(
+    usuarioId: string,
+    dados: DadosDeTrocaDeSenha,
+  ): Promise<ResultadoDeConta>;
+
+  /**
+   * Exclui o Usuário e tudo o que lhe pertence, sem tocar em outro Usuário
+   * (FR-274, FR-275).
+   */
+  excluirConta(
+    usuarioId: string,
+    dados: DadosDeExclusaoDeConta,
+  ): Promise<ResultadoDeConta>;
 }
 
 /**
@@ -216,7 +362,172 @@ export function criarIdentidade(
     randomBytes(TAMANHO_DO_DESCARTAVEL).toString("base64url"),
   );
 
+  /**
+   * Confere a Senha atual informada contra a derivação guardada, em tempo
+   * constante. Devolve o Usuário guardado quando confere; `senha_atual_incorreta`
+   * quando não (ou quando o Usuário já não existe — indistinguível, FR-279); e
+   * `indisponivel` na falha do armazenamento.
+   */
+  async function conferirSenhaAtual(
+    usuarioId: string,
+    senhaAtual: string,
+  ): Promise<
+    | { ok: true; usuario: Usuario }
+    | { ok: false; recusa: RecusaDeConta }
+  > {
+    const lido = await armazenamento.obterUsuarioPorId(usuarioId);
+
+    if (!lido.ok) {
+      return {
+        ok: false,
+        recusa: {
+          ok: false,
+          ...(lido.erro === "indisponivel"
+            ? ARMAZENAMENTO_INDISPONIVEL
+            : SENHA_ATUAL_INCORRETA),
+        },
+      };
+    }
+
+    const candidata = await derivarDaSenhaCom(
+      segredo,
+      senhaAtual,
+      lido.valor.sal,
+      lido.valor.parametros,
+    );
+
+    if (!chavesIguais(lido.valor.hash, candidata)) {
+      return { ok: false, recusa: { ok: false, ...SENHA_ATUAL_INCORRETA } };
+    }
+
+    return { ok: true, usuario: lido.valor };
+  }
+
+  const gestaoDeConta: GestaoDeConta = {
+    async obterConta(usuarioId) {
+      const lido = await armazenamento.obterUsuarioPorId(usuarioId);
+      const contagens = await armazenamento.contarDadosDoUsuario(usuarioId);
+
+      if (!lido.ok || !contagens.ok) {
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return {
+        ok: true,
+        conta: {
+          nomeDeUsuario: lido.valor.nomeDeUsuario,
+          contagens: contagens.valor,
+        },
+      };
+    },
+
+    async alterarNomeDeUsuario(usuarioId, dados) {
+      const novoNome = dados.novoNomeDeUsuario.trim();
+      const invalido = validarNomeDeUsuario(novoNome);
+
+      if (invalido !== null) {
+        return {
+          ok: false,
+          erro: "dados_invalidos",
+          mensagem: invalido.mensagem,
+          campo: "nomeDeUsuario",
+        };
+      }
+
+      const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
+
+      if (!conferida.ok) {
+        return conferida.recusa;
+      }
+
+      if (conferida.usuario.nomeDeUsuario === novoNome) {
+        return { ok: false, ...MESMO_NOME };
+      }
+
+      const gravado = await armazenamento.atualizarNomeDeUsuario(
+        usuarioId,
+        novoNome,
+      );
+
+      if (!gravado.ok) {
+        return gravado.erro === "nome_em_uso"
+          ? { ok: false, ...NOME_INDISPONIVEL }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return { ok: true, nomeDeUsuario: gravado.valor.nomeDeUsuario };
+    },
+
+    async trocarSenha(usuarioId, dados) {
+      const invalida = validarSenha(dados.novaSenha);
+
+      if (invalida !== null) {
+        return {
+          ok: false,
+          erro: "dados_invalidos",
+          mensagem: invalida.mensagem,
+          campo: "novaSenha",
+        };
+      }
+
+      if (dados.novaSenha !== dados.confirmacaoDaSenha) {
+        return {
+          ok: false,
+          erro: "dados_invalidos",
+          mensagem: "A confirmação da Senha não confere com a nova Senha.",
+          campo: "confirmacaoDaSenha",
+        };
+      }
+
+      const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
+
+      if (!conferida.ok) {
+        return conferida.recusa;
+      }
+
+      if (dados.novaSenha === dados.senhaAtual) {
+        return { ok: false, ...MESMA_SENHA };
+      }
+
+      const derivacao = await derivarDaSenha(segredo, dados.novaSenha);
+      const gravada = await armazenamento.atualizarSenha(usuarioId, derivacao);
+
+      return gravada.ok
+        ? { ok: true }
+        : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+    },
+
+    async excluirConta(usuarioId, dados) {
+      const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
+
+      if (!conferida.ok) {
+        return conferida.recusa;
+      }
+
+      const excluido = await armazenamento.excluirUsuario(usuarioId);
+
+      return excluido.ok
+        ? { ok: true }
+        : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+    },
+  };
+
   return {
+    ...gestaoDeConta,
+
+    async obterUsuario(usuarioId) {
+      const lido = await armazenamento.obterUsuarioPorId(usuarioId);
+
+      if (!lido.ok) {
+        return { ok: false, erro: lido.erro };
+      }
+
+      return {
+        ok: true,
+        usuario: { id: lido.valor.id, nomeDeUsuario: lido.valor.nomeDeUsuario },
+      };
+    },
+
     async cadastrar(dados) {
       /** O descarte dos espaços ao redor acontece **antes** da validação. */
       const nomeDeUsuario = dados.nomeDeUsuario.trim();

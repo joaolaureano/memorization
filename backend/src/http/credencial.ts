@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { ACESSO_EXPIRADO } from "../acesso/acesso.ts";
+import type { Acessos } from "../acesso/acesso.ts";
 import type {
   Identidade,
   UsuarioCadastrado,
@@ -39,6 +41,14 @@ import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 const ROTAS_ISENTAS: ReadonlySet<string> = new Set([
   "POST /usuarios",
   "GET /health",
+  // As rotas do Acesso temporário (018) tratam elas mesmas do cookie: cada uma
+  // responde `sem_acesso` ou `acesso_expirado` com o seu código, e limpa o
+  // cookie, o que o hook genérico não faria. `POST /entrar` apresenta a
+  // Credencial — pelo cabeçalho ou pelo corpo — e a verifica ele mesmo.
+  "POST /entrar",
+  "GET /acesso",
+  "POST /acesso/renovar",
+  "POST /sair",
 ]);
 
 /** Status da recusa por Credencial (FR-090). */
@@ -56,6 +66,12 @@ const INDISPONIVEL = 503;
 declare module "fastify" {
   interface FastifyRequest {
     usuarioQueEntrou: UsuarioCadastrado;
+    /**
+     * O valor do Acesso temporário que autenticou a requisição, ou `null` quando
+     * foi a Credencial Basic (018). É por ele que as alterações da conta (017)
+     * sabem se devem emitir um Acesso novo para este navegador (FR-296).
+     */
+    acessoDaRequisicao: string | null;
   }
 }
 
@@ -82,7 +98,7 @@ function isenta(requisicao: FastifyRequest): boolean {
  * usuário e a comparação sem distinguir maiúsculas de minúsculas são regras do
  * `Identidade` (FR-087).
  */
-function credencialDoCabecalho(
+export function credencialDoCabecalho(
   cabecalho: string | undefined,
 ): { nomeDeUsuario: string; senha: string } | null {
   if (cabecalho === undefined) {
@@ -132,6 +148,7 @@ function recusarCredencial(resposta: FastifyReply) {
 export function exigirCredencial(
   servidor: FastifyInstance,
   identidade: Identidade,
+  acessos?: Acessos,
 ): void {
   /**
    * O valor decorado nasce vazio e recebe o Usuário no sucesso da verificação.
@@ -144,9 +161,56 @@ export function exigirCredencial(
     null as unknown as UsuarioCadastrado,
   );
 
+  servidor.decorateRequest("acessoDaRequisicao", null as string | null);
+
   servidor.addHook("onRequest", async (requisicao, resposta) => {
     if (isenta(requisicao)) {
       return;
+    }
+
+    /**
+     * 018 (FR-090 revisado): a requisição se autoriza por Acesso temporário
+     * válido **ou** por Credencial Basic válida. O Acesso vem primeiro, porque é
+     * ele que a interface usa quando a continuidade está marcada.
+     */
+    if (acessos !== undefined) {
+      const valor = acessos.valorDoCookie(requisicao.headers.cookie);
+
+      if (valor !== undefined) {
+        const autorizado = await acessos.autorizar(valor);
+
+        if (autorizado.ok) {
+          const usuario = await identidade.obterUsuario(autorizado.usuarioId);
+
+          if (usuario.ok) {
+            requisicao.usuarioQueEntrou = usuario.usuario;
+            requisicao.acessoDaRequisicao = valor;
+
+            return;
+          }
+
+          if (usuario.erro === "indisponivel") {
+            return resposta.status(INDISPONIVEL).send({
+              erro: "indisponivel",
+              mensagem: "O armazenamento não está disponível. Tente novamente.",
+            });
+          }
+        } else if (autorizado.erro === "acesso_expirado") {
+          return resposta
+            .header("set-cookie", acessos.cookieDeLimpeza())
+            .status(NAO_AUTENTICADO)
+            .send(ACESSO_EXPIRADO);
+        } else if (autorizado.erro === "indisponivel") {
+          // FR-301: a falha do armazenamento não é Acesso expirado, e o cookie
+          // fica como está.
+          return resposta.status(INDISPONIVEL).send({
+            erro: "indisponivel",
+            mensagem: "O armazenamento não está disponível. Tente novamente.",
+          });
+        }
+
+        // Acesso desconhecido: segue para a Credencial Basic, que decide.
+      }
     }
 
     const credencial = credencialDoCabecalho(requisicao.headers.authorization);

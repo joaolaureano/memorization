@@ -1,15 +1,25 @@
 import type { AddressInfo } from "node:net";
 
-import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyRequest,
+} from "fastify";
 
+import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
+import type { Acessos } from "../acesso/acesso.ts";
+import type { ArmazenamentoDeAcessos } from "../armazenamento/porta.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 import { exigirCredencial } from "./credencial.ts";
 import { exigirSegredoDeOrigem } from "./origem.ts";
 import {
   CORPO_INVALIDO,
   registrarRotaDeEntrada,
+  registrarRotasDeAcesso,
   registrarRotasDeBaralhos,
+  registrarRotasDeAgenda,
   registrarRotasDeCartoes,
+  registrarRotasDeConta,
   registrarRotasDePreferencias,
   registrarRotasDeRevisao,
   registrarRotasDeSessoes,
@@ -89,6 +99,37 @@ export const CAMINHO_DAS_PREVIAS = "/previas";
 export const CAMINHO_DAS_PREFERENCIAS = "/preferencias";
 
 /**
+ * Caminho das rotas de conta do Usuário (contrato da `017`): `GET` e `DELETE`
+ * em `/conta`, mais as ações em `/conta/nome-de-usuario` e `/conta/senha`, com o
+ * mesmo CORS.
+ */
+export const CAMINHO_DA_CONTA = "/conta";
+
+/**
+ * Caminhos da Agenda de estudo (`016`): `GET /agenda`, `GET`/`POST
+ * /agenda/rotinas` e `POST /agenda/inicios`, com o mesmo CORS.
+ */
+export const CAMINHO_DA_AGENDA = "/agenda";
+export const CAMINHO_DAS_ROTINAS = "/agenda/rotinas";
+export const CAMINHO_DOS_INICIOS = "/agenda/inicios";
+
+/**
+ * Caminhos das rotas do Acesso temporário (018), com o mesmo CORS — agora
+ * **com credenciais**, porque o navegador envia e recebe o cookie do Acesso.
+ */
+export const CAMINHO_DO_ACESSO = "/acesso";
+export const CAMINHO_DA_RENOVACAO_DO_ACESSO = "/acesso/renovar";
+export const CAMINHO_DE_SAIR = "/sair";
+
+/**
+ * A origem do frontend no ambiente local (018, §4): com `credentials: include` o
+ * navegador **recusa** `Access-Control-Allow-Origin: *`, e por isso a política
+ * de outra origem passa a nomear a origem exata. O padrão é a do `npm run dev`;
+ * `ORIGEM_DO_FRONTEND` a substitui.
+ */
+export const ORIGEM_PADRAO_DO_FRONTEND = "http://127.0.0.1:5173";
+
+/**
  * Erro lançado quando o servidor está escutando fora do loopback.
  *
  * A Credencial protege o acervo, e nunca o transporte; escutar fora do loopback
@@ -143,10 +184,16 @@ export function opcoesDeEscuta(env: NodeJS.ProcessEnv = process.env): {
  * pela Credencial** que agora acompanha toda requisição: sem ele o navegador
  * recusa o pré-voo dos `fetch` que carregam o cabeçalho (FR-090).
  */
-function permitirPreVoo(servidor: FastifyInstance, caminho: string): void {
-  servidor.options(caminho, async (_requisicao, resposta) => {
+function permitirPreVoo(
+  servidor: FastifyInstance,
+  caminho: string,
+  origemDa: (requisicao: FastifyRequest) => string,
+): void {
+  servidor.options(caminho, async (requisicao, resposta) => {
     resposta
-      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-origin", origemDa(requisicao))
+      .header("access-control-allow-credentials", "true")
+      .header("vary", "origin")
       .header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
       .header("access-control-allow-headers", "content-type, authorization")
       .header("access-control-max-age", "86400");
@@ -177,6 +224,24 @@ export interface OpcoesDoServidor {
    * desliga, porque SPA e API dividem a origem do CloudFront (FR-128).
    */
   politicaDeOutraOrigem?: boolean;
+  /**
+   * Os Acessos temporários (018). Informados, o hook de Credencial aceita o
+   * Acesso do cookie **ou** a Credencial Basic; ausentes — como nos servidores
+   * de teste mínimos —, só a Credencial Basic vale.
+   */
+  acessos?: Acessos;
+  /**
+   * A origem exata do frontend, que a política de outra origem concede com
+   * credenciais (§4). Padrão: `ORIGEM_PADRAO_DO_FRONTEND`.
+   */
+  origemDoFrontend?: string;
+  /**
+   * Só para os testes de navegador: aceita como origem qualquer porta do
+   * loopback — o frontend do teste sobe depois da API, numa porta livre, e a
+   * origem exata não existe quando a API é iniciada. A API local escuta apenas
+   * em 127.0.0.1, e o padrão é desligado.
+   */
+  qualquerOrigemLocal?: boolean;
 }
 
 /**
@@ -208,7 +273,7 @@ export function criarServidor(
    * diante toda rota exige Credencial válida, menos as três isentas do
    * contrato.
    */
-  exigirCredencial(servidor, identidade);
+  exigirCredencial(servidor, identidade, opcoes.acessos);
 
   servidor.get("/health", async () => ({ status: "ok" }));
 
@@ -259,6 +324,24 @@ export function criarServidor(
    * ausência é por construção, e não limpeza posterior (FR-128, SC-056).
    */
   if (opcoes.politicaDeOutraOrigem ?? true) {
+    const origemConfigurada =
+      opcoes.origemDoFrontend ?? ORIGEM_PADRAO_DO_FRONTEND;
+
+    /**
+     * A origem concedida: a configurada — e, só quando `qualquerOrigemLocal`,
+     * a de qualquer porta do loopback que a requisição declarar. Nunca `*`:
+     * com credenciais ele é inválido (§4).
+     */
+    const origemDa = (requisicao: FastifyRequest): string => {
+      const declarada = requisicao.headers.origin;
+
+      return opcoes.qualquerOrigemLocal === true &&
+        typeof declarada === "string" &&
+        /^http:\/\/(127\.0\.0\.1|localhost):[0-9]+$/.test(declarada)
+        ? declarada
+        : origemConfigurada;
+    };
+
     for (const caminho of [
       CAMINHO_DOS_CARTOES,
       "/cartoes/:id",
@@ -275,8 +358,17 @@ export function criarServidor(
       CAMINHO_DO_LOTE_DE_REVISAO,
       CAMINHO_DAS_PREVIAS,
       CAMINHO_DAS_PREFERENCIAS,
+      CAMINHO_DA_AGENDA,
+      CAMINHO_DAS_ROTINAS,
+      CAMINHO_DOS_INICIOS,
+      CAMINHO_DA_CONTA,
+      "/conta/nome-de-usuario",
+      "/conta/senha",
+      CAMINHO_DO_ACESSO,
+      CAMINHO_DA_RENOVACAO_DO_ACESSO,
+      CAMINHO_DE_SAIR,
     ]) {
-      permitirPreVoo(servidor, caminho);
+      permitirPreVoo(servidor, caminho, origemDa);
     }
 
     servidor.addHook("onSend", async (requisicao, resposta, carga) => {
@@ -295,9 +387,19 @@ export function criarServidor(
         caminho === CAMINHO_DA_REVISAO ||
         caminho === CAMINHO_DO_LOTE_DE_REVISAO ||
         caminho === CAMINHO_DAS_PREVIAS ||
-        caminho === CAMINHO_DAS_PREFERENCIAS
+        caminho === CAMINHO_DAS_PREFERENCIAS ||
+        caminho === CAMINHO_DA_AGENDA ||
+        caminho.startsWith("/agenda/") ||
+        caminho === CAMINHO_DA_CONTA ||
+        caminho.startsWith("/conta/") ||
+        caminho === CAMINHO_DO_ACESSO ||
+        caminho === CAMINHO_DA_RENOVACAO_DO_ACESSO ||
+        caminho === CAMINHO_DE_SAIR
       ) {
-        resposta.header("access-control-allow-origin", "*");
+        resposta
+          .header("access-control-allow-origin", origemDa(requisicao))
+          .header("access-control-allow-credentials", "true")
+          .header("vary", "origin");
       }
 
       return carga;
@@ -356,14 +458,18 @@ export function registrarRotasDaAplicacao(
   servidor: FastifyInstance,
   identidade: Identidade,
   acervoDe: AcervoDeUsuario,
+  acessos: Acessos,
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
   registrarRotasDeBaralhos(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
   registrarRotasDeRevisao(servidor, acervoDe);
   registrarRotasDePreferencias(servidor, acervoDe);
+  registrarRotasDeAgenda(servidor, acervoDe);
   registrarRotasDeUsuarios(servidor, identidade);
-  registrarRotaDeEntrada(servidor);
+  registrarRotasDeConta(servidor, identidade, acessos);
+  registrarRotaDeEntrada(servidor, identidade, acessos);
+  registrarRotasDeAcesso(servidor, identidade, acessos);
 }
 
 /**
@@ -378,10 +484,18 @@ export async function iniciarServidor(
   env: NodeJS.ProcessEnv = process.env,
   identidade: Identidade,
   acervoDe: AcervoDeUsuario,
+  armazenamentoDeAcessos: ArmazenamentoDeAcessos,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
-  const servidor = criarServidor(identidade);
-  registrarRotasDaAplicacao(servidor, identidade, acervoDe);
+  const acessos = criarAcessos(armazenamentoDeAcessos, {
+    validadeEmSegundos: validadeConfigurada(env),
+  });
+  const servidor = criarServidor(identidade, {
+    acessos,
+    origemDoFrontend: env.ORIGEM_DO_FRONTEND ?? ORIGEM_PADRAO_DO_FRONTEND,
+    qualquerOrigemLocal: env.ORIGENS_LOCAIS_DE_TESTE === "sim",
+  });
+  registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
 
   await servidor.listen(opcoes);
 

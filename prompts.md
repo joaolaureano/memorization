@@ -174,11 +174,26 @@ O Arquiteto deverá:
 - limitar cada worker a uma tarefa bem definida;
 - revisar todo diff produzido;
 - executar ou conferir as verificações;
+- antes de integrar ou enviar alterações, executar `npm run verificar:ci` na
+  raiz e interromper o fluxo se qualquer portão falhar;
 - impedir mudanças fora do escopo;
 - manter a rastreabilidade;
 - atuar como único integrador e committer, salvo autorização explícita em contrário.
 
 O Arquiteto não poderá aceitar a afirmação de um worker sem verificar o código, os testes ou os artefatos correspondentes.
+
+### Verificação antes do push
+
+Depois de `npm ci` na raiz, no backend e no frontend, o Arquiteto executa
+`npm run verificar:ci` antes de todo push. O comando reproduz os portões locais
+da CI: Gitleaks, typecheck, lint e testes do backend, lint, testes e build do
+frontend, e Playwright. `gitleaks` precisa estar instalado na máquina; sem ele,
+a verificação falha e o push não é autorizado.
+
+O `prepare` instala `.githooks/pre-push` no clone corrente. O hook executa o
+mesmo comando como defesa adicional, mas não substitui a execução explícita e a
+revisão do Arquiteto. A CI no GitHub continua sendo a verificação final em
+ambiente limpo.
 
 ### Workers via Aider
 

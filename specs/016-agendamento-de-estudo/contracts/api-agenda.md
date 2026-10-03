@@ -10,7 +10,9 @@ Dado de outro dono responde como inexistente. CORS inclui os caminhos novos.
 
 `RotinaDeEstudo`: id, baralhoId, nomeDoBaralho, dias:number[] (1=seg..7=dom),
 quantidade:number|null, estado:'ativa'|'pausada'|'excluida', versao:number,
-criadaEm:string. Sem usuarioId público e sem versões internas.
+criadaEm:string, indisponivel:boolean (Baralho excluído ou sem Cartões, FR-243;
+campo acrescentado na implementação para a tela de gerenciamento). Sem
+usuarioId público e sem versões internas.
 
 `CompromissoDeEstudo`: rotinaId, data, baralhoId, nomeDoBaralho,
 quantidade:number|null, estado:'pendente'|'programado'|'nao_realizado'|'concluido'|'cancelado',
@@ -42,6 +44,9 @@ quantidadeSolicitada:number|null. Os Cartões já foram selecionados no servidor
 - POST /agenda/inicios → 201 `{ inicio: InicioDeCompromisso }`.
   Corpo `{ rotinaId, data, fuso }`; só hoje e pendente elegível. A autorização
   pode ser repetida após interrupção; cada início tem seu próprio id.
+  Recusas: data que não é hoje → 400; Rotina inexistente, de outro dono, sem
+  ocorrência hoje ou cancelada → 404; já concluído, Baralho excluído ou sem
+  Cartões → 409 `conflito` com a causa na mensagem.
 - POST /sessoes existente aceita `inicioAgendaId?:string`.
   Para Agenda, `id` deve ser igual ao início autorizado; validar origem baralho,
   Baralho capturado e conjunto/quantidade dos Cartões, deriva Frente/Verso/nome
@@ -62,7 +67,8 @@ operações. Adapter em memória segue as mesmas regras observáveis para os tes
 
 ## UI
 
-Rotas propostas: #/agenda (gerenciar), #/agenda/nova, #/agenda/:id/editar.
+Rotas: #/agenda (gerenciar), #/agenda/nova, #/agenda/:id/editar e
+#/agenda/estudo (a Sessão autorizada; sem início na memória, volta a #/inicio).
 Ver Sessão de um Compromisso concluído navega para `#/sessoes/:registroId` (PaginaDoRegistro existente).
 A Sessão autorizada é iniciada após clicar Estudar no componente da Agenda,
 com o snapshot mantido em memória do fluxo; recarregar abandona a Sessão e

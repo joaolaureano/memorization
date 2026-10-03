@@ -78,7 +78,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "content-type",
@@ -101,7 +103,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "authorization",
@@ -112,14 +116,18 @@ describe("CORS para o frontend local", () => {
     const resposta = await servidor.inject({ method: "GET", url: "/cartoes" });
 
     expect(resposta.statusCode).toBe(401);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura da listagem: GET /cartoes devolve access-control-allow-origin", async () => {
     const resposta = await pedir({ method: "GET", url: "/cartoes" });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura da criação concluída: POST 201 devolve access-control-allow-origin", async () => {
@@ -130,7 +138,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(201);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura até da recusa: POST 400 devolve access-control-allow-origin", async () => {
@@ -141,7 +151,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(400);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de POST /baralhos com 204 e os cabeçalhos de permissão", async () => {
@@ -156,7 +168,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "content-type",
@@ -167,7 +181,9 @@ describe("CORS para o frontend local", () => {
     const resposta = await pedir({ method: "GET", url: "/baralhos" });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura da criação concluída: POST /baralhos 201 devolve access-control-allow-origin", async () => {
@@ -178,7 +194,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(201);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura até da recusa: POST /baralhos 400 devolve access-control-allow-origin", async () => {
@@ -189,7 +207,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(400);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de PUT /cartoes/{id} com 204 e permissão de PUT", async () => {
@@ -204,7 +224,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("PUT");
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "content-type",
@@ -223,7 +245,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
   });
 
@@ -239,7 +263,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("PUT");
   });
 
@@ -255,7 +281,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
   });
 
@@ -271,7 +299,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
   });
 
@@ -287,7 +317,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
   });
 
@@ -298,7 +330,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de POST /usuarios com 204 e os cabeçalhos de permissão", async () => {
@@ -313,7 +347,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
     expect(resposta.headers["access-control-allow-headers"]).toContain(
       "content-type",
@@ -328,7 +364,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(201);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("permite a leitura até da recusa: POST /usuarios 400 devolve access-control-allow-origin", async () => {
@@ -339,7 +377,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(400);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("não altera rotas alheias: GET /health segue sem cabeçalho de CORS", async () => {
@@ -361,7 +401,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
     /** Sem `authorization`, o navegador recusaria o `fetch` com Credencial. */
     expect(preVoo.headers["access-control-allow-headers"]).toContain(
@@ -374,7 +416,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).not.toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de GET /revisao/lote com 204 e lê o lote com access-control-allow-origin (FR-201)", async () => {
@@ -389,7 +433,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
     expect(preVoo.headers["access-control-allow-headers"]).toContain(
       "authorization",
@@ -401,7 +447,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).not.toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de POST /previas com 204 e lê a resposta com access-control-allow-origin (FR-221)", async () => {
@@ -416,7 +464,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(preVoo.headers["access-control-allow-methods"]).toContain("POST");
     expect(preVoo.headers["access-control-allow-headers"]).toContain(
       "authorization",
@@ -430,7 +480,9 @@ describe("CORS para o frontend local", () => {
 
     /** A recusa de domínio também precisa ser legível do navegador (FR-044). */
     expect(resposta.statusCode).not.toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de GET /preferencias com 204 e lê as Preferências com access-control-allow-origin (FR-212)", async () => {
@@ -445,7 +497,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
     expect(preVoo.headers["access-control-allow-headers"]).toContain(
       "authorization",
@@ -454,7 +508,9 @@ describe("CORS para o frontend local", () => {
     const resposta = await pedir({ method: "GET", url: "/preferencias" });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 
   it("responde ao pré-voo de PUT /preferencias com 204 e salva as Preferências com access-control-allow-origin (FR-213)", async () => {
@@ -469,7 +525,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
     expect(preVoo.headers["access-control-allow-methods"]).toContain("PUT");
     expect(preVoo.headers["access-control-allow-headers"]).toContain(
       "authorization",
@@ -487,7 +545,9 @@ describe("CORS para o frontend local", () => {
     });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 });
 
@@ -503,13 +563,13 @@ describe("guarda: toda rota da aplicação tem pré-voo permitido (T-c8)", () =>
     const rotas: string[] = [];
 
     const aplicacao = await montarServidorDeContrato(
-      ({ servidor, acervoDe, identidade }) => {
+      ({ servidor, acervoDe, identidade, acessos }) => {
         /** Captura cada rota que a aplicação registra, antes de registrá-las. */
         servidor.addHook("onRoute", (rota) => {
           rotas.push(rota.path);
         });
 
-        registrarRotasDaAplicacao(servidor, identidade, acervoDe);
+        registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
       },
     );
 
@@ -535,11 +595,125 @@ describe("guarda: toda rota da aplicação tem pré-voo permitido (T-c8)", () =>
         expect(
           resposta.headers["access-control-allow-origin"],
           `origem de ${caminho}`,
-        ).toBe("*");
+        ).toBe(ORIGEM_DO_FRONTEND);
+        expect(
+          resposta.headers["access-control-allow-credentials"],
+          `credenciais de ${caminho}`,
+        ).toBe("true");
       }
     } finally {
       await aplicacao.encerrar();
     }
+  });
+});
+
+/**
+ * 018, §4 — com `credentials: include` o navegador recusa
+ * `Access-Control-Allow-Origin: *`: a política de outra origem nomeia a origem
+ * exata do frontend e concede credenciais. As rotas do Acesso temporário entram
+ * na mesma lista de pré-voo.
+ */
+describe("CORS com credenciais para o Acesso temporário (018, §4)", () => {
+  it("nunca responde com * e concede credenciais, no pré-voo e na resposta, de cada rota do Acesso", async () => {
+    for (const [metodo, caminho] of [
+      ["GET", "/acesso"],
+      ["POST", "/acesso/renovar"],
+      ["POST", "/sair"],
+      ["POST", "/entrar"],
+    ] as const) {
+      const preVoo = await servidor.inject({
+        method: "OPTIONS",
+        url: caminho,
+        headers: {
+          origin: ORIGEM_DO_FRONTEND,
+          "access-control-request-method": metodo,
+          "access-control-request-headers": "content-type",
+        },
+      });
+
+      expect(preVoo.statusCode, `pré-voo de ${caminho}`).toBe(204);
+      expect(preVoo.headers["access-control-allow-origin"]).toBe(
+        ORIGEM_DO_FRONTEND,
+      );
+      expect(preVoo.headers["access-control-allow-credentials"]).toBe("true");
+      expect(preVoo.headers["vary"]).toContain("origin");
+    }
+  });
+
+  it("a resposta de uma rota do Acesso, inclusive a recusa, carrega a origem e as credenciais", async () => {
+    const resposta = await servidor.inject({ method: "GET", url: "/cartoes" });
+
+    expect(resposta.statusCode).toBe(401);
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
+    expect(resposta.headers["access-control-allow-credentials"]).toBe("true");
+  });
+
+  it("usa a origem configurada, e não a padrão, quando ela é informada", async () => {
+    const configurado = await montarServidorDeContrato(
+      ({ servidor, acervoDe, identidade, acessos }) => {
+        registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
+      },
+      { origemDoFrontend: "http://127.0.0.1:4999" },
+    );
+
+    try {
+      const resposta = await configurado.servidor.inject({
+        method: "OPTIONS",
+        url: "/acesso",
+        headers: { origin: "http://127.0.0.1:4999" },
+      });
+
+      expect(resposta.headers["access-control-allow-origin"]).toBe(
+        "http://127.0.0.1:4999",
+      );
+    } finally {
+      await configurado.encerrar();
+    }
+  });
+
+  it("só com qualquerOrigemLocal aceita outra porta do loopback, e nunca origem de fora", async () => {
+    const aberto = await montarServidorDeContrato(
+      ({ servidor, acervoDe, identidade, acessos }) => {
+        registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
+      },
+      { qualquerOrigemLocal: true },
+    );
+
+    try {
+      const local = await aberto.servidor.inject({
+        method: "OPTIONS",
+        url: "/acesso",
+        headers: { origin: "http://127.0.0.1:43210" },
+      });
+      const externa = await aberto.servidor.inject({
+        method: "OPTIONS",
+        url: "/acesso",
+        headers: { origin: "https://exemplo.com" },
+      });
+
+      expect(local.headers["access-control-allow-origin"]).toBe(
+        "http://127.0.0.1:43210",
+      );
+      expect(externa.headers["access-control-allow-origin"]).toBe(
+        ORIGEM_DO_FRONTEND,
+      );
+    } finally {
+      await aberto.encerrar();
+    }
+  });
+
+  it("sem a opção, outra porta do loopback não é aceita", async () => {
+    const resposta = await servidor.inject({
+      method: "OPTIONS",
+      url: "/acesso",
+      headers: { origin: "http://127.0.0.1:43210" },
+    });
+
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
   });
 });
 

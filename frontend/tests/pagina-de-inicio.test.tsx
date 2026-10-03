@@ -47,7 +47,24 @@ function clienteComEstatisticas(
     resumo: { vencidos: 0, novosHoje: 0, total: 0 },
   }),
 ): ClienteDoAcervo {
-  return { obterEstatisticas, obterResumoDaRevisao } as ClienteDoAcervo;
+  // A Agenda (016) vive no mesmo Início, mas tem estado próprio: estas provas
+  // a mantêm vazia e sem falha para exercitar só o que é do Início.
+  const obterAgenda: ClienteDoAcervo["obterAgenda"] = async (inicio, fuso) => ({
+    ok: true,
+    agenda: {
+      inicio,
+      hoje: inicio,
+      fuso,
+      compromissos: [],
+      compromissosDeHoje: [],
+    },
+  });
+
+  return {
+    obterEstatisticas,
+    obterResumoDaRevisao,
+    obterAgenda,
+  } as ClienteDoAcervo;
 }
 
 /** Um Registro de Sessão de prova, com os totais e o resto informados. */

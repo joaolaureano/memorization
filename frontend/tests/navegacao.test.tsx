@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Credencial } from "../src/acervo-cliente/cliente";
 import { Aplicacao } from "../src/ui/Aplicacao";
+import { MENSAGEM_DE_SAIDA } from "../src/ui/PaginaDeEntrada";
 import {
   ROTA_PADRAO,
   destinoAtivo,
@@ -18,6 +19,7 @@ import {
   CREDENCIAL_DE_PROVA,
   clienteDeProva,
   fabricaDeClienteDeProva,
+  aguardarVerificacaoDoAcesso,
 } from "./apoio-de-prova";
 
 /**
@@ -55,7 +57,7 @@ function navegarPara(hash: string): void {
  * campos — no navegador cada aba é um documento à parte, e é o id que associa
  * rótulo e campo —, e a consulta por rótulo alcançaria o campo da outra aba.
  */
-function entrarNaAba(aba: HTMLElement): void {
+function entrarNaAba(aba: HTMLElement, continuarConectado = true): void {
   const nomeDeUsuario = aba.querySelector<HTMLInputElement>(
     "input[type='text']",
   );
@@ -72,6 +74,18 @@ function entrarNaAba(aba: HTMLElement): void {
     target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
   });
   fireEvent.change(senha, { target: { value: CREDENCIAL_DE_PROVA.senha } });
+
+  // FR-292: sem a continuidade, a Credencial só existe na memória desta aba.
+  if (!continuarConectado) {
+    const caixa = aba.querySelector<HTMLInputElement>("input[type='checkbox']");
+
+    if (caixa === null) {
+      throw new Error("a tela Entrar da aba não oferece a continuidade");
+    }
+
+    fireEvent.click(caixa);
+  }
+
   fireEvent.click(botao);
 }
 
@@ -275,6 +289,7 @@ describe("destinoAtivo", () => {
 describe("Aplicacao sem Credencial", () => {
   it("apresenta Entrar como primeira e única tela, com o acesso a Criar conta (FR-097, SC-027)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Entrar" }),
@@ -296,8 +311,9 @@ describe("Aplicacao sem Credencial", () => {
     expect(screen.queryByText(/ainda não há Cartões/i)).toBeNull();
   });
 
-  it("nenhuma outra rota é alcançável: todas continuam em Entrar (FR-097)", () => {
+  it("nenhuma outra rota é alcançável: todas continuam em Entrar (FR-097)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     for (const hash of [
       "#/cartoes",
@@ -314,8 +330,9 @@ describe("Aplicacao sem Credencial", () => {
     }
   });
 
-  it("o Cadastro continua alcançável e oferece a volta a Entrar (FR-097)", () => {
+  it("o Cadastro continua alcançável e oferece a volta a Entrar (FR-097)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     navegarPara("#/criar-conta");
 
@@ -341,6 +358,7 @@ describe("Aplicacao depois de Entrar", () => {
         criarCliente={(credencial) => servidor.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
 
@@ -396,6 +414,7 @@ describe("Aplicacao depois de Entrar", () => {
 
   it("marca o link corrente da rota e move o foco para o título da tela de destino", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
 
@@ -429,6 +448,7 @@ describe("Aplicacao depois de Entrar", () => {
         criarCliente={(credencial) => servidor.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByText("To walk");
@@ -436,13 +456,15 @@ describe("Aplicacao depois de Entrar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 
     // A Credencial foi descartada: a tela "Entrar" volta, com a conclusão
-    // anunciada por região ativa, e nada do acervo é exibido.
+    // anunciada por região ativa, e nada do acervo é exibido. O Sair passa por
+    // `POST /sair` (018, FR-293), e por isso a volta é assíncrona.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Entrar" }),
+      await screen.findByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
 
-    const conclusao = screen.getByRole("status", { name: "Saída concluída" });
+    const conclusao = screen.getByText(MENSAGEM_DE_SAIDA);
 
+    expect(conclusao).toHaveAttribute("role", "status");
     expect(conclusao).toHaveAttribute("aria-live", "polite");
     expect(conclusao).toHaveAttribute("aria-atomic", "true");
     expect(conclusao).toHaveTextContent(/você saiu/i);
@@ -474,11 +496,13 @@ describe("Aplicacao depois de Entrar", () => {
         criarCliente={(credencial) => servidor.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByText("To walk");
 
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+    await screen.findByRole("heading", { level: 1, name: "Entrar" });
     entrarPelaTela();
 
     // Com a Credencial de volta, `#/entrar` resolve na rota padrão, Início
@@ -503,10 +527,14 @@ describe("Aplicacao depois de Entrar", () => {
     );
   });
 
-  it("recarregar a página exige Entrar de novo (FR-089, SC-031)", async () => {
+  it("recarregar a página exige Entrar de novo quando a continuidade foi desmarcada (FR-089, FR-292, SC-031)", async () => {
     const criarCliente = fabricaDeClienteDeProva();
     const primeira = render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
 
+    // FR-292: sem «Continuar conectado neste navegador», nenhum Acesso é
+    // emitido e a Credencial só existe na memória da página.
+    fireEvent.click(screen.getByLabelText("Continuar conectado neste navegador"));
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });
 
@@ -515,6 +543,7 @@ describe("Aplicacao depois de Entrar", () => {
     primeira.unmount();
 
     render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Entrar" }),
@@ -522,14 +551,48 @@ describe("Aplicacao depois de Entrar", () => {
     expect(screen.queryByRole("navigation")).toBeNull();
   });
 
+  it("recarregar a página com a continuidade marcada volta ao Início, sem Entrar (FR-290, SC-114)", async () => {
+    const criarCliente = fabricaDeClienteDeProva();
+    const primeira = render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
+
+    // A caixa vem marcada por padrão (FR-292).
+    expect(
+      screen.getByLabelText("Continuar conectado neste navegador"),
+    ).toBeChecked();
+
+    entrarPelaTela();
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    primeira.unmount();
+
+    render(<Aplicacao criarCliente={criarCliente} />);
+
+    // O destino pedido continua valendo: a página recarregada reabre em
+    // Cartões — a rota do hash —, com a navegação, e nunca em Entrar.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Cartões" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Principal" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { level: 1, name: "Entrar" }),
+    ).toBeNull();
+  });
+
   it("duas abas mantêm Credenciais independentes: Sair numa não afeta a outra (FR-089)", async () => {
     const criarCliente = fabricaDeClienteDeProva();
     const outra = render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
     const primeira = render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
 
-    // Cada aba Entra separadamente, na sua própria tela "Entrar".
+    // Cada aba Entra separadamente, na sua própria tela "Entrar", com a
+    // Credencial só na memória dela: com o Acesso temporário as duas abas do
+    // mesmo navegador compartilhariam o cookie (018, FR-299).
     for (const aba of [primeira, outra]) {
-      entrarNaAba(aba.container);
+      entrarNaAba(aba.container, false);
 
       expect(
         await within(aba.container).findByRole("navigation", {
@@ -543,7 +606,7 @@ describe("Aplicacao depois de Entrar", () => {
     );
 
     expect(
-      within(primeira.container).getByRole("heading", {
+      await within(primeira.container).findByRole("heading", {
         level: 1,
         name: "Entrar",
       }),
@@ -565,6 +628,7 @@ describe("Aplicacao depois de Entrar", () => {
     const criarCliente = fabricaDeClienteDeProva();
 
     render(<Aplicacao criarCliente={criarCliente} />);
+    await aguardarVerificacaoDoAcesso();
 
     // Percurso de teclado na tela "Entrar": Nome de usuário → Senha → Entrar.
     const campoDoNome = screen.getByLabelText("Nome de usuário");
@@ -597,10 +661,10 @@ describe("Aplicacao depois de Entrar", () => {
     fireEvent.click(botaoDeSaida);
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Entrar" }),
+      await screen.findByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("status", { name: "Saída concluída" }),
+      screen.getByText(MENSAGEM_DE_SAIDA),
     ).toBeInTheDocument();
 
     // O indicador de foco alcança também "Sair": é um contorno geométrico —
@@ -622,6 +686,7 @@ describe("Aplicacao depois de Entrar", () => {
     window.location.hash = "#/entrar";
 
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
 
@@ -636,6 +701,7 @@ describe("Aplicacao depois de Entrar", () => {
 
   it("marca o destino corrente da moldura nas telas de Baralhos e de Cartões (FR-139)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });
@@ -695,6 +761,7 @@ describe("Aplicacao depois de Entrar", () => {
         criarCliente={(credencial) => servidor.comoUsuario(credencial)}
       />,
     );
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });
@@ -717,6 +784,7 @@ describe("Aplicacao depois de Entrar", () => {
 describe("Aplicacao nas telas de formulário da 012", () => {
   it("com Credencial, #/cartoes/novo apresenta a tela de criação de Cartão (FR-140)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });
@@ -730,6 +798,7 @@ describe("Aplicacao nas telas de formulário da 012", () => {
 
   it("com Credencial, #/baralhos/novo apresenta a tela de criação de Baralho (FR-140)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });
@@ -743,6 +812,7 @@ describe("Aplicacao nas telas de formulário da 012", () => {
 
   it("um Criar cartão sujo pede Descartar as alterações ao navegar, e Cancelar preserva o digitado (FR-148, FR-151)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
+    await aguardarVerificacaoDoAcesso();
 
     entrarPelaTela();
     await screen.findByRole("navigation", { name: "Principal" });

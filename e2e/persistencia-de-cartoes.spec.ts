@@ -46,10 +46,11 @@ const SEGUNDO_CARTAO = {
 
 test.setTimeout(120_000);
 
-test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040, SC-001, SC-003)", async ({ page, browserName }) => {
+test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040, SC-001, SC-003)", async ({ page: paginaInicial, browserName }) => {
   // Navegador real: Chromium, sem DOM simulado.
   expect(browserName).toBe("chromium");
 
+  let page = paginaInicial;
   const pasta = await criarPastaTemporaria("cartoes-t014-");
   const caminhoDoBanco = join(pasta, "cartoes.sqlite");
 
@@ -160,6 +161,15 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     // Reabrir a UI: a Credencial não sobreviveu ao recarregamento, então
     // Entrar é exigido de novo (FR-089, SC-031); os dois Cartões persistem,
     // cada um com a sua Frente e o seu Verso, e nada além deles.
+    // A aba anterior ainda tem o cliente de recarga do Vite. Ao servidor
+    // voltar, ele restaura por conta própria o hash #/cartoes e disputa com
+    // uma navegação para a raiz. Uma aba nova no mesmo contexto é a reabertura
+    // que o cenário quer provar: mantém os cookies do navegador sem essa
+    // navegação pendente.
+    const paginaReaberta = await page.context().newPage();
+    await page.close();
+    page = paginaReaberta;
+
     await page.goto(enderecoDoFrontend);
     await entrarSeNecessario(page);
     await irParaCartoes(page);

@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 
 import type {
   Agendamento,
+  ArmazenamentoDeAcessos,
   ArmazenamentoDoAcervo,
   ArmazenamentoDeUsuarios,
   Avaliacao,
@@ -9,7 +10,12 @@ import type {
   Cartao,
   CompromissoPersistido,
   ContagemPorBaralho,
+  ContagensDaConta,
   Desfecho,
+  DesfechoDeAcesso,
+  DesfechoDeAcessoValido,
+  DesfechoDeAlteracaoDeNome,
+  DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
   DesfechoDeRotina,
@@ -18,6 +24,7 @@ import type {
   InicioAutorizado,
   ItemAvaliado,
   ItemRegistrado,
+  OperacaoDeRotinaGravada,
   Preferencias,
   RegistroDeSessao,
   RegistroResumido,
@@ -65,6 +72,8 @@ export interface ArmazenamentoPostgresqlAberto {
   armazenamento: ArmazenamentoDoAcervo;
   /** A segunda Porta, sobre o mesmo conjunto de conexões: os Usuários. */
   usuarios: ArmazenamentoDeUsuarios;
+  /** A terceira Porta, sobre o mesmo conjunto: os Acessos temporários (018). */
+  acessos: ArmazenamentoDeAcessos;
   /** Fecha o conjunto de conexões. O conteúdo gravado permanece na base. */
   encerrar(): Promise<void>;
 }
@@ -107,6 +116,9 @@ const NOME_DE_USUARIO_EXISTENTE = {
   ok: false,
   erro: "nome_de_usuario_existente",
 } as const;
+
+/** Desfecho do Nome de usuário em uso por outro Usuário, na alteração. */
+const NOME_EM_USO = { ok: false, erro: "nome_em_uso" } as const;
 
 /** Desfecho de falha do armazenamento na Porta de Usuários. */
 const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
@@ -425,6 +437,69 @@ INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
 VALUES ($1, $2, $3, $4, $5);
 `;
 
+const OBTER_USUARIO_POR_ID = `
+SELECT id, nome_de_usuario, sal, hash, parametros
+  FROM usuario
+ WHERE id = $1;
+`;
+
+const ATUALIZAR_NOME_DO_USUARIO = `
+UPDATE usuario SET nome_de_usuario = $1 WHERE id = $2;
+`;
+
+const ATUALIZAR_SENHA_DO_USUARIO = `
+UPDATE usuario SET sal = $1, hash = $2, parametros = $3 WHERE id = $4;
+`;
+
+/**
+ * Uma única instrução: as chaves estrangeiras `ON DELETE CASCADE` removem, na
+ * mesma transação implícita, tudo o que pertence ao Usuário (FR-274, FR-275).
+ */
+const EXCLUIR_USUARIO = `
+DELETE FROM usuario WHERE id = $1;
+`;
+
+const CONTAR_DADOS_DO_USUARIO = `
+SELECT
+  (SELECT COUNT(*) FROM cartao WHERE usuario_id = $1)::int AS cartoes,
+  (SELECT COUNT(*) FROM baralho WHERE usuario_id = $1)::int AS baralhos,
+  (SELECT COUNT(*) FROM registro_de_sessao WHERE usuario_id = $1)::int
+    AS registros,
+  ((SELECT COUNT(*) FROM rotina_de_estudo WHERE usuario_id = $1)
+   + (SELECT COUNT(*) FROM compromisso_de_estudo WHERE usuario_id = $1)
+   + (SELECT COUNT(*) FROM inicio_de_compromisso WHERE usuario_id = $1))::int
+    AS agenda;
+`;
+
+const INSERIR_ACESSO = `
+INSERT INTO acesso_temporario (digest, usuario_id, criado_em, expira_em, ultima_acao_em)
+VALUES ($1, $2, $3::timestamptz, $4::timestamptz, $3::timestamptz);
+`;
+
+const OBTER_ACESSO = `
+SELECT usuario_id, expira_em > $2::timestamptz AS valido
+  FROM acesso_temporario
+ WHERE digest = $1;
+`;
+
+const RENOVAR_ACESSO = `
+UPDATE acesso_temporario
+   SET expira_em = $2::timestamptz, ultima_acao_em = $3::timestamptz
+ WHERE digest = $1;
+`;
+
+const ENCERRAR_ACESSO = `
+DELETE FROM acesso_temporario WHERE digest = $1;
+`;
+
+const ENCERRAR_ACESSOS_DO_USUARIO = `
+DELETE FROM acesso_temporario WHERE usuario_id = $1;
+`;
+
+const REMOVER_ACESSOS_EXPIRADOS = `
+DELETE FROM acesso_temporario WHERE expira_em < $1::timestamptz;
+`;
+
 /**
  * A leitura não distingue maiúsculas de minúsculas, e é o `lower` de ambos os
  * lados que o garante: o índice único da migração 4 é sobre
@@ -527,6 +602,16 @@ INSERT INTO operacao_de_rotina
        (usuario_id, operacao_id, rotina_id, intencao, resultado)
 VALUES ($1, $2, $3, $4, $5::jsonb)
 ON CONFLICT (usuario_id, operacao_id) DO NOTHING;
+`;
+
+/**
+ * A reativação (FR-239) remove só a exceção `cancelado`: a linha `concluido`
+ * nunca é apagada (FR-245).
+ */
+const REMOVER_COMPROMISSO_CANCELADO = `
+DELETE FROM compromisso_de_estudo
+ WHERE rotina_id = $1 AND data = $2 AND usuario_id = $3
+   AND estado = 'cancelado';
 `;
 
 const INSERIR_COMPROMISSO = `
@@ -1656,6 +1741,41 @@ export async function abrirArmazenamentoPostgresql(
             }
 
             /**
+             * Cancelamentos e reativações de hoje entram na mesma transação da
+             * Rotina (FR-238, FR-239). O cancelamento só cria a linha quando
+             * ainda não há nenhuma para `(rotina, data)`: a conclusão
+             * existente prevalece (FR-245).
+             */
+            for (const cancelado of gravacao.cancelamentos ?? []) {
+              const { rows: existentes } =
+                await cliente.query<LinhaDeCompromisso>(
+                  OBTER_COMPROMISSO_DO_USUARIO,
+                  [cancelado.rotinaId, cancelado.data, usuarioId],
+                );
+
+              if (existentes[0] === undefined) {
+                await cliente.query(INSERIR_COMPROMISSO, [
+                  cancelado.rotinaId,
+                  cancelado.data,
+                  usuarioId,
+                  "cancelado",
+                  null,
+                  cancelado.baralhoId,
+                  cancelado.nomeDoBaralho,
+                  cancelado.quantidade,
+                ]);
+              }
+            }
+
+            for (const data of gravacao.reativacoes ?? []) {
+              await cliente.query(REMOVER_COMPROMISSO_CANCELADO, [
+                gravacao.rotina.id,
+                data,
+                usuarioId,
+              ]);
+            }
+
+            /**
              * A operação guarda o JSON da Rotina gravada: é ele que o reenvio
              * idempotente devolve como resultado (FR-248).
              */
@@ -1713,6 +1833,26 @@ export async function abrirArmazenamentoPostgresql(
 
           throw erro;
         }
+      });
+    },
+
+    /**
+     * Devolve a operação de Rotina `operacaoId` do Usuário (FR-249); ausente é
+     * `nao_encontrado`.
+     */
+    async obterOperacaoDeRotina(usuarioId, operacaoId) {
+      return comDesfecho<OperacaoDeRotinaGravada>(async () => {
+        const { rows } = await piscina.query<LinhaDeOperacaoDeRotina>(
+          OBTER_OPERACAO_DE_ROTINA,
+          [usuarioId, operacaoId],
+        );
+
+        return rows[0] === undefined
+          ? NAO_ENCONTRADO
+          : {
+              ok: true,
+              valor: { intencao: rows[0].intencao, rotina: rows[0].resultado },
+            };
       });
     },
 
@@ -1929,6 +2069,110 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
+    /**
+     * Conclui o Compromisso da Agenda numa **única transação** serializada por
+     * Usuário (FR-233, FR-235, FR-256): a linha de `usuario` é travada com
+     * `FOR UPDATE`, os Agendamentos e as Preferências são lidos **depois** do
+     * bloqueio e o cálculo de domínio parte desse estado — duas conclusões
+     * concorrentes do mesmo Usuário produzem Agendamentos coerentes com a ordem
+     * serializada. O reenvio do mesmo `id` devolve o Registro guardado sem
+     * recalcular.
+     */
+    async inserirRegistroDaAgenda(usuarioId, registro, compromisso, calcular) {
+      return comDesfecho<{ registro: RegistroDeSessao; novo: boolean }>(() =>
+        emTransacao<Desfecho<{ registro: RegistroDeSessao; novo: boolean }>>(
+          piscina,
+          async (cliente) => {
+            await cliente.query(TRAVAR_USUARIO_PARA_GRAVACAO, [usuarioId]);
+
+            const jaGuardado = await lerRegistroDoUsuario(
+              cliente,
+              usuarioId,
+              registro.id,
+            );
+
+            if (jaGuardado !== undefined) {
+              return { ok: true, valor: { registro: jaGuardado, novo: false } };
+            }
+
+            const { rows: linhasDePreferencias } =
+              await cliente.query<LinhaDePreferencias>(OBTER_PREFERENCIAS, [
+                usuarioId,
+              ]);
+            const preferencias =
+              linhasDePreferencias[0] === undefined
+                ? PREFERENCIAS_PADRAO
+                : preferenciasDaLinha(linhasDePreferencias[0]);
+            const { rows: linhasDeAgendamento } =
+              await cliente.query<LinhaDeAgendamento>(LISTAR_AGENDAMENTOS, [
+                usuarioId,
+              ]);
+            const agendamentos = linhasDeAgendamento.map(agendamentoDaLinha);
+
+            const { rows } = await cliente.query<{ concluidaEm: Instante }>(
+              INSERIR_REGISTRO_DE_SESSAO,
+              parametrosDoRegistro(usuarioId, registro),
+            );
+
+            /**
+             * Nenhuma linha devolvida: o `id` pertence a outro Usuário (o do
+             * mesmo Usuário já foi tratado acima, sob o bloqueio).
+             */
+            if (rows[0] === undefined) {
+              return CONFLITO_DE_REGISTRO;
+            }
+
+            await gravarItens(cliente, registro);
+            await gravarAgendamentos(
+              cliente,
+              usuarioId,
+              calcular({ agendamentos, preferencias }),
+            );
+
+            const { rows: atuais } = await cliente.query<LinhaDeCompromisso>(
+              OBTER_COMPROMISSO_DO_USUARIO,
+              [compromisso.rotinaId, compromisso.data, usuarioId],
+            );
+
+            if (atuais[0] === undefined) {
+              await cliente.query(INSERIR_COMPROMISSO, [
+                compromisso.rotinaId,
+                compromisso.data,
+                usuarioId,
+                "concluido",
+                compromisso.registroId,
+                compromisso.baralhoId,
+                compromisso.nomeDoBaralho,
+                compromisso.quantidade,
+              ]);
+            } else if (atuais[0].estado !== "concluido") {
+              await cliente.query(ATUALIZAR_COMPROMISSO, [
+                "concluido",
+                compromisso.registroId,
+                compromisso.baralhoId,
+                compromisso.nomeDoBaralho,
+                compromisso.quantidade,
+                compromisso.rotinaId,
+                compromisso.data,
+                usuarioId,
+              ]);
+            }
+
+            return {
+              ok: true,
+              valor: {
+                registro: {
+                  ...registro,
+                  concluidaEm: instanteIso(rows[0].concluidaEm),
+                },
+                novo: true,
+              },
+            };
+          },
+        ),
+      );
+    },
+
     /** Os Itens com Avaliação e Cartão de origem, em `(concluida_em, posicao)` (FR-213). */
     async listarItensAvaliados(usuarioId) {
       const { rows } = await piscina.query<LinhaDeItemAvaliado>(
@@ -1990,11 +2234,218 @@ export async function abrirArmazenamentoPostgresql(
         USUARIO_INDISPONIVEL,
       );
     },
+
+    async obterUsuarioPorId(id) {
+      return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
+        async () => {
+          const { rows } = await piscina.query<LinhaDeUsuario>(
+            OBTER_USUARIO_POR_ID,
+            [id],
+          );
+
+          return rows[0] === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(rows[0]) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async atualizarNomeDeUsuario(id, nome) {
+      return comDesfechoDeUsuario<DesfechoDeAlteracaoDeNome>(
+        async () => {
+          try {
+            const resultado = await piscina.query(ATUALIZAR_NOME_DO_USUARIO, [
+              nome,
+              id,
+            ]);
+
+            if (resultado.rowCount === 0) {
+              return USUARIO_NAO_ENCONTRADO;
+            }
+          } catch (erro) {
+            if (
+              ehViolacao(erro, VIOLACAO_DE_UNICIDADE, INDICE_DE_NOME_DE_USUARIO)
+            ) {
+              return NOME_EM_USO;
+            }
+
+            throw erro;
+          }
+
+          const { rows } = await piscina.query<LinhaDeUsuario>(
+            OBTER_USUARIO_POR_ID,
+            [id],
+          );
+
+          return rows[0] === undefined
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: usuarioDaLinha(rows[0]) };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async atualizarSenha(id, derivacao) {
+      return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
+        async () => {
+          const resultado = await piscina.query(ATUALIZAR_SENHA_DO_USUARIO, [
+            Buffer.from(derivacao.sal),
+            Buffer.from(derivacao.hash),
+            derivacao.parametros,
+            id,
+          ]);
+
+          return resultado.rowCount === 0
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: undefined };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async excluirUsuario(id) {
+      return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
+        async () => {
+          const resultado = await piscina.query(EXCLUIR_USUARIO, [id]);
+
+          return resultado.rowCount === 0
+            ? USUARIO_NAO_ENCONTRADO
+            : { ok: true, valor: undefined };
+        },
+        USUARIO_INDISPONIVEL,
+      );
+    },
+
+    async contarDadosDoUsuario(id) {
+      return comDesfechoDeUsuario<
+        DesfechoDeOperacaoDeConta<ContagensDaConta>
+      >(async () => {
+        const { rows } = await piscina.query<{
+          cartoes: number;
+          baralhos: number;
+          registros: number;
+          agenda: number;
+        }>(CONTAR_DADOS_DO_USUARIO, [id]);
+
+        const linha = rows[0];
+
+        if (linha === undefined) {
+          return USUARIO_NAO_ENCONTRADO;
+        }
+
+        return {
+          ok: true,
+          valor: {
+            cartoes: Number(linha.cartoes),
+            baralhos: Number(linha.baralhos),
+            registrosDeSessao: Number(linha.registros),
+            agenda: Number(linha.agenda),
+          },
+        };
+      }, USUARIO_INDISPONIVEL);
+    },
+  };
+
+  /**
+   * A terceira Porta, sobre o mesmo conjunto de conexões: o Acesso temporário.
+   * Nenhum erro do driver atravessa — a falha é `indisponivel`, e jamais Acesso
+   * ausente ou expirado (FR-301). A comparação de validade é feita pelo banco,
+   * com o mesmo instante informado, e os instantes entram como ISO-8601 UTC.
+   */
+  const SEM_CARGA_DE_ACESSO: DesfechoDeAcesso<void> = {
+    ok: true,
+    valor: undefined,
+  };
+  const ACESSO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
+
+  async function comDesfechoDeAcesso<D>(
+    operacao: () => Promise<D>,
+  ): Promise<D | typeof ACESSO_INDISPONIVEL> {
+    try {
+      return await operacao();
+    } catch {
+      return ACESSO_INDISPONIVEL;
+    }
+  }
+
+  const acessos: ArmazenamentoDeAcessos = {
+    async criar(digest, usuarioId, expiraEm) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(async () => {
+        await piscina.query(INSERIR_ACESSO, [
+          digest,
+          usuarioId,
+          new Date().toISOString(),
+          expiraEm,
+        ]);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async obterValido(digest, agora) {
+      return comDesfechoDeAcesso<DesfechoDeAcessoValido>(async () => {
+        const { rows } = await piscina.query<{
+          usuario_id: string;
+          valido: boolean;
+        }>(OBTER_ACESSO, [digest, agora]);
+        const linha = rows[0];
+
+        if (linha === undefined) {
+          return { ok: false, erro: "nao_encontrado" };
+        }
+
+        return linha.valido
+          ? { ok: true, valor: { usuarioId: linha.usuario_id } }
+          : { ok: false, erro: "expirado" };
+      });
+    },
+
+    async renovar(digest, novoExpiraEm) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(async () => {
+        const resultado = await piscina.query(RENOVAR_ACESSO, [
+          digest,
+          novoExpiraEm,
+          new Date().toISOString(),
+        ]);
+
+        return resultado.rowCount === 0
+          ? { ok: false, erro: "nao_encontrado" }
+          : SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async encerrar(digest) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(async () => {
+        await piscina.query(ENCERRAR_ACESSO, [digest]);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async encerrarTodosDoUsuario(usuarioId) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<void>>(async () => {
+        await piscina.query(ENCERRAR_ACESSOS_DO_USUARIO, [usuarioId]);
+
+        return SEM_CARGA_DE_ACESSO;
+      });
+    },
+
+    async removerExpirados(agora) {
+      return comDesfechoDeAcesso<DesfechoDeAcesso<number>>(async () => {
+        const resultado = await piscina.query(REMOVER_ACESSOS_EXPIRADOS, [
+          agora,
+        ]);
+
+        return { ok: true, valor: resultado.rowCount ?? 0 };
+      });
+    },
   };
 
   return {
     armazenamento,
     usuarios,
+    acessos,
 
     async encerrar() {
       if (encerrado) {

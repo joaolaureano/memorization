@@ -98,3 +98,32 @@ de domínio ou artefato de aplicação foi alterado nesta revisão.
   Agenda, sua Interface, os Seams existentes de armazenamento/cliente e a
   estratégia de testes pela Interface. O plano mantém os dois Adapters reais
   em cada Seam e não introduz uma Seam hipotética.
+
+## R7 — Decisões da implementação (2026-10-03)
+
+**Decisão**: a Rotina guarda versões por data civil; ocorrências comuns são
+projetadas e só cancelamentos e conclusões são persistidos. Pausar, excluir ou
+remover um dia cancela o Compromisso de hoje (linha `cancelado`, fora dos totais e
+visível nos detalhes); retomar ou readicionar o dia remove essa exceção e reutiliza
+o Compromisso da mesma Rotina/data; uma conclusão nunca é sobrescrita.
+**Rationale**: atende FR-238, FR-239 e FR-245 sem materializar o futuro (SC-102) e
+sem reescrever o passado (SC-098).
+**Aprovação das premissas**: A-01–A-07 foram tratadas como aprovadas pelo pedido do
+Product Owner de implementar o `PLAN.md`; isso fica registrado aqui e no commit, e
+não equivale a uma confirmação individual de cada uma.
+
+## Evidência de execução (2026-10-03)
+
+- **Backend**: `tsc --noEmit`, `eslint .` e `vitest run` verdes, exceto as suítes
+  que dependem do PostgreSQL embutido (não sobe como root neste ambiente).
+  Domínio e conclusão: 51 testes em `tests/agenda/` mais `http.test.ts` (10) e
+  `desempenho.test.ts` (1); a bateria da Porta passa no SQLite.
+- **Frontend**: `tsc --noEmit`, `eslint .`, `vitest run` (781 testes) e `vite build`.
+- **E2E**: suíte completa contra a API (SQLite) e o frontend (Vite) reais;
+  `agendamento-de-estudo.spec.ts` cobre o percurso integrado, a interrupção e o
+  recarregamento, dois aparelhos e dois Usuários, o teclado e a geometria em 360,
+  390, 768 e 1440 px.
+- **Desempenho (SC-102)**: 100 Rotinas e mais de 10 mil Compromissos concluídos em
+  dois anos; a semana e o resumo respondem muito abaixo de 1 s e a leitura se
+  restringe à janela pedida, sem tocar o Histórico de Sessões.
+- **Converge**: FR-222–FR-256 e SC-095–SC-104 têm teste (matriz em `tasks.md`).

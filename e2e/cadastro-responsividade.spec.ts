@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { gerarSenhaDeProva } from './servidores-locais';
+import { gerarSenhaDeProva, prepararAcessoAusente } from './servidores-locais';
 
 // T613 — a tela "Criar conta" permanece utilizável em largura de telefone
 // (FR-042; specs/007-criar-usuario/tasks.md).
@@ -27,6 +27,10 @@ test.use({
 test('a tela Criar conta permanece utilizável e sem rolagem horizontal em telefone (FR-042)', async ({ page, browserName }) => {
   // Navegador real: Chromium em viewport de telefone, não um DOM simulado.
   expect(browserName).toBe('chromium');
+
+  // 018: a carga pergunta se há Acesso temporário; sem API, a resposta é a de
+  // quem não tem Acesso.
+  await prepararAcessoAusente(page);
 
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/criar-conta`);
 

@@ -227,6 +227,14 @@ dois responderem e imprime o endereço a abrir: **<http://127.0.0.1:5173>**. Os
 dados ficam em `backend/memorizacao.sqlite`, então o acervo de uma apresentação
 continua na seguinte, e `Ctrl+C` encerra API e frontend juntos.
 
+### Variáveis de ambiente opcionais
+
+| Variável | Padrão | Finalidade |
+| --- | --- | --- |
+| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | A origem exata a que a API concede CORS (com credenciais), para o cookie do Acesso temporário. |
+| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Validade deslizante do Acesso temporário, em segundos (inteiro positivo). É configuração de ambiente, nunca escolha da pessoa. |
+| `ORIGENS_LOCAIS_DE_TESTE` | não definida | `sim` deixa passar qualquer porta do loopback no CORS. **Só para os testes de ponta a ponta**, em que o frontend sobe depois da API. |
+
 ## Verificação
 
 ```bash

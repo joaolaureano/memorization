@@ -537,7 +537,8 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
     );
 
     expect(tabelas.map((tabela) => tabela.nome)).toEqual([
-      "agendamento",
+        "acesso_temporario",
+        "agendamento",
       "baralho",
       "cartao",
       "compromisso_de_estudo",

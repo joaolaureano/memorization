@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   ClienteDoAcervo,
   Estatisticas,
+  InicioDeCompromisso,
   RegistroResumido,
   ResumoDaRevisao,
 } from "../acervo-cliente/cliente";
@@ -12,6 +13,7 @@ import {
   taxaDeAcerto,
 } from "../estatisticas/estatisticas";
 import { limitesDoDia } from "../revisao/dia";
+import { AgendaDeEstudo } from "./AgendaDeEstudo";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
@@ -54,9 +56,12 @@ const SESSOES_RECENTES = 5;
 export function PaginaDeInicio({
   cliente,
   nomeDeUsuario,
+  aoIniciarEstudo,
 }: {
   cliente: ClienteDoAcervo;
   nomeDeUsuario: string;
+  /** Abre a Sessão de um Compromisso da Agenda (016, FR-231). */
+  aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
 }) {
   const [inicio, setInicio] = useState<EstadoDoInicio>({ estado: "carregando" });
   const [revisao, setRevisao] = useState<EstadoDaRevisao>({
@@ -121,6 +126,10 @@ export function PaginaDeInicio({
           <h1>Olá, {nomeDeUsuario}</h1>
         </div>
       </div>
+
+      {/* A Agenda de estudo vem antes da Revisão do dia (A-06), com estado e
+          contagens próprios (FR-256). */}
+      <AgendaDeEstudo cliente={cliente} aoIniciarEstudo={aoIniciarEstudo} />
 
       <BlocoDaRevisaoDoDia
         revisao={revisao}

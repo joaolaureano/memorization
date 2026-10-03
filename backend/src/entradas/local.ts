@@ -98,8 +98,11 @@ if (segredo !== null) {
 
     console.log(LINHA_DE_INICIO);
 
-    await iniciarServidor(process.env, identidade, (usuarioId) =>
-      criarAcervo(aberto.armazenamento, usuarioId),
+    await iniciarServidor(
+      process.env,
+      identidade,
+      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId),
+      aberto.acessos,
     );
   }
 }

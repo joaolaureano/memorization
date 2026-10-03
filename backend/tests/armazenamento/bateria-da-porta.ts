@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type {
   Agendamento,
+  ArmazenamentoDeAcessos,
   ArmazenamentoDeUsuarios,
   ArmazenamentoDoAcervo,
   Avaliacao,
@@ -41,6 +42,8 @@ export interface ArmazenamentoAberto {
    * linha de `usuario` que a chave estrangeira exige (FR-092).
    */
   usuarios: ArmazenamentoDeUsuarios;
+  /** A terceira Porta, sobre o **mesmo** armazenamento: os Acessos temporários (018). */
+  acessos: ArmazenamentoDeAcessos;
   encerrar(): Promise<void>;
 }
 
@@ -1916,6 +1919,285 @@ export function bateriaDaPorta(
         });
       });
 
+      describe("operações de gravação da 016 (FR-233, FR-238, FR-239, FR-249)", () => {
+        async function prepararRotina(): Promise<RotinaArmazenada> {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina,
+          });
+
+          return rotina;
+        }
+
+        it("obterOperacaoDeRotina devolve a intenção e a Rotina gravadas, só para o dono (FR-249)", async () => {
+          expect(
+            await armazenamento().obterOperacaoDeRotina(DONO_UM, "op-r1"),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+
+          const rotina = await prepararRotina();
+
+          expect(
+            await armazenamento().obterOperacaoDeRotina(DONO_UM, "op-r1"),
+          ).toEqual({ ok: true, valor: { intencao: "criar", rotina } });
+          expect(
+            await armazenamento().obterOperacaoDeRotina(DONO_DOIS, "op-r1"),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+
+        it("cancelamentos criam a exceção só quando não há linha; conclusão nunca é sobrescrita (FR-238, FR-245)", async () => {
+          const rotina = await prepararRotina();
+
+          await armazenamento().gravarCompromisso(
+            DONO_UM,
+            compromissoDe("r1", "2026-01-12", "concluido", "reg-1"),
+          );
+
+          const atualizada = rotinaDe("r1", "b1", 2, "Inglês", rotina.criadaEm, "pausada");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-pausa",
+            intencao: "pausar",
+            versaoEsperada: 1,
+            rotina: atualizada,
+            cancelamentos: [
+              compromissoDe("r1", "2026-01-12", "cancelado"),
+              compromissoDe("r1", "2026-01-14", "cancelado"),
+            ],
+          });
+
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+          ).toMatchObject({ ok: true, valor: { estado: "concluido", registroId: "reg-1" } });
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-14"),
+          ).toMatchObject({ ok: true, valor: { estado: "cancelado" } });
+        });
+
+        it("reativações removem só a exceção cancelado (FR-239)", async () => {
+          const rotina = await prepararRotina();
+
+          await armazenamento().gravarCompromisso(
+            DONO_UM,
+            compromissoDe("r1", "2026-01-12", "concluido", "reg-1"),
+          );
+          await armazenamento().gravarCompromisso(
+            DONO_UM,
+            compromissoDe("r1", "2026-01-14", "cancelado"),
+          );
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-retoma",
+            intencao: "retomar",
+            versaoEsperada: 1,
+            rotina: rotinaDe("r1", "b1", 2, "Inglês", rotina.criadaEm),
+            reativacoes: ["2026-01-12", "2026-01-14"],
+          });
+
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+          ).toMatchObject({ ok: true, valor: { estado: "concluido" } });
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-14"),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+
+        it("a gravação recusada por versão não deixa cancelamento nem reativação (atomicidade)", async () => {
+          const rotina = await prepararRotina();
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op-velha",
+              intencao: "pausar",
+              versaoEsperada: 7,
+              rotina: rotinaDe("r1", "b1", 8, "Inglês", rotina.criadaEm, "pausada"),
+              cancelamentos: [compromissoDe("r1", "2026-01-14", "cancelado")],
+            }),
+          ).toEqual({ ok: false, erro: "conflito_de_versao" });
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-14"),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+
+        describe("inserirRegistroDaAgenda", () => {
+          const concluido = (registroId: string) =>
+            compromissoDe("r1", "2026-01-12", "concluido", registroId);
+
+          async function prepararSessao(): Promise<void> {
+            await prepararRotina();
+            await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+            await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2"));
+          }
+
+          const registroDaAgenda = (id: string) =>
+            registroDe(id, "2026-01-12T10:00:00.000Z", [
+              {
+                posicao: 0,
+                frente: "To walk",
+                verso: "Caminhar",
+                resultado: "acertou",
+                cartaoId: "c1",
+                avaliacao: "bom",
+              },
+              {
+                posicao: 1,
+                frente: "To run",
+                verso: "Correr",
+                resultado: "errou",
+                cartaoId: "c2",
+                avaliacao: "errei",
+              },
+            ]);
+
+          it("grava Registro, Agendamentos calculados sobre o estado lido e a conclusão numa transação", async () => {
+            await prepararSessao();
+            await armazenamento().substituirAgendamentos(
+              DONO_UM,
+              { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+              [agendamentoDe("c1")],
+            );
+
+            let recebido: unknown;
+
+            const gravado = await armazenamento().inserirRegistroDaAgenda(
+              DONO_UM,
+              registroDaAgenda("reg-1"),
+              concluido("reg-1"),
+              (estado) => {
+                recebido = estado;
+
+                return [agendamentoDe("c2", "2026-03-01T00:00:00.000Z")];
+              },
+            );
+
+            expect(gravado).toMatchObject({ ok: true, valor: { novo: true } });
+            expect(recebido).toEqual({
+              agendamentos: [agendamentoDe("c1")],
+              preferencias: { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+            });
+            expect(
+              (await armazenamento().listarAgendamentos(DONO_UM))
+                .map((a) => a.cartaoId)
+                .sort(),
+            ).toEqual(["c1", "c2"]);
+            expect(
+              await armazenamento().obterRegistroDeSessao(DONO_UM, "reg-1"),
+            ).toMatchObject({ ok: true, valor: { estudados: 2 } });
+            expect(
+              await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+            ).toEqual({ ok: true, valor: concluido("reg-1") });
+          });
+
+          it("o reenvio devolve o Registro guardado sem recalcular nem gravar (FR-235)", async () => {
+            await prepararSessao();
+            await armazenamento().inserirRegistroDaAgenda(
+              DONO_UM,
+              registroDaAgenda("reg-1"),
+              concluido("reg-1"),
+              () => [agendamentoDe("c1")],
+            );
+
+            let chamado = false;
+            const repetido = await armazenamento().inserirRegistroDaAgenda(
+              DONO_UM,
+              registroDaAgenda("reg-1"),
+              concluido("reg-1"),
+              () => {
+                chamado = true;
+
+                return [agendamentoDe("c2")];
+              },
+            );
+
+            expect(repetido).toMatchObject({ ok: true, valor: { novo: false } });
+            expect(chamado).toBe(false);
+            expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([
+              agendamentoDe("c1"),
+            ]);
+          });
+
+          it("o id de outro Usuário é conflito e nada é gravado (FR-166)", async () => {
+            await prepararSessao();
+            await armazenamento().inserirRegistroDeSessao(
+              DONO_DOIS,
+              registroDe("reg-1"),
+            );
+
+            expect(
+              await armazenamento().inserirRegistroDaAgenda(
+                DONO_UM,
+                registroDaAgenda("reg-1"),
+                concluido("reg-1"),
+                () => [agendamentoDe("c1")],
+              ),
+            ).toEqual({ ok: false, erro: "conflito" });
+            expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([]);
+            expect(
+              await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+            ).toEqual({ ok: false, erro: "nao_encontrado" });
+          });
+
+          it("mantém o primeiro Registro como conclusão e converte o cancelado em concluído (FR-235, FR-245)", async () => {
+            await prepararSessao();
+            await armazenamento().gravarCompromisso(
+              DONO_UM,
+              compromissoDe("r1", "2026-01-12", "cancelado"),
+            );
+            await armazenamento().inserirRegistroDaAgenda(
+              DONO_UM,
+              registroDaAgenda("reg-1"),
+              concluido("reg-1"),
+              () => [],
+            );
+
+            expect(
+              await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+            ).toEqual({ ok: true, valor: concluido("reg-1") });
+
+            await armazenamento().inserirRegistroDaAgenda(
+              DONO_UM,
+              registroDaAgenda("reg-2"),
+              concluido("reg-2"),
+              () => [],
+            );
+
+            expect(
+              await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+            ).toEqual({ ok: true, valor: concluido("reg-1") });
+            expect(
+              await armazenamento().obterRegistroDeSessao(DONO_UM, "reg-2"),
+            ).toMatchObject({ ok: true });
+          });
+
+          it("a falha do cálculo desfaz tudo e chega como indisponivel (FR-233)", async () => {
+            await prepararSessao();
+
+            expect(
+              await armazenamento().inserirRegistroDaAgenda(
+                DONO_UM,
+                registroDaAgenda("reg-1"),
+                concluido("reg-1"),
+                () => {
+                  throw new Error("falha simulada");
+                },
+              ),
+            ).toEqual({ ok: false, erro: "indisponivel" });
+            expect(
+              await armazenamento().obterRegistroDeSessao(DONO_UM, "reg-1"),
+            ).toEqual({ ok: false, erro: "nao_encontrado" });
+            expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([]);
+            expect(
+              await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-12"),
+            ).toEqual({ ok: false, erro: "nao_encontrado" });
+          });
+        });
+      });
+
       describe("exclusão do Baralho", () => {
         it("preserva a Rotina com baralhoId nulo e os Compromissos (FR-248, FR-250)", async () => {
           await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
@@ -1950,6 +2232,444 @@ export function bateriaDaPorta(
           expect(
             await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-10"),
           ).toEqual({ ok: true, valor: compromisso });
+        });
+      });
+    });
+
+    describe("Acesso temporário (018)", () => {
+      /** Instantes fixos, em ISO-8601 UTC, na forma que os dois Adapters comparam. */
+      const AGORA = "2026-03-01T12:00:00.000Z";
+      const ANTES = "2026-03-01T11:59:59.000Z";
+      const DEPOIS = "2026-03-01T12:05:00.000Z";
+      const MAIS_TARDE = "2026-03-01T12:10:00.000Z";
+
+      function acessos(): ArmazenamentoDeAcessos {
+        return aberto.acessos;
+      }
+
+      it("guarda o Acesso e o reconhece enquanto `expiraEm > agora` (FR-289, FR-291)", async () => {
+        expect(await acessos().criar("d1", DONO_UM, DEPOIS)).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+
+        expect(await acessos().obterValido("d1", AGORA)).toEqual({
+          ok: true,
+          valor: { usuarioId: DONO_UM },
+        });
+      });
+
+      it("distingue expirado de inexistente (FR-294)", async () => {
+        await acessos().criar("d1", DONO_UM, AGORA);
+
+        // `expiraEm <= agora` é expirado, inclusive no instante exato.
+        expect(await acessos().obterValido("d1", AGORA)).toEqual({
+          ok: false,
+          erro: "expirado",
+        });
+        expect(await acessos().obterValido("d1", DEPOIS)).toEqual({
+          ok: false,
+          erro: "expirado",
+        });
+        expect(await acessos().obterValido("d1", ANTES)).toMatchObject({
+          ok: true,
+        });
+        expect(await acessos().obterValido("inexistente", AGORA)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("renova o vencimento e recusa renovar o inexistente (FR-291)", async () => {
+        await acessos().criar("d1", DONO_UM, DEPOIS);
+
+        expect(await acessos().renovar("d1", MAIS_TARDE)).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+        expect(await acessos().obterValido("d1", DEPOIS)).toMatchObject({
+          ok: true,
+        });
+        expect(await acessos().obterValido("d1", MAIS_TARDE)).toEqual({
+          ok: false,
+          erro: "expirado",
+        });
+        expect(await acessos().renovar("inexistente", MAIS_TARDE)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("encerra só o Acesso indicado, e encerrar o ausente também é sucesso (FR-293)", async () => {
+        await acessos().criar("d1", DONO_UM, DEPOIS);
+        await acessos().criar("d2", DONO_UM, DEPOIS);
+
+        expect(await acessos().encerrar("d1")).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+        expect(await acessos().obterValido("d1", AGORA)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await acessos().obterValido("d2", AGORA)).toMatchObject({
+          ok: true,
+        });
+        expect(await acessos().encerrar("d1")).toMatchObject({ ok: true });
+      });
+
+      it("encerra todos os Acessos do Usuário sem tocar nos do outro (FR-296, FR-298, FR-299)", async () => {
+        await acessos().criar("a1", DONO_UM, DEPOIS);
+        await acessos().criar("a2", DONO_UM, DEPOIS);
+        await acessos().criar("b1", DONO_DOIS, DEPOIS);
+
+        expect(await acessos().encerrarTodosDoUsuario(DONO_UM)).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+
+        expect(await acessos().obterValido("a1", AGORA)).toMatchObject({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await acessos().obterValido("a2", AGORA)).toMatchObject({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        // O Acesso de um Usuário nunca autoriza o acervo do outro (FR-298).
+        expect(await acessos().obterValido("b1", AGORA)).toEqual({
+          ok: true,
+          valor: { usuarioId: DONO_DOIS },
+        });
+      });
+
+      it("remove os expirados e conta quantos eram (D7)", async () => {
+        await acessos().criar("velho1", DONO_UM, ANTES);
+        await acessos().criar("velho2", DONO_DOIS, ANTES);
+        await acessos().criar("novo", DONO_UM, DEPOIS);
+
+        expect(await acessos().removerExpirados(AGORA)).toEqual({
+          ok: true,
+          valor: 2,
+        });
+        expect(await acessos().obterValido("velho1", ANTES)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await acessos().obterValido("novo", AGORA)).toMatchObject({
+          ok: true,
+        });
+        expect(await acessos().removerExpirados(AGORA)).toEqual({
+          ok: true,
+          valor: 0,
+        });
+      });
+
+      it("remove os Acessos junto com o Usuário excluído e preserva os do outro (FR-296, SC-120)", async () => {
+        await acessos().criar("a1", DONO_UM, DEPOIS);
+        await acessos().criar("b1", DONO_DOIS, DEPOIS);
+
+        expect(await aberto.usuarios.excluirUsuario(DONO_UM)).toMatchObject({
+          ok: true,
+        });
+
+        expect(await acessos().obterValido("a1", AGORA)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await acessos().obterValido("b1", AGORA)).toMatchObject({
+          ok: true,
+        });
+      });
+
+      it("recusa Acesso de Usuário inexistente como indisponivel, e nunca como sucesso", async () => {
+        expect(await acessos().criar("x", "ninguem", DEPOIS)).toEqual({
+          ok: false,
+          erro: "indisponivel",
+        });
+        expect(await acessos().obterValido("x", AGORA)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("reutilizar o digest é recusado sem alterar o Acesso existente", async () => {
+        await acessos().criar("d1", DONO_UM, DEPOIS);
+
+        expect(await acessos().criar("d1", DONO_DOIS, MAIS_TARDE)).toEqual({
+          ok: false,
+          erro: "indisponivel",
+        });
+        expect(await acessos().obterValido("d1", AGORA)).toEqual({
+          ok: true,
+          valor: { usuarioId: DONO_UM },
+        });
+      });
+    });
+
+    describe("Conta do Usuário (017)", () => {
+      /**
+       * Semeia **tudo** o que um dono pode ter: Cartão, Baralho, Vínculo,
+       * Registro com Item, Agendamento, Preferências e a Agenda — Rotina,
+       * Compromisso e Início. É o que a exclusão da conta precisa remover, e o
+       * que `contarDadosDoUsuario` precisa contar (FR-272, FR-274, SC-113).
+       */
+      async function semearTudo(dono: string, sufixo: string): Promise<void> {
+        const cartaoId = `c-${sufixo}`;
+        const baralhoId = `b-${sufixo}`;
+        const rotinaId = `r-${sufixo}`;
+
+        await armazenamento().inserirCartao(dono, cartaoDe(cartaoId));
+        await armazenamento().inserirBaralho(dono, baralhoDe(baralhoId));
+        await armazenamento().vincular(dono, cartaoId, baralhoId);
+        await armazenamento().inserirRegistroDeSessao(
+          dono,
+          registroDe(`reg-${sufixo}`, "2026-01-01T00:00:00.000Z", [
+            itemAvaliadoDe(0, cartaoId),
+          ]),
+        );
+        await armazenamento().substituirAgendamentos(
+          dono,
+          { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+          [agendamentoDe(cartaoId)],
+        );
+        await armazenamento().gravarRotina(dono, {
+          operacaoId: `op-${sufixo}`,
+          intencao: "criar",
+          versaoEsperada: null,
+          rotina: {
+            id: rotinaId,
+            criadaEm: "2026-01-01T00:00:00.000Z",
+            versao: 1,
+            estado: "ativa",
+            baralhoId,
+            versoes: [
+              {
+                ordem: 1,
+                iniciaEm: "2026-01-01",
+                baralhoId,
+                nomeDoBaralho: "Inglês",
+                dias: [1],
+                quantidade: null,
+                estado: "ativa",
+              },
+            ],
+          },
+        });
+        await armazenamento().gravarCompromisso(dono, {
+          rotinaId,
+          data: "2026-01-05",
+          estado: "cancelado",
+          registroId: null,
+          baralhoId,
+          nomeDoBaralho: "Inglês",
+          quantidade: null,
+        });
+        await armazenamento().gravarInicio(dono, {
+          id: `i-${sufixo}`,
+          rotinaId,
+          data: "2026-01-05",
+          iniciadoEm: "2026-01-05T10:00:00.000Z",
+          fuso: "America/Sao_Paulo",
+          baralhoId,
+          nomeDoBaralho: "Inglês",
+          quantidade: null,
+          cartoes: [cartaoDe(cartaoId)],
+        });
+      }
+
+      const CONTAGENS_SEMEADAS = {
+        cartoes: 1,
+        baralhos: 1,
+        registrosDeSessao: 1,
+        agenda: 3,
+      };
+
+      it("conta o que pertence ao Usuário, com a Agenda somada (FR-272, SC-113)", async () => {
+        expect(await aberto.usuarios.contarDadosDoUsuario(DONO_UM)).toEqual({
+          ok: true,
+          valor: { cartoes: 0, baralhos: 0, registrosDeSessao: 0, agenda: 0 },
+        });
+
+        await semearTudo(DONO_UM, "um");
+        await semearTudo(DONO_DOIS, "dois");
+
+        expect(await aberto.usuarios.contarDadosDoUsuario(DONO_UM)).toEqual({
+          ok: true,
+          valor: CONTAGENS_SEMEADAS,
+        });
+      });
+
+      it("lê o Usuário pelo id e devolve nao_encontrado para id desconhecido", async () => {
+        const lido = await aberto.usuarios.obterUsuarioPorId(DONO_UM);
+
+        expect(lido.ok && lido.valor.nomeDeUsuario).toBe("ana.silva");
+        expect(await aberto.usuarios.obterUsuarioPorId("ninguem")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("altera o Nome de usuário e libera o anterior (FR-262, SC-112)", async () => {
+        const alterado = await aberto.usuarios.atualizarNomeDeUsuario(
+          DONO_UM,
+          "ana.nova",
+        );
+
+        expect(alterado.ok && alterado.valor.nomeDeUsuario).toBe("ana.nova");
+
+        const antigo =
+          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ana.silva");
+        const novo =
+          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ANA.NOVA");
+
+        expect(antigo).toEqual({ ok: false, erro: "nao_encontrado" });
+        expect(novo.ok && novo.valor.id).toBe(DONO_UM);
+
+        /** O nome liberado pode ser usado por outro Usuário. */
+        expect(
+          (
+            await aberto.usuarios.atualizarNomeDeUsuario(
+              DONO_DOIS,
+              "ana.silva",
+            )
+          ).ok,
+        ).toBe(true);
+      });
+
+      it("recusa Nome em uso por outro Usuário, mesmo diferindo só em maiúsculas (FR-262, SC-112)", async () => {
+        expect(
+          await aberto.usuarios.atualizarNomeDeUsuario(DONO_UM, "BRUNO.SOUZA"),
+        ).toEqual({ ok: false, erro: "nome_em_uso" });
+
+        const intacto = await aberto.usuarios.obterUsuarioPorId(DONO_UM);
+
+        expect(intacto.ok && intacto.valor.nomeDeUsuario).toBe("ana.silva");
+      });
+
+      it("permite ao próprio Usuário mudar só a caixa do Nome", async () => {
+        const alterado = await aberto.usuarios.atualizarNomeDeUsuario(
+          DONO_UM,
+          "ANA.SILVA",
+        );
+
+        expect(alterado.ok && alterado.valor.nomeDeUsuario).toBe("ANA.SILVA");
+      });
+
+      it("recusa alterar o Nome de Usuário inexistente como nao_encontrado", async () => {
+        expect(
+          await aberto.usuarios.atualizarNomeDeUsuario("ninguem", "qualquer"),
+        ).toEqual({ ok: false, erro: "nao_encontrado" });
+      });
+
+      it("substitui sal, hash e parametros pela nova derivação (FR-267)", async () => {
+        const sal = Uint8Array.from({ length: 16 }, (_, i) => 100 + i);
+        const hash = Uint8Array.from({ length: 64 }, (_, i) => 200 - i);
+
+        expect(
+          await aberto.usuarios.atualizarSenha(DONO_UM, {
+            sal,
+            hash,
+            parametros: '{"algoritmo":"novo"}',
+          }),
+        ).toEqual({ ok: true, valor: undefined });
+
+        const lido = await aberto.usuarios.obterUsuarioPorId(DONO_UM);
+
+        expect(lido.ok).toBe(true);
+
+        if (lido.ok) {
+          expect(Array.from(lido.valor.sal)).toEqual(Array.from(sal));
+          expect(Array.from(lido.valor.hash)).toEqual(Array.from(hash));
+          expect(lido.valor.parametros).toBe('{"algoritmo":"novo"}');
+        }
+
+        const outro = await aberto.usuarios.obterUsuarioPorId(DONO_DOIS);
+
+        expect(outro.ok && outro.valor.parametros).not.toBe(
+          '{"algoritmo":"novo"}',
+        );
+      });
+
+      it("recusa trocar a Senha do Usuário inexistente como nao_encontrado", async () => {
+        expect(
+          await aberto.usuarios.atualizarSenha("ninguem", {
+            sal: new Uint8Array(16),
+            hash: new Uint8Array(64),
+            parametros: "{}",
+          }),
+        ).toEqual({ ok: false, erro: "nao_encontrado" });
+      });
+
+      it("exclui o Usuário e tudo o que é dele sem tocar no outro (FR-274, FR-275, SC-105)", async () => {
+        await semearTudo(DONO_UM, "um");
+        await semearTudo(DONO_DOIS, "dois");
+
+        expect(await aberto.usuarios.excluirUsuario(DONO_UM)).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+
+        expect(await aberto.usuarios.obterUsuarioPorId(DONO_UM)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await armazenamento().listarCartoes(DONO_UM)).toEqual([]);
+        expect(await armazenamento().listarBaralhos(DONO_UM)).toEqual([]);
+        expect(
+          await armazenamento().listarRegistrosRecentes(DONO_UM, 10),
+        ).toEqual([]);
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([]);
+        expect(await armazenamento().listarRotinas(DONO_UM)).toEqual([]);
+        expect(
+          await armazenamento().listarCompromissos(
+            DONO_UM,
+            "2000-01-01",
+            "2100-01-01",
+          ),
+        ).toEqual([]);
+        expect(await armazenamento().obterInicio(DONO_UM, "i-um")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+
+        /** O outro Usuário permanece idêntico. */
+        expect(await aberto.usuarios.contarDadosDoUsuario(DONO_DOIS)).toEqual({
+          ok: true,
+          valor: CONTAGENS_SEMEADAS,
+        });
+        expect(await armazenamento().listarCartoesDoBaralho(DONO_DOIS, "b-dois"))
+          .toEqual([cartaoDe("c-dois")]);
+        expect(await armazenamento().listarAgendamentos(DONO_DOIS)).toHaveLength(
+          1,
+        );
+        expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
+          algoritmo: "sm2",
+          limiteDeNovosPorDia: 7,
+        });
+        expect(await armazenamento().obterInicio(DONO_DOIS, "i-dois")).toMatchObject(
+          { ok: true },
+        );
+      });
+
+      it("libera o Nome de usuário da conta excluída (FR-277)", async () => {
+        await aberto.usuarios.excluirUsuario(DONO_UM);
+
+        await criarDonoDeTeste(aberto.usuarios, "dono-tres", "ana.silva");
+
+        const lido =
+          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ana.silva");
+
+        expect(lido.ok && lido.valor.id).toBe("dono-tres");
+        expect(await armazenamento().listarCartoes("dono-tres")).toEqual([]);
+      });
+
+      it("recusa excluir o Usuário inexistente como nao_encontrado", async () => {
+        await aberto.usuarios.excluirUsuario(DONO_UM);
+
+        expect(await aberto.usuarios.excluirUsuario(DONO_UM)).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
         });
       });
     });

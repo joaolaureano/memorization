@@ -468,6 +468,17 @@ label:has(input[type="checkbox"]) {
   padding: 10px 0;
 }
 
+/* 018: a opção «Continuar conectado neste navegador» é um alvo de toque de
+ * 44x44 px (SC-063): o próprio <input> tem essa caixa, e não só o rótulo. */
+.campo--opcao input[type="checkbox"] {
+  width: 44px;
+  height: 44px;
+}
+
+.campo--opcao label {
+  gap: 8px;
+}
+
 input[aria-invalid="true"],
 textarea[aria-invalid="true"] {
   border-color: var(--danger);
@@ -989,6 +1000,9 @@ dialog .acoes {
 }
 
 .voltar a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   color: var(--accent);
   font-weight: 600;
 }
@@ -1199,5 +1213,239 @@ details summary {
   * {
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Agenda de estudo (016)
+ * Vocabulário: agenda, agenda__cabecalho, agenda__links, agenda__hoje,
+ *   agenda__semana, agenda__titulo-da-semana, agenda__intervalo,
+ *   agenda__controles, agenda__dias, agenda__dia (+ --estado, --hoje,
+ *   --selecionado), agenda__dia-detalhe, agenda__estudos, agenda__estudo,
+ *   agenda__rotinas, agenda__rotina, agenda__escolha-de-dias,
+ *   agenda__resumo-da-rotina
+ * ------------------------------------------------------------------------- */
+
+.agenda__cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.agenda__cabecalho .sobretitulo {
+  margin: 0;
+}
+
+.agenda__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.agenda__hoje {
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.agenda__hoje .sobretitulo {
+  margin: 0 0 4px;
+}
+
+.agenda__hoje h2 {
+  margin-bottom: 8px;
+  font-size: 21px;
+}
+
+.agenda__titulo-da-semana {
+  margin-bottom: 4px;
+  font-size: 19px;
+}
+
+.agenda__intervalo {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.agenda__controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Os sete dias ficam na mesma linha e usam o espaço disponível antes de reduzir
+ * os alvos, que nunca descem de 44 px (FR-253). */
+.agenda__dias {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(44px, 1fr));
+  gap: 4px;
+}
+
+.agenda__dia {
+  width: 100%;
+  min-width: 44px;
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.agenda__dia-semana,
+.agenda__dia-contagem {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.agenda__dia-numero {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* O estado do dia também aparece em texto nos detalhes e no nome acessível; aqui
+ * a borda reforça sem ser a única pista (FR-252). */
+.agenda__dia--concluido {
+  border-color: var(--success);
+}
+
+.agenda__dia--nao_realizado {
+  border-style: dashed;
+  border-color: var(--danger);
+}
+
+.agenda__dia--parcial,
+.agenda__dia--pendente {
+  border-color: var(--warning);
+}
+
+.agenda__dia--hoje {
+  box-shadow: inset 0 0 0 2px var(--warning);
+}
+
+.agenda__dia--selecionado {
+  background: var(--bg);
+  border-color: var(--accent);
+  border-width: 3px;
+}
+
+.agenda__dia--selecionado .agenda__dia-numero {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.agenda__fuso {
+  margin: 0;
+  font-size: 14px;
+}
+
+.agenda__dia-detalhe h3 {
+  margin-bottom: 4px;
+}
+
+.agenda__estudos,
+.agenda__rotinas {
+  margin-top: 8px;
+}
+
+.agenda__estudo,
+.agenda__rotina {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.agenda__estudo-texto,
+.agenda__rotina-texto {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.agenda__estudo .titulo-do-item,
+.agenda__rotina .titulo-do-item {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+
+.agenda__estudo p,
+.agenda__rotina p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agenda__rotina .acoes {
+  margin-top: 0;
+}
+
+.agenda__escolha-de-dias {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px 16px;
+}
+
+fieldset.campo--grupo {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.agenda__resumo-da-rotina {
+  margin-bottom: 28px;
+}
+
+.agenda__resumo-da-rotina p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Caixas de marcar e botões de opção do formulário são alvos de 44 x 44 px; o
+ * seletor `input:not([type="checkbox"])` não pode esticar os de opção (FR-253). */
+.campo--opcao input[type="checkbox"],
+.campo--opcao input[type="radio"] {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+label.campo--opcao {
+  font-weight: 400;
+}
+
+@media (max-width: 600px) {
+  /* Em telefone o calendário usa a largura útil do cartão: cancela o respiro
+   * lateral para os sete alvos de 44 px caberem em 360 px sem encolher. */
+  .agenda__dias {
+    margin-inline: -20px;
+    gap: 1px;
+  }
+
+  .agenda__dia {
+    padding-inline: 0;
+    border-radius: 8px;
   }
 }

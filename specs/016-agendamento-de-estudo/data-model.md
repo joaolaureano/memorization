@@ -52,6 +52,19 @@ Atualização exige versao esperada; conflito retorna desfecho tipado.
   dois Registros, mantendo uma conclusão do Compromisso.
 - Falha em qualquer gravação reverte toda a transação.
 
+## Implementação: efeito de hoje e leituras serializadas
+
+- Cancelamentos e reativações de hoje (FR-238, FR-239) são gravados **na mesma
+  transação** da nova versão da Rotina (`GravacaoDeRotina.cancelamentos` e
+  `reativacoes`). O cancelamento só cria a linha `cancelado` quando ainda não há
+  linha para a Rotina/data — uma conclusão nunca é sobrescrita; a reativação só
+  remove `cancelado`.
+- `obterOperacaoDeRotina` permite reconhecer o reenvio **antes** de qualquer
+  checagem que dependa do estado atual (versão, estado, sobreposição).
+- `inserirRegistroDaAgenda` lê Agendamentos e Preferências dentro da transação
+  serializada por Usuário (SQLite `BEGIN IMMEDIATE`; PostgreSQL `FOR UPDATE` na
+  linha de `usuario`) e chama a função de domínio que calcula os Agendamentos.
+
 ## Datas e limites
 
 Rejeitar datas inexistentes (incluindo 31/02), fuso inválido e janelas que não
