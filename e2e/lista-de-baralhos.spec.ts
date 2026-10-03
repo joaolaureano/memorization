@@ -67,12 +67,6 @@ const ALTURA_DA_VIEWPORT = 844;
 /** Cada linha da lista é fina: no máximo 72px de altura (FR-144). */
 const ALTURA_MAXIMA_DA_LINHA = 72;
 
-/**
- * A linha do nome mais longo pode quebrar em duas linhas e, só por isso, mede
- * mais que as demais: no máximo 96px, sem truncar o nome (FR-144, SC-079).
- */
-const ALTURA_MAXIMA_DA_LINHA_COM_NOME_QUEBRADO = 96;
-
 /** Cada controle da linha é um alvo de toque: no mínimo 44px (FR-144). */
 const ALTURA_MINIMA_DO_ALVO = 44;
 
@@ -151,9 +145,11 @@ for (const largura of LARGURAS) {
 
       await expect(linhas).toHaveCount(QUANTIDADE_DE_BARALHOS);
 
-      // Cada linha é fina: as de nome curto medem no máximo 72px. Apenas a do
-      // nome de quarenta caracteres pode quebrar em duas linhas e medir no
-      // máximo 96px (FR-144, SC-079).
+      // Cada linha é fina: as de nome em uma única linha medem no máximo
+      // 72px. A exceção é a do nome de quarenta caracteres, que pode quebrar
+      // em quantas linhas a fonte do sistema exigir e, por isso, não tem teto
+      // de altura — ela é avaliada adiante por não truncar o nome e por não
+      // provocar rolagem horizontal (FR-144, SC-079).
       const alturasDasLinhas = await linhas.evaluateAll((elementos) =>
         elementos.map((elemento) => elemento.getBoundingClientRect().height),
       );
@@ -161,7 +157,7 @@ for (const largura of LARGURAS) {
       expect(alturasDasLinhas).toHaveLength(QUANTIDADE_DE_BARALHOS);
 
       // A linha do nome longo é localizada pelo próprio nome, e não pela
-      // posição na lista, para que o limite certo valha em qualquer ordem.
+      // posição na lista, para que a exceção valha em qualquer ordem.
       const indiceDoNomeLongo = await linhas.evaluateAll(
         (elementos, nomeLongo) =>
           elementos.findIndex(
@@ -173,13 +169,20 @@ for (const largura of LARGURAS) {
 
       expect(indiceDoNomeLongo).toBeGreaterThanOrEqual(0);
 
+      // Todas as linhas são finas: no máximo 72px (FR-144). A do nome longo é
+      // a única exceção: o número de linhas em que o nome quebra depende da
+      // fonte de cada sistema (duas no macOS, três no runner Linux do CI), por
+      // isso a spec 012 corrigida (SC-079) não limita a altura dessa linha.
+      // Em vez de um teto de altura, ela é avaliada adiante por não truncar o
+      // nome e por não provocar rolagem horizontal.
       for (let indice = 0; indice < alturasDasLinhas.length; indice += 1) {
-        const limite =
-          indice === indiceDoNomeLongo
-            ? ALTURA_MAXIMA_DA_LINHA_COM_NOME_QUEBRADO
-            : ALTURA_MAXIMA_DA_LINHA;
+        if (indice === indiceDoNomeLongo) {
+          continue;
+        }
 
-        expect(alturasDasLinhas[indice]).toBeLessThanOrEqual(limite);
+        expect(alturasDasLinhas[indice]).toBeLessThanOrEqual(
+          ALTURA_MAXIMA_DA_LINHA,
+        );
       }
 
       // O nome de quarenta caracteres aparece inteiro, sem truncamento por
@@ -196,6 +199,30 @@ for (const largura of LARGURAS) {
       );
 
       expect(textOverflowDoNomeLongo).not.toBe("ellipsis");
+
+      // O nome de quarenta caracteres cabe inteiro no próprio link: a largura
+      // do conteúdo não ultrapassa a largura visível, sem corte (SC-079).
+      const medidaDoNomeLongo = await linkDoNomeLongo.evaluate((elemento) => ({
+        conteudo: elemento.scrollWidth,
+        visivel: elemento.clientWidth,
+      }));
+
+      expect(medidaDoNomeLongo.conteudo).toBeLessThanOrEqual(
+        medidaDoNomeLongo.visivel,
+      );
+
+      // Mesmo quebrando em quantas linhas a fonte do sistema exigir, a linha
+      // do nome longo não cria rolagem horizontal (FR-144, SC-079).
+      const medidaDaLinhaDoNomeLongo = await linhas
+        .nth(indiceDoNomeLongo)
+        .evaluate((elemento) => ({
+          conteudo: elemento.scrollWidth,
+          visivel: elemento.clientWidth,
+        }));
+
+      expect(medidaDaLinhaDoNomeLongo.conteudo).toBeLessThanOrEqual(
+        medidaDaLinhaDoNomeLongo.visivel,
+      );
 
       // Cada linha traz exatamente dois controles — o nome, que abre o
       // detalhe, e "Estudar" —, e ambos são alvos de toque de no mínimo 44px
