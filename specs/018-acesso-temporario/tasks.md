@@ -56,9 +56,9 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - FR-289, FR-297, FR-301; SC-115, SC-116, SC-122; §1.
 
 - [ ] T1803 [P] Module puro `atividade.ts` (§6) — `frontend/src/acesso/atividade.ts`, `frontend/tests/atividade.test.ts`.
-  - Module puro, sem I/O: observa teclado, clique e toque e faz throttle de `POST /acesso/renovar` para no máximo uma vez a cada 60 s (§6; FR-291; SC-124).
-  - A renovação é disparada por qualquer interação da pessoa com a página — teclado, clique ou toque —, inclusive digitar num formulário, Revelar o Verso, Avaliar um Item e navegar entre telas, mesmo quando nada é gravado (§6; FR-291).
-  - Testes: o throttle de 60 s; teclado, clique e toque; nenhuma renovação sem interação (FR-291, SC-124).
+  - Module puro, sem I/O: recebe o instante de uma interação e o instante da última renovação e devolve a decisão de renovar ou aguardar. `Aplicacao.tsx` observa teclado, clique e toque e chama `POST /acesso/renovar` somente quando receber a decisão de renovar, no máximo uma vez a cada 60 s (§6; FR-291; SC-124).
+  - A Aplicação deve fornecer ao Module cada interação da pessoa com a página — teclado, clique ou toque —, inclusive digitar num formulário, Revelar o Verso, Avaliar um Item e navegar entre telas, mesmo quando nada é gravado (§6; FR-291).
+  - Testes: decisão na primeira interação; throttle de 60 s; nenhuma decisão de renovar sem interação. O vínculo dos eventos reais fica em T1813 (FR-291, SC-124).
   - FR-291; SC-124; §6.
 
 **Checkpoint Onda 1**: portões de backend e frontend verdes; variáveis de contrato publicadas para as ondas 2 e 3.
@@ -93,8 +93,8 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 - [ ] T1807 [P] Cliente do frontend: Acesso temporário (§6) — `frontend/src/acervo-cliente/cliente.ts`, `frontend/src/acervo-cliente/cliente-http.ts`, `frontend/src/acervo-cliente/cliente-em-memoria.ts`, `frontend/src/ui/guarda-de-credencial.ts`, `frontend/tests/acervo-cliente/acesso.test.ts`.
   - `ClienteDoAcervo` ganha `obterAcesso(): Promise<ResultadoDeObterAcesso>`, `renovarAcesso(): Promise<ResultadoDeRenovarAcesso>`, `sair(): Promise<ResultadoDeSair>` e `entrar(dados)` com `continuarConectado?: boolean` (§6; FR-289, FR-290, FR-292, FR-293, FR-294, FR-295).
   - `cliente-http.ts` usa `fetch` com **`credentials: "include"`** em todas as chamadas, para o navegador enviar e receber o cookie do Acesso (§6; FR-297, FR-305).
-  - `guarda-de-credencial.ts` passa a **descartar a Credencial** quando o Acesso for recusado por expiração, Sair ou eventos da 017, e a **manter a Credencial apenas em memória** durante o Entrar (FR-089 revisado, FR-091 revisado).
-  - Regra literal: `401 acesso_expirado` descarta o Acesso e leva a Entrar com a mensagem; `401 sem_acesso` leva a Entrar; `503` **NÃO** descarta o Acesso temporário (FR-294, FR-301, FR-304).
+  - `guarda-de-credencial.ts` passa a **descartar a Credencial** quando o Acesso for recusado por expiração, Sair ou eventos da 017, e a **manter a Credencial apenas em memória** quando a continuidade estiver desmarcada (FR-089 e FR-091 revisados).
+  - Regra literal: `401 acesso_expirado` recebe `Set-Cookie` que descarta o Acesso e leva a Entrar com a mensagem; `401 sem_acesso` também recebe limpeza do cookie e leva a Entrar; `503` **NÃO** descarta o Acesso temporário (FR-091, FR-294, FR-301, FR-304).
   - Testes em `frontend/tests/acervo-cliente/acesso.test.ts`: parsing e erros de cada método nos dois clientes; `credentials: "include"`; `401 acesso_expirado` descarta; `401 sem_acesso` leva a Entrar; `503` preserva o Acesso.
   - FR-079 revisado, FR-089 revisado, FR-090 revisado, FR-091 revisado, FR-289, FR-290, FR-292, FR-293, FR-294, FR-295, FR-297, FR-301; SC-115, SC-116, SC-119, SC-122; §6.
 
@@ -108,15 +108,15 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - Acesso válido: renova `expira_em` e prossegue, decorando `usuarioQueEntrou` (§3; FR-291).
   - Acesso expirado: `401 { erro: 'acesso_expirado' }` (FR-294); Acesso inexistente segue para Basic; se Basic também faltar, `401 credencial_invalida` (§3).
   - Falha de armazenamento ao verificar Acesso: `503`, **sem limpar o cookie** (FR-301; §3).
-  - `POST /entrar` estendido: corpo `{ nomeDeUsuario, senha, continuarConectado?: boolean }`, padrão `true`; sucesso `200 { nomeDeUsuario }`; se `continuarConectado` for `true`, define cookie **`HttpOnly`**, **`Secure` na nuvem**, **`SameSite=Strict`**, **`Path=/`**, `Max-Age` longo; nunca devolve o Acesso no corpo (FR-289, FR-292, FR-297; §2.1).
-  - Se `continuarConectado` for `false`, nenhum Acesso é emitido e a Credencial em memória continua como Basic (§2.1; FR-292).
-  - `GET /acesso`: `200 { nomeDeUsuario }` quando válido; `401 { erro: 'acesso_expirado' }` quando expirou; `401 { erro: 'sem_acesso' }` quando não há linha ou cookie; `503` quando armazenamento falha, **sem limpar o cookie** (FR-290, FR-294, FR-301; §2.2).
-  - `POST /acesso/renovar`: `204` quando renova; `401` quando expirado/sem acesso; `503` quando indisponível (FR-291; §2.3).
+  - `POST /entrar` estendido: corpo `{ nomeDeUsuario, senha, continuarConectado?: boolean }`, padrão `true`; sucesso `200 { nomeDeUsuario }`; se `continuarConectado` for `true`, revoga o Acesso do cookie atual antes de criar e definir outro com **`HttpOnly`**, **`Secure` na nuvem**, **`SameSite=Strict`**, **`Path=/`**, `Max-Age` longo; nunca devolve o Acesso no corpo (FR-289, FR-292, FR-297; §2.1).
+  - Se `continuarConectado` for `false`, revoga e limpa o Acesso do cookie atual, se houver; não emite outro e mantém a Credencial como Basic apenas na página aberta (§2.1; FR-090, FR-292).
+  - `GET /acesso`: `200 { nomeDeUsuario }` quando válido; `401 { erro: 'acesso_expirado' }` quando expirou; `401 { erro: 'sem_acesso' }` quando não há linha ou cookie. Ambos os `401` limpam o cookie com `Set-Cookie`; `503` por armazenamento falho **não o limpa** (FR-091, FR-290, FR-294, FR-301; §2.2).
+  - `POST /acesso/renovar`: `204` quando renova; `401 { erro: 'acesso_expirado' }` quando expirado; `401 { erro: 'sem_acesso' }` quando ausente ou encerrado. Ambos os `401` limpam o cookie; `503` não o limpa (FR-291, FR-294, FR-301; §2.3).
   - `POST /sair`: `204`; remove a linha do Acesso e limpa o cookie; `503` quando armazenamento falha, sem apresentar sucesso (FR-293, FR-295; §2.4).
   - Todas as rotas entram em `registrarRotasDaAplicacao` **E** na lista de pré-voo de CORS de `criarServidor`; o Acesso nunca aparece em URL, corpo de resposta ou log (FR-297, FR-305; §2).
   - CORS local deixa de ser `*` e usa a origem configurada do frontend com **`Access-Control-Allow-Credentials: true`**; `*` com credenciais é inválido e é rejeitado (§4; FR-090, FR-301).
   - `backend/tests/http/cors.test.ts` ganha a guarda: toda rota registrada precisa de pré-voo; falha se alguma estiver sem (§4; lição do bug `9251ae0` da 013 e do bug de CORS da 015).
-  - `backend/tests/http/acesso.test.ts`: contrato HTTP com os status e códigos literais — `200/204/401/503`, `acesso_expirado`, `sem_acesso` —, cookie com `HttpOnly`, `Secure` na nuvem, `SameSite=Strict`, `Path=/`, e nunca Acesso no corpo ou URL (FR-289..FR-301, FR-305, FR-306; SC-114, SC-115, SC-116, SC-118, SC-119, SC-121, SC-122, SC-123).
+  - `backend/tests/http/acesso.test.ts`: contrato HTTP com os status e códigos literais — `200/204/401/503`, `acesso_expirado`, `sem_acesso` —, cookie com `HttpOnly`, `Secure` na nuvem, `SameSite=Strict`, `Path=/`, e nunca Acesso no corpo ou URL. Cobre substituição do Acesso ao Entrar de novo, limpeza quando a continuidade é desmarcada e limpeza em ambos os `401`, preservando o cookie em `503` (FR-289..FR-301, FR-305, FR-306; SC-114, SC-115, SC-116, SC-118, SC-119, SC-121, SC-122, SC-123).
   - `backend/tests/http/credencial.test.ts`: hook aceita Acesso OU Basic; `401` por Acesso expirado; `401` por Basic ausente; `503` por falha de armazenamento sem limpar cookie (FR-079 revisado, FR-090 revisado, FR-091 revisado, FR-294, FR-301).
   - FR-079 revisado, FR-089 revisado, FR-090 revisado, FR-091 revisado, FR-289, FR-290, FR-291, FR-292, FR-293, FR-294, FR-295, FR-297, FR-301, FR-305, FR-306; SC-114..SC-124; §2, §3, §4.
 
@@ -149,7 +149,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
 - [ ] T1811 [P] [US1] `PaginaDeEntrada.tsx`: opção «Continuar conectado neste navegador» (§6) — `frontend/src/ui/PaginaDeEntrada.tsx`, `frontend/tests/pagina-de-entrada.test.tsx`.
   - A opção MUST vir **marcada por padrão** e MUST ser acessível por teclado, com foco visível que não dependa apenas de cor (FR-292, FR-302, FR-303; SC-121).
   - Ao concluir Entrar, enviar `continuarConectado` ao cliente; quando desmarcada, nenhum Acesso temporário é emitido e recarregar/fechar exige Entrar de novo (FR-292).
-  - Testes: marcação padrão; alternar por teclado; Entrar com a opção marcada e desmarcada (FR-292, FR-302, FR-303). Larguras de 360 a 1440 px e zoom de 200 % ficam no e2e T1817 (`visual-e-contraste.spec.ts`; SC-121).
+  - Testes: marcação padrão; alternar por teclado; Entrar com a opção marcada e desmarcada, inclusive desmarcar depois de uma entrada anterior com Acesso e confirmar que a recarga exige Entrar (FR-292, FR-302, FR-303). Larguras de 360 a 1440 px e zoom de 200 % ficam no e2e T1817 (`visual-e-contraste.spec.ts`; SC-121).
   - FR-292, FR-302, FR-303; SC-121; §6.
 
 - [ ] T1812 [P] [US1] `Aplicacao.tsx`: carga com `GET /acesso` (§6) — `frontend/src/ui/Aplicacao.tsx`, `frontend/tests/aplicacao-acesso.test.tsx`.
@@ -175,7 +175,7 @@ description: "Lista de tarefas da feature 018 — Acesso temporário"
   - Qualquer `401 acesso_expirado` durante o uso leva a Entrar com a mensagem **«Seu acesso expirou. Entre novamente.»**, sem apresentar a operação como concluída (FR-294, FR-091 revisado; SC-115, SC-123).
   - Sessão de estudo em andamento é descartada conforme FR-151/FR-157 de `012`, sem registrar estudo parcial nem apresentar conclusão (FR-151, FR-157; SC-124).
   - A renovação é ligada a `frontend/src/acesso/atividade.ts` na aplicação, para que teclado, clique e toque renovem o Acesso no máximo a cada 60 s (FR-291; SC-124).
-  - Testes: `401 acesso_expirado` em operação de Cartão/Baralho/Vínculo; recusa sem mudança; Sessão de estudo descartada; mensagem exata e foco no campo de Entrar perceptível por leitor de tela (FR-304; SC-123).
+  - Testes: teclado, clique e toque vinculados a `atividade.ts` disparam a renovação quando a decisão for renovar; `401 acesso_expirado` em operação de Cartão/Baralho/Vínculo; recusa sem mudança; Sessão de estudo descartada; mensagem exata e foco no campo de Entrar perceptível por leitor de tela (FR-304; SC-123).
   - Depende de T1812 e compartilha `frontend/src/ui/Aplicacao.tsx`; **NÃO é [P]** com T1812 — executa depois, em série.
   - FR-091 revisado, FR-151, FR-157, FR-291, FR-294, FR-304; SC-115, SC-123, SC-124; §6.
 

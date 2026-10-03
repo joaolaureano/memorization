@@ -19,7 +19,7 @@
   - FK de Baralho MUST NOT apagar a programação: excluir o Baralho deixa a Rotina indisponível (sem `ON DELETE CASCADE` para `baralho`).
   - Índices por dono para a consulta da semana (SC-102).
   - Restrição da 017 (data-model, seção "Restrição vinda da 017"): toda tabela da Agenda com dados de um Usuário MUST ter `REFERENCES usuario(id) ON DELETE CASCADE`, direto ou pela cadeia de chaves estrangeiras, nos dois Adapters; o teste prova que excluir um Usuário remove a Agenda dele e preserva a de outro.
-- [X] T1603 Adicionar Module Agenda em backend/src/agenda/agenda.ts e tipos.ts, composição Acervo e tipos de cliente em frontend/src/acervo-cliente/cliente.ts. Requisitos: FR-222–FR-256.
+- [X] T1603 Adicionar Module Agenda em backend/src/agenda/agenda.ts e tipos.ts, composição Acervo e tipos de cliente em frontend/src/acervo-cliente/cliente.ts. Fundação para FR-222–FR-256; o comportamento aceito é verificado nas tarefas T1604–T1623.
   - Tipos públicos exatamente como em contracts/api-agenda.md (`RotinaDeEstudo`, `CompromissoDeEstudo`, `SemanaDaAgenda`, `InicioDeCompromisso`); sem `usuarioId` público e sem JSON de versões. Datas civis `YYYY-MM-DD` validadas estritamente (rejeitar 31/02) e fuso IANA validado; hoje derivado no servidor nesse fuso.
 
 ## Phase 3: User Story 1 — Programar estudo
@@ -89,6 +89,44 @@ Setup → Foundational → histórias P1 → gerenciamento/datas → validação
 Contratos documentais liberam trabalho independente do backend e frontend em
 pastas distintas; integração E2E depende dos dois. Não há escrita concorrente
 nos mesmos arquivos. Testes de cada história precedem sua implementação.
+
+## Rastreabilidade requisito–teste
+
+Esta matriz declara a tarefa que exercita cada requisito pela Interface
+observável. Ela descreve o teste planejado ou executado conforme o marcador da
+tarefa; não altera seu estado de conclusão.
+
+| Requisito | Tarefas de teste |
+| --- | --- |
+| FR-222–FR-226 | T1604, T1606 |
+| FR-227–FR-230 | T1607, T1609 |
+| FR-231–FR-236 | T1610, T1612 |
+| FR-237–FR-239 | T1616, T1618 |
+| FR-240 | T1607, T1609 |
+| FR-241 | T1606, T1607, T1609 |
+| FR-242 | T1606, T1616, T1618 |
+| FR-243–FR-247 | T1619, T1621 |
+| FR-248 | T1613 |
+| FR-249 | T1604, T1616, T1618 |
+| FR-250 | T1602, T1613 |
+| FR-251 | T1604, T1610, T1618 |
+| FR-252–FR-253 | T1615 |
+| FR-254 | T1610, T1613 |
+| FR-255 | T1612, T1615 |
+| FR-256 | T1610, T1612 |
+| SC-095 | T1604, T1606 |
+| SC-096 | T1607, T1609 |
+| SC-097 | T1610 |
+| SC-098 | T1616, T1618 |
+| SC-099 | T1619, T1621 |
+| SC-100 | T1613 |
+| SC-101 | T1615 |
+| SC-102 | T1622 |
+| SC-103 | T1615 |
+| SC-104 | T1610, T1612 |
+
+T1623 exercita o percurso integrado de FR-222–FR-256 e SC-095–SC-104; T1624 e
+T1625 conferem os portões e a cobertura dessa matriz.
 
 ## Parallel Examples
 

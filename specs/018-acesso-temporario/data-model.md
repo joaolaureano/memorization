@@ -8,7 +8,11 @@ Comprovante opaco emitido ao Entrar, que permite continuar operando no mesmo Nav
 
 ### Credencial
 
-Par Nome de usuário e Senha mantido apenas na memória durante o Entrar. Passa a ser apresentado no Entrar, não a cada operação; é descartado ao recarregar, fechar ou Sair (FR-089 revisado). Continua sendo aceito pelo hook quando não há Acesso válido (FR-090 revisado).
+Par Nome de usuário e Senha mantido apenas na memória durante o Entrar. Quando
+a pessoa desmarca a continuidade, pode autorizar operações somente enquanto a
+página aberta o mantiver; é descartado ao recarregar, fechar ou Sair. Com
+continuidade, o Acesso temporário autoriza as operações (FR-089 e FR-090
+revisados).
 
 ### Usuário
 

@@ -72,3 +72,38 @@ As contagens exibidas no diálogo de exclusão vêm de `GET /conta`, que as obt�
 - **domain-modeling** (`.agents/skills/domain-modeling/`), aplicada no specify e no clarify porque a feature mexe na linguagem de domínio do Usuário. Ela barrou "Conta" como entidade, porque "conta" é sinônimo evitado de Usuário em `CONTEXT.md`. "Minha conta" e "Excluir conta" ficaram como rótulos de interface, como "Criar conta" na `007`, e o `CONTEXT.md` registra esses rótulos na definição de Usuário. Influenciou a spec (Key Entities, Clarifications) e o glossário.
 - **codebase-design** (`.agents/skills/codebase-design/`), aplicada no plan porque define Interfaces e Seams. Ela manteve a profundidade nos Modules já existentes (`Identidade` e Porta `ArmazenamentoDeUsuarios`, que tem dois Adapters reais) em vez de criar uma Seam nova com um só Adapter. Isolou a decisão de resultado incerto num Module puro (`resultado-incerto.ts`), testável sem rede. Dividiu a seção "Minha conta" em quatro componentes com props fixas (contrato §6), para permitir execução paralela em arquivos disjuntos. Influenciou D1, D2, D4, D5 e o contrato §6.
 
+## Análise de consistência — 2026-10-03
+
+Revisão documental do ciclo `specify → clarify → plan → checklist → tasks →
+analyze`, contra `CONTEXT.md` e a constituição 3.0.0. Foram inspecionados
+`spec.md`, checklist, `plan.md`, este registro, `data-model.md`, contrato,
+`quickstart.md` e `tasks.md`.
+
+### Correções aplicadas nesta análise
+
+- **FR-279 e código HTTP**: a formulação anterior dizia que a mensagem de
+  re-confirmação não revelava a causa, enquanto o contrato publica o código
+  literal `senha_atual_incorreta`. O requisito agora exige o comportamento
+  verificável compatível com o contrato: uma única mensagem entre as três ações,
+  sem expor Senha, derivado ou informação sobre outro Usuário. `403` continua
+  distinto de `401`, preservando a Credencial válida da página (D3, R5).
+- **SC-113 e `agenda`**: o campo numérico não definia quais dados da Agenda
+  compunham sua contagem. O modelo, contrato e tarefas agora fixam a soma dos
+  registros persistidos de Rotinas de estudo, Compromissos de estudo e Inícios
+  de Compromisso do Usuário; versões guardadas dentro de Rotinas não contam
+  separadamente. `null` continua representando a ausência da 016.
+
+### Resultado do portão
+
+- O checklist de requisitos permanece com 20 de 20 itens aprovados.
+- Todos os FR-257..FR-288 e SC-105..SC-113 têm pelo menos uma tarefa na matriz
+  de rastreabilidade, e o `quickstart.md` cobre os cinco fluxos e os nove SC.
+- As Interfaces planejadas respeitam a Porta com dois Adapters, módulos
+  existentes e testes pela Interface; nenhuma Seam hipotética foi introduzida.
+- A dependência da 016 para as cascatas está declarada dos dois lados, e a
+  compatibilidade futura com a 018 para a conferência de resultado incerto está
+  registrada em D4.
+
+Não há inconsistência **CRITICAL** remanescente. A spec permanece em `Draft` e
+aguarda aprovação explícita do Product Owner; até essa aprovação, a constituição
+impede `implement`.

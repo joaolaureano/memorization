@@ -42,8 +42,8 @@ Todas as rotas entram em `registrarRotasDaAplicacao` e na lista de pré-voo de `
 ### 2.1 `POST /entrar`
 
 - Requisição: `{ nomeDeUsuario, senha, continuarConectado?: boolean }`, padrão `true`.
-- Sucesso: `200 { nomeDeUsuario }`; se `continuarConectado` for `true`, define cookie `HttpOnly`, `Secure` na nuvem, `SameSite=Strict`, `Path=/`, `Max-Age` longo; nunca devolve o Acesso no corpo (FR-289, FR-292, FR-297).
-- Se `continuarConectado` for `false`, nenhum Acesso é emitido e a Credencial em memória continua como Basic.
+- Sucesso: `200 { nomeDeUsuario }`; se `continuarConectado` for `true`, revoga o Acesso indicado pelo cookie presente, se houver, antes de criar um novo e definir o cookie `HttpOnly`, `Secure` na nuvem, `SameSite=Strict`, `Path=/`, `Max-Age` longo. Nunca devolve o Acesso no corpo (FR-289, FR-292, FR-297).
+- Se `continuarConectado` for `false`, revoga o Acesso indicado pelo cookie presente, se houver, limpa esse cookie e não emite outro. A Credencial em memória continua como Basic apenas até a página ser recarregada ou fechada (FR-090, FR-292).
 - A conferência de resultado incerto da 017 (D4) também usa `POST /entrar`. Ela MUST enviar `continuarConectado` igual ao estado atual da página: `true` se a página opera por Acesso, `false` se opera por Credencial em memória. Assim, a conferência nunca cria um Acesso que a pessoa não pediu.
 - `401` para Credencial recusada; `503` para armazenamento indisponível.
 
@@ -53,11 +53,12 @@ Todas as rotas entram em `registrarRotasDaAplicacao` e na lista de pré-voo de `
 - `200 { nomeDeUsuario }` quando válido (FR-290).
 - `401 { erro: 'acesso_expirado' }` quando a linha existe e expirou (FR-294).
 - `401 { erro: 'sem_acesso' }` quando não há linha ou cookie.
+- Nos dois `401`, limpa o cookie com `Set-Cookie`; em `503`, nunca o limpa (FR-091, FR-301).
 - `503` quando o armazenamento falha; o cookie NÃO é limpo (FR-301).
 
 ### 2.3 `POST /acesso/renovar`
 
-- `204` quando renova; `401` quando expirado/sem acesso; `503` quando indisponível. Usado por `atividade.ts` (FR-291).
+- `204` quando renova; `401 { erro: 'acesso_expirado' }` quando expirado; `401 { erro: 'sem_acesso' }` quando ausente ou encerrado; `503` quando indisponível. Nos dois `401`, limpa o cookie com `Set-Cookie`; em `503`, nunca o limpa. Usado pela Aplicação conforme a decisão de `atividade.ts` (FR-291, FR-294, FR-301).
 
 ### 2.4 `POST /sair`
 
@@ -69,7 +70,7 @@ Todas as rotas entram em `registrarRotasDaAplicacao` e na lista de pré-voo de `
 O hook aceita EITHER um Acesso temporário válido no cookie OR uma Credencial Basic válida (FR-090 revisado).
 
 - Acesso válido: renova `expira_em` e prossegue, decorando `usuarioQueEntrou`.
-- Acesso expirado: `401 { erro: 'acesso_expirado' }` (FR-294).
+- Acesso expirado: `401 { erro: 'acesso_expirado' }` e limpeza do cookie com `Set-Cookie` (FR-091, FR-294).
 - Acesso inexistente: segue para Basic; se Basic também faltar, `401 credencial_invalida`.
 - Falha de armazenamento ao verificar Acesso: `503`, sem limpar o cookie (FR-301).
 - Basic válido: prossegue como hoje; usado quando «Continuar conectado neste navegador» foi desmarcada.
@@ -93,7 +94,7 @@ O contrato §3 da 017 permanece. Trocar Senha e alterar Nome de usuário chamam 
 - `PaginaDeEntrada.tsx` exibe «Continuar conectado neste navegador», marcada por padrão, acessível por teclado (FR-292, FR-302, FR-303).
 - `POST /sair` encerra o Acesso e leva a Entrar (FR-293, FR-295).
 - Qualquer `401 acesso_expirado` durante o uso leva a Entrar com a mensagem, sem sucesso; Sessão de estudo em andamento é descartada conforme FR-151/FR-157 (FR-091 revisado, FR-294).
-- `frontend/src/acesso/atividade.ts` é Module puro: observa teclado, clique e toque e faz throttle de `POST /acesso/renovar` para no máximo uma vez a cada 60 s (D3; FR-291; SC-124).
+- `frontend/src/acesso/atividade.ts` é Module puro: recebe o instante de teclado, clique ou toque e decide se a renovação é devida. `Aplicacao.tsx` observa esses eventos e, quando a decisão mandar, chama `POST /acesso/renovar`, no máximo uma vez a cada 60 s (D3; FR-291; SC-124).
 
 ## 7. Rastreabilidade
 

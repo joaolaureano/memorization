@@ -20,7 +20,10 @@ A 017 não cria entidade de domínio nova. Ela opera sobre o **Usuário** existe
 
 ### ContagensDaConta
 - Valor de leitura retornado por `GET /conta` e usado no diálogo de exclusão: `{ cartoes, baralhos, registrosDeSessao, agenda: number | null }`.
-- `agenda` é `null` enquanto a feature 016 não existir; existindo, é a contagem dos dados da Agenda do Usuário (FR-272, SC-113).
+- `agenda` é `null` enquanto a feature 016 não existir. Existindo, é a soma dos
+  registros persistidos da Agenda pertencentes ao Usuário: Rotinas de estudo,
+  Compromissos de estudo e Inícios de Compromisso. Versões guardadas dentro de
+  uma Rotina não são contadas separadamente (FR-272, SC-113).
 - As contagens vêm do servidor (R4) e devem corresponder exatamente ao que `excluirUsuario` remove.
 
 ## Porta `ArmazenamentoDeUsuarios`
@@ -61,7 +64,10 @@ Restrição entre features: a migração da 016 MUST declarar `ON DELETE CASCADE
 - **Alterar Nome de usuário**: validar no `Identidade`; persistir com `atualizarNomeDeUsuario`. A unicidade é garantida pelo banco com `COLLATE NOCASE`; a violação vira `nome_em_uso`, e o `Identidade` traduz para `nome_indisponivel` (FR-260, FR-262, SC-112).
 - **Trocar Senha**: validar a nova Senha e a Confirmação no `Identidade` (FR-266, FR-267, FR-269); derivar a nova chave; persistir com `atualizarSenha`. Senha igual à atual é recusada antes da persistência (FR-268).
 - **Excluir conta**: `excluirUsuario` é uma única instrução em transação. A exclusão é tudo ou nada: ou o Usuário e todos os dados dele desaparecem, ou nada é aplicado (FR-274, FR-275, SC-108, invariante 3).
-- **Contagens**: `contarDadosDoUsuario` é leitura; `agenda` é `null` sem 016 e numérica com 016. O diálogo de exclusão usa o valor retornado pelo servidor (FR-272, SC-113).
+- **Contagens**: `contarDadosDoUsuario` é leitura; `agenda` é `null` sem 016 e,
+  com 016, soma Rotinas de estudo, Compromissos de estudo e Inícios de
+  Compromisso persistidos do Usuário. O diálogo de exclusão usa o valor
+  retornado pelo servidor (FR-272, SC-113).
 
 ## Invariantes de dados
 

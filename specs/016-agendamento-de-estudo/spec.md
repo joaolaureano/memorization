@@ -1,6 +1,7 @@
 # Feature Specification: Agendamento de estudo
 
-**Feature Branch**: `wip/outro-agente-cartao-fixo` (branch atual; diretório da feature independente da branch)
+**Feature Branch**: `implementacao-016-018` (branch atual; diretório da
+feature independente da branch)
 **Created**: 2026-10-03
 **Status**: Implementação autorizada em 2026-10-03
 **Input**: “O usuário seria capaz de agendar por exemplo toda segunda-feira usar o Baralho X. Assim, na tela inicial, ele tem um mini report, um pequeno calendário da semana, se tudo já foi feito no dia ou não.” Continuação: “Estruture tudo usando GithubSpecKit, use o framework para criar o Spec da maneira esperada, completa.”
@@ -343,5 +344,9 @@ fuso; o total real é preservado e a precedência da tabela continua válida.
 - **A-06 — premissa a validar**: Agenda aparece antes de Revisão do dia em Início e o gerenciamento é acessado pelo próprio bloco, sem novo destino principal. Orienta FR-227/FR-237 e Definição da UI.
 - **A-07 — premissa a validar**: 100 Rotinas e 2 anos de Compromissos são a escala inicial de aceite; não representam um limite de cadastro. Orienta SC-102.
 - Dados do protótipo são ilustrativos e não serão incluídos no acervo do Usuário. O glossário novo registra a linguagem desta proposta, não a existência de implementação.
-- A instrução final limita o trabalho à criação do plano. Implementação, migrações executadas, testes de aplicação, commits de código e publicação estão fora desta entrega. As tarefas documentam uma implementação futura, dependente de nova autorização.
+- **Registro histórico**: a instrução inicial limitava o trabalho à criação do
+  plano. Ela foi superada pela autorização de implementação de 2026-10-03,
+  registrada no cabeçalho e em `plan.md`/`tasks.md`. Essa autorização não
+  converte A-01–A-07 em decisões confirmadas: elas continuam premissas de
+  produto explicitamente pendentes.
 - Arquitetura, contratos, modelo de persistência, migração e estratégia de testes pertencem ao `plan`; a rastreabilidade requisito–teste será detalhada em `tasks`. A matriz de aceitação em `checklists/requirements.md` é uma revisão documental, não evidência de testes executados.

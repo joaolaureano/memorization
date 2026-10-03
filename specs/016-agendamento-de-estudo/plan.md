@@ -1,7 +1,9 @@
 # Implementation Plan: Agendamento de estudo
 
-**Branch**: `wip/outro-agente-cartao-fixo` | **Date**: 2026-10-03 | **Spec**: [spec.md](spec.md)
-**Input**: spec 016; escopo explicitamente limitado ao planejamento pelo Product Owner.
+**Branch**: `implementacao-016-018` | **Date**: 2026-10-03 | **Spec**: [spec.md](spec.md)
+**Input histórico**: a spec 016 teve escopo inicialmente limitado ao
+planejamento pelo Product Owner; a autorização de implementação posterior está
+registrada no Status. A-01–A-07 continuam premissas de produto pendentes.
 **Status**: Implementação autorizada pelo Product Owner em 2026-10-03 (branch `implementacao-016-018`).
 
 ## Summary

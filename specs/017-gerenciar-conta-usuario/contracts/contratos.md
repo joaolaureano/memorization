@@ -27,7 +27,10 @@ Este documento descreve a Porta `ArmazenamentoDeUsuarios`, a Interface do Module
 ### 1.4 `contarDadosDoUsuario(id)`
 
 - Saída: `{ cartoes, baralhos, registrosDeSessao, agenda: number | null }`.
-- `agenda` é `null` enquanto as tabelas da 016 não existirem; existindo, é a contagem da Agenda do Usuário (D2, R4, FR-272, SC-113).
+- `agenda` é `null` enquanto as tabelas da 016 não existirem. Existindo, soma
+  os registros persistidos do Usuário de Rotina de estudo, Compromisso de estudo
+  e Início de Compromisso; versões guardadas dentro de uma Rotina não contam
+  separadamente (D2, R4, FR-272, SC-113).
 - Erros: `indisponivel`.
 
 A bateria compartilhada da Porta (`backend/tests/armazenamento/bateria-da-porta.ts`) cobre as quatro operações nos dois Adapters e inclui cenário de cascade com dois Usuários (D2, D6, SC-105).
@@ -68,7 +71,8 @@ A bateria compartilhada da Porta (`backend/tests/armazenamento/bateria-da-porta.
 
 ### 2.5 Códigos e mensagens
 
-- `senha_atual_incorreta`: uma única mensagem para as três ações, sem revelar a causa (FR-279, SC-107).
+- `senha_atual_incorreta`: uma única mensagem para as três ações, sem expor a
+  Senha, qualquer derivado ou informação sobre outro Usuário (FR-279, SC-107).
 - `mesmo_nome`: explicação, sem mudança (FR-261).
 - `mesma_senha`: explicação, sem mudança (FR-268).
 - `nome_indisponivel`: código existente de 007, mensagem clara (FR-262, SC-112).

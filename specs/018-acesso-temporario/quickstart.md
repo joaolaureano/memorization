@@ -24,7 +24,7 @@
 - Inspecione o armazenamento do navegador, a URL e os registros da aplicação: a Senha e o Nome de usuário não podem aparecer; o Acesso temporário não pode aparecer em URL, corpo de resposta ou log (FR-078, FR-297, FR-305; SC-116).
 - Tente forjar ou adivinhar o Acesso: deve ser recusado (FR-297).
 - Com o armazenamento indisponível, a validação deve responder indisponível, não expiração, e o cookie não deve ser descartado; ao voltar o armazenamento, a operação deve funcionar (FR-301; SC-122).
-- Com a opção desmarcada, nenhum Acesso é emitido; recarregar ou fechar exige Entrar de novo (FR-292; SC-114).
+- Com a opção desmarcada, nenhum Acesso é emitido; se havia um Acesso anterior, ele é revogado e o cookie é limpo. Recarregar ou fechar exige Entrar de novo (FR-292; SC-114).
 
 ## Verificações de acessibilidade e responsividade
 

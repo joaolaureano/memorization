@@ -45,7 +45,9 @@ A feature 017 completa o CRUD da conta do Usuário sem criar administrador, sess
 - **VII. Escopo Mínimo Honesto**: recuperação de Senha, exportação, carência, restauração, administrador, limite de tentativas, e-mail, verificação em duas etapas e auditoria ficam fora (Funcionalidades Adiadas da spec). Nada de token, cookie ou sessão (FR-079).
 - **VIII. Segredos Fora do Repositório**: nenhum segredo, credencial, token ou string de conexão nova entra em arquivo versionado; a Senha e a Credencial continuam apenas em memória e nunca em log (FR-078, FR-089).
 - **IX. Rastreabilidade Requisito–Teste**: FR-257..FR-288 e SC-105..SC-113 são mapeados a testes no artefato de tasks e conferidos na revisão do diff.
-- **X. Portões de Qualidade**: `analyze` sem CRITICAL e checklist aprovado antes de `implement`; o portão é binário.
+- **X. Portões de Qualidade**: checklist aprovado e análise registrada em
+  `research.md`, sem CRITICAL remanescente, antes de `implement`; o portão é
+  binário.
 - **XI. Delegação Obrigatória de Código**: todo código sob `backend/`, `frontend/` e `e2e/` é criado por workers DeepSeek; o Arquiteto especifica, delega, revisa e verifica. Aplicam-se as skills domain-modeling (Usuário, Credencial, exclusão, cenários-limite) e codebase-design (Interface do `Identidade`, Porta, Module puro de resultado incerto, Seam do cliente).
 
 ## Project Structure

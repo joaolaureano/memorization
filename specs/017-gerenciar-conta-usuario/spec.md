@@ -221,8 +221,8 @@ nunca remove outra conta.
 ### Edge Cases
 
 - **Senha atual errada em qualquer das três ações**: mensagem única de recusa,
-  sem revelar se o erro é de Senha ou de qualquer outra coisa, sem mudança
-  alguma e sem descartar o que foi digitado, exceto os campos de Senha.
+  sem expor a Senha, qualquer derivado ou informação sobre outro Usuário, sem
+  mudança alguma e sem descartar o que foi digitado, exceto os campos de Senha.
 - **Novo Nome de usuário igual ao atual**: recusado com explicação; nada muda.
 - **Novo Nome de usuário ocupado por outro Usuário**, mesmo diferindo só em
   maiúsculas e minúsculas ou em espaços ao redor: recusado com a mensagem clara
@@ -361,8 +361,9 @@ feature:
 **Re-confirmação, resultado incerto e concorrência**
 
 - **FR-279**: Senha atual incorreta em qualquer das três ações MUST produzir
-  uma única mensagem de recusa, sem revelar a causa, sem alterar nada e sem
-  descartar o que foi digitado, exceto os campos de Senha.
+  uma única mensagem de recusa, sem expor a Senha, qualquer derivado ou
+  informação sobre outro Usuário, sem alterar nada e sem descartar o que foi
+  digitado, exceto os campos de Senha.
 - **FR-280**: Quando o resultado de uma alteração ou de uma exclusão não puder
   ser confirmado, a interface MUST NOT apresentar sucesso nem falha e MUST
   determinar o resultado real antes de informar (FR-044).
@@ -397,7 +398,7 @@ feature:
 | FR-258 | A Senha nunca é exibida ou recuperada na seção "Minha conta" | Teste que inspeciona todos os campos e leituras da tela e exige ausência da Senha e de qualquer derivado, e que exige ausência de qualquer caminho de recuperação |
 | FR-275 | Nada da conta excluída permanece, e outras contas não mudam | Teste com dois Usuários que exclui um deles e exige ausência total de qualquer dado dele em todas as leituras, e integridade total do outro, incluindo Cartões, Baralhos, Vínculos, Registros de sessão, Preferências e Agendamentos |
 | FR-259, FR-266, FR-273 | Toda alteração e a exclusão exigem a Senha atual | Teste que tenta cada ação sem Senha atual ou com Senha atual errada e exige recusa sem qualquer mudança |
-| FR-279 | Senha atual errada não revela a causa | Teste que compara a recusa de cada ação com Senha errada e exige mensagem única entre as ações |
+| FR-279 | Senha atual errada usa mensagem única sem expor dados | Teste que compara a recusa de cada ação com Senha errada, exige mensagem única entre as ações e ausência de Senha, derivado ou informação sobre outro Usuário |
 | FR-280 | Nunca há sucesso ou falha anunciados sem confirmação | Teste com falha de conexão que exige ausência de qualquer anúncio antes da verificação de estado |
 | FR-283 | Nova tentativa não duplica efeito | Teste que repete a mesma alteração e a mesma exclusão após resultado incerto e confere contagens, identidade e ausência de exclusão de outra conta |
 | FR-287 | Não existe administrador nem acesso a contas alheias | Teste que percorre toda a interface e as leituras e exige ausência de qualquer operação sobre outro Usuário, e teste de requisição fora da interface que exige recusa |

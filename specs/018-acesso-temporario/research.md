@@ -78,3 +78,34 @@ Aplicada porque a feature cria uma Porta nova, altera um hook e adiciona um Modu
 ## Rastreabilidade
 
 D1: FR-289, FR-297, FR-301; SC-115, SC-122. D2: FR-089, FR-090, FR-297, FR-305; SC-116. D3: FR-291, FR-294; SC-123, SC-124. D4: FR-290..FR-295, FR-301, FR-306; SC-115, SC-119, SC-122, SC-123. D5: FR-296; SC-120. D6: FR-289..FR-295, FR-302..FR-304; SC-114, SC-118, SC-121. D7: FR-301; SC-122. D8: FR-289..FR-306; SC-114..SC-124. D9: idem ondas.
+
+## Portão de análise (2026-10-03)
+
+Análise cruzada de `spec.md`, checklist, plan, research, data-model, contratos,
+quickstart e tasks contra a constituição 3.0.0 e `CONTEXT.md`. Não há item
+CRITICAL restante; o checklist de requisitos permanece aprovado. Quatro achados
+de consistência foram resolvidos antes de qualquer implementação:
+
+- **A1 — FR-090 e continuidade desmarcada**: FR-090 exigia Acesso temporário
+  para toda operação, enquanto D2 e as tasks mantinham a Credencial Basic em
+  memória se a continuidade fosse desmarcada. O requisito passou a autorizar
+  explicitamente essa Credencial somente na página aberta; a recarga ou o
+  fechamento a descarta.
+- **A2 — Substituição e desmarcação**: US1 exige que um novo Entrar substitua o
+  Acesso do mesmo Navegador, e FR-292 exige que a opção desmarcada não deixe
+  continuidade. O contrato agora revoga o Acesso do cookie atual antes de emitir
+  outro e o revoga e limpa quando a opção é desmarcada; T1808 e T1811 verificam
+  os dois percursos.
+- **A3 — Descarte de cookie `HttpOnly`**: o frontend não consegue apagar o
+  cookie por script. Nos `401 acesso_expirado` e `401 sem_acesso`, `GET
+  /acesso` e `POST /acesso/renovar` agora retornam `Set-Cookie` de limpeza; em
+  `503`, o cookie é preservado conforme FR-301.
+- **A4 — Module puro de atividade**: os documentos chamavam `atividade.ts` de
+  puro e, ao mesmo tempo, atribuíam a ele observação de eventos e HTTP. A sua
+  Interface agora recebe instantes e decide renovar/aguardar; `Aplicacao.tsx`
+  observa eventos e usa `ClienteDoAcervo` para o I/O. Isso mantém a Interface
+  como superfície de teste, com Leverage e Locality.
+
+Cobertura de rastreabilidade conferida: FR-079, FR-089..FR-091, FR-289..FR-306
+e SC-114..SC-124 têm ao menos uma tarefa. A implementação continua bloqueada
+até a aprovação do Product Owner, conforme `tasks.md`.

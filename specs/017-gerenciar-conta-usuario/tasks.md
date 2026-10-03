@@ -50,7 +50,7 @@ description: "Lista de tarefas da feature 017 — Gerenciar conta do Usuário"
 
 - [ ] T1702 [P] Porta de armazenamento: operações da conta e tipo `ContagensDaConta` (§1) — `backend/src/armazenamento/porta.ts`.
   - Acrescentar à Interface de `ArmazenamentoDeUsuarios`: `atualizarNomeDeUsuario(id, nome)`, `atualizarSenha(id, { sal, hash, parametros })`, `excluirUsuario(id)` e `contarDadosDoUsuario(id)`; manter `Desfecho` e `CodigoDeFalhaDeArmazenamento` existentes (§1).
-  - Tipos novos: `ContagensDaConta = { cartoes: number; baralhos: number; registrosDeSessao: number; agenda: number | null }`; **`agenda: null` enquanto as tabelas da feature `016` não existirem**; existindo, é a contagem da Agenda do Usuário (§1.4; FR-272, SC-113).
+  - Tipos novos: `ContagensDaConta = { cartoes: number; baralhos: number; registrosDeSessao: number; agenda: number | null }`; **`agenda: null` enquanto as tabelas da feature `016` não existirem**; existindo, soma os registros persistidos de Rotinas de estudo, Compromissos de estudo e Inícios de Compromisso do Usuário; versões dentro de Rotinas não contam separadamente (§1.4; FR-272, SC-113).
   - Erro tipado `nome_em_uso`: nasce da violação da unicidade `COLLATE NOCASE`; será traduzido pelo `Identidade` para `nome_indisponivel` (§1.1; FR-262, SC-112).
   - A Senha em texto claro NÃO entra na Porta: `atualizarSenha` recebe `sal`, `hash` e `parametros` já derivados (§1.2; FR-078, FR-267).
   - `excluirUsuario` é um único comando em transação; as FKs **`ON DELETE CASCADE` de `usuario`** removem `cartao`, `baralho`, `registro_de_sessao`, `agendamento`, `preferencias` e, por cascata, `vinculo` e `item_de_registro` (§1.3; FR-274, FR-275, SC-105).
@@ -78,21 +78,21 @@ description: "Lista de tarefas da feature 017 — Gerenciar conta do Usuário"
   - `atualizarNomeDeUsuario`: `UPDATE` no Usuário; violação de `UNIQUE ... COLLATE NOCASE` → erro tipado `nome_em_uso` (§1.1; FR-262, SC-112).
   - `atualizarSenha`: substitui `sal`, `hash` e `parametros`; não devolve derivacao (§1.2; FR-078, FR-267).
   - `excluirUsuario`: um único `DELETE FROM usuario WHERE id = ?` em transação; as FKs **`ON DELETE CASCADE`** de `cartao`, `baralho`, `registro_de_sessao`, `agendamento`, `preferencias` e, por cascata, `vinculo` e `item_de_registro` removem o resto (§1.3; FR-274, FR-275).
-  - `contarDadosDoUsuario`: `SELECT COUNT(*)` em `cartao`, `baralho`, `registro_de_sessao`; **`agenda: null` enquanto as tabelas da `016` não existirem** (§1.4; FR-272, SC-113).
+  - `contarDadosDoUsuario`: `SELECT COUNT(*)` em `cartao`, `baralho`, `registro_de_sessao`; **`agenda: null` enquanto as tabelas da `016` não existirem**; existindo, soma os registros persistidos de Rotinas, Compromissos e Inícios da Agenda do Usuário (§1.4; FR-272, SC-113).
   - Testes pela bateria compartilhada (T1707), rodada em `backend/tests/armazenamento/sqlite.test.ts`.
   - FR-262, FR-272, FR-274, FR-275; SC-105, SC-108, SC-112, SC-113; §1.
 
 - [ ] T1706 [P] Adapter PostgreSQL das quatro operações (§1; D2) — `backend/src/armazenamento/postgresql/armazenamento.ts`.
   - Equivalentes aos de T1705, com tradução `TIMESTAMPTZ` ↔ ISO-8601 UTC como nas features anteriores.
   - As FKs `ON DELETE CASCADE` para `usuario` (`cartao`, `baralho`, `registro_de_sessao`, `agendamento`, `preferencias`) já existem; **a migração da `016` MUST declarar `ON DELETE CASCADE` para `usuario` nas tabelas da Agenda** (RotinaDeEstudo, CompromissoDeEstudo, InicioDeCompromisso) — a `017` não cria migração própria (data-model; FR-274, FR-275).
-  - `contarDadosDoUsuario` devolve **`agenda: null` enquanto a `016` não existir**; existindo, numérica (§1.4; SC-113).
+  - `contarDadosDoUsuario` devolve **`agenda: null` enquanto a `016` não existir**; existindo, soma os registros persistidos de Rotinas, Compromissos e Inícios da Agenda do Usuário (§1.4; SC-113).
   - Testes pela bateria compartilhada (T1707), rodada em `backend/tests/armazenamento/postgresql/bateria.test.ts`.
   - FR-262, FR-272, FR-274, FR-275; SC-105, SC-108, SC-112, SC-113; §1.
 
 - [ ] T1707 [P] Bateria compartilhada da Porta (§1; D2, D6) — `backend/tests/armazenamento/bateria-da-porta.ts`.
   - Cenário de **cascata com DOIS Usuários**, cada um com `cartao`, `baralho`, `vinculo`, `registro_de_sessao`, `item_de_registro`, `agendamento` e `preferencias`: excluir um **NÃO** pode tocar no outro (FR-274, FR-275, SC-105).
   - `atualizarNomeDeUsuario`: nome já existente para outro Usuário, mesmo diferindo só em maiúsculas/minúsculas ou em espaços ao redor, devolve `nome_em_uso` (FR-262, SC-112).
-  - `contarDadosDoUsuario`: contagens conferem integralmente com o que é removido; **`agenda: null` enquanto a `016` não existir** e numérica quando existir (FR-272, SC-113).
+  - `contarDadosDoUsuario`: contagens conferem integralmente com o que é removido; **`agenda: null` enquanto a `016` não existir** e, quando existir, igual à soma de Rotinas, Compromissos e Inícios persistidos da Agenda removidos (FR-272, SC-113).
   - A bateria roda nos dois Adapters (SQLite e PostgreSQL) com o mesmo arquivo.
   - FR-262, FR-272, FR-274, FR-275; SC-105, SC-112, SC-113; §1.
 
@@ -101,7 +101,7 @@ description: "Lista de tarefas da feature 017 — Gerenciar conta do Usuário"
   - `alterarNomeDeUsuario(usuarioId, { senhaAtual, novoNomeDeUsuario })`: exige `senhaAtual` (FR-259); normaliza como em `007` — espaços ao redor descartados, 3 a 50 caracteres, letras A–Z sem acento, dígitos, `.`, `_` e `-` (FR-260); `mesmo_nome` quando igual ao atual (FR-261); `nome_indisponivel` quando já existente, mesmo diferindo só em maiúsculas/minúsculas (FR-262, SC-112); `senha_atual_incorreta` quando a Senha atual falha (FR-279); sucesso devolve `{ nomeDeUsuario }` (FR-263).
   - `trocarSenha(usuarioId, { senhaAtual, novaSenha, confirmacaoDaSenha })`: exige `senhaAtual` (FR-266); nova Senha segue `007` — 8 a 128 caracteres, qualquer caractere, espaços preservados, sem regra de composição (FR-267); `mesma_senha` quando a nova igual à atual (FR-268); `dados_invalidos` quando nova e Confirmação diferem (FR-269); sucesso = 204 e Credencial substituída (FR-270).
   - `excluirConta(usuarioId, { senhaAtual })`: exige `senhaAtual` (FR-273); `senha_atual_incorreta` na falha (FR-279); sucesso remove Usuário e todos os dados (via `ON DELETE CASCADE`), descarta Credencial e leva a Entrar com «Conta excluída» (FR-274, FR-276); não toca em outro Usuário (FR-275, FR-287).
-  - Códigos e mensagens (§2.5): **`senha_atual_incorreta`** — uma única mensagem para as três ações, sem revelar a causa (FR-279, SC-107); **`mesmo_nome`** (FR-261); **`mesma_senha`** (FR-268); **`nome_indisponivel`** — código existente de `007` (FR-262, SC-112); **`dados_invalidos`** — regra violada identificada (FR-260, FR-267); **`indisponivel`** — falha de armazenamento, sem falso sucesso (FR-044, FR-045).
+  - Códigos e mensagens (§2.5): **`senha_atual_incorreta`** — uma única mensagem para as três ações, sem expor a Senha, derivado ou informação sobre outro Usuário (FR-279, SC-107); **`mesmo_nome`** (FR-261); **`mesma_senha`** (FR-268); **`nome_indisponivel`** — código existente de `007` (FR-262, SC-112); **`dados_invalidos`** — regra violada identificada (FR-260, FR-267); **`indisponivel`** — falha de armazenamento, sem falso sucesso (FR-044, FR-045).
   - Testes: cada verbo com sucesso, cada código de recusa e a uniformidade da mensagem de `senha_atual_incorreta` entre as três ações (SC-107).
   - FR-257..FR-279; SC-105, SC-106, SC-107, SC-111, SC-112; §2.
 

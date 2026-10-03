@@ -74,3 +74,27 @@ todos corrigidos nos artefatos antes de iniciar a implementação.
   de pré-flight CORS (lição da 015).
 
 Cobertura: FR-222–FR-256 e SC-095–SC-104 com ao menos uma tarefa (100%).
+
+## R6 — Revisão documental do ciclo SDD (2026-10-03)
+
+**Decisão**: manter A-01–A-07 como premissas de produto pendentes. A revisão
+não interpreta a autorização ampla de implementação como confirmação individual
+dessas decisões; por isso, ela não fecha o ciclo de clarify para essas premissas.
+
+**Contexto e consequência**: spec, checklist e plano continham registros do
+escopo inicial, limitado ao planejamento, ao lado da autorização posterior de
+implementação. Os registros foram preservados como históricos e passaram a
+apontar o estado atual, sem reescrever a narrativa. `tasks.md` passou a declarar
+a matriz requisito–teste exigida pela Constituição IX. Nenhum requisito, regra
+de domínio ou artefato de aplicação foi alterado nesta revisão.
+
+**Skills aplicadas**:
+
+- `domain-modeling`: aplicada porque a revisão confrontou Agenda de estudo,
+  Rotina de estudo e Compromisso de estudo com `CONTEXT.md`, seus invariantes e
+  cenários-limite. Os termos já estavam canônicos; não houve alteração do
+  glossário.
+- `codebase-design`: aplicada porque a revisão conferiu o desenho do Module
+  Agenda, sua Interface, os Seams existentes de armazenamento/cliente e a
+  estratégia de testes pela Interface. O plano mantém os dois Adapters reais
+  em cada Seam e não introduz uma Seam hipotética.

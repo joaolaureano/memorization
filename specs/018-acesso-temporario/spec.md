@@ -228,8 +228,9 @@ feature:
   Sair.
 - **FR-090 (008, revisado)**: Toda operação sobre Cartões, Baralhos e Vínculos, e
   o carregamento dos dados de uma Sessão de estudo, MUST exigir Acesso temporário
-  válido; sem Acesso válido, a operação MUST ser recusada e MUST NOT alterar
-  nada.
+  válido ou, somente enquanto a página aberta mantiver a Credencial em memória
+  porque a opção de continuidade foi desmarcada, Credencial válida. Sem um dos
+  dois, a operação MUST ser recusada e MUST NOT alterar nada.
 - **FR-091 (008, revisado)**: Quando uma operação for recusada por Acesso
   temporário, a interface MUST descartar o Acesso, MUST voltar a "Entrar" com
   mensagem que explique a recusa, e MUST NOT apresentar a operação como
@@ -418,9 +419,10 @@ feature:
   "Sair de todos os navegadores" fica adiado (decisões do clarify).
 - A validade é decidida pelo servidor; o relógio do aparelho não altera a
   decisão.
-- A Credencial de `008` continua existindo apenas durante o Entrar e para
-  operações que exijam reapresentação, mas o Acesso temporário substitui a
-  reapresentação a cada operação enquanto válido.
+- Com a opção de continuidade desmarcada, a Credencial de `008` pode autorizar
+  operações somente enquanto fica na memória da página aberta; ao recarregar ou
+  fechar, ela é descartada e Entrar é exigido. Com Acesso temporário válido, ele
+  substitui a reapresentação a cada operação.
 - As regras de acervo por usuário de `008` continuam valendo.
 - Arquitetura, contratos, armazenamento e estratégia de testes pertencem ao
   `plan`. Esta spec não fixa tecnologia, protocolo ou framework.
