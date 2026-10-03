@@ -210,7 +210,7 @@ with no shortcuts:
 
 ## SESSION.md
 
-[`SESSION.md`](SESSION.md) is the project's **auditable log**. Each relevant
+[`SESSION.md`](https://github.com/joaolaureano/memorization/blob/v1.0.0/SESSION.md) is the project's **auditable log** for version 1 and exists only in the `v1.0.0` tag; it is not kept on `main`. Each relevant
 interaction becomes a numbered event, with date and time, actor, Spec Kit command
 used, decision made, checks run and the matching commit. Earlier events are not
 rewritten, and no secret is recorded. That is where the history of the Product

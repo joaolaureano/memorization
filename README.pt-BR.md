@@ -205,7 +205,7 @@ etapas sem atalho:
 
 ## SESSION.md
 
-[`SESSION.md`](SESSION.md) é o **registro auditável** do projeto. Cada interação
+[`SESSION.md`](https://github.com/joaolaureano/memorization/blob/v1.0.0/SESSION.md) é o **registro auditável** da versão 1 e existe apenas na tag `v1.0.0`; ele não é mantido na `main`. Cada interação
 relevante vira um evento numerado, com data e hora, ator, comando do Spec Kit
 usado, decisão tomada, verificações executadas e commit correspondente. Os
 eventos anteriores não são reescritos, e nenhum segredo é registrado. É ali que
