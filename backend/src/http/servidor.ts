@@ -297,6 +297,33 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 }
 
 /**
+ * Registra **todas** as rotas da aplicação sobre o servidor já montado:
+ * Cartões, Baralhos, Sessões, Usuários e Entrar. É a **única fonte da verdade**
+ * da lista de rotas, e as duas entradas — a local, por `iniciarServidor`, e a da
+ * nuvem, pela fábrica da `funcao` — precisam chamá-la.
+ *
+ * A duplicação anterior deixava cada entrada montar a sua própria lista, e uma
+ * rota podia existir em uma e faltar na outra: foi assim que o Histórico da
+ * `013` passou a responder no loopback e a devolver `404` de rota na AWS. Com
+ * uma só função, a rota que não estiver aqui não existe em lugar algum, e não há
+ * como divergir.
+ *
+ * A Credencial já foi exigida pelo hook registrado em `criarServidor`, antes
+ * destas rotas; por isso nenhuma delas repete a verificação (FR-090).
+ */
+export function registrarRotasDaAplicacao(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+  acervoDe: AcervoDeUsuario,
+): void {
+  registrarRotasDeCartoes(servidor, acervoDe);
+  registrarRotasDeBaralhos(servidor, acervoDe);
+  registrarRotasDeSessoes(servidor, acervoDe);
+  registrarRotasDeUsuarios(servidor, identidade);
+  registrarRotaDeEntrada(servidor);
+}
+
+/**
  * Sobe o servidor com todas as rotas do contrato.
  *
  * O `Acervo` entra como **construtor por Usuário** (`acervoDe`), e não como
@@ -311,11 +338,7 @@ export async function iniciarServidor(
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
   const servidor = criarServidor(identidade);
-  registrarRotasDeCartoes(servidor, acervoDe);
-  registrarRotasDeBaralhos(servidor, acervoDe);
-  registrarRotasDeSessoes(servidor, acervoDe);
-  registrarRotasDeUsuarios(servidor, identidade);
-  registrarRotaDeEntrada(servidor);
+  registrarRotasDaAplicacao(servidor, identidade, acervoDe);
 
   await servidor.listen(opcoes);
 

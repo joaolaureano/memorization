@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,6 +162,22 @@ interface OpcoesDoEvento {
  * `requestContext.http.method` com o método.
  */
 function eventoV2(metodo: string, caminho: string, opcoes: OpcoesDoEvento) {
+  /**
+   * O caminho pode carregar a consulta depois de `?`: ela vira o
+   * `rawQueryString` do evento, como o CloudFront a entrega, e o `rawPath` fica
+   * só com o caminho — que é o que o roteador do Fastify enxerga.
+   *
+   * O evento real da Function URL também traz `queryStringParameters`, com os
+   * pares já decodificados; por fidelidade ao que o CloudFront entrega, o evento
+   * sintético os traz também, porque o `@fastify/aws-lambda` lê a consulta
+   * **somente** dali: sem eles, o Adapter descartaria a consulta e o roteador a
+   * perderia.
+   */
+  const [caminhoBase, consulta = ""] = caminho.split("?");
+  const parametrosDaConsulta =
+    consulta === ""
+      ? undefined
+      : Object.fromEntries(new URLSearchParams(consulta));
   const headers: Record<string, string> = {};
 
   if (opcoes.segredoDeOrigem !== undefined) {
@@ -180,11 +196,12 @@ function eventoV2(metodo: string, caminho: string, opcoes: OpcoesDoEvento) {
 
   return {
     version: "2.0",
-    rawPath: caminho,
-    rawQueryString: "",
+    rawPath: caminhoBase,
+    rawQueryString: consulta,
+    queryStringParameters: parametrosDaConsulta,
     headers,
     requestContext: {
-      http: { method: metodo, path: caminho, protocol: "HTTP/1.1" },
+      http: { method: metodo, path: caminhoBase, protocol: "HTTP/1.1" },
     },
     ...(corpo === undefined ? {} : { body: corpo, isBase64Encoded: false }),
   };
@@ -462,6 +479,76 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
     expect(resposta.status).toBe(401);
     expect(resposta.corpo).toMatchObject({ erro: "credencial_invalida" });
     expect(resposta.bruto).not.toContain("ninguem.silva");
+  }, 60_000);
+});
+
+describe("a paridade das rotas entre a entrada local e a da nuvem (013)", () => {
+  it("roteia o Histórico na função da nuvem, e nunca com 404 de rota", async () => {
+    const nomeDeUsuario = `hist.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+    const credencial = credencialDe(nomeDeUsuario, senha);
+
+    const cadastro = await pedir(funcao, "POST", "/usuarios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      corpo: { nomeDeUsuario, senha },
+    });
+
+    expect(cadastro.status).toBe(201);
+
+    /** A janela válida é contada a partir de agora, dentro dos 31 dias do contrato. */
+    const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    /**
+     * A janela válida responde o Histórico — `200` —, e não o `404` do roteador:
+     * a rota existe na aplicação que a `funcao` monta, e não só na entrada local.
+     */
+    const estatisticas = await pedir(
+      funcao,
+      "GET",
+      `/estatisticas?desde=${encodeURIComponent(desde)}`,
+      { segredoDeOrigem: SEGREDO_DE_ORIGEM, credencial },
+    );
+
+    expect(estatisticas.status).toBe(200);
+    expect(estatisticas.bruto).not.toMatch(/Route .* not found/);
+
+    /** O registro aleatório recebe o `404` **do Histórico**, com o corpo dele. */
+    const registro = await pedir(funcao, "GET", `/sessoes/${randomUUID()}`, {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(registro.status).toBe(404);
+    expect(registro.corpo).toEqual({
+      erro: "nao_encontrado",
+      mensagem: "Sessão não encontrada.",
+    });
+    expect(registro.bruto).not.toMatch(/Route .* not found/);
+
+    /**
+     * A gravação também está roteada: corpo de forma inválida é recusado pelo
+     * Histórico com `dados_invalidos`, e não com o `404` do roteador.
+     */
+    const gravacao = await pedir(funcao, "POST", "/sessoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: {},
+    });
+
+    expect(gravacao.status).toBe(400);
+    expect(gravacao.corpo).toMatchObject({ erro: "dados_invalidos" });
+    expect(gravacao.bruto).not.toMatch(/Route .* not found/);
+
+    /** Sem Credencial, a rota existe e recusa pela Credencial: `401`, nunca `404`. */
+    const semCredencial = await pedir(
+      funcao,
+      "GET",
+      "/estatisticas?desde=2026-01-01T00:00:00.000Z",
+      { segredoDeOrigem: SEGREDO_DE_ORIGEM },
+    );
+
+    expect(semCredencial.status).toBe(401);
+    expect(semCredencial.bruto).not.toMatch(/Route .* not found/);
   }, 60_000);
 });
 

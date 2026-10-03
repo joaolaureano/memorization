@@ -16,13 +16,7 @@ import {
   lerVersaoDoEsquema,
   versaoCorrenteConhecida,
 } from "../armazenamento/postgresql/esquema.ts";
-import {
-  registrarRotaDeEntrada,
-  registrarRotasDeBaralhos,
-  registrarRotasDeCartoes,
-  registrarRotasDeUsuarios,
-} from "../http/rotas.ts";
-import { criarServidor } from "../http/servidor.ts";
+import { criarServidor, registrarRotasDaAplicacao } from "../http/servidor.ts";
 import { criarIdentidade } from "../identidade/identidade.ts";
 import {
   segredoConfigurado,
@@ -271,10 +265,7 @@ export function criarFuncao(
     const acervoDe = (usuarioId: string) =>
       criarAcervo(aberto.armazenamento, usuarioId);
 
-    registrarRotasDeCartoes(servidor, acervoDe);
-    registrarRotasDeBaralhos(servidor, acervoDe);
-    registrarRotasDeUsuarios(servidor, identidade);
-    registrarRotaDeEntrada(servidor);
+    registrarRotasDaAplicacao(servidor, identidade, acervoDe);
 
     /**
      * O Adaptador do evento é criado **antes** do `ready()`: ele decora a
