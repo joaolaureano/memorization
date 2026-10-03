@@ -147,3 +147,17 @@ e `npm run build`. Nas fases 6 e 7 também `npm run test:e2e`, na raiz, e
 | T1120 | O Product Owner aprova o diff. Nenhum commit sem pedido | SC-070 | T1117–T1119 | aprovação registrada |
 
 </details>
+
+---
+
+## Revisão de 2026-10-02 — ações do Baralho no topo
+
+- [X] T1121 `PaginaDoBaralho.tsx`: Estudar este Baralho, Adicionar cartões existentes, Renomear e Excluir Baralho reunidos no topo, antes da lista de Cartões; testes de tela (ordem de Tab) e e2e de visibilidade sem rolagem com 40 Cartões em 360 px
+
+<details><summary>Metadados</summary>
+
+| ID | Objetivo observável | Requisitos | Depende | Concluída quando |
+|---|---|---|---|---|
+| T1121 | As quatro ações do Baralho ficam no primeiro viewport e antes dos Cartões no Tab, com 0, 1 e 40 Cartões, de 360 a 1440 px; Remover deste baralho continua em cada Cartão | FR-145 (revisado), SC-078 | — | testes de tela e e2e verdes; CI e deploy verdes |
+
+</details>

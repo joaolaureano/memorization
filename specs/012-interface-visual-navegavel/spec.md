@@ -24,6 +24,8 @@ Esta entrega contém somente especificação e revisão de qualidade dos requisi
 
 ### Session 2026-10-02
 
+- Q (revisão do Product Owner): onde ficam as ações sobre o Baralho no seu detalhe? → A: todas no topo, antes da lista de Cartões — Estudar, Adicionar cartões existentes, Renomear e Excluir —, para não obrigar a rolar a lista (FR-145 revisado, SC-078). Remover deste baralho permanece em cada Cartão.
+
 - Q: Abaixo de qual largura vale a disposição móvel (marca e Sair no cabeçalho, destinos na navegação inferior)? → A: até 600 px, inclusive; acima disso a navegação fica no cabeçalho, tablets incluídos (FR-139).
 - Q: Como o Resumo apresenta o percentual de acertos? → A: inteiro arredondado ao mais próximo, sem casas decimais; 2 de 3 = 67% (FR-152, SC-067).
 - Q: Quais formulários pedem confirmação de descarte? → A: Cadastro, criar/editar Cartão, criar/renomear Baralho e configuração de estudo alterada; Entrar não pede (FR-148).
@@ -61,7 +63,8 @@ A pessoa cria um Baralho, cria Cartões em uma página própria e os vincula pel
 
 1. **Given** a lista de Baralhos, **When** a pessoa escolhe Criar baralho, **Then** abre uma página própria com nome, orientações, salvar e voltar/cancelar; a lista apresenta nome, quantidade de Cartões, detalhe e ação textual Estudar.
 2. **Given** a lista de Cartões, **When** a pessoa cria ou edita um Cartão, **Then** encontra Frente e Verso com limites e validação em página própria; após salvar, o conteúdo é atualizado no acervo.
-3. **Given** um Baralho existente, **When** seu detalhe é aberto, **Then** Estudar aparece no topo e estão disponíveis Cartões vinculados, adicionar existentes, renomear e excluir.
+3. **Given** um Baralho existente, **When** seu detalhe é aberto, **Then** Estudar este Baralho, Adicionar cartões existentes, Renomear e Excluir Baralho aparecem juntos no topo, antes da lista de Cartões vinculados.
+3a. **Given** um Baralho com 40 Cartões vinculados, em 360 px, **When** o detalhe é aberto, **Then** as quatro ações do Baralho ficam visíveis sem rolagem, e o primeiro Tab depois do título chega a elas antes de qualquer Cartão.
 4. **Given** um Cartão já vinculado ao Baralho, **When** a tela de adicionar é aberta, **Then** não oferece criar o mesmo Vínculo novamente; quando não há opções, explica se faltam Cartões no acervo ou se todos já estão vinculados.
 5. **Given** um Cartão em dois Baralhos, **When** a edição é aberta, **Then** informa os Baralhos e que editar afeta todos eles; salvar altera o conteúdo visto nos dois.
 6. **Given** um Cartão vinculado, **When** Remover deste baralho conclui, **Then** somente esse Vínculo é removido, sem pedir confirmação, preservando o Cartão e seus demais Vínculos.
@@ -158,7 +161,7 @@ FR-044 aplica-se às operações persistentes; Resultados e Resumos de Sessão c
 - **FR-142**: Campos de Senha e Confirmação da Senha MUST iniciar mascarados e permitir mostrar/ocultar apenas o conteúdo digitado no formulário atual. MUST NOT recuperar Senhas armazenadas, preencher Credencial de exemplo, persistir a Senha no navegador ou exibi-la em mensagens e resumos.
 - **FR-143**: Cadastro concluído MUST apresentar confirmação e acesso a Entrar, sem acesso automático ao acervo; Cadastro recusado MUST preservar o preenchimento para correção ou nova tentativa enquanto a página estiver aberta.
 - **FR-144**: As listas MUST apresentar estados vazios com próximo passo. Baralhos MUST mostrar nome, quantidade de Cartões, acesso ao detalhe e ação textual Estudar; Cartões MUST mostrar Frente, Verso e Baralhos em que estão vinculados, inclusive ausência de Vínculos.
-- **FR-145**: O detalhe do Baralho MUST oferecer Estudar no topo, Cartões presentes, adicionar Cartões existentes, remover Vínculo, renomear e excluir. A seleção de existentes MUST excluir os já vinculados e explicar ausência de opções.
+- **FR-145**: O detalhe do Baralho MUST reunir no topo da página, logo abaixo do título e **antes** da lista de Cartões, todas as ações sobre o Baralho: Estudar este Baralho (ação principal), Adicionar cartões existentes, Renomear e Excluir Baralho. Essas ações MUST estar alcançáveis sem rolar a lista, qualquer que seja a quantidade de Cartões, nas larguras de 360 a 1440 px, e MUST vir antes dos Cartões na ordem de leitura e de Tab. Excluir Baralho mantém a aparência de ação perigosa e a confirmação (FR-147). Remover deste baralho continua junto de cada Cartão, por agir sobre um Vínculo e não sobre o Baralho. A seleção de existentes MUST excluir os já vinculados e explicar ausência de opções. *(Revisado em 2026-10-02 a pedido do Product Owner: as ações ficavam no fim da página e exigiam rolar a lista inteira.)*
 - **FR-146**: Editar Cartão MUST informar quais e quantos Baralhos o utilizam e que a alteração afeta todos eles; as telas afetadas MUST refletir a alteração confirmada, preservando as regras de Sessão já iniciada.
 - **FR-147**: Remover deste baralho MUST desfazer somente o Vínculo e MUST NOT exigir confirmação, conforme FR-066. Excluir Cartão e excluir Baralho MUST exigir confirmação com alvo e consequências explícitas; cancelar MUST preservar o acervo.
 - **FR-148**: Sair de Cadastro, criação ou edição de acervo ou configuração de estudo com alterações efetivas não salvas MUST pedir confirmação. Cancelar MUST preservar os campos; confirmar MUST descartar o preenchimento não salvo. Restaurar os valores originais MUST eliminar a confirmação. Recusa de Credencial segue FR-157.
@@ -200,6 +203,7 @@ Numeração continua após SC-061 de `011`.
 - **SC-067**: Para Sessões de 1 e 3 Itens, incluindo todos os acertos, todos os erros e dois acertos em três, as contagens sempre somam o total e os percentuais são 100% para todos os acertos, 0% para todos os erros e 67% para dois acertos em três; interrupção nunca apresenta Resumo.
 - **SC-068**: Todos os campos, ações, mensagens e diálogos atendem aos requisitos de teclado, foco, nome acessível e anúncio; a inspeção visual confirma os mínimos de tamanho e contraste do FR-136 em todas as telas.
 - **SC-069**: Após Entrar, o destino é Baralhos em todos os casos de sucesso. Depois de Sair, recarregar ou recusar Credencial, nenhum percurso de voltar permite acessar o acervo sem novo Entrar; Usuários distintos nunca veem o acervo um do outro.
+- **SC-078**: Em 100% das larguras de aceite (360, 390, 768 e 1440 px) e com 0, 1 e 40 Cartões vinculados, as ações Estudar, Adicionar cartões existentes, Renomear e Excluir Baralho do detalhe ficam no primeiro viewport, sem rolagem, e precedem os Cartões na ordem de Tab.
 - **SC-070**: Nenhuma tela do aplicativo oferece controles ou dados de demonstração ou Explorações futuras. Os artefatos de design continuam disponíveis para revisão separados do uso real.
 
 ## Inventário de telas e estados para aceite

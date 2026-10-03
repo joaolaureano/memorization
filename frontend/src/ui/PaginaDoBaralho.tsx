@@ -307,9 +307,11 @@ export function PaginaDoBaralho({
         </div>
 
         {baralho !== null && (
-          // FR-145: Estudar é a primeira ação da página. Sem Cartões, o
-          // caminho não leva a lugar nenhum: o botão fica desabilitado e a
-          // explicação vem ao lado.
+          // FR-145 (revisado), SC-078: todas as ações sobre o Baralho ficam
+          // reunidas no topo da página, logo abaixo do título e antes da lista
+          // de Cartões — alcançáveis sem rolar a lista e precedendo os Cartões
+          // na ordem de leitura e de Tab. Sem Cartões, Estudar não leva a lugar
+          // nenhum: o botão fica desabilitado e a explicação vem ao lado.
           <div className="acoes">
             {quantidadeDeCartoes === 0 ? (
               <>
@@ -321,9 +323,6 @@ export function PaginaDoBaralho({
                 >
                   Estudar este Baralho
                 </button>
-                <p id="motivo-para-nao-estudar" className="ajuda">
-                  Adicione Cartões ao Baralho para poder estudar.
-                </p>
               </>
             ) : (
               <a
@@ -333,7 +332,35 @@ export function PaginaDoBaralho({
                 Estudar este Baralho
               </a>
             )}
+            <a
+              className="botao botao--secundario"
+              href={`#/baralhos/${id}/adicionar`}
+            >
+              Adicionar cartões existentes
+            </a>
+            <a
+              className="botao botao--secundario"
+              href={`#/baralhos/${id}/editar`}
+            >
+              Renomear
+            </a>
+            <button
+              ref={botaoDeExcluir}
+              type="button"
+              className="botao botao--perigo"
+              aria-label="Excluir Baralho"
+              disabled={removendo !== null || excluindo}
+              onClick={abrirExclusao}
+            >
+              Excluir Baralho
+            </button>
           </div>
+        )}
+
+        {baralho !== null && quantidadeDeCartoes === 0 && (
+          <p id="motivo-para-nao-estudar" className="ajuda">
+            Adicione Cartões ao Baralho para poder estudar.
+          </p>
         )}
       </div>
 
@@ -410,34 +437,7 @@ export function PaginaDoBaralho({
               </ul>
             )}
 
-            <p>
-              <a
-                className="botao botao--secundario"
-                href={`#/baralhos/${id}/adicionar`}
-              >
-                Adicionar cartões existentes
-              </a>
-            </p>
           </section>
-
-          <div className="acoes">
-            <a
-              className="botao botao--secundario"
-              href={`#/baralhos/${id}/editar`}
-            >
-              Renomear
-            </a>
-            <button
-              ref={botaoDeExcluir}
-              type="button"
-              className="botao botao--perigo"
-              aria-label="Excluir Baralho"
-              disabled={removendo !== null || excluindo}
-              onClick={abrirExclusao}
-            >
-              Excluir Baralho
-            </button>
-          </div>
 
           {falhaDeExclusao !== null && (
             <p
