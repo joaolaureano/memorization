@@ -4,12 +4,14 @@ import type {
   ClienteDoAcervo,
   Estatisticas,
   RegistroResumido,
+  ResumoDaRevisao,
 } from "../acervo-cliente/cliente";
 import {
   inicioDaJanela,
   itensPorDia,
   taxaDeAcerto,
 } from "../estatisticas/estatisticas";
+import { limitesDoDia } from "../revisao/dia";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
@@ -28,6 +30,10 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * O cabeçalho fica fora do estado da carga: mesmo quando a leitura falha, a
  * página continua sendo a de Início, com a navegação da Moldura à vista e o
  * caminho de tentar de novo (FR-173).
+ *
+ * O bloco "Revisão do dia" (FR-198, FR-199) fica no topo do conteúdo, antes
+ * das Estatísticas, e tem estado próprio: uma falha nele não esconde os
+ * números, e uma falha nos números não o esconde (FR-217).
  */
 
 /** O estado da leitura das Estatísticas, do pedido à resposta (FR-164). */
@@ -35,6 +41,12 @@ type EstadoDoInicio =
   | { estado: "carregando" }
   | { estado: "falha"; mensagem: string }
   | { estado: "pronta"; estatisticas: Estatisticas; agora: Date };
+
+/** O estado da leitura do resumo da Revisão do dia, do pedido à resposta (FR-198). */
+type EstadoDaRevisao =
+  | { estado: "carregando" }
+  | { estado: "falha"; mensagem: string }
+  | { estado: "pronta"; resumo: ResumoDaRevisao };
 
 /** Quantas Sessões recentes a tela apresenta (FR-165). */
 const SESSOES_RECENTES = 5;
@@ -47,8 +59,11 @@ export function PaginaDeInicio({
   nomeDeUsuario: string;
 }) {
   const [inicio, setInicio] = useState<EstadoDoInicio>({ estado: "carregando" });
+  const [revisao, setRevisao] = useState<EstadoDaRevisao>({
+    estado: "carregando",
+  });
 
-  const carregar = useCallback(async () => {
+  const carregarEstatisticas = useCallback(async () => {
     setInicio({ estado: "carregando" });
 
     // Um só `agora` decide a janela pedida e o desenho do gráfico: fossem dois
@@ -65,13 +80,38 @@ export function PaginaDeInicio({
     );
   }, [cliente]);
 
-  useEffect(() => {
-    void carregar();
-  }, [carregar]);
+  const carregarRevisao = useCallback(async () => {
+    setRevisao({ estado: "carregando" });
 
-  const tentarNovamente = useCallback(() => {
-    void carregar();
-  }, [carregar]);
+    // Os limites do dia vêm do fuso do navegador (FR-204), e é o mesmo `agora`
+    // que decide o corte da meia-noite e o instante pedido ao servidor.
+    const { inicioDoDia, fimDoDia } = limitesDoDia(new Date());
+    const resultado = await cliente.obterResumoDaRevisao(inicioDoDia, fimDoDia);
+
+    setRevisao(
+      resultado.ok
+        ? { estado: "pronta", resumo: resultado.resumo }
+        : { estado: "falha", mensagem: resultado.mensagem },
+    );
+  }, [cliente]);
+
+  // Duas cargas independentes: falhar numa não deixa a outra sem caminho, e o
+  // "Tentar novamente" de cada bloco só refaz a sua leitura (FR-217).
+  useEffect(() => {
+    void carregarEstatisticas();
+  }, [carregarEstatisticas]);
+
+  useEffect(() => {
+    void carregarRevisao();
+  }, [carregarRevisao]);
+
+  const tentarNovamenteEstatisticas = useCallback(() => {
+    void carregarEstatisticas();
+  }, [carregarEstatisticas]);
+
+  const tentarNovamenteRevisao = useCallback(() => {
+    void carregarRevisao();
+  }, [carregarRevisao]);
 
   return (
     <div className="pagina">
@@ -82,6 +122,11 @@ export function PaginaDeInicio({
         </div>
       </div>
 
+      <BlocoDaRevisaoDoDia
+        revisao={revisao}
+        aoTentarNovamente={tentarNovamenteRevisao}
+      />
+
       {inicio.estado === "carregando" ? (
         <EstadoDaCarga estado="carregando" mensagem="Carregando o seu estudo…" />
       ) : null}
@@ -90,7 +135,7 @@ export function PaginaDeInicio({
         <EstadoDaCarga
           estado="falha"
           mensagem={inicio.mensagem}
-          aoTentarNovamente={tentarNovamente}
+          aoTentarNovamente={tentarNovamenteEstatisticas}
         />
       ) : null}
 
@@ -102,6 +147,121 @@ export function PaginaDeInicio({
       ) : null}
     </div>
   );
+}
+
+/**
+ * O bloco "Revisão do dia" de Início (FR-198, FR-199, FR-202, FR-217).
+ *
+ * Tem estado próprio, independente das Estatísticas: a falha de um não impede
+ * o outro de aparecer, e cada um oferece o seu "Tentar novamente" (FR-217). O
+ * resumo lido diz quantos Cartões vencem hoje e quantos novos ainda cabem no
+ * limite do dia (FR-198, FR-199).
+ */
+function BlocoDaRevisaoDoDia({
+  revisao,
+  aoTentarNovamente,
+}: {
+  revisao: EstadoDaRevisao;
+  aoTentarNovamente: () => void;
+}) {
+  return (
+    <section className="cartao" aria-labelledby="rotulo-da-revisao">
+      <p className="sobretitulo" id="rotulo-da-revisao">
+        Revisão do dia
+      </p>
+
+      {revisao.estado === "carregando" ? (
+        <EstadoDaCarga
+          estado="carregando"
+          mensagem="Carregando a revisão do dia…"
+        />
+      ) : null}
+
+      {revisao.estado === "falha" ? (
+        <EstadoDaCarga
+          estado="falha"
+          mensagem={revisao.mensagem}
+          aoTentarNovamente={aoTentarNovamente}
+        />
+      ) : null}
+
+      {revisao.estado === "pronta" ? (
+        <ResumoDoDia resumo={revisao.resumo} />
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * O resumo já carregado: quantos vencem hoje, quantos novos entram e o caminho
+ * para revisar (FR-198, FR-199, FR-202).
+ *
+ * Quando não há nada para revisar, o botão deixa de ser um link e passa a
+ * anunciar-se indisponível, com a explicação associada por `aria-describedby`
+ * — a indisponibilidade não fica só na cor (FR-202).
+ */
+function ResumoDoDia({ resumo }: { resumo: ResumoDaRevisao }) {
+  const nadaParaRevisar = resumo.total === 0;
+
+  return (
+    <div className="pilha">
+      <div>
+        <h2>{tituloDaRevisao(resumo)}</h2>
+        {nadaParaRevisar ? (
+          <p className="texto-secundario" id="explicacao-da-revisao">
+            Não há Cartões vencidos nem Cartões novos disponíveis hoje.
+          </p>
+        ) : (
+          <p className="texto-secundario">{textoDeNovos(resumo.novosHoje)}</p>
+        )}
+      </div>
+
+      {nadaParaRevisar ? (
+        <button
+          type="button"
+          className="botao botao--secundario"
+          disabled
+          aria-describedby="explicacao-da-revisao"
+        >
+          Revisar
+        </button>
+      ) : (
+        <a className="botao botao--primario" href="#/revisao">
+          Revisar
+        </a>
+      )}
+    </div>
+  );
+}
+
+/** O título do bloco, derivado dos vencidos (FR-198, FR-202). */
+function tituloDaRevisao(resumo: ResumoDaRevisao): string {
+  if (resumo.total === 0) {
+    return "Nada para revisar hoje";
+  }
+
+  if (resumo.vencidos === 0) {
+    return "Nenhum Cartão vencido hoje";
+  }
+
+  if (resumo.vencidos === 1) {
+    return "1 Cartão para revisar hoje";
+  }
+
+  return `${resumo.vencidos} Cartões para revisar hoje`;
+}
+
+/** O texto dos Cartões novos de hoje, no singular e no plural (FR-199). */
+function textoDeNovos(novos: number): string {
+  if (novos === 0) {
+    return "Nenhum Cartão novo entra hoje";
+  }
+
+  if (novos === 1) {
+    return "1 Cartão novo entra hoje";
+  }
+
+  return `${novos} Cartões novos entram hoje`;
 }
 
 /** O painel já carregado: os números, o gráfico e as Sessões recentes. */

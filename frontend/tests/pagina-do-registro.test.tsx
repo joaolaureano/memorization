@@ -45,6 +45,7 @@ function clienteComRegistro(
 /** Um Registro de prova, com os Itens na ordem em que foram apresentados. */
 const REGISTRO: RegistroDeSessao = {
   id: "sessao-1",
+  origem: "baralho",
   baralhoId: "baralho-1",
   nomeDoBaralho: "Inglês",
   concluidaEm: "2026-09-30T12:30:00.000Z",
@@ -69,6 +70,36 @@ const REGISTRO: RegistroDeSessao = {
       frente: "thoroughly",
       verso: "minuciosamente",
       resultado: "errou",
+    },
+  ],
+};
+
+/** Um Registro da Revisão do dia, com Avaliação em todos os Itens (FR-196). */
+const REGISTRO_DA_REVISAO: RegistroDeSessao = {
+  id: "sessao-2",
+  origem: "revisao",
+  baralhoId: "",
+  nomeDoBaralho: "Revisão do dia",
+  concluidaEm: "2026-10-01T09:00:00.000Z",
+  estudados: 2,
+  acertos: 1,
+  erros: 1,
+  itens: [
+    {
+      posicao: 0,
+      frente: "ephemeral",
+      verso: "efêmero, passageiro",
+      resultado: "acertou",
+      cartaoId: "cartao-1",
+      avaliacao: "bom",
+    },
+    {
+      posicao: 1,
+      frente: "thoroughly",
+      verso: "minuciosamente",
+      resultado: "errou",
+      cartaoId: "cartao-2",
+      avaliacao: "errei",
     },
   ],
 };
@@ -115,6 +146,60 @@ describe("PaginaDoRegistro", () => {
     expect(screen.queryByRole("link", { name: "Ver baralho" })).toBeNull();
     // O que foi estudado continua à vista (FR-166).
     expect(screen.getByText("Inglês")).toBeTruthy();
+  });
+
+  it("mostra 'Revisão do dia' sem selo nem link para Baralho (FR-215)", async () => {
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => ({
+          ok: true,
+          registro: REGISTRO_DA_REVISAO,
+          baralhoExiste: false,
+        }))}
+        id="sessao-2"
+      />,
+    );
+
+    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Revisão do dia" }),
+    ).toBeTruthy();
+    // A ausência de Baralho é própria da Revisão, e não de um Baralho excluído:
+    // nem selo, nem link quebrado (FR-215).
+    expect(screen.queryByText("Baralho excluído")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Ver baralho" })).toBeNull();
+    // As Avaliações dos Itens chegam ao Resumo (FR-197, FR-216).
+    expect(
+      screen.getByLabelText("Contagem por nível de Avaliação"),
+    ).toBeTruthy();
+    expect(screen.getByText("Bom 1")).toBeTruthy();
+    expect(screen.getByText("Errei 1")).toBeTruthy();
+  });
+
+  it("mantém o Baralho no estudo livre e não anuncia a Revisão (FR-178, FR-197)", async () => {
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => ({
+          ok: true,
+          registro: REGISTRO,
+          baralhoExiste: true,
+        }))}
+        id="sessao-1"
+      />,
+    );
+
+    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Revisão do dia" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Ver baralho" }).getAttribute("href"),
+    ).toBe("#/baralhos/baralho-1");
+    // Itens sem Avaliação — Registros anteriores à 015 — não ganham a contagem
+    // por nível e aparecem exatamente como antes (FR-197, FR-214).
+    expect(
+      screen.queryByLabelText("Contagem por nível de Avaliação"),
+    ).toBeNull();
   });
 
   it("avisa quando o Registro não existe e oferece a volta ao Início", async () => {

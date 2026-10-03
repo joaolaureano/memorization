@@ -4,12 +4,15 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
   NAO_AUTENTICADO,
 } from "./cliente";
 import type {
+  Avaliacao,
   Baralho,
   BaralhoComCartoes,
   BaralhoListado,
@@ -22,9 +25,15 @@ import type {
   DadosDeRegistro,
   DadosDeUsuario,
   Estatisticas,
+  ItemDoLoteDeRevisao,
   ItemRegistrado,
+  OpcaoDeAlgoritmo,
+  Preferencias,
+  Previa,
   RegistroDeSessao,
   RegistroResumido,
+  ResumoDaRevisao,
+  ResultadoDasPrevias,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
@@ -38,9 +47,13 @@ import type {
   ResultadoDeListagemDeCartoes,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
+  ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
+  ResultadoDeSalvarPreferencias,
   ResultadoDeVinculacao,
+  ResultadoDoLoteDeRevisao,
+  ResultadoDoResumoDaRevisao,
   Usuario,
 } from "./cliente";
 import { ehCodigoDeErroDeBaralho, ehCodigoDeErroDeCartao } from "./validacao";
@@ -564,12 +577,14 @@ export class ClienteHttp implements ClienteDoAcervo {
         headers: { "content-type": "application/json", ...this.cabecalho() },
         body: JSON.stringify({
           id: dados.id,
+          origem: dados.origem,
           baralhoId: dados.baralhoId,
           nomeDoBaralho: dados.nomeDoBaralho,
           itens: dados.itens.map((item) => ({
             frente: item.frente,
             verso: item.verso,
-            resultado: item.resultado,
+            cartaoId: item.cartaoId,
+            avaliacao: item.avaliacao,
           })),
         }),
       });
@@ -676,6 +691,181 @@ export class ClienteHttp implements ClienteDoAcervo {
       return this.falhaDeIndisponibilidadeDeHistorico();
     } catch {
       return this.falhaDeIndisponibilidadeDeHistorico();
+    }
+  }
+
+  /**
+   * O resumo da Revisão do dia (FR-198, FR-199). Os limites do dia vão na
+   * query, codificados, e nenhuma resposta fora do contrato atravessa: vira
+   * `indisponivel` (FR-044).
+   */
+  async obterResumoDaRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoResumoDaRevisao> {
+    try {
+      const resposta = await fetch(
+        `${this.endereco}/revisao?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
+        { headers: this.cabecalho() },
+      );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const resumo = lerResumoDaRevisao(await resposta.json());
+
+        if (resumo !== null) {
+          return { ok: true, resumo };
+        }
+
+        return this.falhaDeIndisponibilidadeDeRevisao();
+      }
+
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+  }
+
+  /**
+   * O lote da Revisão do dia, já ordenado pelo servidor (FR-201, FR-203). Cada
+   * Item traz a prévia de cada Avaliação (FR-221).
+   */
+  async obterLoteDeRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoLoteDeRevisao> {
+    try {
+      const resposta = await fetch(
+        `${this.endereco}/revisao/lote?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
+        { headers: this.cabecalho() },
+      );
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const itens = lerLoteDeRevisao(await resposta.json());
+
+        if (itens !== null) {
+          return { ok: true, itens };
+        }
+
+        return this.falhaDeIndisponibilidadeDeRevisao();
+      }
+
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+  }
+
+  /**
+   * A prévia dos Cartões informados, para o estudo livre (FR-221). Os
+   * `cartaoIds` vão no corpo, como no contrato.
+   */
+  async obterPrevias(cartaoIds: string[]): Promise<ResultadoDasPrevias> {
+    try {
+      const resposta = await fetch(`${this.endereco}/previas`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({ cartaoIds }),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const previas = lerPrevias(await resposta.json());
+
+        if (previas !== null) {
+          return { ok: true, previas };
+        }
+
+        return this.falhaDeIndisponibilidadeDeRevisao();
+      }
+
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+  }
+
+  /** As Preferências do Usuário mais a lista de algoritmos (FR-212). */
+  async obterPreferencias(): Promise<ResultadoDePreferencias> {
+    try {
+      const resposta = await fetch(`${this.endereco}/preferencias`, {
+        headers: this.cabecalho(),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const preferencias = lerPreferencias(await resposta.json());
+
+        if (preferencias !== null) {
+          return { ok: true, preferencias };
+        }
+
+        return this.falhaDeIndisponibilidadeDePreferencias();
+      }
+
+      return this.falhaDeIndisponibilidadeDePreferencias();
+    } catch {
+      return this.falhaDeIndisponibilidadeDePreferencias();
+    }
+  }
+
+  /**
+   * Salva as Preferências (FR-200, FR-212). O `400 dados_invalidos` é a única
+   * recusa de domínio; qualquer outro código de 400 é resposta fora do
+   * contrato e vira `indisponivel`.
+   */
+  async salvarPreferencias(preferencias: {
+    algoritmo: string;
+    limiteDeNovosPorDia: number;
+  }): Promise<ResultadoDeSalvarPreferencias> {
+    try {
+      const resposta = await fetch(`${this.endereco}/preferencias`, {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({
+          algoritmo: preferencias.algoritmo,
+          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
+        }),
+      });
+
+      if (resposta.status === 401) {
+        return this.falhaDeNaoAutenticado();
+      }
+
+      if (resposta.status === 200) {
+        const salvas = lerPreferencias(await resposta.json());
+
+        if (salvas !== null) {
+          return { ok: true, preferencias: salvas };
+        }
+
+        return this.falhaDeIndisponibilidadeDePreferencias();
+      }
+
+      if (resposta.status === 400) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "dados_invalidos")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      return this.falhaDeIndisponibilidadeDePreferencias();
+    } catch {
+      return this.falhaDeIndisponibilidadeDePreferencias();
     }
   }
 
@@ -797,6 +987,30 @@ export class ClienteHttp implements ClienteDoAcervo {
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDeRevisao(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDePreferencias(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
     };
   }
 }
@@ -1109,12 +1323,42 @@ function lerItemRegistrado(corpo: unknown): ItemRegistrado | null {
     return null;
   }
 
-  return {
+  const item: ItemRegistrado = {
     posicao: campos.posicao,
     frente: campos.frente,
     verso: campos.verso,
     resultado: campos.resultado,
   };
+
+  // Cartão e Avaliação são opcionais: um Registro anterior à 015 não os tem, e
+  // o Item atravessa a Interface exatamente como veio (FR-196, FR-197).
+  if (campos.cartaoId !== undefined) {
+    if (campos.cartaoId !== null && typeof campos.cartaoId !== "string") {
+      return null;
+    }
+
+    item.cartaoId = campos.cartaoId;
+  }
+
+  if (campos.avaliacao !== undefined) {
+    if (campos.avaliacao !== null && !ehAvaliacao(campos.avaliacao)) {
+      return null;
+    }
+
+    item.avaliacao = campos.avaliacao;
+  }
+
+  return item;
+}
+
+/** Reconhece uma das 4 Avaliações (FR-193). */
+function ehAvaliacao(valor: unknown): valor is Avaliacao {
+  return (
+    valor === "errei" ||
+    valor === "dificil" ||
+    valor === "bom" ||
+    valor === "facil"
+  );
 }
 
 function lerRegistroResumido(corpo: unknown): RegistroResumido | null {
@@ -1126,6 +1370,7 @@ function lerRegistroResumido(corpo: unknown): RegistroResumido | null {
 
   if (
     typeof campos.id !== "string" ||
+    (campos.origem !== "baralho" && campos.origem !== "revisao") ||
     typeof campos.baralhoId !== "string" ||
     typeof campos.nomeDoBaralho !== "string" ||
     typeof campos.concluidaEm !== "string" ||
@@ -1138,6 +1383,7 @@ function lerRegistroResumido(corpo: unknown): RegistroResumido | null {
 
   return {
     id: campos.id,
+    origem: campos.origem,
     baralhoId: campos.baralhoId,
     nomeDoBaralho: campos.nomeDoBaralho,
     concluidaEm: campos.concluidaEm,
@@ -1243,4 +1489,169 @@ function lerRegistroComBaralho(
   }
 
   return { registro, baralhoExiste: campos.baralhoExiste };
+}
+
+function lerResumoDaRevisao(corpo: unknown): ResumoDaRevisao | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.vencidos !== "number" ||
+    typeof campos.novosHoje !== "number" ||
+    typeof campos.total !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    vencidos: campos.vencidos,
+    novosHoje: campos.novosHoje,
+    total: campos.total,
+  };
+}
+
+/** Reconhece a prévia: o instante ISO de cada uma das 4 Avaliações (FR-221). */
+function lerPrevia(corpo: unknown): Previa | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.errei !== "string" ||
+    typeof campos.dificil !== "string" ||
+    typeof campos.bom !== "string" ||
+    typeof campos.facil !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    errei: campos.errei,
+    dificil: campos.dificil,
+    bom: campos.bom,
+    facil: campos.facil,
+  };
+}
+
+function lerItemDoLote(corpo: unknown): ItemDoLoteDeRevisao | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+  const cartao = lerCartao(campos.cartao);
+  const previa = lerPrevia(campos.previa);
+
+  if (cartao === null || previa === null) {
+    return null;
+  }
+
+  return { cartao, previa };
+}
+
+function lerLoteDeRevisao(corpo: unknown): ItemDoLoteDeRevisao[] | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (!Array.isArray(campos.itens)) {
+    return null;
+  }
+
+  const itens: ItemDoLoteDeRevisao[] = [];
+
+  for (const item of campos.itens) {
+    const lido = lerItemDoLote(item);
+
+    if (lido === null) {
+      return null;
+    }
+
+    itens.push(lido);
+  }
+
+  return itens;
+}
+
+function lerPrevias(corpo: unknown): Record<string, Previa> | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (typeof campos.previas !== "object" || campos.previas === null) {
+    return null;
+  }
+
+  const previas: Record<string, Previa> = {};
+
+  for (const [cartaoId, valor] of Object.entries(
+    campos.previas as Record<string, unknown>,
+  )) {
+    const previa = lerPrevia(valor);
+
+    if (previa === null) {
+      return null;
+    }
+
+    previas[cartaoId] = previa;
+  }
+
+  return previas;
+}
+
+function lerOpcaoDeAlgoritmo(corpo: unknown): OpcaoDeAlgoritmo | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (typeof campos.id !== "string" || typeof campos.rotulo !== "string") {
+    return null;
+  }
+
+  return { id: campos.id, rotulo: campos.rotulo };
+}
+
+function lerPreferencias(corpo: unknown): Preferencias | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    typeof campos.algoritmo !== "string" ||
+    typeof campos.limiteDeNovosPorDia !== "number" ||
+    !Array.isArray(campos.algoritmos)
+  ) {
+    return null;
+  }
+
+  const algoritmos: OpcaoDeAlgoritmo[] = [];
+
+  for (const item of campos.algoritmos) {
+    const opcao = lerOpcaoDeAlgoritmo(item);
+
+    if (opcao === null) {
+      return null;
+    }
+
+    algoritmos.push(opcao);
+  }
+
+  return {
+    algoritmo: campos.algoritmo,
+    limiteDeNovosPorDia: campos.limiteDeNovosPorDia,
+    algoritmos,
+  };
 }

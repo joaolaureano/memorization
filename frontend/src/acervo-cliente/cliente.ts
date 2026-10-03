@@ -174,6 +174,29 @@ export const MENSAGEM_DE_CONFLITO_DE_SESSAO =
 export const MENSAGEM_DE_SESSAO_NAO_ENCONTRADA = "Sessão não encontrada.";
 
 /**
+ * Mensagem em português destinada ao usuário quando o transporte até as rotas
+ * de repetição espaçada falha (FR-046, FR-221). Mantida separada das demais
+ * para que cada operação anuncie a entidade que falhou.
+ */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO =
+  "Não foi possível acessar a revisão agora. Tente novamente.";
+
+/**
+ * Mensagem em português destinada ao usuário quando o transporte até as rotas
+ * de Preferências falha (FR-046). Mantida separada das demais para que cada
+ * operação anuncie a entidade que falhou.
+ */
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS =
+  "Não foi possível acessar as Preferências. Tente novamente.";
+
+/**
+ * Mensagem da recusa `dados_invalidos` ao salvar as Preferências (FR-200): o
+ * limite de novos ou o algoritmo informados não respeitam o contrato.
+ */
+export const MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS =
+  "As Preferências informadas não são válidas.";
+
+/**
  * Resultado de `entrar`. Sucesso traz exatamente o Usuário que Entrou — `id` e
  * `nomeDeUsuario`, nunca a Senha nem qualquer derivação dela (FR-078, FR-086).
  * A recusa é `nao_autenticado`, com a mensagem única; a falha de transporte
@@ -438,7 +461,18 @@ export type ResultadoDeCriacaoDeUsuario =
     };
 
 /**
+ * A Avaliação de um Cartão em 4 níveis (FR-193): substitui o antigo
+ * `Resultado` de dois níveis como entrada da Sessão. O `resultado`
+ * (`"acertou" | "errou"`) passa a ser **derivado** dela — `errei` vira
+ * `errou`; `dificil`, `bom` e `facil` viram `acertou` (FR-194, FR-195).
+ */
+export type Avaliacao = "errei" | "dificil" | "bom" | "facil";
+
+/**
  * O desfecho de um Item apresentado numa Sessão: acertou ou errou (FR-162).
+ *
+ * Continua sendo vocabulário de **leitura**: é o servidor quem o deriva da
+ * Avaliação, e o cliente nunca o envia (FR-194).
  */
 export type ResultadoDoItemRegistrado = "acertou" | "errou";
 
@@ -446,13 +480,19 @@ export type ResultadoDoItemRegistrado = "acertou" | "errou";
  * Um Item já registrado, na ordem em que foi apresentado (FR-162, FR-164).
  *
  * `posicao` é 0..n-1 e é derivada pelo servidor no momento do registro; o
- * cliente nunca a envia.
+ * cliente nunca a envia. `cartaoId` e `avaliacao` são opcionais: os Registros
+ * anteriores à 015 não os têm, e a interface os exibe como sempre os exibiu
+ * (FR-196, FR-197, FR-214).
  */
 export interface ItemRegistrado {
   posicao: number;
   frente: string;
   verso: string;
   resultado: ResultadoDoItemRegistrado;
+  /** Cartão de origem; ausente/nulo em Itens anteriores à 015 (FR-196). */
+  cartaoId?: string | null;
+  /** Avaliação em 4 níveis; ausente/nula em Itens anteriores à 015 (FR-196). */
+  avaliacao?: Avaliacao | null;
 }
 
 /**
@@ -463,6 +503,7 @@ export interface ItemRegistrado {
  */
 export interface RegistroResumido {
   id: string;
+  origem: "baralho" | "revisao";
   baralhoId: string;
   nomeDoBaralho: string;
   concluidaEm: string;
@@ -493,12 +534,20 @@ export interface RegistroDeSessao extends RegistroResumido {
  */
 export interface DadosDeRegistro {
   id: string;
+  /** Origem da Sessão: estudo livre por Baralho ou Revisão do dia (FR-196). */
+  origem: "baralho" | "revisao";
   baralhoId: string;
   nomeDoBaralho: string;
+  /**
+   * Cada Item carrega o Cartão de origem e a Avaliação (FR-196); o
+   * `resultado` **não** vem do cliente — é o servidor que o deriva
+   * (`errei` → `errou`; os demais → `acertou`) (FR-194).
+   */
   itens: {
     frente: string;
     verso: string;
-    resultado: ResultadoDoItemRegistrado;
+    cartaoId: string;
+    avaliacao: Avaliacao;
   }[];
 }
 
@@ -562,6 +611,110 @@ export type ResultadoDeObterRegistro =
         | "nao_encontrado"
         | typeof INDISPONIVEL
         | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * A prévia de agendamento de um Cartão: o instante ISO que o servidor
+ * devolveria para cada uma das 4 Avaliações (FR-221). A interface apenas a
+ * exibe — nunca reimplementa o algoritmo (D7).
+ */
+export type Previa = Record<Avaliacao, string>;
+
+/**
+ * O resumo do bloco de revisão do Início (FR-198, FR-199): quantos Cartões
+ * vencem hoje e quantos novos ainda cabem no limite do dia.
+ */
+export interface ResumoDaRevisao {
+  vencidos: number;
+  novosHoje: number;
+  total: number;
+}
+
+/**
+ * Um Item do lote da Revisão do dia (FR-201, FR-221): o Cartão e a prévia de
+ * cada Avaliação, para os botões anunciarem o que acontecerá.
+ */
+export interface ItemDoLoteDeRevisao {
+  cartao: Cartao;
+  previa: Previa;
+}
+
+/** Uma opção de algoritmo oferecida pela tela de Preferências (FR-212). */
+export interface OpcaoDeAlgoritmo {
+  id: string;
+  rotulo: string;
+}
+
+/**
+ * As Preferências do Usuário (FR-200, FR-212): o algoritmo escolhido, o limite
+ * de Cartões novos por dia e a lista de algoritmos disponíveis.
+ */
+export interface Preferencias {
+  algoritmo: string;
+  limiteDeNovosPorDia: number;
+  algoritmos: OpcaoDeAlgoritmo[];
+}
+
+/**
+ * Resultado de `obterResumoDaRevisao`. A leitura não tem recusa de domínio: as
+ * falhas são `indisponivel` e `nao_autenticado`, e nenhum número é entregue
+ * sem sucesso.
+ */
+export type ResultadoDoResumoDaRevisao =
+  | { ok: true; resumo: ResumoDaRevisao }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterLoteDeRevisao`. Como toda leitura, não tem recusa de
+ * domínio: as falhas são `indisponivel` e `nao_autenticado`.
+ */
+export type ResultadoDoLoteDeRevisao =
+  | { ok: true; itens: ItemDoLoteDeRevisao[] }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterPrevias`. Sem recusa de domínio: as falhas são
+ * `indisponivel` e `nao_autenticado`.
+ */
+export type ResultadoDasPrevias =
+  | { ok: true; previas: Record<string, Previa> }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `obterPreferencias`. Sem recusa de domínio: as falhas são
+ * `indisponivel` e `nao_autenticado`.
+ */
+export type ResultadoDePreferencias =
+  | { ok: true; preferencias: Preferencias }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `salvarPreferencias`. A recusa de domínio é `dados_invalidos`
+ * (limite ou algoritmo fora do contrato, FR-200); as falhas de transporte são
+ * `indisponivel` e `nao_autenticado`.
+ */
+export type ResultadoDeSalvarPreferencias =
+  | { ok: true; preferencias: Preferencias }
+  | {
+      ok: false;
+      erro: "dados_invalidos" | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
 
@@ -703,4 +856,47 @@ export interface ClienteDoAcervo {
    * outro Usuário é `nao_encontrado`.
    */
   obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
+
+  /**
+   * O resumo da Revisão do dia para o bloco de Início (FR-198, FR-199): os
+   * Cartões vencidos e quantos novos ainda cabem no limite do dia. Os limites
+   * do dia vêm de `limitesDoDia`, no fuso do navegador (FR-204, D3), e são
+   * instantes ISO-8601.
+   */
+  obterResumoDaRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoResumoDaRevisao>;
+
+  /**
+   * O lote da Revisão do dia, já ordenado — vencidos primeiro —, com a prévia
+   * de cada Cartão (FR-201, FR-203, FR-221). A Sessão da revisão usa a lista
+   * como veio, sem embaralhar (FR-201).
+   */
+  obterLoteDeRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoLoteDeRevisao>;
+
+  /**
+   * A prévia dos Cartões informados, para o estudo livre exibir o que cada
+   * Avaliação fará (FR-221). Até 200 `cartaoIds` por chamada.
+   */
+  obterPrevias(cartaoIds: string[]): Promise<ResultadoDasPrevias>;
+
+  /**
+   * As Preferências do Usuário mais a lista de algoritmos disponíveis
+   * (FR-200, FR-212).
+   */
+  obterPreferencias(): Promise<ResultadoDePreferencias>;
+
+  /**
+   * Salva as Preferências (FR-200, FR-212). Algoritmo diferente do atual
+   * dispara a reconstrução dos Agendamentos no servidor (FR-213); a resposta
+   * traz as Preferências já salvas.
+   */
+  salvarPreferencias(preferencias: {
+    algoritmo: string;
+    limiteDeNovosPorDia: number;
+  }): Promise<ResultadoDeSalvarPreferencias>;
 }

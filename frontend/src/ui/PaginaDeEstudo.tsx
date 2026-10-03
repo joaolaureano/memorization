@@ -1,7 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { BaralhoComCartoes, ClienteDoAcervo } from "../acervo-cliente/cliente";
+import type {
+  Avaliacao,
+  BaralhoComCartoes,
+  ClienteDoAcervo,
+  DadosDeRegistro,
+  Previa,
+  ResultadoDasPrevias,
+} from "../acervo-cliente/cliente";
+import { rotuloDaPrevia } from "../revisao/dia";
 import { AleatoriedadeReal } from "../sessao-de-estudo/aleatoriedade";
 import type { Aleatoriedade } from "../sessao-de-estudo/aleatoriedade";
 import {
@@ -11,7 +19,6 @@ import {
 import type {
   EstadoDaSessao,
   EstadoDaSessaoConcluida,
-  ResultadoDoItem,
 } from "../sessao-de-estudo/sessao-de-estudo";
 import { ResumoDaSessao } from "./ResumoDaSessao";
 import type { ItemDoResumo } from "./ResumoDaSessao";
@@ -47,7 +54,38 @@ import type { Protecao } from "./protecao-de-saida";
  * mesmo `id` e não duplica o Registro. Sessão interrompida nunca é registrada
  * (FR-162) e, enquanto o Registro não estiver confirmado, sair do Resumo pede
  * confirmação (FR-164).
+ *
+ * A partir da 015, cada Item é avaliado em **quatro níveis** — Errei, Difícil,
+ * Bom e Fácil —, e os quatro botões só aparecem depois da Revelação, no lugar
+ * do antigo Acertei/Errei (FR-192, FR-193, FR-194). Ao iniciar a Sessão a
+ * página pede ao cliente a prévia da próxima revisão dos Cartões
+ * (`obterPrevias`, em blocos de até 200 ids) e cada botão exibe o nível com o
+ * rótulo da prévia, no texto e no nome acessível ("Bom · 3 dias" /
+ * "Bom, próxima revisão em 3 dias", FR-221); sem prévia, o botão mostra só o
+ * nível, a falha é anunciada e o estudo segue. Os atalhos 1 a 4 escolhem as
+ * quatro Avaliações quando o Verso está revelado e o foco está na Sessão
+ * (FR-218). O Registro passa a carregar a `origem` e a Avaliação de cada Item
+ * (FR-196), e o Resumo recebe a Avaliação para exibir a contagem por nível
+ * (FR-216).
  */
+
+/** As quatro Avaliações na ordem exibida, com rótulo e atalho (FR-192, FR-218). */
+const NIVEIS_DE_AVALIACAO: readonly {
+  readonly avaliacao: Avaliacao;
+  readonly rotulo: string;
+  readonly atalho: string;
+}[] = [
+  { avaliacao: "errei", rotulo: "Errei", atalho: "1" },
+  { avaliacao: "dificil", rotulo: "Difícil", atalho: "2" },
+  { avaliacao: "bom", rotulo: "Bom", atalho: "3" },
+  { avaliacao: "facil", rotulo: "Fácil", atalho: "4" },
+];
+
+/**
+ * O máximo de Cartões por chamada de `obterPrevias` (FR-221), como no contrato
+ * do cliente (§5): acima disso, a Sessão pede as prévias em blocos.
+ */
+const TAMANHO_MAXIMO_DO_BLOCO_DE_PREVIAS = 200;
 
 interface PropriedadesDaPaginaDeEstudo {
   cliente: ClienteDoAcervo;
@@ -95,12 +133,16 @@ export function PaginaDeEstudo({
 
   const [anuncio, setAnuncio] = useState<string | null>(null);
   const [sequenciaDeAnuncio, setSequenciaDeAnuncio] = useState(0);
+  // As prévias de próxima revisão por Cartão e por Avaliação (FR-221), quando
+  // o cliente consegue obtê-las; sem elas, os botões mostram só o nível.
+  const [previas, setPrevias] = useState<Record<string, Previa>>({});
 
   const alvoDeFoco = useRef<AlvoDeFoco | null>(null);
   const frenteRef = useRef<HTMLHeadingElement>(null);
   const versoRef = useRef<HTMLHeadingElement>(null);
   const resumoRef = useRef<HTMLHeadingElement>(null);
   const quantidadeRef = useRef<HTMLInputElement>(null);
+  const conteinerDaSessao = useRef<HTMLDivElement>(null);
   const idDoRegistroDeSessao = useRef<string | null>(null);
 
   useEffect(() => {
@@ -117,6 +159,7 @@ export function PaginaDeEstudo({
     setAnuncio(null);
     setSequenciaDeAnuncio(0);
     setSituacaoDoRegistro({ estado: "ocioso" });
+    setPrevias({});
     idDoRegistroDeSessao.current = null;
     alvoDeFoco.current = null;
 
@@ -170,6 +213,57 @@ export function PaginaDeEstudo({
     }
   }, [estado]);
 
+  // Atalhos 1 a 4 = Errei, Difícil, Bom, Fácil (FR-218). Só valem durante uma
+  // Sessão em andamento, com o Verso revelado e o foco dentro da Sessão; são
+  // ignorados antes da Revelação e em campos de texto, para não roubar a
+  // digitação de quem escreve.
+  useEffect(() => {
+    function aoTeclar(evento: KeyboardEvent): void {
+      if (sessao === null || estado === null || estado.concluida) {
+        return;
+      }
+
+      if (evento.altKey || evento.ctrlKey || evento.metaKey) {
+        return;
+      }
+
+      const alvo = evento.target as HTMLElement | null;
+
+      if (alvo !== null && ehCampoDeTexto(alvo)) {
+        return;
+      }
+
+      if (
+        conteinerDaSessao.current !== null &&
+        alvo !== null &&
+        !conteinerDaSessao.current.contains(alvo)
+      ) {
+        return;
+      }
+
+      if (!estado.itemAtual.revelado) {
+        return;
+      }
+
+      const nivel = NIVEIS_DE_AVALIACAO.find(
+        (candidato) => candidato.atalho === evento.key,
+      );
+
+      if (nivel === undefined) {
+        return;
+      }
+
+      evento.preventDefault();
+      registrarAvaliacao(nivel.avaliacao);
+    }
+
+    document.addEventListener("keydown", aoTeclar);
+
+    return () => {
+      document.removeEventListener("keydown", aoTeclar);
+    };
+  }, [sessao, estado]);
+
   const emAndamento = sessao !== null && estado !== null && !estado.concluida;
   // Sessão concluída e ainda não registrada: sair perde o Registro, e por isso
   // a navegação pede confirmação até o histórico confirmar (FR-164).
@@ -220,6 +314,7 @@ export function PaginaDeEstudo({
     setQuantidade("");
     setAnuncio(null);
     setSituacaoDoRegistro({ estado: "ocioso" });
+    setPrevias({});
     idDoRegistroDeSessao.current = null;
     alvoDeFoco.current = null;
     irParaRota(`#/baralhos/${id}`);
@@ -233,6 +328,7 @@ export function PaginaDeEstudo({
     setFalhaDeInicio(null);
     setAnuncio(null);
     setSituacaoDoRegistro({ estado: "ocioso" });
+    setPrevias({});
     idDoRegistroDeSessao.current = null;
   }
 
@@ -265,6 +361,7 @@ export function PaginaDeEstudo({
 
     setSessao(novaSessao);
     setEstado(estadoInicial);
+    carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
     alvoDeFoco.current = "frente";
     // O aviso de limite é exibido na própria tela (FR-149); o anúncio é
     // distinto para não duplicar o mesmo texto na página.
@@ -291,12 +388,17 @@ export function PaginaDeEstudo({
     anunciar("Verso revelado.");
   }
 
-  function registrarResultado(resultado: ResultadoDoItem): void {
+  /**
+   * Registra a Avaliação do Item corrente (FR-193). Só é chamada com o Verso
+   * revelado — os botões e os atalhos nascem depois da Revelação —, e o
+   * `resultado` de duas vias é derivado pela própria Sessão (FR-194).
+   */
+  function registrarAvaliacao(avaliacao: Avaliacao): void {
     if (sessao === null) {
       return;
     }
 
-    const resposta = sessao.registrarResultado(resultado);
+    const resposta = sessao.registrarAvaliacao(avaliacao);
 
     if (!resposta.ok) {
       return;
@@ -308,15 +410,33 @@ export function PaginaDeEstudo({
     if (estadoAtualizado.concluida) {
       alvoDeFoco.current = "resumo";
       anunciar("Sessão concluída.");
-      // Os Itens do Resumo saem do estado da Sessão concluída, na ordem em que
-      // foram apresentados (FR-176): é essa a ordem que a tela exibe e que o
-      // Registro transporta.
-      registrarNoHistorico(itensDoResumo(estadoAtualizado));
+      // Os Itens do Registro saem do estado da Sessão concluída, na ordem em
+      // que foram apresentados (FR-176): é essa a ordem que a tela exibe e que
+      // o Registro transporta, com Cartão e Avaliação (FR-196).
+      registrarNoHistorico(itensDoRegistro(estadoAtualizado));
       return;
     }
 
     alvoDeFoco.current = "frente";
-    anunciar(`Resultado registrado: ${resultado}.`);
+    anunciar(`Avaliação registrada: ${rotuloDaAvaliacao(avaliacao)}.`);
+  }
+
+  /**
+   * Busca as prévias dos Cartões da Sessão (FR-221) e as guarda por Cartão.
+   * Uma falha não bloqueia: a mensagem é anunciada e os botões aparecem só com
+   * o nível, de modo que o estudo continua.
+   */
+  function carregarPrevias(cartaoIds: readonly string[]): void {
+    setPrevias({});
+
+    void carregarTodasAsPrevias(cliente, cartaoIds).then((resultado) => {
+      if (resultado.ok) {
+        setPrevias(resultado.previas);
+        return;
+      }
+
+      anunciar(resultado.mensagem);
+    });
   }
 
   /**
@@ -325,7 +445,7 @@ export function PaginaDeEstudo({
    * **mesmo** `id`, e é isso que impede o Registro duplicado. Só é chamada
    * quando a Sessão termina — Sessão interrompida nunca registra (FR-162).
    */
-  function registrarNoHistorico(itens: readonly ItemDoResumo[]): void {
+  function registrarNoHistorico(itens: DadosDeRegistro["itens"]): void {
     if (baralho === null) {
       return;
     }
@@ -338,9 +458,10 @@ export function PaginaDeEstudo({
     void cliente
       .registrarSessao({
         id: idDoRegistro,
+        origem: "baralho",
         baralhoId: id,
         nomeDoBaralho: baralho.nome,
-        itens: [...itens],
+        itens,
       })
       .then((resultado) => {
         setSituacaoDoRegistro(
@@ -356,7 +477,7 @@ export function PaginaDeEstudo({
       return;
     }
 
-    registrarNoHistorico(itensDoResumo(estado));
+    registrarNoHistorico(itensDoRegistro(estado));
   }
 
   if (carregando) {
@@ -515,7 +636,7 @@ export function PaginaDeEstudo({
           </p>
         )}
 
-        <ResumoDaSessao itens={itensDoResumo(estado)}>
+        <ResumoDaSessao itens={itensDoResumo(estado)} origem="baralho">
           {situacaoDoRegistro.estado === "registrando" && (
             <p
               role="status"
@@ -584,7 +705,7 @@ export function PaginaDeEstudo({
   }
 
   return (
-    <div className="pilha">
+    <div className="pilha" ref={conteinerDaSessao}>
       <div className="acoes">
         <button
           className="botao botao--secundario"
@@ -666,20 +787,26 @@ export function PaginaDeEstudo({
             </h2>
             <p className="conteudo-do-cartao">{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
-              <button
-                className="botao botao--sucesso"
-                type="button"
-                onClick={() => registrarResultado("acertou")}
-              >
-                <span aria-hidden="true">✓</span> Acertei
-              </button>
-              <button
-                className="botao botao--erro"
-                type="button"
-                onClick={() => registrarResultado("errou")}
-              >
-                <span aria-hidden="true">✕</span> Errei
-              </button>
+              {NIVEIS_DE_AVALIACAO.map(({ avaliacao, rotulo, atalho }) => {
+                const previa = previaDaAvaliacao(
+                  previas,
+                  estado.itemAtual.cartaoId,
+                  avaliacao,
+                );
+
+                return (
+                  <button
+                    key={avaliacao}
+                    className="botao botao--secundario"
+                    type="button"
+                    aria-label={nomeAcessivelDaAvaliacao(rotulo, previa)}
+                    aria-keyshortcuts={atalho}
+                    onClick={() => registrarAvaliacao(avaliacao)}
+                  >
+                    {previa === null ? rotulo : `${rotulo} · ${previa}`}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
@@ -704,7 +831,8 @@ function descricaoDeAndamento(posicao: number, total: number): string {
  * Ao concluir, todo Item já foi revelado e respondido — é o que a Sessão exige
  * para chegar ao fim —, então o estreitamento pelo discriminante `revelado`
  * garante Verso e Resultado não nulos, sem asserções sobre valores que possam
- * ser nulos. A ordem é a do próprio estado da Sessão, que é a ordem exibida.
+ * ser nulos. A ordem é a do próprio estado da Sessão, que é a ordem exibida, e
+ * a Avaliação acompanha cada Item para a contagem por nível (FR-196, FR-216).
  */
 function itensDoResumo(estado: EstadoDaSessaoConcluida): ItemDoResumo[] {
   const itens: ItemDoResumo[] = [];
@@ -715,9 +843,122 @@ function itensDoResumo(estado: EstadoDaSessaoConcluida): ItemDoResumo[] {
         frente: item.frente,
         verso: item.verso,
         resultado: item.resultado,
+        avaliacao: item.avaliacao,
       });
     }
   }
 
   return itens;
+}
+
+/**
+ * Os Itens do Registro de sessão, na ordem apresentada, com o Cartão de origem
+ * e a Avaliação de cada um (FR-196). O `resultado` não é enviado: quem o
+ * deriva é o servidor (FR-194).
+ */
+function itensDoRegistro(
+  estado: EstadoDaSessaoConcluida,
+): DadosDeRegistro["itens"] {
+  const itens: DadosDeRegistro["itens"] = [];
+
+  for (const item of estado.itens) {
+    if (item.revelado && item.avaliacao !== null) {
+      itens.push({
+        frente: item.frente,
+        verso: item.verso,
+        cartaoId: item.cartaoId,
+        avaliacao: item.avaliacao,
+      });
+    }
+  }
+
+  return itens;
+}
+
+/** O rótulo em português de uma Avaliação, para anúncios (FR-046). */
+function rotuloDaAvaliacao(avaliacao: Avaliacao): string {
+  const nivel = NIVEIS_DE_AVALIACAO.find(
+    (candidato) => candidato.avaliacao === avaliacao,
+  );
+
+  return nivel?.rotulo ?? avaliacao;
+}
+
+/**
+ * O rótulo humano da próxima revisão de uma Avaliação para um Cartão
+ * (FR-221), ou `null` quando a prévia não foi obtida — caso em que o botão
+ * mostra só o nível.
+ */
+function previaDaAvaliacao(
+  previas: Record<string, Previa>,
+  cartaoId: string,
+  avaliacao: Avaliacao,
+): string | null {
+  const iso = previas[cartaoId]?.[avaliacao];
+
+  if (iso === undefined) {
+    return null;
+  }
+
+  return rotuloDaPrevia(new Date(), iso);
+}
+
+/**
+ * O nome acessível de um botão de Avaliação (FR-221). Com prévia, ela entra no
+ * nome — "Bom, próxima revisão em 3 dias" —, com o "em" apenas para a contagem
+ * de dias, já que "hoje" e "amanhã" dispensam a preposição.
+ */
+function nomeAcessivelDaAvaliacao(rotulo: string, previa: string | null): string {
+  if (previa === null) {
+    return rotulo;
+  }
+
+  const distancia =
+    previa === "hoje" || previa === "amanhã" ? previa : `em ${previa}`;
+
+  return `${rotulo}, próxima revisão ${distancia}`;
+}
+
+/** Um campo de texto com foco engole os atalhos 1 a 4 (FR-218). */
+function ehCampoDeTexto(elemento: HTMLElement): boolean {
+  const tag = elemento.tagName;
+
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    elemento.isContentEditable
+  );
+}
+
+/**
+ * Reúne as prévias de todos os Cartões da Sessão, em blocos de até 200 ids
+ * (FR-221, contrato §5). Qualquer bloco que falhe interrompe a coleta e a
+ * falha é propagada — a página a anuncia sem impedir o estudo.
+ */
+async function carregarTodasAsPrevias(
+  cliente: ClienteDoAcervo,
+  cartaoIds: readonly string[],
+): Promise<ResultadoDasPrevias> {
+  const previas: Record<string, Previa> = {};
+
+  for (
+    let inicio = 0;
+    inicio < cartaoIds.length;
+    inicio += TAMANHO_MAXIMO_DO_BLOCO_DE_PREVIAS
+  ) {
+    const bloco = cartaoIds.slice(
+      inicio,
+      inicio + TAMANHO_MAXIMO_DO_BLOCO_DE_PREVIAS,
+    );
+    const resultado = await cliente.obterPrevias(bloco);
+
+    if (!resultado.ok) {
+      return resultado;
+    }
+
+    Object.assign(previas, resultado.previas);
+  }
+
+  return { ok: true, previas };
 }

@@ -41,7 +41,9 @@ export type Rota =
   | { nome: "editar-baralho"; id: string }
   | { nome: "adicionar-cartoes"; id: string }
   | { nome: "estudo"; id: string }
-  | { nome: "cadastro" };
+  | { nome: "cadastro" }
+  | { nome: "revisao" }
+  | { nome: "preferencias" };
 
 /**
  * Interpreta o hash corrente como uma `Rota`, já sob a guarda de Credencial
@@ -115,6 +117,16 @@ function interpretarCaminho(hash: string): Rota {
         // `#/usuarios`, porque o caminho nomeia a ação que a interface oferece.
         if (primeiro === "criar-conta") {
           return { nome: "cadastro" };
+        }
+
+        // A Revisão do dia (FR-198) e as Preferências (FR-212) são destinos de
+        // primeiro nível, como o Início, os Baralhos e os Cartões.
+        if (primeiro === "revisao") {
+          return { nome: "revisao" };
+        }
+
+        if (primeiro === "preferencias") {
+          return { nome: "preferencias" };
         }
 
         return { nome: "inicio" };
@@ -199,6 +211,12 @@ export function hashDaRota(rota: Rota): string {
     case "cadastro":
       return "#/criar-conta";
 
+    case "revisao":
+      return "#/revisao";
+
+    case "preferencias":
+      return "#/preferencias";
+
     case "cartoes":
       return "#/cartoes";
 
@@ -229,18 +247,20 @@ export function hashDaRota(rota: Rota): string {
 }
 
 /**
- * Qual destino da moldura a rota ativa: Início, Cartões, Baralhos, ou nenhum
- * quando não há moldura de navegação (Entrar e Criar conta). O Registro de uma
- * Sessão pertence ao Início, que é quem o apresenta (FR-168). Concentrar essa
- * decisão aqui evita que o cabeçalho compare strings soltas para saber o que
- * sublinhar (FR-139, FR-168).
+ * Qual destino da moldura a rota ativa: Início, Cartões, Baralhos,
+ * Preferências, ou nenhum quando não há moldura de navegação (Entrar e Criar
+ * conta). O Registro de uma Sessão e a Revisão do dia pertencem ao Início, que
+ * é quem os apresenta (FR-168, FR-198). Concentrar essa decisão aqui evita que
+ * o cabeçalho compare strings soltas para saber o que sublinhar (FR-139,
+ * FR-168, FR-212).
  */
 export function destinoAtivo(
   rota: Rota,
-): "inicio" | "cartoes" | "baralhos" | null {
+): "inicio" | "cartoes" | "baralhos" | "preferencias" | null {
   switch (rota.nome) {
     case "inicio":
     case "registro":
+    case "revisao":
       return "inicio";
 
     case "cartoes":
@@ -255,6 +275,9 @@ export function destinoAtivo(
     case "adicionar-cartoes":
     case "estudo":
       return "baralhos";
+
+    case "preferencias":
+      return "preferencias";
 
     case "entrar":
     case "cadastro":

@@ -12,6 +12,7 @@ import {
   NAO_AUTENTICADO,
 } from "../../src/acervo-cliente/cliente";
 import type {
+  Avaliacao,
   ClienteDoAcervo,
   Credencial,
   DadosDeRegistro,
@@ -64,20 +65,29 @@ function respostaDeTeste(status: number, corpo: unknown): RespostaDeTeste {
   return { status, json: async () => corpo };
 }
 
+/** O Cartão de teste que os Itens enviados referenciam (FR-196). */
+const CARTAO_DE_TESTE = "cartao-1";
+
+/**
+ * Um Item do corpo de `registrarSessao`: os dados do Cartão de origem e a
+ * Avaliação (FR-196). O `resultado` de dois níveis **não** vem do cliente — é
+ * o servidor que o deriva da Avaliação (FR-194).
+ */
 function itemDe(
   frente: string,
   verso: string,
-  resultado: "acertou" | "errou",
-): { frente: string; verso: string; resultado: "acertou" | "errou" } {
-  return { frente, verso, resultado };
+  avaliacao: Avaliacao,
+): { frente: string; verso: string; cartaoId: string; avaliacao: Avaliacao } {
+  return { frente, verso, cartaoId: CARTAO_DE_TESTE, avaliacao };
 }
 
 function dadosValidos(): DadosDeRegistro {
   return {
     id: randomUUID(),
+    origem: "baralho",
     baralhoId: "b1",
     nomeDoBaralho: "Inglês",
-    itens: [itemDe("To walk", "Caminhar", "acertou")],
+    itens: [itemDe("To walk", "Caminhar", "bom")],
   };
 }
 
@@ -88,6 +98,7 @@ function desdeAmplo(): string {
 function registroCompleto(): RegistroDeSessao {
   return {
     id: randomUUID(),
+    origem: "baralho",
     baralhoId: "b1",
     nomeDoBaralho: "Inglês",
     concluidaEm: "2026-10-02T12:00:00.000Z",
@@ -104,6 +115,7 @@ function registroCompleto(): RegistroDeSessao {
 function resumo(parcial: Partial<RegistroResumido> = {}): RegistroResumido {
   return {
     id: randomUUID(),
+    origem: "baralho",
     baralhoId: "b1",
     nomeDoBaralho: "Inglês",
     concluidaEm: "2026-10-02T12:00:00.000Z",
@@ -147,11 +159,12 @@ describe("ClienteHttp — registrarSessao", () => {
 
     const dados: DadosDeRegistro = {
       id: registro.id,
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
       itens: [
-        itemDe("To walk", "Caminhar", "acertou"),
-        itemDe("To run", "Correr", "errou"),
+        itemDe("To walk", "Caminhar", "bom"),
+        itemDe("To run", "Correr", "errei"),
       ],
     };
 
@@ -164,11 +177,22 @@ describe("ClienteHttp — registrarSessao", () => {
     expect(chamadas[0]?.opcoes?.method).toBe("POST");
     expect(JSON.parse(String(chamadas[0]?.opcoes?.body))).toEqual({
       id: registro.id,
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
       itens: [
-        { frente: "To walk", verso: "Caminhar", resultado: "acertou" },
-        { frente: "To run", verso: "Correr", resultado: "errou" },
+        {
+          frente: "To walk",
+          verso: "Caminhar",
+          cartaoId: CARTAO_DE_TESTE,
+          avaliacao: "bom",
+        },
+        {
+          frente: "To run",
+          verso: "Correr",
+          cartaoId: CARTAO_DE_TESTE,
+          avaliacao: "errei",
+        },
       ],
     });
   });
@@ -501,12 +525,13 @@ describe("ClienteEmMemoria — histórico", () => {
 
     const resultado = await cliente.registrarSessao({
       id,
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
       itens: [
-        itemDe("To walk", "Caminhar", "acertou"),
-        itemDe("To run", "Correr", "errou"),
-        itemDe("To sleep", "Dormir", "acertou"),
+        itemDe("To walk", "Caminhar", "bom"),
+        itemDe("To run", "Correr", "errei"),
+        itemDe("To sleep", "Dormir", "bom"),
       ],
     });
 
@@ -524,9 +549,30 @@ describe("ClienteEmMemoria — histórico", () => {
       erros: 1,
     });
     expect(resultado.registro.itens).toEqual([
-      { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
-      { posicao: 1, frente: "To run", verso: "Correr", resultado: "errou" },
-      { posicao: 2, frente: "To sleep", verso: "Dormir", resultado: "acertou" },
+      {
+        posicao: 0,
+        frente: "To walk",
+        verso: "Caminhar",
+        resultado: "acertou",
+        cartaoId: CARTAO_DE_TESTE,
+        avaliacao: "bom",
+      },
+      {
+        posicao: 1,
+        frente: "To run",
+        verso: "Correr",
+        resultado: "errou",
+        cartaoId: CARTAO_DE_TESTE,
+        avaliacao: "errei",
+      },
+      {
+        posicao: 2,
+        frente: "To sleep",
+        verso: "Dormir",
+        resultado: "acertou",
+        cartaoId: CARTAO_DE_TESTE,
+        avaliacao: "bom",
+      },
     ]);
     expect(new Date(resultado.registro.concluidaEm).toISOString()).toBe(
       resultado.registro.concluidaEm,
@@ -537,15 +583,16 @@ describe("ClienteEmMemoria — histórico", () => {
     const cliente = clienteEmMemoria();
     const dados: DadosDeRegistro = {
       id: randomUUID(),
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
-      itens: [itemDe("To walk", "Caminhar", "acertou")],
+      itens: [itemDe("To walk", "Caminhar", "bom")],
     };
 
     const primeira = await cliente.registrarSessao(dados);
     const segunda = await cliente.registrarSessao({
       ...dados,
-      itens: [itemDe("To run", "Correr", "errou")],
+      itens: [itemDe("To run", "Correr", "errei")],
     });
 
     expect(segunda).toEqual(primeira);
@@ -569,9 +616,10 @@ describe("ClienteEmMemoria — histórico", () => {
     const outro = cliente.comoUsuario(outraCredencial);
     const dados: DadosDeRegistro = {
       id: randomUUID(),
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
-      itens: [itemDe("To walk", "Caminhar", "acertou")],
+      itens: [itemDe("To walk", "Caminhar", "bom")],
     };
 
     await cliente.registrarSessao(dados);
@@ -588,12 +636,14 @@ describe("ClienteEmMemoria — histórico", () => {
 
     const idNaoEhUuid: DadosDeRegistro = {
       id: "sessao-1",
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
-      itens: [itemDe("To walk", "Caminhar", "acertou")],
+      itens: [itemDe("To walk", "Caminhar", "bom")],
     };
     const semItens: DadosDeRegistro = {
       id: randomUUID(),
+      origem: "baralho",
       baralhoId: "b1",
       nomeDoBaralho: "Inglês",
       itens: [],
@@ -648,9 +698,10 @@ describe("ClienteEmMemoria — histórico", () => {
       ids.push(id);
       await cliente.registrarSessao({
         id,
+        origem: "baralho",
         baralhoId: "b1",
         nomeDoBaralho: "Inglês",
-        itens: [itemDe("To walk", "Caminhar", "acertou")],
+        itens: [itemDe("To walk", "Caminhar", "bom")],
       });
     }
 
@@ -676,9 +727,10 @@ describe("ClienteEmMemoria — histórico", () => {
 
     await cliente.registrarSessao({
       id,
+      origem: "baralho",
       baralhoId: baralho.baralho.id,
       nomeDoBaralho: "Inglês",
-      itens: [itemDe("To walk", "Caminhar", "acertou")],
+      itens: [itemDe("To walk", "Caminhar", "bom")],
     });
 
     const antes = await cliente.obterRegistroDeSessao(id);

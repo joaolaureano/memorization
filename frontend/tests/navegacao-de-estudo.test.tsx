@@ -1,6 +1,12 @@
 import { act } from "react";
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Aplicacao } from "../src/ui/Aplicacao";
@@ -266,5 +272,105 @@ describe("Aplicacao — rota de estudo", () => {
 
     const dialogo = await screen.findByRole("dialog");
     expect(dialogo).toHaveTextContent("Descartar a configuração?");
+  });
+});
+
+/**
+ * Rotas próprias das telas novas da `015` na casca (T1522, §7): a Revisão do
+ * dia (`#/revisao`) e as Preferências (`#/preferencias`) são reconhecidas por
+ * `interpretarRota` e renderizadas por `TelaDaRota`, sob a mesma Moldura e o
+ * mesmo cliente com guarda de Credencial das demais páginas. O lançamento da
+ * Revisão se dá pelo botão "Revisar" do Início (FR-198), que leva a `#/revisao`.
+ */
+describe("Aplicacao — Revisão do dia e Preferências", () => {
+  /** Entra na casca pela tela "Entrar", como as demais provas de navegação. */
+  function entrar(): void {
+    fireEvent.change(screen.getByLabelText("Nome de usuário"), {
+      target: { value: CREDENCIAL_DE_PROVA.nomeDeUsuario },
+    });
+    fireEvent.change(screen.getByLabelText("Senha"), {
+      target: { value: CREDENCIAL_DE_PROVA.senha },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+  }
+
+  it("apresenta a Revisão do dia em #/revisao e marca Início como corrente (FR-198, §7)", async () => {
+    const cliente = clienteDeProva();
+
+    navegarPara("#/revisao");
+    render(
+      <Aplicacao
+        criarCliente={(credencial) => cliente.comoUsuario(credencial)}
+      />,
+    );
+
+    entrar();
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Revisão do dia",
+      }),
+    ).toBeInTheDocument();
+    // A Revisão do dia pertence ao Início (`destinoAtivo`, §7).
+    expect(screen.getByRole("link", { name: "Início" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("apresenta as Preferências em #/preferencias e marca Preferências como corrente (FR-212, §7)", async () => {
+    const cliente = clienteDeProva();
+
+    navegarPara("#/preferencias");
+    render(
+      <Aplicacao
+        criarCliente={(credencial) => cliente.comoUsuario(credencial)}
+      />,
+    );
+
+    entrar();
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Preferências",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Preferências" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("o botão Revisar do Início leva a #/revisao (FR-198, FR-202)", async () => {
+    const cliente = clienteDeProva();
+    await cliente.criarCartao({ frente: "To walk", verso: "Caminhar" });
+
+    navegarPara("#/inicio");
+    render(
+      <Aplicacao
+        criarCliente={(credencial) => cliente.comoUsuario(credencial)}
+      />,
+    );
+
+    entrar();
+
+    fireEvent.click(await screen.findByRole("link", { name: "Revisar" }));
+
+    // A PaginaDaRevisao troca de <h1> entre os estados (carregando → Sessão),
+    // e o elemento achado por `findByRole` sai do documento antes do expect;
+    // `waitFor` espera o estado estável (FR-202).
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", {
+          level: 1,
+          name: "Revisão do dia",
+        }),
+      ).toBeInTheDocument(),
+    );
+    // Com 1 Cartão novo, a Sessão fica pronta e o botão de Revelar aparece,
+    // confirmando o estado estável antes de conferir a rota.
+    await screen.findByRole("button", { name: "Revelar verso" });
+    expect(window.location.hash).toBe("#/revisao");
   });
 });

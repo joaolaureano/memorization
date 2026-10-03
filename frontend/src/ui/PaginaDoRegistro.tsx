@@ -19,6 +19,13 @@ import { ResumoDaSessao } from "./ResumoDaSessao";
  * existe, em vez de um link quebrado a tela traz o selo "Baralho excluído",
  * que explica a ausência sem esconder o que foi estudado.
  *
+ * A Revisão do dia não pertence a Baralho algum (FR-215): quando a `origem` é
+ * "revisao", a tela mostra "Revisão do dia" no lugar do nome do Baralho e não
+ * traz o selo nem o link, porque a ausência de Baralho é própria da Revisão —
+ * anunciá-la como um Baralho apagado seria mentir sobre o Registro. Os
+ * Registros de estudo livre e os anteriores à 015 seguem exatamente como antes
+ * (FR-178, FR-197, FR-214).
+ *
  * Um Registro inexistente — ou de outro Usuário, que o isolamento por
  * Credencial não devolve (FR-092) — não se apresenta como tela vazia: diz que
  * não o encontrou e oferece a volta para o Início (FR-179). A falha de
@@ -103,7 +110,7 @@ export function PaginaDoRegistro({
           <div className="cabecalho-da-pagina">
             <div>
               <p className="sobretitulo">Sessão registrada</p>
-              <h1>{registro.registro.nomeDoBaralho}</h1>
+              <h1>{tituloDaSessao(registro.registro)}</h1>
             </div>
           </div>
 
@@ -111,21 +118,40 @@ export function PaginaDoRegistro({
             {instanteLocal(registro.registro.concluidaEm)}
           </p>
 
-          <p>
-            {registro.baralhoExiste ? (
-              <a href={`#/baralhos/${registro.registro.baralhoId}`}>
-                Ver baralho
-              </a>
-            ) : (
-              <span className="selo">Baralho excluído</span>
-            )}
-          </p>
+          {registro.registro.origem === "baralho" ? (
+            <p>
+              {registro.baralhoExiste ? (
+                <a href={`#/baralhos/${registro.registro.baralhoId}`}>
+                  Ver baralho
+                </a>
+              ) : (
+                <span className="selo">Baralho excluído</span>
+              )}
+            </p>
+          ) : null}
 
-          <ResumoDaSessao itens={registro.registro.itens} />
+          <ResumoDaSessao
+            itens={registro.registro.itens}
+            origem={registro.registro.origem}
+          />
         </>
       ) : null}
     </div>
   );
+}
+
+/** O nome próprio da Revisão do dia, exibido no lugar do Baralho (FR-215). */
+const TITULO_DA_REVISAO = "Revisão do dia";
+
+/**
+ * O título do Registro: o nome do Baralho no estudo livre ou o nome próprio da
+ * Revisão do dia (FR-215). Registros anteriores à 015 são de estudo livre e
+ * seguem trazendo o nome do Baralho (FR-197).
+ */
+function tituloDaSessao(registro: RegistroDeSessao): string {
+  return registro.origem === "revisao"
+    ? TITULO_DA_REVISAO
+    : registro.nomeDoBaralho;
 }
 
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-177). */

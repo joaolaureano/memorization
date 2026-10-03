@@ -1,4 +1,4 @@
-import type { Cartao } from "../acervo-cliente/cliente";
+import type { Avaliacao, Cartao } from "../acervo-cliente/cliente";
 import { AleatoriedadeReal } from "./aleatoriedade";
 import type { Aleatoriedade } from "./aleatoriedade";
 
@@ -16,10 +16,36 @@ import type { Aleatoriedade } from "./aleatoriedade";
  * `ItemDeEstudo` já no estado correto e apenas reage a `ok`.
  */
 
-/** Valores aceitos para o Resultado do Item (FR-035, FR-036). */
+/**
+ * As 4 Avaliações aceitas como entrada de um Item revelado (FR-192, FR-193).
+ *
+ * Substituem o antigo Resultado de dois níveis: a pessoa informa como se saiu
+ * e o Module deriva o `ResultadoDoItem` correspondente (FR-194).
+ */
+export const AVALIACOES = ["errei", "dificil", "bom", "facil"] as const;
+
+/** Distingue uma Avaliação de qualquer outro valor em tempo de execução. */
+export function ehAvaliacao(valor: unknown): valor is Avaliacao {
+  return (
+    typeof valor === "string" &&
+    AVALIACOES.some((avaliacao) => avaliacao === valor)
+  );
+}
+
+/**
+ * O desfecho derivado de um Item (FR-194, FR-195): vocabulário de leitura.
+ *
+ * `errei` vira `errou`; `dificil`, `bom` e `facil` viram `acertou`. O cliente
+ * nunca o envia — quem o deriva da Avaliação é o servidor.
+ */
 export const RESULTADOS_DO_ITEM = ["acertou", "errou"] as const;
 
 export type ResultadoDoItem = (typeof RESULTADOS_DO_ITEM)[number];
+
+/** Deriva o Resultado de duas vias a partir da Avaliação (FR-194). */
+export function derivarResultado(avaliacao: Avaliacao): ResultadoDoItem {
+  return avaliacao === "errei" ? "errou" : "acertou";
+}
 
 /**
  * Distingue um Resultado do Item de qualquer outro valor em tempo de execução.
@@ -38,7 +64,8 @@ export function ehResultadoDoItem(valor: unknown): valor is ResultadoDoItem {
 export const CODIGOS_DE_ERRO_DE_SESSAO = [
   "baralho_inelegivel",
   "quantidade_invalida",
-  "resultado_invalido",
+  "revisao_vazia",
+  "avaliacao_invalida",
   "revelacao_ausente",
   "sessao_concluida",
 ] as const;
@@ -53,11 +80,14 @@ export const MENSAGEM_DE_BARALHO_INELEGIVEL =
 export const MENSAGEM_DE_QUANTIDADE_INVALIDA =
   "Informe uma quantidade inteira de Cartões, ao menos igual a 1.";
 
-export const MENSAGEM_DE_RESULTADO_INVALIDO =
-  "O resultado do item deve ser acertou ou errou.";
+export const MENSAGEM_DE_REVISAO_VAZIA =
+  "Não há Cartões para revisar hoje.";
+
+export const MENSAGEM_DE_AVALIACAO_INVALIDA =
+  "A avaliação do item deve ser errei, dificil, bom ou facil.";
 
 export const MENSAGEM_DE_REVELACAO_AUSENTE =
-  "Revele o Verso antes de registrar o resultado.";
+  "Revele o Verso antes de registrar a avaliação.";
 
 export const MENSAGEM_DE_SESSAO_CONCLUIDA =
   "A Sessão já foi concluída.";
@@ -68,15 +98,19 @@ export interface ItemDeEstudoOculto {
   readonly frente: string;
   readonly revelado: false;
   readonly verso: null;
+  readonly avaliacao: null;
   readonly resultado: null;
 }
 
-/** Item de estudo após a Revelação (FR-033). */
+/** Item de estudo após a Revelação (FR-033, FR-193). */
 export interface ItemDeEstudoRevelado {
   readonly cartaoId: string;
   readonly frente: string;
   readonly revelado: true;
   readonly verso: string;
+  /** A Avaliação informada; ausente até o registro (FR-193). */
+  readonly avaliacao: Avaliacao | null;
+  /** Derivado da Avaliação; ausente até o registro (FR-194). */
   readonly resultado: ResultadoDoItem | null;
 }
 
@@ -104,7 +138,12 @@ export function percentualDeAcertos(resumo: ResumoDaSessao): number {
   return Math.round((resumo.acertos / resumo.estudados) * 100);
 }
 
-/** Base do estado observável da Sessão. */
+/**
+ * Base do estado observável da Sessão.
+ *
+ * `baralhoId` é o Baralho estudado; na Revisão do dia não há Baralho de
+ * origem e o valor é vazio, como no Registro da revisão (D5).
+ */
 interface EstadoBaseDaSessao {
   readonly baralhoId: string;
   readonly total: number;
@@ -136,16 +175,24 @@ export type ResultadoDeInicioDeSessao =
       mensagem: string;
     };
 
+/**
+ * Resultado de `iniciarDaRevisao` (FR-201): a lista sem Cartões é recusada
+ * com o código próprio `revisao_vazia`.
+ */
+export type ResultadoDeInicioDaRevisao =
+  | { ok: true; sessao: SessaoDeEstudo }
+  | { ok: false; erro: "revisao_vazia"; mensagem: string };
+
 export type ResultadoDeRevelacao =
   | { ok: true; item: ItemDeEstudoRevelado }
   | { ok: false; erro: "sessao_concluida"; mensagem: string };
 
-export type ResultadoDeRegistroDeResultado =
+export type ResultadoDeRegistroDeAvaliacao =
   | { ok: true; item: ItemDeEstudoOculto }
   | { ok: true; resumo: ResumoDaSessao }
   | {
       ok: false;
-      erro: "resultado_invalido" | "revelacao_ausente" | "sessao_concluida";
+      erro: "avaliacao_invalida" | "revelacao_ausente" | "sessao_concluida";
       mensagem: string;
     };
 
@@ -154,6 +201,7 @@ interface ItemInterno {
   frente: string;
   verso: string;
   revelado: boolean;
+  avaliacao: Avaliacao | null;
   resultado: ResultadoDoItem | null;
 }
 
@@ -224,6 +272,7 @@ export class SessaoDeEstudo {
       frente: cartao.frente,
       verso: cartao.verso,
       revelado: false,
+      avaliacao: null,
       resultado: null,
     }));
 
@@ -235,6 +284,43 @@ export class SessaoDeEstudo {
     return {
       ok: true,
       sessao: new SessaoDeEstudo(baralhoId, itens, avisoDeLimite),
+    };
+  }
+
+  /**
+   * Inicia uma Sessão de Revisão do dia (FR-201).
+   *
+   * A lista de Cartões vem **já ordenada** pelo servidor — vencidos primeiro —
+   * e é usada como veio, sem embaralhar; a quantidade é o tamanho da lista.
+   * Uma lista sem Cartões é recusada com o código próprio `revisao_vazia`.
+   * Sem Baralho de origem, o `baralhoId` da Sessão é vazio, como no Registro
+   * da revisão (D5).
+   */
+  static iniciarDaRevisao(
+    cartoes: readonly Cartao[],
+  ): ResultadoDeInicioDaRevisao {
+    const cartoesUnicos = deduplicarCartoes(cartoes);
+
+    if (cartoesUnicos.length === 0) {
+      return {
+        ok: false,
+        erro: "revisao_vazia",
+        mensagem: MENSAGEM_DE_REVISAO_VAZIA,
+      };
+    }
+
+    const itens: ItemInterno[] = cartoesUnicos.map((cartao) => ({
+      cartaoId: cartao.id,
+      frente: cartao.frente,
+      verso: cartao.verso,
+      revelado: false,
+      avaliacao: null,
+      resultado: null,
+    }));
+
+    return {
+      ok: true,
+      sessao: new SessaoDeEstudo("", itens, null),
     };
   }
 
@@ -260,16 +346,16 @@ export class SessaoDeEstudo {
   }
 
   /**
-   * Registra o Resultado do Item corrente (FR-035, FR-036).
+   * Registra a Avaliação do Item corrente (FR-035, FR-150, FR-193).
    *
-   * Recusa antes da Revelação (`revelacao_ausente`) e depois da conclusão
-   * (`sessao_concluida`). Quando aceito, o Resultado é definitivo: a Sessão
-   * avança para o próximo Item (devolvido com o Verso oculto) ou, se este era
-   * o último, devolve o Resumo.
+   * Recusa uma Avaliação fora dos 4 níveis (`avaliacao_invalida`), antes da
+   * Revelação (`revelacao_ausente`) e depois da conclusão
+   * (`sessao_concluida`). Quando aceita, o Resultado é **derivado** dela
+   * (FR-194) e torna-se definitivo: a Sessão avança para o próximo Item
+   * (devolvido com o Verso oculto) ou, se este era o último, devolve o
+   * Resumo.
    */
-  registrarResultado(
-    resultado: ResultadoDoItem,
-  ): ResultadoDeRegistroDeResultado {
+  registrarAvaliacao(avaliacao: Avaliacao): ResultadoDeRegistroDeAvaliacao {
     if (this.concluida) {
       return {
         ok: false,
@@ -278,11 +364,11 @@ export class SessaoDeEstudo {
       };
     }
 
-    if (!ehResultadoDoItem(resultado)) {
+    if (!ehAvaliacao(avaliacao)) {
       return {
         ok: false,
-        erro: "resultado_invalido",
-        mensagem: MENSAGEM_DE_RESULTADO_INVALIDO,
+        erro: "avaliacao_invalida",
+        mensagem: MENSAGEM_DE_AVALIACAO_INVALIDA,
       };
     }
 
@@ -296,7 +382,8 @@ export class SessaoDeEstudo {
       };
     }
 
-    item.resultado = resultado;
+    item.avaliacao = avaliacao;
+    item.resultado = derivarResultado(avaliacao);
 
     if (this.posicaoCorrente === this.itens.length - 1) {
       this.concluida = true;
@@ -422,6 +509,7 @@ function congelarItemOculto(item: ItemInterno): ItemDeEstudoOculto {
     frente: item.frente,
     revelado: false,
     verso: null,
+    avaliacao: null,
     resultado: null,
   };
 
@@ -434,6 +522,7 @@ function congelarItemRevelado(item: ItemInterno): ItemDeEstudoRevelado {
     frente: item.frente,
     revelado: true,
     verso: item.verso,
+    avaliacao: item.avaliacao,
     resultado: item.resultado,
   };
 
