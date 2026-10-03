@@ -1,6 +1,6 @@
 # Tasks: Agendamento de estudo
 
-**Status**: Backlog de implementação futura. Todas as tarefas permanecem pendentes; nenhuma deve ser executada nesta etapa de planejamento.
+**Status**: Implementação autorizada pelo Product Owner em 2026-10-03 (branch `implementacao-016-018`), após o portão `/speckit-analyze` de 2026-10-03 sem CRITICAL.
 
 **Input**: spec.md, plan.md, research.md, data-model.md e contracts/api-agenda.md.
 **Tests**: obrigatórios pela constituição e critérios da spec; cada tarefa de código inclui teste observável.
@@ -13,8 +13,14 @@
 ## Phase 2: Foundational
 
 - [ ] T1602 Adicionar tipos/Porta e migração 8 em backend/src/armazenamento/porta.ts e sqlite/postgresql/migracoes.ts; testar upgrade preservando dados. Requisitos: FR-248, FR-250.
+  - Restrições literais do data-model: `dias` = inteiros únicos 1=segunda … 7=domingo, ao menos um; `quantidade` = `null` (Todos os Cartões) ou inteiro 1..999; `estado` da Rotina ∈ `ativa|pausada|excluida` (excluída é tombstone); `versao` positiva de concorrência; versões da configuração com data civil de início; `operacaoId` com resultado guardado para reenvio idempotente.
+  - Compromisso: no máximo um por Rotina + data `YYYY-MM-DD` dentro do dono (unicidade também no banco); `registroId` opcional, primeiro Registro confirmado, imutável. Persistir só exceções (cancelado) e conclusões; ocorrências comuns são projetadas.
+  - Início de Compromisso: id aleatório gerado no servidor, usuarioId, rotinaId, data, iniciadoEm, fuso, baralhoId, nomeDoBaralho, quantidade efetiva e Cartões selecionados com Frente/Verso capturados; sem Avaliações intermediárias.
+  - FK de Baralho MUST NOT apagar a programação: excluir o Baralho deixa a Rotina indisponível (sem `ON DELETE CASCADE` para `baralho`).
+  - Índices por dono para a consulta da semana (SC-102).
   - Restrição da 017 (data-model, seção "Restrição vinda da 017"): toda tabela da Agenda com dados de um Usuário MUST ter `REFERENCES usuario(id) ON DELETE CASCADE`, direto ou pela cadeia de chaves estrangeiras, nos dois Adapters; o teste prova que excluir um Usuário remove a Agenda dele e preserva a de outro.
 - [ ] T1603 Adicionar Module Agenda em backend/src/agenda/agenda.ts e tipos.ts, composição Acervo e tipos de cliente em frontend/src/acervo-cliente/cliente.ts. Requisitos: FR-222–FR-256.
+  - Tipos públicos exatamente como em contracts/api-agenda.md (`RotinaDeEstudo`, `CompromissoDeEstudo`, `SemanaDaAgenda`, `InicioDeCompromisso`); sem `usuarioId` público e sem JSON de versões. Datas civis `YYYY-MM-DD` validadas estritamente (rejeitar 31/02) e fuso IANA validado; hoje derivado no servidor nesse fuso.
 
 ## Phase 3: User Story 1 — Programar estudo
 
@@ -22,7 +28,8 @@
 
 - [ ] T1604 [US1] Testar criação, quantidade, dias, overlap e reenvio em backend/tests/agenda/agenda.test.ts. Requisitos: FR-222–FR-226, FR-249, FR-251, SC-095.
 - [ ] T1605 [US1] Implementar operações de Rotina e HTTP em backend/src/agenda/agenda.ts e backend/src/http/rotas.ts. Requisitos: FR-222–FR-226.
-- [ ] T1606 [US1] Implementar formulário em frontend/src/ui/PaginaDaAgenda.tsx e testes frontend/tests/agenda.test.tsx. Requisitos: FR-222–FR-226, FR-241, FR-242, SC-095.
+  - `POST /agenda/rotinas` responde **201** ao criar e **200** nas demais ações e no reenvio idempotente. Toda rota nova entra em `registrarRotasDaAplicacao` **e** na lista de pré-flight CORS de `criarServidor`, com o teste de paridade e o teste-guarda de CORS atualizados.
+- [ ] T1606 [US1] Implementar formulário em frontend/src/ui/PaginaDaAgenda.tsx e testes frontend/tests/agenda.test.tsx; registrar a rota `#/agenda/nova` em frontend/src/ui/navegacao.ts e Aplicacao.tsx. Requisitos: FR-222–FR-226, FR-241, FR-242, SC-095.
 
 ## Phase 4: User Story 2 — Acompanhar semana
 
@@ -30,14 +37,19 @@
 
 - [ ] T1607 [US2] Testar projeção/estados/totais e janela em backend/tests/agenda/agenda.test.ts. Requisitos: FR-227–FR-230, FR-240, FR-241, SC-096.
 - [ ] T1608 [US2] Implementar projeção semanal e rota GET em backend/src/agenda/agenda.ts e backend/src/http/rotas.ts. Requisitos: FR-227–FR-230, FR-240.
+  - `GET /agenda` e `GET /agenda/rotinas` entram em `registrarRotasDaAplicacao` e na lista de pré-flight CORS, com paridade testada.
 - [ ] T1609 [US2] Implementar bloco/calendário em frontend/src/ui/AgendaDeEstudo.tsx, PaginaDeInicio.tsx e estilos.css; testar navegação e falha em frontend/tests/agenda.test.tsx. Requisitos: FR-227–FR-230, FR-240, FR-241, SC-096.
+  - Ver Sessão de um Compromisso concluído navega para o Registro existente (`#/sessoes/:registroId`, `PaginaDoRegistro`).
 
 ## Phase 5: User Story 3 — Concluir Compromisso
 
 **Independent Test**: executar a história correspondente de spec.md com dados preparados pela Interface pública; não depende de concluir outras histórias pela UI.
 
 - [ ] T1610 [US3] Testar início, snapshot, reenvio, concorrência e rollback em backend/tests/agenda/conclusao.test.ts e testes dos Adapters. Requisitos: FR-231–FR-236, FR-254, FR-256, SC-097, SC-104.
+  - Incluir: Todos os Cartões com mais de 1000 Cartões aceito pela Agenda e recusado fora dela; duas conclusões concorrentes do mesmo Usuário produzem Agendamentos coerentes com a ordem serializada.
 - [ ] T1611 [US3] Implementar autorização e conclusão atômica em backend/src/agenda/agenda.ts, backend/src/acervo/acervo.ts e ambos armazenamento.ts. Requisitos: FR-231–FR-236, FR-254, FR-256.
+  - Refinamentos do plan.md: o limite legado de 1000 Itens por Registro (`LIMITE_DE_ITENS_REGISTRADOS`) continua para Registros sem início da Agenda; com `inicioAgendaId`, o máximo válido é o snapshot autorizado. Os Agendamentos dos Cartões são calculados a partir das leituras da **mesma transação**, serializada por Usuário (SQLite com transação imediata; PostgreSQL com bloqueio por Usuário); o reenvio idempotente é detectado antes de recalcular. A Porta recebe uma função de domínio e não expõe conexão, SQL ou driver ao Module.
+  - `POST /agenda/inicios` entra em `registrarRotasDaAplicacao` e na lista de pré-flight CORS.
 - [ ] T1612 [US3] Integrar início autorizado em frontend/src/ui/PaginaDeEstudo.tsx e Aplicacao.tsx; registrar inicioAgendaId e testar em frontend/tests/agenda.test.tsx. Requisitos: FR-231–FR-236, FR-255, FR-256.
 
 ## Phase 6: User Story 4 — Segurança e acesso
@@ -68,8 +80,8 @@
 
 - [ ] T1622 Testar 100 Rotinas e 2 anos sem leitura de Histórico completo em backend/tests/agenda/desempenho.test.ts. Requisitos: SC-102.
 - [ ] T1623 Executar E2E real de criação até conclusão/reabertura em e2e/agendamento-de-estudo.spec.ts. Requisitos: FR-222–FR-256, SC-095–SC-104.
-- [ ] T1624 Executar portões backend/frontend/e2e e revisar diff; registrar evidências em specs/016-agendamento-de-estudo/quickstart.md e SESSION.md. Requisitos: Constituição V, VI, IX, X.
-- [ ] T1625 Executar converge e registrar cobertura final em specs/016-agendamento-de-estudo/tasks.md e SESSION.md. Requisitos: FR-222–FR-256, SC-095–SC-104.
+- [ ] T1624 Executar portões backend/frontend/e2e e revisar diff; registrar evidências em specs/016-agendamento-de-estudo/research.md e na mensagem de commit (Constituição II, v3.0.0). Requisitos: Constituição V, VI, IX, X.
+- [ ] T1625 Executar converge e registrar cobertura final em specs/016-agendamento-de-estudo/tasks.md, research.md e na mensagem de commit. Requisitos: FR-222–FR-256, SC-095–SC-104.
 
 ## Dependencies & Execution Order
 
@@ -89,7 +101,7 @@ nos mesmos arquivos. Testes de cada história precedem sua implementação.
 
 ## Implementation Strategy
 
-Somente após nova autorização de implementação, workers DeepSeek receberão
+Com a implementação autorizada (2026-10-03), workers DeepSeek recebem
 um pacote coeso de tarefas e caminhos permitidos;
 nenhum worker altera requisitos, faz commit ou declara revisão final. O Arquiteto
 só marca tarefa após conferir diff e testes. Começar pelo cadastro/consulta,

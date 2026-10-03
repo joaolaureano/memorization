@@ -31,7 +31,7 @@ quantidadeSolicitada:number|null. Os Cartões já foram selecionados no servidor
   inicio deve ser segunda-feira, intervalo implícito de sete dias.
 - GET /agenda/rotinas → 200 `{ rotinas: RotinaDeEstudo[] }`, ativas e pausadas
   na ordem criadaEm/id; excluídas omitidas, mas histórico permanece.
-- POST /agenda/rotinas → 200/201 `{ rotina: RotinaDeEstudo }`.
+- POST /agenda/rotinas → 201 `{ rotina: RotinaDeEstudo }` ao criar; 200 nas demais ações e no reenvio idempotente.
   Corpo `{ operacaoId, id?, versao?, acao, baralhoId?, dias?, quantidade?,
   confirmarSobreposicao?, fuso }`.
   acao: criar|editar|pausar|retomar|excluir. Criar/editar exigem configuração
@@ -63,6 +63,7 @@ operações. Adapter em memória segue as mesmas regras observáveis para os tes
 ## UI
 
 Rotas propostas: #/agenda (gerenciar), #/agenda/nova, #/agenda/:id/editar.
+Ver Sessão de um Compromisso concluído navega para `#/sessoes/:registroId` (PaginaDoRegistro existente).
 A Sessão autorizada é iniciada após clicar Estudar no componente da Agenda,
 com o snapshot mantido em memória do fluxo; recarregar abandona a Sessão e
 retorna à Agenda, preservando o Compromisso pendente. Reutilizar PaginaDeEstudo

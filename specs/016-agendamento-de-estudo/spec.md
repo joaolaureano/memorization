@@ -2,7 +2,7 @@
 
 **Feature Branch**: `wip/outro-agente-cartao-fixo` (branch atual; diretório da feature independente da branch)
 **Created**: 2026-10-03
-**Status**: Planejamento para revisão — implementação não autorizada
+**Status**: Implementação autorizada em 2026-10-03
 **Input**: “O usuário seria capaz de agendar por exemplo toda segunda-feira usar o Baralho X. Assim, na tela inicial, ele tem um mini report, um pequeno calendário da semana, se tudo já foi feito no dia ou não.” Continuação: “Estruture tudo usando GithubSpecKit, use o framework para criar o Spec da maneira esperada, completa.”
 
 **Depende de**: `002`/`003` (Baralhos e Vínculos), `004`/`012` (Sessão e interface), `008`–`010` (acervo por Usuário e persistência), `013` (Registro de sessão e Início) e `015` (Avaliação e repetição espaçada).
@@ -20,7 +20,7 @@ sobre seus dados de exemplo, limitações e interações simuladas.
 
 ### Session 2026-10-03
 
-- **Limite explícito do escopo**: o Product Owner esclareceu: “aqui é só criar o plano. NÃO deve ser implementado nada”. A entrega se limita aos artefatos de planejamento; tarefas e verificações de código descrevem trabalho futuro e não autorizam sua execução.
+- **Limite explícito do escopo**: o Product Owner esclareceu: “aqui é só criar o plano. NÃO deve ser implementado nada”. A entrega se limita aos artefatos de planejamento; tarefas e verificações de código descrevem trabalho futuro e não autorizam sua execução. *(Superado em 2026-10-03: o Product Owner autorizou a implementação das features 016 em diante.)*
 
 - **Confirmado pelo pedido**: recorrência semanal por Baralho, calendário compacto da semana em Início, acompanhamento de conclusão diária e especificação pelo GitHub Spec Kit, com `001` como referência de estrutura.
 - **Delimitação**: esta entrega é a especificação da feature 016. O tamanho fixo do cartão de Sessão permanece requisito transversal de `012`, FR-150; não constitui uma segunda feature neste documento.

@@ -56,3 +56,21 @@ Inspeção local: backend/src/acervo/acervo.ts (registrarSessao),
 backend/src/armazenamento/porta.ts (inserirRegistroEAgendamentos), os dois
 Adapters, backend/src/http/rotas.ts e servidor.ts; frontend/src/ui/Aplicacao.tsx,
 PaginaDeInicio.tsx, PaginaDeEstudo.tsx e acervo-cliente. Não há tecnologia nova.
+
+## Portão de análise (2026-10-03)
+
+`/speckit-analyze` antes do implement (T1601): 1 CRITICAL, 3 HIGH e 4 MEDIUM,
+todos corrigidos nos artefatos antes de iniciar a implementação.
+
+- **C1 (Constituição II)**: auditoria apontava para SESSION.md; passou a
+  research.md e mensagens de commit (v3.0.0).
+- **I1**: status "não autorizada" atualizado; a implementação foi autorizada
+  pelo Product Owner em 2026-10-03.
+- **U1/U2**: restrições do data-model e refinamentos do plan.md (limite de 1000
+  Itens só fora da Agenda; Agendamentos calculados na transação serializada por
+  Usuário) citados literalmente em T1602, T1603, T1610 e T1611.
+- **F1/U3/U4/L1**: rota `#/agenda/nova` no T1606; 201 ao criar e 200 nas demais
+  ações; Ver Sessão leva a `#/sessoes/:registroId`; rotas novas também na lista
+  de pré-flight CORS (lição da 015).
+
+Cobertura: FR-222–FR-256 e SC-095–SC-104 com ao menos uma tarefa (100%).

@@ -1,7 +1,6 @@
 # Quickstart: Agenda
 
-Guia para uma futura implementação autorizada. Os comandos e percursos abaixo
-não foram executados nesta etapa de planejamento.
+Guia de validação da implementação autorizada em 2026-10-03.
 
 ## Pré-requisitos
 

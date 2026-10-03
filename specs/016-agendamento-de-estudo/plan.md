@@ -2,7 +2,7 @@
 
 **Branch**: `wip/outro-agente-cartao-fixo` | **Date**: 2026-10-03 | **Spec**: [spec.md](spec.md)
 **Input**: spec 016; escopo explicitamente limitado ao planejamento pelo Product Owner.
-**Status**: Plano elaborado para revisão. NÃO implementar nesta etapa.
+**Status**: Implementação autorizada pelo Product Owner em 2026-10-03 (branch `implementacao-016-018`).
 
 ## Summary
 
@@ -33,7 +33,7 @@ nenhuma mudança de algoritmo e nenhum dado de demonstração no produto.
 - Seam: ArmazenamentoDoAcervo tem SQLite/PostgreSQL; ClienteDoAcervo tem HTTP/em
   memória. Nenhuma interface para Implementation única.
 - Atomicidade: início autorizado, Registro e conclusão conferidos por dono.
-- Auditabilidade: SESSION.md recebe decisões e resultados, sem segredos.
+- Auditabilidade (Constituição II, v3.0.0): decisões em research.md e notas dos artefatos; ações e verificações nas mensagens de commit, sem segredos.
 - Delegação futura: se a implementação for autorizada, fontes backend/frontend/e2e
   deverão ser produzidas por workers DeepSeek. Nenhum worker de código é iniciado nesta etapa.
 - Qualidade: análise sem CRITICAL e checklist revisado antes de implement;
@@ -64,7 +64,7 @@ quickstart.md, tasks.md e checklists/requirements.md.
 Agenda, nunca duplicada na tela. Tipos de transporte do frontend são explícitos,
 sem importação de código servidor para o bundle.
 
-## Execução e validação futuras — não autorizadas nesta etapa
+## Execução e validação
 
 1. Contratos/modelo e portão de análise.
 2. Backend completo com persistência, migração e conclusão atômica; testes de domínio e transporte.
@@ -73,8 +73,8 @@ sem importação de código servidor para o bundle.
 5. Revisão de cada diff, rastreabilidade e converge; executar typecheck/lint/test/build pertinentes.
 
 A geração de autorização de início não equivale a Registro de sessão nem guarda
-resultados parciais; Sessão interrompida continua sem Registro. Não há publicação
-ou implementação autorizada nesta entrega documental.
+resultados parciais; Sessão interrompida continua sem Registro. Merge em main,
+push e publicação dependem de pedido explícito do Product Owner.
 
 ## Complexity Tracking
 
