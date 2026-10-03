@@ -37,7 +37,8 @@ _Avoid_: baralho válido, baralho pronto, baralho ativo
 ### Estudo
 
 **Sessão de estudo**:
-Execução em que cartões de um único baralho são revisados um a um até o resumo.
+Execução em que cartões de um único baralho (estudo livre) ou da revisão do dia
+são revisados um a um até o resumo.
 Concluída, vira um registro de sessão; interrompida, é descartada sem deixar
 rastro.
 _Avoid_: revisão, treino, rodada, prática
@@ -53,8 +54,15 @@ _Avoid_: virar, flip, mostrar resposta
 
 **Resultado do item**:
 Declaração do próprio usuário, acertou ou errou, sobre sua recordação de um item.
-A aplicação registra a declaração; não avalia a resposta.
-_Avoid_: nota, correção, avaliação, score, métrica
+A aplicação registra a declaração; não avalia a resposta. Desde a repetição
+espaçada, deriva da avaliação: errei = errou; difícil, bom e fácil = acertou.
+_Avoid_: nota, correção, score, métrica
+
+**Avaliação**:
+Declaração do usuário, em quatro níveis (errei, difícil, bom, fácil), sobre a
+facilidade da recordação de um item, dada após a revelação. Alimenta o
+agendamento do cartão.
+_Avoid_: nota, rating, grau, resposta, dificuldade
 
 **Resumo da sessão**:
 Consolidação final de quantos itens foram estudados, quantos acertos e quantos
@@ -81,6 +89,42 @@ _Avoid_: score, nota, aproveitamento, desempenho
 Números derivados do acervo e do histórico de estudo de um usuário, apresentados
 na tela Início.
 _Avoid_: métricas, dashboard, KPIs, relatório
+
+### Repetição espaçada
+
+**Algoritmo de repetição espaçada**:
+Regra que, a partir do estado do agendamento de um cartão, de uma avaliação e
+do instante, calcula o novo estado e a próxima revisão. Escolhido pelo usuário
+nas preferências; nesta entrega, só o SM-2.
+_Avoid_: scheduler, motor, estratégia, método
+
+**Agendamento do cartão**:
+Quando um cartão deve ser revisto por um usuário, com o estado próprio do
+algoritmo que o calculou. Pertence ao cartão e ao usuário, nunca ao vínculo.
+_Avoid_: agenda, schedule, intervalo, fila
+
+**Cartão novo**:
+Cartão que o usuário nunca avaliou e que, por isso, ainda não tem agendamento.
+_Avoid_: cartão não visto, cartão inédito
+
+**Cartão vencido**:
+Cartão cuja próxima revisão é hoje ou anterior, no fuso do navegador.
+_Avoid_: atrasado, pendente, devido
+
+**Revisão do dia**:
+Sessão de estudo que reúne os cartões vencidos de todos os baralhos e os
+cartões novos até o limite diário, iniciada em Início pelo botão Revisar.
+_Avoid_: revisão diária, fila do dia, estudo agendado
+
+**Estudo livre**:
+Sessão de estudo de um baralho escolhido pelo usuário, independente do que
+está vencido. Também alimenta o agendamento.
+_Avoid_: estudo extra, treino, prática
+
+**Preferências**:
+Escolhas do usuário que valem para todo o seu acervo: o algoritmo de repetição
+espaçada e o limite diário de cartões novos.
+_Avoid_: configurações, settings, ajustes, opções
 
 ### Acesso
 
