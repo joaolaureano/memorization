@@ -1,15 +1,19 @@
 import type { Pool, PoolClient } from "pg";
 
 import type {
+  Agendamento,
   ArmazenamentoDoAcervo,
   ArmazenamentoDeUsuarios,
+  Avaliacao,
   Baralho,
   Cartao,
   ContagemPorBaralho,
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  ItemAvaliado,
   ItemRegistrado,
+  Preferencias,
   RegistroDeSessao,
   RegistroResumido,
   ResultadoDoItemRegistrado,
@@ -129,12 +133,25 @@ const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
  * excluída, e o `id` de outro Usuário é indistinguível de um `id` que nunca
  * existiu (FR-092, SC-030).
  */
+/**
+ * `criado_em` é gravado pelo Adapter com o instante corrente: é a ordem de
+ * criação que `loteDeRevisao` usa para os Cartões novos (FR-201). O tipo
+ * `Cartao` não muda — o instante é do armazenamento, e não do domínio.
+ */
 const INSERIR_CARTAO = `
-INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ($1, $2, $3, $4);
+INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
+VALUES ($1, $2, $3, $4, $5::timestamptz);
 `;
 
+/**
+ * A ordem de criação é a da listagem (FR-201): as linhas anteriores à 015, com
+ * `criado_em` nulo, vêm primeiro, e `ordem_de_insercao` desempata os Cartões de
+ * mesmo instante — o `id` não serve, por ser um UUID aleatório. A coluna é do
+ * armazenamento, e não do domínio: ela nunca aparece no tipo `Cartao`.
+ */
 const LISTAR_CARTOES = `
-SELECT id, frente, verso FROM cartao WHERE usuario_id = $1;
+SELECT id, frente, verso FROM cartao WHERE usuario_id = $1
+ ORDER BY criado_em NULLS FIRST, ordem_de_insercao;
 `;
 
 const OBTER_CARTAO = `
@@ -241,8 +258,8 @@ SELECT baralho.id AS "baralhoId",
  */
 const INSERIR_REGISTRO_DE_SESSAO = `
 INSERT INTO registro_de_sessao
-       (id, usuario_id, baralho_id, nome_do_baralho, concluida_em, estudados, acertos, erros)
-VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8)
+       (id, usuario_id, baralho_id, nome_do_baralho, origem, concluida_em, estudados, acertos, erros)
+VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
 RETURNING concluida_em AS "concluidaEm";
 `;
@@ -253,8 +270,9 @@ RETURNING concluida_em AS "concluidaEm";
  * ordem de inserção.
  */
 const INSERIR_ITEM_DE_REGISTRO = `
-INSERT INTO item_de_registro (registro_id, posicao, frente, verso, resultado)
-VALUES ($1, $2, $3, $4, $5);
+INSERT INTO item_de_registro
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 `;
 
 /**
@@ -266,6 +284,7 @@ const COLUNAS_DE_RESUMO = `
        id,
        baralho_id      AS "baralhoId",
        nome_do_baralho AS "nomeDoBaralho",
+       origem,
        concluida_em    AS "concluidaEm",
        estudados,
        acertos,
@@ -306,10 +325,92 @@ SELECT ${COLUNAS_DE_RESUMO}
  * confirmado que o Registro é dele.
  */
 const LISTAR_ITENS_DO_REGISTRO = `
-SELECT posicao, frente, verso, resultado
+SELECT posicao, frente, verso, resultado,
+       cartao_id AS "cartaoId", avaliacao
   FROM item_de_registro
  WHERE registro_id = $1
  ORDER BY posicao;
+`;
+
+/**
+ * As Preferências do Usuário; ausência de linha é os padrões, que a Porta
+ * sintetiza na leitura, sem gravar linha a priori (D5, FR-212).
+ */
+const OBTER_PREFERENCIAS = `
+SELECT algoritmo, limite_de_novos_por_dia AS "limiteDeNovosPorDia"
+  FROM preferencias
+ WHERE usuario_id = $1;
+`;
+
+/**
+ * O upsert das Preferências por Usuário: uma linha por dono, inserida ou
+ * atualizada (FR-212).
+ */
+const SALVAR_PREFERENCIAS = `
+INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
+VALUES ($1, $2, $3)
+ON CONFLICT (usuario_id) DO UPDATE
+   SET algoritmo               = EXCLUDED.algoritmo,
+       limite_de_novos_por_dia = EXCLUDED.limite_de_novos_por_dia;
+`;
+
+/** Todos os Agendamentos do Usuário, sem ordem prometida (FR-187). */
+const LISTAR_AGENDAMENTOS = `
+SELECT cartao_id           AS "cartaoId",
+       algoritmo,
+       versao_do_algoritmo AS "versaoDoAlgoritmo",
+       estado,
+       proxima_revisao_em  AS "proximaRevisaoEm",
+       ultima_avaliacao    AS "ultimaAvaliacao",
+       revisado_em         AS "revisadoEm",
+       criado_em           AS "criadoEm"
+  FROM agendamento
+ WHERE usuario_id = $1;
+`;
+
+/**
+ * O upsert de um Agendamento, **só para Cartão que existe e é do Usuário**: o
+ * `EXISTS` descarta em silêncio o Cartão excluído entre a leitura e a gravação,
+ * sem derrubar a transação (D5). O `ON CONFLICT` atualiza o estado e as datas,
+ * mas **preserva `criado_em`** — é o instante da primeira Avaliação, e é ele
+ * que faz o Cartão contar no limite de novos do dia (FR-210, D3).
+ */
+const GRAVAR_AGENDAMENTO = `
+INSERT INTO agendamento
+       (usuario_id, cartao_id, algoritmo, versao_do_algoritmo, estado,
+        proxima_revisao_em, ultima_avaliacao, revisado_em, criado_em)
+SELECT $1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7, $8::timestamptz, $9::timestamptz
+ WHERE EXISTS (SELECT 1 FROM cartao WHERE id = $2 AND usuario_id = $1)
+ON CONFLICT (usuario_id, cartao_id) DO UPDATE
+   SET algoritmo           = EXCLUDED.algoritmo,
+       versao_do_algoritmo = EXCLUDED.versao_do_algoritmo,
+       estado              = EXCLUDED.estado,
+       proxima_revisao_em  = EXCLUDED.proxima_revisao_em,
+       ultima_avaliacao    = EXCLUDED.ultima_avaliacao,
+       revisado_em         = EXCLUDED.revisado_em;
+`;
+
+/** Apaga todos os Agendamentos do Usuário, para a reconstrução (FR-213). */
+const EXCLUIR_AGENDAMENTOS = `
+DELETE FROM agendamento WHERE usuario_id = $1;
+`;
+
+/**
+ * Os Itens com Avaliação e Cartão de origem do Usuário, em ordem
+ * `(concluida_em, posicao)` — o insumo do replay (FR-213). Os Itens anteriores
+ * à 015, com `avaliacao` ou `cartao_id` nulos, ficam de fora.
+ */
+const LISTAR_ITENS_AVALIADOS = `
+SELECT item.cartao_id        AS "cartaoId",
+       item.avaliacao,
+       registro.concluida_em AS "concluidaEm",
+       item.posicao
+  FROM item_de_registro item
+  JOIN registro_de_sessao registro ON registro.id = item.registro_id
+ WHERE registro.usuario_id = $1
+   AND item.avaliacao IS NOT NULL
+   AND item.cartao_id IS NOT NULL
+ ORDER BY registro.concluida_em, item.posicao;
 `;
 
 const INSERIR_USUARIO = `
@@ -369,18 +470,50 @@ type LinhaDeRegistro = {
   id: string;
   baralhoId: string;
   nomeDoBaralho: string;
+  origem: "baralho" | "revisao";
   concluidaEm: Instante;
   estudados: number;
   acertos: number;
   erros: number;
 };
 
-/** Linha de `item_de_registro`; `resultado` é o vocabulário do `CHECK`. */
+/**
+ * Linha de `item_de_registro`; `resultado` é o vocabulário do `CHECK`, e
+ * `cartaoId`/`avaliacao` são nulos nos Itens anteriores à 015 (FR-197).
+ */
 type LinhaDeItem = {
   posicao: number;
   frente: string;
   verso: string;
   resultado: ResultadoDoItemRegistrado;
+  cartaoId: string | null;
+  avaliacao: Avaliacao | null;
+};
+
+/** Linha de `agendamento`; `estado` é `JSONB` e chega já como objeto. */
+type LinhaDeAgendamento = {
+  cartaoId: string;
+  algoritmo: string;
+  versaoDoAlgoritmo: number;
+  estado: unknown;
+  proximaRevisaoEm: Instante;
+  ultimaAvaliacao: Avaliacao;
+  revisadoEm: Instante;
+  criadoEm: Instante;
+};
+
+/** Linha de `preferencias`; ausência de linha significa os padrões (D5). */
+type LinhaDePreferencias = {
+  algoritmo: string;
+  limiteDeNovosPorDia: number;
+};
+
+/** Linha de Item com Avaliação, para o replay dos Agendamentos (FR-213). */
+type LinhaDeItemAvaliado = {
+  cartaoId: string;
+  avaliacao: Avaliacao;
+  concluidaEm: Instante;
+  posicao: number;
 };
 
 /** Uma conexão que sabe executar consultas: a piscina ou uma conexão dela. */
@@ -524,6 +657,7 @@ function registroResumidoDaLinha(linha: LinhaDeRegistro): RegistroResumido {
     id: linha.id,
     baralhoId: linha.baralhoId,
     nomeDoBaralho: linha.nomeDoBaralho,
+    origem: linha.origem,
     concluidaEm: instanteIso(linha.concluidaEm),
     estudados: linha.estudados,
     acertos: linha.acertos,
@@ -538,7 +672,127 @@ function itemDaLinha(linha: LinhaDeItem): ItemRegistrado {
     frente: linha.frente,
     verso: linha.verso,
     resultado: linha.resultado,
+    cartaoId: linha.cartaoId,
+    avaliacao: linha.avaliacao,
   };
+}
+
+/** Lê a linha como Agendamento, com os instantes em ISO-8601 UTC (FR-187). */
+function agendamentoDaLinha(linha: LinhaDeAgendamento): Agendamento {
+  return {
+    cartaoId: linha.cartaoId,
+    algoritmo: linha.algoritmo,
+    versaoDoAlgoritmo: linha.versaoDoAlgoritmo,
+    estado: linha.estado,
+    proximaRevisaoEm: instanteIso(linha.proximaRevisaoEm),
+    ultimaAvaliacao: linha.ultimaAvaliacao,
+    revisadoEm: instanteIso(linha.revisadoEm),
+    criadoEm: instanteIso(linha.criadoEm),
+  };
+}
+
+/** Lê a linha como Preferências, sem deixar a forma do driver atravessar. */
+function preferenciasDaLinha(linha: LinhaDePreferencias): Preferencias {
+  return {
+    algoritmo: linha.algoritmo,
+    limiteDeNovosPorDia: linha.limiteDeNovosPorDia,
+  };
+}
+
+/** Lê a linha como Item com Avaliação, insumo do replay (FR-213). */
+function itemAvaliadoDaLinha(linha: LinhaDeItemAvaliado): ItemAvaliado {
+  return {
+    cartaoId: linha.cartaoId,
+    avaliacao: linha.avaliacao,
+    concluidaEm: instanteIso(linha.concluidaEm),
+    posicao: linha.posicao,
+  };
+}
+
+/**
+ * As Preferências padrão da Porta (D5): a ausência de linha em `preferencias`
+ * equivale a `algoritmo = "sm2"` e `limiteDeNovosPorDia = 20`, e a leitura as
+ * sintetiza sem gravar linha a priori (FR-212).
+ */
+const PREFERENCIAS_PADRAO: Preferencias = {
+  algoritmo: "sm2",
+  limiteDeNovosPorDia: 20,
+};
+
+/** Os parâmetros da inserção do Registro, na ordem da consulta. */
+function parametrosDoRegistro(
+  usuarioId: string,
+  registro: RegistroDeSessao,
+): unknown[] {
+  return [
+    registro.id,
+    usuarioId,
+    registro.baralhoId,
+    registro.nomeDoBaralho,
+    registro.origem,
+    registro.concluidaEm,
+    registro.estudados,
+    registro.acertos,
+    registro.erros,
+  ];
+}
+
+/**
+ * Grava os Itens do Registro na conexão informada, na ordem apresentada. Os
+ * Itens anteriores à 015, sem `cartaoId`/`avaliacao`, gravam `NULL` — é o que
+ * mantém o Histórico antigo gravável e exibível (FR-197).
+ */
+async function gravarItens(
+  conexao: Conexao,
+  registro: RegistroDeSessao,
+): Promise<void> {
+  for (const item of registro.itens) {
+    await conexao.query(INSERIR_ITEM_DE_REGISTRO, [
+      registro.id,
+      item.posicao,
+      item.frente,
+      item.verso,
+      item.resultado,
+      item.cartaoId ?? null,
+      item.avaliacao ?? null,
+    ]);
+  }
+}
+
+/** Os parâmetros do upsert do Agendamento, na ordem da consulta. */
+function parametrosDoAgendamento(
+  usuarioId: string,
+  agendamento: Agendamento,
+): unknown[] {
+  return [
+    usuarioId,
+    agendamento.cartaoId,
+    agendamento.algoritmo,
+    agendamento.versaoDoAlgoritmo,
+    JSON.stringify(agendamento.estado),
+    agendamento.proximaRevisaoEm,
+    agendamento.ultimaAvaliacao,
+    agendamento.revisadoEm,
+    agendamento.criadoEm,
+  ];
+}
+
+/**
+ * Grava os Agendamentos na conexão informada. O `GRAVAR_AGENDAMENTO` descarta
+ * em silêncio o Agendamento de Cartão inexistente ou de outro Usuário, sem
+ * derrubar a transação (D5), e atualiza sem tocar em `criado_em` (FR-210).
+ */
+async function gravarAgendamentos(
+  conexao: Conexao,
+  usuarioId: string,
+  agendamentos: readonly Agendamento[],
+): Promise<void> {
+  for (const agendamento of agendamentos) {
+    await conexao.query(
+      GRAVAR_AGENDAMENTO,
+      parametrosDoAgendamento(usuarioId, agendamento),
+    );
+  }
 }
 
 /**
@@ -594,6 +848,7 @@ export async function abrirArmazenamentoPostgresql(
           cartao.frente,
           cartao.verso,
           usuarioId,
+          new Date().toISOString(),
         ]);
 
         return { ok: true, valor: cartao };
@@ -784,16 +1039,7 @@ export async function abrirArmazenamentoPostgresql(
         emTransacao<Desfecho<RegistroDeSessao>>(piscina, async (cliente) => {
           const { rows } = await cliente.query<{ concluidaEm: Instante }>(
             INSERIR_REGISTRO_DE_SESSAO,
-            [
-              registro.id,
-              usuarioId,
-              registro.baralhoId,
-              registro.nomeDoBaralho,
-              registro.concluidaEm,
-              registro.estudados,
-              registro.acertos,
-              registro.erros,
-            ],
+            parametrosDoRegistro(usuarioId, registro),
           );
 
           /**
@@ -813,15 +1059,7 @@ export async function abrirArmazenamentoPostgresql(
               : { ok: true, valor: existente };
           }
 
-          for (const item of registro.itens) {
-            await cliente.query(INSERIR_ITEM_DE_REGISTRO, [
-              registro.id,
-              item.posicao,
-              item.frente,
-              item.verso,
-              item.resultado,
-            ]);
-          }
+          await gravarItens(cliente, registro);
 
           return {
             ok: true,
@@ -865,6 +1103,130 @@ export async function abrirArmazenamentoPostgresql(
           ? NAO_ENCONTRADO
           : { ok: true, valor: registro };
       });
+    },
+
+    /**
+     * As Preferências do Usuário; **ausência de linha não é `nao_encontrado`**:
+     * a Porta sintetiza os padrões (`"sm2"`, 20), sem gravar linha a priori
+     * (D5, FR-212).
+     */
+    async obterPreferencias(usuarioId) {
+      const { rows } = await piscina.query<LinhaDePreferencias>(
+        OBTER_PREFERENCIAS,
+        [usuarioId],
+      );
+
+      return rows[0] === undefined
+        ? PREFERENCIAS_PADRAO
+        : preferenciasDaLinha(rows[0]);
+    },
+
+    /** Grava as Preferências já validadas pelo Module, com upsert por dono (FR-212). */
+    async salvarPreferencias(usuarioId, preferencias) {
+      return comDesfecho(async () => {
+        await piscina.query(SALVAR_PREFERENCIAS, [
+          usuarioId,
+          preferencias.algoritmo,
+          preferencias.limiteDeNovosPorDia,
+        ]);
+
+        return { ok: true, valor: preferencias };
+      });
+    },
+
+    /** Os Agendamentos do Usuário, com o `estado` opaco devolvido como objeto (FR-188). */
+    async listarAgendamentos(usuarioId) {
+      const { rows } = await piscina.query<LinhaDeAgendamento>(
+        LISTAR_AGENDAMENTOS,
+        [usuarioId],
+      );
+
+      return rows.map(agendamentoDaLinha);
+    },
+
+    /**
+     * Guarda o Registro e os Agendamentos numa **única transação** (FR-210),
+     * com a mesma idempotência/conflito de `inserirRegistroDeSessao`: o `id` já
+     * existente **deste** Usuário devolve o Registro guardado com `novo: false`,
+     * sem gravar Agendamento algum; o `id` de outro Usuário é `conflito`.
+     * Quando o Registro é novo, os Agendamentos entram logo depois, e o de
+     * Cartão inexistente ou alheio é descartado em silêncio (D5).
+     */
+    async inserirRegistroEAgendamentos(usuarioId, registro, agendamentos) {
+      return comDesfecho<{ registro: RegistroDeSessao; novo: boolean }>(() =>
+        emTransacao<Desfecho<{ registro: RegistroDeSessao; novo: boolean }>>(
+          piscina,
+          async (cliente) => {
+            const { rows } = await cliente.query<{ concluidaEm: Instante }>(
+              INSERIR_REGISTRO_DE_SESSAO,
+              parametrosDoRegistro(usuarioId, registro),
+            );
+
+            /**
+             * Nenhuma linha devolvida é o `id` já existente: o Registro do
+             * Usuário é devolvido com `novo: false`, e o de outro Usuário é
+             * `conflito`. Nada é gravado — nem os Itens, nem os Agendamentos.
+             */
+            if (rows[0] === undefined) {
+              const existente = await lerRegistroDoUsuario(
+                cliente,
+                usuarioId,
+                registro.id,
+              );
+
+              return existente === undefined
+                ? CONFLITO_DE_REGISTRO
+                : { ok: true, valor: { registro: existente, novo: false } };
+            }
+
+            await gravarItens(cliente, registro);
+            await gravarAgendamentos(cliente, usuarioId, agendamentos);
+
+            return {
+              ok: true,
+              valor: {
+                registro: {
+                  ...registro,
+                  concluidaEm: instanteIso(rows[0].concluidaEm),
+                },
+                novo: true,
+              },
+            };
+          },
+        ),
+      );
+    },
+
+    /**
+     * Numa única transação, salva as Preferências, apaga **todos** os
+     * Agendamentos do Usuário e grava os novos — a reconstrução que a troca de
+     * algoritmo dispara (FR-212, FR-213).
+     */
+    async substituirAgendamentos(usuarioId, preferencias, agendamentos) {
+      return comDesfecho<void>(() =>
+        emTransacao<Desfecho<void>>(piscina, async (cliente) => {
+          await cliente.query(SALVAR_PREFERENCIAS, [
+            usuarioId,
+            preferencias.algoritmo,
+            preferencias.limiteDeNovosPorDia,
+          ]);
+
+          await cliente.query(EXCLUIR_AGENDAMENTOS, [usuarioId]);
+          await gravarAgendamentos(cliente, usuarioId, agendamentos);
+
+          return SEM_CARGA;
+        }),
+      );
+    },
+
+    /** Os Itens com Avaliação e Cartão de origem, em `(concluida_em, posicao)` (FR-213). */
+    async listarItensAvaliados(usuarioId) {
+      const { rows } = await piscina.query<LinhaDeItemAvaliado>(
+        LISTAR_ITENS_AVALIADOS,
+        [usuarioId],
+      );
+
+      return rows.map(itemAvaliadoDaLinha);
     },
   };
 

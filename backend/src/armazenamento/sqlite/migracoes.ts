@@ -230,6 +230,70 @@ CREATE TABLE item_de_registro (
 `;
 
 /**
+ * A migração 7 cria as tabelas da repetição espaçada — a feature `015` — e
+ * acrescenta as colunas que ela estende nas tabelas existentes. É a migração
+ * da repetição espaçada, **equivalente** à do Adapter PostgreSQL: mesmas
+ * tabelas e colunas, com o tipo de cada banco (aqui `estado` é `TEXT` com o
+ * JSON e os instantes são texto ISO-8601 UTC).
+ *
+ * Ela **apenas** cria tabelas e acrescenta colunas: nenhum dado existente é
+ * alterado, e Cartões, Baralhos, Vínculos, Usuários e Histórico de uma base
+ * instalada sobrevivem intactos (FR-220). **Nenhum Agendamento nasce** aqui —
+ * o acervo pré-015 vira Cartões novos, e os Agendamentos surgem na primeira
+ * Avaliação (FR-214).
+ *
+ * `agendamento` tem `PK(usuario_id, cartao_id)` — um Agendamento por Cartão
+ * por Usuário, nunca por Vínculo (FR-207) — e as duas chaves estrangeiras com
+ * cascata fazem excluir o Usuário ou o Cartão apagar o Agendamento (FR-209). O
+ * índice por `(usuario_id, proxima_revisao_em)` serve à contagem de vencidos e
+ * à ordem dos vencidos (D3/D5). O `CHECK` de `ultima_avaliacao` duplica
+ * FR-192 como rede de segurança contra erro de programação.
+ *
+ * `preferencias` tem uma linha por Usuário; a **ausência de linha** equivale
+ * aos padrões (`'sm2'` e 20), então a Porta sintetiza os padrões na leitura,
+ * sem gravar linha a priori (D5). O `CHECK` 0..999 duplica FR-200.
+ *
+ * Os `ADD COLUMN` preservam as linhas existentes: em `item_de_registro`,
+ * `cartao_id` e `avaliacao` ficam `NULL`; em `registro_de_sessao`, `origem`
+ * recebe o default `'baralho'`; e `cartao.criado_em` fica `NULL` nas linhas
+ * anteriores à 015, que por isso vêm primeiro na ordem de criação dos Cartões
+ * novos (FR-197, FR-201).
+ */
+const ESQUEMA_REPETICAO_ESPACADA = `
+CREATE TABLE agendamento (
+  usuario_id          TEXT    NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  cartao_id           TEXT    NOT NULL REFERENCES cartao(id)  ON DELETE CASCADE,
+  algoritmo           TEXT    NOT NULL,
+  versao_do_algoritmo INTEGER NOT NULL,
+  estado              TEXT    NOT NULL,
+  proxima_revisao_em  TEXT    NOT NULL,
+  ultima_avaliacao    TEXT    NOT NULL CHECK (ultima_avaliacao IN ('errei','dificil','bom','facil')),
+  revisado_em         TEXT    NOT NULL,
+  criado_em           TEXT    NOT NULL,
+  PRIMARY KEY (usuario_id, cartao_id)
+);
+
+CREATE INDEX indice_agendamento_por_usuario_vencimento
+  ON agendamento (usuario_id, proxima_revisao_em);
+
+CREATE TABLE preferencias (
+  usuario_id              TEXT    PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+  algoritmo               TEXT    NOT NULL DEFAULT 'sm2',
+  limite_de_novos_por_dia INTEGER NOT NULL DEFAULT 20
+                          CHECK (limite_de_novos_por_dia BETWEEN 0 AND 999)
+);
+
+ALTER TABLE item_de_registro ADD COLUMN cartao_id TEXT NULL;
+ALTER TABLE item_de_registro ADD COLUMN avaliacao TEXT NULL
+  CHECK (avaliacao IS NULL OR avaliacao IN ('errei','dificil','bom','facil'));
+
+ALTER TABLE registro_de_sessao ADD COLUMN origem TEXT NOT NULL DEFAULT 'baralho'
+  CHECK (origem IN ('baralho','revisao'));
+
+ALTER TABLE cartao ADD COLUMN criado_em TEXT NULL;
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -241,4 +305,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 4, sql: ESQUEMA_USUARIO },
   { versao: 5, sql: ESQUEMA_DONO_NO_ACERVO },
   { versao: 6, sql: ESQUEMA_REGISTRO_DE_SESSAO },
+  { versao: 7, sql: ESQUEMA_REPETICAO_ESPACADA },
 ];

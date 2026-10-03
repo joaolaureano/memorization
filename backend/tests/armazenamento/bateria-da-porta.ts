@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type {
+  Agendamento,
   ArmazenamentoDeUsuarios,
   ArmazenamentoDoAcervo,
+  Avaliacao,
   Baralho,
   Cartao,
   ContagemPorBaralho,
@@ -91,13 +93,25 @@ function registroDe(
   id: string,
   concluidaEm = "2026-01-01T00:00:00.000Z",
   itens: readonly ItemRegistrado[] = [
-    { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
+    /**
+     * Item anterior à 015: sem Cartão de origem e sem Avaliação, como o
+     * Adapter o devolve ao reler o Registro (FR-196, FR-197).
+     */
+    {
+      posicao: 0,
+      frente: "To walk",
+      verso: "Caminhar",
+      resultado: "acertou",
+      cartaoId: null,
+      avaliacao: null,
+    },
   ],
 ): RegistroDeSessao {
   const acertos = itens.filter((item) => item.resultado === "acertou").length;
 
   return {
     id,
+    origem: "baralho",
     baralhoId: "b1",
     nomeDoBaralho: "Inglês",
     concluidaEm,
@@ -118,10 +132,55 @@ function semItens(registro: RegistroDeSessao): RegistroResumido {
     id: registro.id,
     baralhoId: registro.baralhoId,
     nomeDoBaralho: registro.nomeDoBaralho,
+    origem: registro.origem,
     concluidaEm: registro.concluidaEm,
     estudados: registro.estudados,
     acertos: registro.acertos,
     erros: registro.erros,
+  };
+}
+
+/**
+ * Item registrado com Cartão de origem e Avaliação em quatro níveis (FR-196).
+ * O `resultado` exibido é derivado da Avaliação, como o Module o deriva antes
+ * de gravar: `errei` é erro, e `dificil`/`bom`/`facil` são acerto (FR-194,
+ * FR-195).
+ */
+function itemAvaliadoDe(
+  posicao: number,
+  cartaoId: string,
+  avaliacao: Avaliacao = "bom",
+): ItemRegistrado {
+  return {
+    posicao,
+    frente: "To walk",
+    verso: "Caminhar",
+    resultado: avaliacao === "errei" ? "errou" : "acertou",
+    cartaoId,
+    avaliacao,
+  };
+}
+
+/**
+ * Agendamento de um Cartão, com o estado opaco do SM-2. O cenário só compara o
+ * `estado` consigo mesmo: a Porta o guarda como JSON e o devolve como objeto,
+ * sem o interpretar (FR-188). Os instantes são ISO-8601 UTC com milissegundos
+ * `.000`, a forma que os dois Adapters devolvem sem alteração.
+ */
+function agendamentoDe(
+  cartaoId: string,
+  proximaRevisaoEm = "2026-02-01T00:00:00.000Z",
+  estado: unknown = { repeticoes: 1, facilidade: 2.5, intervaloEmDias: 1 },
+): Agendamento {
+  return {
+    cartaoId,
+    algoritmo: "sm2",
+    versaoDoAlgoritmo: 1,
+    estado,
+    proximaRevisaoEm,
+    ultimaAvaliacao: "bom",
+    revisadoEm: "2026-01-02T00:00:00.000Z",
+    criadoEm: "2026-01-01T00:00:00.000Z",
   };
 }
 
@@ -684,9 +743,30 @@ export function bateriaDaPorta(
     describe("Histórico de Sessão", () => {
       it("guarda o Registro com os Itens na ordem apresentada e o devolve inteiro", async () => {
         const registro = registroDe("r1", "2026-01-02T12:00:00.000Z", [
-          { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
-          { posicao: 1, frente: "To read", verso: "Ler", resultado: "errou" },
-          { posicao: 2, frente: "To run", verso: "Correr", resultado: "acertou" },
+          {
+            posicao: 0,
+            frente: "To walk",
+            verso: "Caminhar",
+            resultado: "acertou",
+            cartaoId: null,
+            avaliacao: null,
+          },
+          {
+            posicao: 1,
+            frente: "To read",
+            verso: "Ler",
+            resultado: "errou",
+            cartaoId: null,
+            avaliacao: null,
+          },
+          {
+            posicao: 2,
+            frente: "To run",
+            verso: "Correr",
+            resultado: "acertou",
+            cartaoId: null,
+            avaliacao: null,
+          },
         ]);
 
         expect(
@@ -903,6 +983,367 @@ export function bateriaDaPorta(
 
         expect(recusa).toEqual({ ok: false, erro: "indisponivel" });
         expect(Object.keys(recusa).sort()).toEqual(["erro", "ok"]);
+      });
+    });
+
+    /**
+     * Repetição espaçada (FR-207..FR-210, FR-213): a Porta que o Module puro
+     * exercita para ler Preferências, gravar Agendamentos na mesma transação do
+     * Registro, trocar o conjunto inteiro na troca de algoritmo e reenviar o
+     * Histórico para o replay. Nenhum cenário nomeia dialeto, tabela ou driver:
+     * a prova é da Interface, e os dois Adapters a exercitam sem edição
+     * (FR-207, SC-086).
+     */
+    describe("Repetição espaçada (015)", () => {
+      it("lista os Cartões em ordem de criação, o insumo dos Cartões novos (FR-201)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
+
+        expect(await armazenamento().listarCartoes(DONO_UM)).toEqual([
+          { id: "c1", frente: "To walk", verso: "Caminhar" },
+          { id: "c2", frente: "To read", verso: "Ler" },
+          { id: "c3", frente: "To run", verso: "Correr" },
+        ]);
+      });
+
+      it("devolve os padrões quando não há linha de Preferências (D5, FR-212)", async () => {
+        expect(await armazenamento().obterPreferencias(DONO_UM)).toEqual({
+          algoritmo: "sm2",
+          limiteDeNovosPorDia: 20,
+        });
+      });
+
+      it("salva as Preferências e as devolve na releitura (FR-212)", async () => {
+        const preferencias = { algoritmo: "sm2", limiteDeNovosPorDia: 30 };
+
+        expect(
+          await armazenamento().salvarPreferencias(DONO_UM, preferencias),
+        ).toEqual({ ok: true, valor: preferencias });
+        expect(await armazenamento().obterPreferencias(DONO_UM)).toEqual(
+          preferencias,
+        );
+      });
+
+      it("as Preferências de um Usuário não alcançam o outro (FR-219)", async () => {
+        await armazenamento().salvarPreferencias(DONO_UM, {
+          algoritmo: "sm2",
+          limiteDeNovosPorDia: 5,
+        });
+
+        expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
+          algoritmo: "sm2",
+          limiteDeNovosPorDia: 20,
+        });
+      });
+
+      it("grava o Registro e os Agendamentos na primeira vez, com os Itens de origem (FR-210, SC-085)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c1", "bom"),
+          itemAvaliadoDe(1, "c2", "dificil"),
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+            agendamentoDe("c1"),
+          ]),
+        ).toEqual({ ok: true, valor: { registro, novo: true } });
+
+        /** O Registro volta inteiro: a origem e cada Item com Cartão e Avaliação. */
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: registro,
+        });
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([
+          agendamentoDe("c1"),
+        ]);
+      });
+
+      it("reenviar o mesmo id devolve novo falso, sem reaplicar Agendamentos (FR-163, FR-210, SC-085)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const guardado = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c1", "bom"),
+        ]);
+        const original = agendamentoDe("c1");
+
+        await armazenamento().inserirRegistroEAgendamentos(DONO_UM, guardado, [
+          original,
+        ]);
+
+        const reenvio = registroDe("r1", "2026-03-04T09:30:00.000Z", [
+          itemAvaliadoDe(0, "c1", "errei"),
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroEAgendamentos(DONO_UM, reenvio, [
+            agendamentoDe("c1", "2026-12-31T00:00:00.000Z", {
+              repeticoes: 9,
+              facilidade: 1.3,
+              intervaloEmDias: 100,
+            }),
+          ]),
+        ).toEqual({ ok: true, valor: { registro: guardado, novo: false } });
+
+        /** A primeira Sessão é a que vale, e o Agendamento do reenvio é ignorado. */
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: guardado,
+        });
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([original]);
+      });
+
+      it("recusa como conflito o Registro de mesmo id vindo de outro Usuário (FR-166, FR-210)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c1", "bom"),
+        ]);
+
+        await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+          agendamentoDe("c1"),
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroEAgendamentos(DONO_DOIS, registro, []),
+        ).toEqual({ ok: false, erro: "conflito" });
+        expect(await armazenamento().listarAgendamentos(DONO_DOIS)).toEqual([]);
+      });
+
+      it("descarta em silêncio o Agendamento de Cartão inexistente (D5, FR-210)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c1", "bom"),
+        ]);
+
+        expect(
+          await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+            agendamentoDe("c1"),
+            agendamentoDe("inexistente", "2026-03-01T00:00:00.000Z"),
+          ]),
+        ).toEqual({ ok: true, valor: { registro, novo: true } });
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([
+          agendamentoDe("c1"),
+        ]);
+      });
+
+      it("descarta em silêncio o Agendamento de Cartão de outro Usuário (FR-219)", async () => {
+        await armazenamento().inserirCartao(
+          DONO_DOIS,
+          cartaoDe("c2", "To read", "Ler"),
+        );
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c2", "bom"),
+        ]);
+
+        await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+          agendamentoDe("c2"),
+        ]);
+
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([]);
+      });
+
+      it("o upsert por Cartão preserva o criadoEm da primeira Avaliação (FR-207, D3)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const primeiro = agendamentoDe("c1", "2026-02-01T00:00:00.000Z");
+
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r1", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "bom"),
+          ]),
+          [primeiro],
+        );
+
+        const segundo = {
+          ...agendamentoDe("c1", "2026-03-01T00:00:00.000Z", {
+            repeticoes: 2,
+            facilidade: 2.6,
+            intervaloEmDias: 6,
+          }),
+          criadoEm: "2026-02-02T00:00:00.000Z",
+        };
+
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r2", "2026-02-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "facil"),
+          ]),
+          [segundo],
+        );
+
+        const agendamentos = await armazenamento().listarAgendamentos(DONO_UM);
+
+        expect(agendamentos).toHaveLength(1);
+        expect(agendamentos[0]).toEqual({
+          ...segundo,
+          criadoEm: primeiro.criadoEm,
+        });
+      });
+
+      it("a origem revisao tem baralhoId vazio e nome Revisão do dia (D5, FR-196)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const registro: RegistroDeSessao = {
+          ...registroDe("r1", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "facil"),
+          ]),
+          origem: "revisao",
+          baralhoId: "",
+          nomeDoBaralho: "Revisão do dia",
+        };
+
+        await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+          agendamentoDe("c1"),
+        ]);
+
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: registro,
+        });
+      });
+
+      it("excluir o Cartão remove o Agendamento e preserva o Registro (FR-208, FR-209)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
+          itemAvaliadoDe(0, "c1", "bom"),
+        ]);
+
+        await armazenamento().inserirRegistroEAgendamentos(DONO_UM, registro, [
+          agendamentoDe("c1"),
+        ]);
+        await armazenamento().excluirCartao(DONO_UM, "c1");
+
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual([]);
+        expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
+          ok: true,
+          valor: registro,
+        });
+      });
+
+      it("substituirAgendamentos troca as Preferências e só os Agendamentos do dono (FR-213, SC-086)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await armazenamento().inserirCartao(
+          DONO_DOIS,
+          cartaoDe("c3", "To run", "Correr"),
+        );
+
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r1", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "bom"),
+          ]),
+          [agendamentoDe("c1")],
+        );
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_DOIS,
+          registroDe("r2", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c3", "bom"),
+          ]),
+          [agendamentoDe("c3")],
+        );
+
+        const preferencias = { algoritmo: "sm2", limiteDeNovosPorDia: 7 };
+        const reconstruidos = [agendamentoDe("c2", "2026-04-01T00:00:00.000Z")];
+
+        expect(
+          await armazenamento().substituirAgendamentos(
+            DONO_UM,
+            preferencias,
+            reconstruidos,
+          ),
+        ).toEqual({ ok: true, valor: undefined });
+
+        expect(await armazenamento().obterPreferencias(DONO_UM)).toEqual(preferencias);
+        expect(await armazenamento().listarAgendamentos(DONO_UM)).toEqual(reconstruidos);
+
+        /** O outro dono guarda as Preferências padrão e o Agendamento original. */
+        expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
+          algoritmo: "sm2",
+          limiteDeNovosPorDia: 20,
+        });
+        expect(await armazenamento().listarAgendamentos(DONO_DOIS)).toEqual([
+          agendamentoDe("c3"),
+        ]);
+      });
+
+      it("lista os Itens avaliados em ordem (concluidaEm, posicao), o insumo do replay (FR-213, SC-083)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
+
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r1", "2026-01-01T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "bom"),
+            itemAvaliadoDe(1, "c2", "dificil"),
+          ]),
+          [],
+        );
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r2", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c3", "facil"),
+          ]),
+          [],
+        );
+
+        expect(await armazenamento().listarItensAvaliados(DONO_UM)).toEqual([
+          {
+            cartaoId: "c1",
+            avaliacao: "bom",
+            concluidaEm: "2026-01-01T00:00:00.000Z",
+            posicao: 0,
+          },
+          {
+            cartaoId: "c2",
+            avaliacao: "dificil",
+            concluidaEm: "2026-01-01T00:00:00.000Z",
+            posicao: 1,
+          },
+          {
+            cartaoId: "c3",
+            avaliacao: "facil",
+            concluidaEm: "2026-01-02T00:00:00.000Z",
+            posicao: 0,
+          },
+        ]);
+      });
+
+      it("não lista Itens gravados sem avaliacao ou sem cartaoId (FR-196, FR-197, FR-213)", async () => {
+        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+
+        /** Registro anterior à 015: Item sem `avaliacao` e sem `cartaoId`. */
+        await armazenamento().inserirRegistroDeSessao(
+          DONO_UM,
+          registroDe("antigo", "2026-01-01T00:00:00.000Z", [
+            { posicao: 0, frente: "To walk", verso: "Caminhar", resultado: "acertou" },
+          ]),
+        );
+        await armazenamento().inserirRegistroEAgendamentos(
+          DONO_UM,
+          registroDe("r1", "2026-01-02T00:00:00.000Z", [
+            itemAvaliadoDe(0, "c1", "bom"),
+          ]),
+          [],
+        );
+
+        expect(await armazenamento().listarItensAvaliados(DONO_UM)).toEqual([
+          {
+            cartaoId: "c1",
+            avaliacao: "bom",
+            concluidaEm: "2026-01-02T00:00:00.000Z",
+            posicao: 0,
+          },
+        ]);
       });
     });
   });

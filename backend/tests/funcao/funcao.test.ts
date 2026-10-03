@@ -552,6 +552,193 @@ describe("a paridade das rotas entre a entrada local e a da nuvem (013)", () => 
   }, 60_000);
 });
 
+describe("a paridade das rotas da Repetição espaçada (015)", () => {
+  /**
+   * T1515 — a paridade das rotas da `015` entre a entrada local e a da nuvem
+   * (contrato §4, FR-219).
+   *
+   * A lição da regressão `9251ae0`: uma rota registrada apenas na entrada local
+   * responde na suíte local e devolve `404 Route ... not found` na nuvem, porque
+   * a Função monta **somente** o que `registrarRotasDaAplicacao` registra — a
+   * lista única usada pelo local e pela nuvem. Por isso cada rota nova —
+   * `/revisao`, `/revisao/lote`, `/previas`, `/preferencias` e o `/sessoes`
+   * estendido — é chamada **pela função da nuvem**, e o `bruto` de cada resposta
+   * é conferido: sem isso, o `404` do roteador passaria por acidente.
+   */
+  it("roteia a Revisão e as Preferências na função da nuvem, e nunca com 404 de rota", async () => {
+    const nomeDeUsuario = `rev.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+    const credencial = credencialDe(nomeDeUsuario, senha);
+
+    const cadastro = await pedir(funcao, "POST", "/usuarios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      corpo: { nomeDeUsuario, senha },
+    });
+
+    expect(cadastro.status).toBe(201);
+
+    const cartao = await pedir(funcao, "POST", "/cartoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { frente: "To walk", verso: "Caminhar" },
+    });
+
+    expect(cartao.status).toBe(201);
+    const cartaoId = (cartao.corpo as { id: string }).id;
+
+    const baralho = await pedir(funcao, "POST", "/baralhos", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { nome: "Inglês" },
+    });
+
+    expect(baralho.status).toBe(201);
+    const baralhoId = (baralho.corpo as { id: string }).id;
+
+    /** A janela do dia é a do navegador, em limites locais (FR-204). */
+    const inicio = new Date();
+    inicio.setHours(0, 0, 0, 0);
+    const fim = new Date(inicio);
+    fim.setDate(fim.getDate() + 1);
+    const consulta =
+      `inicioDoDia=${encodeURIComponent(inicio.toISOString())}` +
+      `&fimDoDia=${encodeURIComponent(fim.toISOString())}`;
+
+    /** `GET /revisao` — o resumo de Início: vencidos e novos de hoje (FR-198, FR-199). */
+    const resumo = await pedir(funcao, "GET", `/revisao?${consulta}`, {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(resumo.status).toBe(200);
+    expect(resumo.corpo).toMatchObject({ vencidos: 0, novosHoje: 1, total: 1 });
+    expect(resumo.bruto).not.toMatch(/Route .* not found/);
+
+    /** `GET /revisao/lote` — até 20 Cartões, cada um com a prévia dos 4 níveis (FR-201, FR-221). */
+    const lote = await pedir(funcao, "GET", `/revisao/lote?${consulta}`, {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(lote.status).toBe(200);
+    expect(lote.corpo).toMatchObject({ itens: [{ cartao: { id: cartaoId } }] });
+    expect(lote.bruto).not.toMatch(/Route .* not found/);
+
+    /** `POST /previas` — a prévia dos Cartões do estudo livre (FR-221). */
+    const previas = await pedir(funcao, "POST", "/previas", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { cartaoIds: [cartaoId] },
+    });
+
+    expect(previas.status).toBe(200);
+    expect(previas.corpo).toMatchObject({
+      previas: { [cartaoId]: { errei: expect.any(String) } },
+    });
+    expect(previas.bruto).not.toMatch(/Route .* not found/);
+
+    /** `GET /preferencias` — o algoritmo e o limite vigentes, com a lista de algoritmos (FR-212). */
+    const preferencias = await pedir(funcao, "GET", "/preferencias", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+    });
+
+    expect(preferencias.status).toBe(200);
+    expect(preferencias.corpo).toMatchObject({
+      algoritmo: "sm2",
+      limiteDeNovosPorDia: 20,
+    });
+    expect(preferencias.bruto).not.toMatch(/Route .* not found/);
+
+    /** `PUT /preferencias` — o mesmo corpo do `GET` volta salvo (FR-200, FR-212). */
+    const salvas = await pedir(funcao, "PUT", "/preferencias", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { algoritmo: "sm2", limiteDeNovosPorDia: 30 },
+    });
+
+    expect(salvas.status).toBe(200);
+    expect(salvas.corpo).toMatchObject({
+      algoritmo: "sm2",
+      limiteDeNovosPorDia: 30,
+    });
+    expect(salvas.bruto).not.toMatch(/Route .* not found/);
+
+    /** `POST /sessoes` — o corpo novo, com `origem` e Itens com `cartaoId`/`avaliacao` (FR-194, FR-196). */
+    const idDaSessao = randomUUID();
+    const corpoDaSessao = {
+      id: idDaSessao,
+      origem: "baralho",
+      baralhoId,
+      nomeDoBaralho: "Inglês",
+      itens: [
+        { frente: "To walk", verso: "Caminhar", cartaoId, avaliacao: "bom" },
+      ],
+    };
+
+    const sessao = await pedir(funcao, "POST", "/sessoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: corpoDaSessao,
+    });
+
+    expect(sessao.status).toBe(201);
+    expect(sessao.corpo).toMatchObject({ id: idDaSessao, origem: "baralho" });
+    expect(sessao.bruto).not.toMatch(/Route .* not found/);
+
+    /** O reenvio é idempotente pelo `id`: `200`, e os Agendamentos não são reaplicados (FR-210). */
+    const reenvio = await pedir(funcao, "POST", "/sessoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: corpoDaSessao,
+    });
+
+    expect(reenvio.status).toBe(200);
+    expect(reenvio.bruto).not.toMatch(/Route .* not found/);
+
+    /** Corpo sem `origem`/`itens` é recusado pela rota do Histórico, e não pelo roteador. */
+    const invalida = await pedir(funcao, "POST", "/sessoes", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: {},
+    });
+
+    expect(invalida.status).toBe(400);
+    expect(invalida.corpo).toMatchObject({ erro: "dados_invalidos" });
+    expect(invalida.bruto).not.toMatch(/Route .* not found/);
+
+    /** Sem Credencial, cada rota nova existe e recusa pela Credencial: `401`, nunca `404` (FR-219). */
+    const semCredencial = [
+      await pedir(funcao, "GET", `/revisao?${consulta}`, {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      }),
+      await pedir(funcao, "GET", `/revisao/lote?${consulta}`, {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      }),
+      await pedir(funcao, "POST", "/previas", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: { cartaoIds: [] },
+      }),
+      await pedir(funcao, "GET", "/preferencias", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      }),
+      await pedir(funcao, "PUT", "/preferencias", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: { algoritmo: "sm2", limiteDeNovosPorDia: 20 },
+      }),
+      await pedir(funcao, "POST", "/sessoes", {
+        segredoDeOrigem: SEGREDO_DE_ORIGEM,
+        corpo: {},
+      }),
+    ];
+
+    for (const resposta of semCredencial) {
+      expect(resposta.status).toBe(401);
+      expect(resposta.bruto).not.toMatch(/Route .* not found/);
+    }
+  }, 60_000);
+});
+
 describe("a inicialização é memorizada e descartável (SC-054)", () => {
   it("compartilha a mesma promise entre invocações concorrentes", async () => {
     let liberar: () => void = () => {};

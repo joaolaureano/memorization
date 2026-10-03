@@ -674,9 +674,11 @@ describe("pacotes e inícios de cada armazenamento", () => {
     );
 
     expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+      "agendamento",
       "baralho",
       "cartao",
       "item_de_registro",
+      "preferencias",
       "registro_de_sessao",
       "usuario",
       "versao_do_esquema",

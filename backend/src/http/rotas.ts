@@ -79,26 +79,31 @@ const corpoDeUsuario = z.object({
 
 /**
  * Forma do corpo de `POST /sessoes`: o Registro de sessão que o cliente envia
- * ao concluir — o identificador que dá a idempotência, o Baralho e o seu nome
- * no momento da conclusão e a lista de Itens, cada um com Frente, Verso e
- * Resultado (contrato da `013`, §3).
+ * ao concluir — o identificador que dá a idempotência, a Origem da Sessão
+ * (`"baralho"` ou `"revisao"`), o Baralho e o seu nome no momento da conclusão
+ * e a lista de Itens, cada um com Frente, Verso, Cartão de origem e Avaliação
+ * (contrato da `015`, §4, FR-196).
  *
  * O esquema confere apenas a **forma**. Os limites de tamanho, a forma canônica
- * do identificador, o intervalo de 1 a 1000 Itens e a validade de Frente e
- * Verso como Cartão continuam sendo julgados exclusivamente pelo `Acervo`
- * (FR-161), e Resultado fora de `acertou`/`errou` também é recusado lá. Por
- * isso a recusa de forma na borda usa o **mesmo** código da recusa de domínio —
- * `dados_invalidos` —, e o cliente tem um só caminho para corpo inválido.
+ * do identificador, o intervalo de 1 a 1000 Itens, a Origem conhecida, a
+ * validade de Frente e Verso como Cartão, o Cartão de origem não vazio e a
+ * Avaliação em um dos quatro níveis continuam sendo julgados exclusivamente
+ * pelo `Acervo` (FR-161, FR-193, FR-196). O Resultado **não** vem do cliente:
+ * ele é derivado da Avaliação lá (FR-194). Por isso a recusa de forma na borda
+ * usa o **mesmo** código da recusa de domínio — `dados_invalidos` —, e o
+ * cliente tem um só caminho para corpo inválido.
  */
 const corpoDeRegistro = z.object({
   id: z.string(),
+  origem: z.string(),
   baralhoId: z.string(),
   nomeDoBaralho: z.string(),
   itens: z.array(
     z.object({
       frente: z.string(),
       verso: z.string(),
-      resultado: z.string(),
+      cartaoId: z.string(),
+      avaliacao: z.string(),
     }),
   ),
 });
@@ -111,6 +116,38 @@ const corpoDeRegistro = z.object({
  */
 const consultaDaJanela = z.object({
   desde: z.string(),
+});
+
+/**
+ * Forma da consulta de `GET /revisao` e de `GET /revisao/lote`: os dois limites
+ * do dia local do navegador, ambos texto (contrato da `015`, §4). Ausentes,
+ * repetidos ou de outro tipo são recusados na borda como `dados_invalidos`; se
+ * os textos formam a janela de um dia, quem decide é o `Acervo` (FR-204).
+ */
+const consultaDaRevisao = z.object({
+  inicioDoDia: z.string(),
+  fimDoDia: z.string(),
+});
+
+/**
+ * Forma do corpo de `POST /previas`: a lista de Cartões cuja prévia o estudo
+ * livre quer mostrar (contrato da `015`, §4). O esquema confere apenas a forma;
+ * o intervalo de 1 a 200 identificadores não vazios é julgado pelo `Acervo`
+ * (FR-221), e por isso a recusa de forma usa o mesmo código da de domínio.
+ */
+const corpoDePrevias = z.object({
+  cartaoIds: z.array(z.string()),
+});
+
+/**
+ * Forma do corpo de `PUT /preferencias`: exatamente o algoritmo e o limite de
+ * Cartões novos por dia (contrato da `015`, §4). O esquema confere apenas a
+ * forma; o algoritmo disponível e o limite inteiro de 0 a 999 são julgados pelo
+ * `Acervo` (FR-200, FR-212).
+ */
+const corpoDePreferencias = z.object({
+  algoritmo: z.string(),
+  limiteDeNovosPorDia: z.number(),
 });
 
 /**
@@ -154,9 +191,24 @@ const REGISTRO_NAO_ENCONTRADO = {
   erro: "nao_encontrado",
   mensagem: "Sessão não encontrada.",
 } as const;
-const INDISPONIVEL_DO_HISTORICO = {
+const INDISPONIVEL_DO_ARMAZENAMENTO = {
   erro: "indisponivel",
   mensagem: "O armazenamento está indisponível.",
+} as const;
+
+/**
+ * Recusas das rotas de Revisão e de Preferências (contrato da `015`, §4), na
+ * mesma forma `{ erro, mensagem }` das demais. Como nas rotas de Histórico, o
+ * corpo carrega só o código estável, e é o Adapter do cliente que o traduz em
+ * frase para a tela (FR-044).
+ */
+const DADOS_DA_REVISAO_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados da Revisão são inválidos.",
+} as const;
+const DADOS_DAS_PREFERENCIAS_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados das Preferências são inválidos.",
 } as const;
 
 /**
@@ -494,7 +546,7 @@ export function registrarRotasDeSessoes(
         return resposta.status(409).send(REGISTRO_EM_CONFLITO);
       }
 
-      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_ARMAZENAMENTO);
     }
 
     const jaExistia =
@@ -518,7 +570,7 @@ export function registrarRotasDeSessoes(
         return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
       }
 
-      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+      return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_ARMAZENAMENTO);
     }
 
     return resposta.status(200).send(resultado.estatisticas);
@@ -531,7 +583,9 @@ export function registrarRotasDeSessoes(
 
     if (!resultado.ok) {
       if (resultado.erro === "indisponivel") {
-        return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_HISTORICO);
+        return resposta
+          .status(INDISPONIVEL)
+          .send(INDISPONIVEL_DO_ARMAZENAMENTO);
       }
 
       return resposta.status(404).send(REGISTRO_NAO_ENCONTRADO);
@@ -541,6 +595,153 @@ export function registrarRotasDeSessoes(
       registro: resultado.registro,
       baralhoExiste: resultado.baralhoExiste,
     });
+  });
+}
+
+/**
+ * Registra as rotas de Revisão do contrato sobre o `Acervo` de quem Entrou:
+ * `GET /revisao?inicioDoDia=<ISO>&fimDoDia=<ISO>`, `GET /revisao/lote` com a
+ * mesma consulta e `POST /previas` (contrato da `015`, §4).
+ *
+ * Mesma estrutura fina das demais rotas: a Credencial já foi exigida pelo hook
+ * `onRequest` (FR-090), o `Acervo` é construído **dentro** de cada handler com o
+ * dono decorado na requisição, de modo que a Revisão de um Usuário nunca
+ * alcança os Cartões de outro (FR-219); a forma é validada na borda com Zod, e
+ * os limites do dia, o teto de 200 identificadores e a janela válida são
+ * julgados exclusivamente pelo `Acervo` (FR-198, FR-201, FR-204, FR-221). A
+ * recusa de domínio atravessa com o **mesmo** código da recusa de forma —
+ * `dados_invalidos` —, de modo que o cliente tem um só caminho para entrada
+ * inválida.
+ */
+export function registrarRotasDeRevisao(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  servidor.get("/revisao", async (requisicao, resposta) => {
+    const consulta = consultaDaRevisao.safeParse(requisicao.query);
+
+    if (!consulta.success) {
+      return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterResumoDaRevisao(
+      consulta.data.inicioDoDia,
+      consulta.data.fimDoDia,
+    );
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+      }
+
+      return resposta
+        .status(INDISPONIVEL)
+        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(200).send(resultado.resumo);
+  });
+
+  servidor.get("/revisao/lote", async (requisicao, resposta) => {
+    const consulta = consultaDaRevisao.safeParse(requisicao.query);
+
+    if (!consulta.success) {
+      return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterLoteDeRevisao(
+      consulta.data.inicioDoDia,
+      consulta.data.fimDoDia,
+    );
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+      }
+
+      return resposta
+        .status(INDISPONIVEL)
+        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(200).send({ itens: resultado.itens });
+  });
+
+  servidor.post("/previas", async (requisicao, resposta) => {
+    const corpo = corpoDePrevias.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterPrevias(corpo.data.cartaoIds);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
+      }
+
+      return resposta
+        .status(INDISPONIVEL)
+        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(200).send({ previas: resultado.previas });
+  });
+}
+
+/**
+ * Registra as rotas de Preferências do contrato sobre o `Acervo` de quem
+ * Entrou: `GET /preferencias` e `PUT /preferencias` (contrato da `015`, §4).
+ *
+ * O `PUT` responde com o **mesmo** corpo do `GET` — o algoritmo e o limite
+ * salvos mais a lista de algoritmos disponíveis —, para que a tela de
+ * Preferências se redesenhe com uma única leitura (FR-212). O algoritmo
+ * desconhecido e o limite fora do inteiro de 0 a 999 são recusados pelo `Acervo`
+ * como `dados_invalidos`, e a troca de algoritmo dispara lá a reconstrução dos
+ * Agendamentos (FR-200, FR-213).
+ */
+export function registrarRotasDePreferencias(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  servidor.get("/preferencias", async (requisicao, resposta) => {
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.obterPreferencias();
+
+    if (!resultado.ok) {
+      return resposta
+        .status(INDISPONIVEL)
+        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(200).send(resultado.preferencias);
+  });
+
+  servidor.put("/preferencias", async (requisicao, resposta) => {
+    const corpo = corpoDePreferencias.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DAS_PREFERENCIAS_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.salvarPreferencias(corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DAS_PREFERENCIAS_INVALIDOS);
+      }
+
+      return resposta
+        .status(INDISPONIVEL)
+        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta.status(200).send(resultado.preferencias);
   });
 }
 

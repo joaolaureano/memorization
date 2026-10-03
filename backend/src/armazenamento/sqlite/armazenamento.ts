@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type {
+  Agendamento,
   ArmazenamentoDoAcervo,
   ArmazenamentoDeUsuarios,
   Baralho,
@@ -9,7 +10,9 @@ import type {
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  ItemAvaliado,
   ItemRegistrado,
+  Preferencias,
   RegistroDeSessao,
   RegistroResumido,
   Usuario,
@@ -75,6 +78,15 @@ const VINCULO_DUPLICADO: Desfecho<never> = {
 const CONFLITO: Desfecho<never> = {
   ok: false,
   erro: "conflito",
+};
+
+/**
+ * Padrões das Preferências quando o Usuário nunca as salvou (D5, FR-200). A
+ * Porta sintetiza os padrões na leitura e nunca grava linha a priori.
+ */
+const PREFERENCIAS_PADRAO: Preferencias = {
+  algoritmo: "sm2",
+  limiteDeNovosPorDia: 20,
 };
 
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
@@ -205,6 +217,9 @@ function itemDaLinha(linha: Record<string, unknown>): ItemRegistrado {
     frente: linha.frente as string,
     verso: linha.verso as string,
     resultado: linha.resultado as ItemRegistrado["resultado"],
+    /** Nulos nos Itens anteriores à 015, exibidos como antes (FR-197). */
+    cartaoId: (linha.cartao_id as string | null) ?? null,
+    avaliacao: (linha.avaliacao as ItemRegistrado["avaliacao"]) ?? null,
   };
 }
 
@@ -219,6 +234,8 @@ function registroResumidoDaLinha(
     id: linha.id as string,
     baralhoId: linha.baralho_id as string,
     nomeDoBaralho: linha.nome_do_baralho as string,
+    /** `'baralho'` nas linhas anteriores à 015, pelo default da coluna (FR-196). */
+    origem: linha.origem as RegistroResumido["origem"],
     concluidaEm: comoInstanteIso(linha.concluida_em),
     estudados: Number(linha.estudados),
     acertos: Number(linha.acertos),
@@ -232,6 +249,34 @@ function registroDaLinha(
   itens: readonly ItemRegistrado[],
 ): RegistroDeSessao {
   return { ...registroResumidoDaLinha(linha), itens };
+}
+
+/**
+ * Lê a linha como Agendamento. `estado` volta como **objeto** — o Adapter
+ * desfaz o JSON que ele mesmo gravou —, e os instantes voltam em ISO-8601 UTC,
+ * como as demais tabelas de instante (FR-188).
+ */
+function agendamentoDaLinha(linha: Record<string, unknown>): Agendamento {
+  return {
+    cartaoId: linha.cartao_id as string,
+    algoritmo: linha.algoritmo as string,
+    versaoDoAlgoritmo: Number(linha.versao_do_algoritmo),
+    estado: JSON.parse(linha.estado as string) as unknown,
+    proximaRevisaoEm: comoInstanteIso(linha.proxima_revisao_em),
+    ultimaAvaliacao: linha.ultima_avaliacao as Agendamento["ultimaAvaliacao"],
+    revisadoEm: comoInstanteIso(linha.revisado_em),
+    criadoEm: comoInstanteIso(linha.criado_em),
+  };
+}
+
+/** Lê a linha como ItemAvaliado — o insumo do replay (FR-213). */
+function itemAvaliadoDaLinha(linha: Record<string, unknown>): ItemAvaliado {
+  return {
+    cartaoId: linha.cartao_id as string,
+    avaliacao: linha.avaliacao as ItemAvaliado["avaliacao"],
+    concluidaEm: comoInstanteIso(linha.concluida_em),
+    posicao: Number(linha.posicao),
+  };
 }
 
 /**
@@ -280,10 +325,21 @@ export async function abrirArmazenamentoSqlite(
    * ele é indistinguível de um `id` que nunca existiu (FR-092, SC-030).
    */
   const inserirCartao = banco.prepare(
-    "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES (?, ?, ?, ?)",
+    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
+     VALUES (?, ?, ?, ?, ?)`,
   );
+  /**
+   * A ordem é a de criação, exigida por `loteDeRevisao` para os Cartões novos
+   * (FR-201): as linhas anteriores à 015 têm `criado_em` nulo e vêm primeiro
+   * (`criado_em IS NOT NULL` vale 0), e o `rowid` — a ordem de inserção —
+   * desempata os Cartões de mesmo instante. O `id` não serve para desempatar,
+   * porque é um UUID aleatório, sem relação com a criação.
+   */
   const listarCartoes = banco.prepare(
-    "SELECT id, frente, verso FROM cartao WHERE usuario_id = ?",
+    `SELECT id, frente, verso
+       FROM cartao
+      WHERE usuario_id = ?
+      ORDER BY criado_em IS NOT NULL, criado_em, rowid`,
   );
   const obterCartaoPorId = banco.prepare(
     "SELECT id, frente, verso FROM cartao WHERE id = ? AND usuario_id = ?",
@@ -364,14 +420,14 @@ export async function abrirArmazenamentoSqlite(
    */
   const inserirRegistro = banco.prepare(
     `INSERT INTO registro_de_sessao
-       (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+       (id, usuario_id, baralho_id, nome_do_baralho, origem, concluida_em,
         estudados, acertos, erros)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const inserirItemDoRegistro = banco.prepare(
     `INSERT INTO item_de_registro
-       (registro_id, posicao, frente, verso, resultado)
-     VALUES (?, ?, ?, ?, ?)`,
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   /**
    * A busca por `id` **sem** escopo de dono é deliberada: é ela que distingue
@@ -380,7 +436,7 @@ export async function abrirArmazenamentoSqlite(
    * caminho de conflito — só o booleano do dono atravessa.
    */
   const obterRegistroPorId = banco.prepare(
-    `SELECT id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+    `SELECT id, usuario_id, baralho_id, nome_do_baralho, origem, concluida_em,
             estudados, acertos, erros
        FROM registro_de_sessao
       WHERE id = ?`,
@@ -391,13 +447,13 @@ export async function abrirArmazenamentoSqlite(
    * (FR-092, SC-030).
    */
   const obterRegistroDoUsuario = banco.prepare(
-    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+    `SELECT id, baralho_id, nome_do_baralho, origem, concluida_em,
             estudados, acertos, erros
        FROM registro_de_sessao
       WHERE id = ? AND usuario_id = ?`,
   );
   const listarItensDoRegistro = banco.prepare(
-    `SELECT posicao, frente, verso, resultado
+    `SELECT posicao, frente, verso, resultado, cartao_id, avaliacao
        FROM item_de_registro
       WHERE registro_id = ?
       ORDER BY posicao`,
@@ -408,19 +464,87 @@ export async function abrirArmazenamentoSqlite(
    * sem qualquer conversão.
    */
   const listarRegistrosDesde = banco.prepare(
-    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+    `SELECT id, baralho_id, nome_do_baralho, origem, concluida_em,
             estudados, acertos, erros
        FROM registro_de_sessao
       WHERE usuario_id = ? AND concluida_em >= ?
       ORDER BY concluida_em DESC`,
   );
   const listarRegistrosRecentes = banco.prepare(
-    `SELECT id, baralho_id, nome_do_baralho, concluida_em,
+    `SELECT id, baralho_id, nome_do_baralho, origem, concluida_em,
             estudados, acertos, erros
        FROM registro_de_sessao
       WHERE usuario_id = ?
       ORDER BY concluida_em DESC
       LIMIT ?`,
+  );
+
+  /**
+   * As consultas da repetição espaçada. `estado` trafega como JSON em `TEXT` —
+   * o Adapter o guarda e o devolve como objeto, e só o algoritmo o interpreta
+   * (FR-188). Os instantes são texto ISO-8601 UTC, como as demais tabelas de
+   * instante, e é o que permite ordená-los como string.
+   */
+  const listarAgendamentos = banco.prepare(
+    `SELECT cartao_id, algoritmo, versao_do_algoritmo, estado,
+            proxima_revisao_em, ultima_avaliacao, revisado_em, criado_em
+       FROM agendamento
+      WHERE usuario_id = ?`,
+  );
+  /**
+   * O upsert do Agendamento. O `SELECT ... WHERE EXISTS` impede que uma linha
+   * nasça para Cartão de outro Usuário ou já excluído: o Agendamento é
+   * descartado em silêncio, sem derrubar a transação (D5). `criado_em` fica de
+   * fora do `DO UPDATE` de propósito — é o instante da primeira Avaliação e
+   * não muda ao reagendar (D3, FR-199).
+   */
+  const gravarAgendamento = banco.prepare(
+    `INSERT INTO agendamento
+       (usuario_id, cartao_id, algoritmo, versao_do_algoritmo, estado,
+        proxima_revisao_em, ultima_avaliacao, revisado_em, criado_em)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (SELECT 1 FROM cartao
+                     WHERE cartao.id = ? AND cartao.usuario_id = ?)
+     ON CONFLICT (usuario_id, cartao_id) DO UPDATE SET
+       algoritmo           = excluded.algoritmo,
+       versao_do_algoritmo = excluded.versao_do_algoritmo,
+       estado              = excluded.estado,
+       proxima_revisao_em  = excluded.proxima_revisao_em,
+       ultima_avaliacao    = excluded.ultima_avaliacao,
+       revisado_em         = excluded.revisado_em`,
+  );
+  const apagarAgendamentos = banco.prepare(
+    "DELETE FROM agendamento WHERE usuario_id = ?",
+  );
+  /** As Preferências: uma linha por Usuário, ausente quando nunca salvas (D5). */
+  const obterPreferenciasDoUsuario = banco.prepare(
+    `SELECT algoritmo, limite_de_novos_por_dia
+       FROM preferencias
+      WHERE usuario_id = ?`,
+  );
+  const gravarPreferencias = banco.prepare(
+    `INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
+     VALUES (?, ?, ?)
+     ON CONFLICT (usuario_id) DO UPDATE SET
+       algoritmo               = excluded.algoritmo,
+       limite_de_novos_por_dia = excluded.limite_de_novos_por_dia`,
+  );
+  /**
+   * O insumo do replay: só Itens com Avaliação e Cartão de origem, em ordem
+   * `(concluidaEm, posicao)`; os anteriores à 015, com `NULL`, ficam de fora
+   * (FR-213).
+   */
+  const listarItensAvaliados = banco.prepare(
+    `SELECT item.cartao_id AS cartao_id,
+            item.avaliacao   AS avaliacao,
+            registro.concluida_em AS concluida_em,
+            item.posicao     AS posicao
+       FROM item_de_registro AS item
+       JOIN registro_de_sessao AS registro ON registro.id = item.registro_id
+      WHERE registro.usuario_id = ?
+        AND item.cartao_id IS NOT NULL
+        AND item.avaliacao IS NOT NULL
+      ORDER BY registro.concluida_em, item.posicao`,
   );
 
   const inserirUsuario = banco.prepare(
@@ -442,7 +566,17 @@ export async function abrirArmazenamentoSqlite(
   const armazenamento: ArmazenamentoDoAcervo = {
     async inserirCartao(usuarioId, cartao) {
       return comDesfecho(() => {
-        inserirCartao.run(cartao.id, cartao.frente, cartao.verso, usuarioId);
+        /**
+         * `criado_em` é o instante corrente e não faz parte de `Cartao`: ele só
+         * existe para ordenar os Cartões novos por criação (FR-201).
+         */
+        inserirCartao.run(
+          cartao.id,
+          cartao.frente,
+          cartao.verso,
+          usuarioId,
+          new Date().toISOString(),
+        );
 
         return { ok: true, valor: cartao };
       });
@@ -628,6 +762,7 @@ export async function abrirArmazenamentoSqlite(
             usuarioId,
             registro.baralhoId,
             registro.nomeDoBaralho,
+            registro.origem,
             registro.concluidaEm,
             registro.estudados,
             registro.acertos,
@@ -641,6 +776,8 @@ export async function abrirArmazenamentoSqlite(
               item.frente,
               item.verso,
               item.resultado,
+              item.cartaoId ?? null,
+              item.avaliacao ?? null,
             );
           }
         });
@@ -675,6 +812,159 @@ export async function abrirArmazenamentoSqlite(
               ),
             };
       });
+    },
+
+    async obterPreferencias(usuarioId) {
+      const linha = obterPreferenciasDoUsuario.get(usuarioId);
+
+      return linha === undefined
+        ? PREFERENCIAS_PADRAO
+        : {
+            algoritmo: linha.algoritmo as string,
+            limiteDeNovosPorDia: Number(linha.limite_de_novos_por_dia),
+          };
+    },
+
+    async salvarPreferencias(usuarioId, preferencias) {
+      return comDesfecho(() => {
+        gravarPreferencias.run(
+          usuarioId,
+          preferencias.algoritmo,
+          preferencias.limiteDeNovosPorDia,
+        );
+
+        return { ok: true, valor: preferencias };
+      });
+    },
+
+    async listarAgendamentos(usuarioId) {
+      return listarAgendamentos.all(usuarioId).map(agendamentoDaLinha);
+    },
+
+    async inserirRegistroEAgendamentos(usuarioId, registro, agendamentos) {
+      /**
+       * O genérico explícito é necessário porque os dois caminhos de sucesso
+       * devolvem literais distintos (`novo: true` e `novo: false`) e a
+       * inferência estreitaria o tipo para um deles, incompatível com a
+       * assinatura da Porta, que promete `novo: boolean` (FR-210).
+       */
+      return comDesfecho<{ registro: RegistroDeSessao; novo: boolean }>(() => {
+        const existente = obterRegistroPorId.get(registro.id);
+
+        if (existente !== undefined) {
+          /**
+           * A idempotência do Histórico estendida aos Agendamentos: reenviar o
+           * mesmo `id` pelo mesmo Usuário devolve o Registro guardado com
+           * `novo: false` e **não** grava Agendamento algum (FR-210, SC-085). O
+           * `id` de **outro** Usuário é `conflito`, como em
+           * `inserirRegistroDeSessao` (FR-166).
+           */
+          return (existente.usuario_id as string) === usuarioId
+            ? {
+                ok: true,
+                valor: {
+                  registro: registroDaLinha(
+                    existente,
+                    listarItensDoRegistro.all(registro.id).map(itemDaLinha),
+                  ),
+                  novo: false,
+                },
+              }
+            : CONFLITO;
+        }
+
+        /**
+         * Registro, Itens e Agendamentos numa transação só (FR-167, FR-210): um
+         * Registro sem Itens seria uma Sessão corrompida, e um Agendamento
+         * gravado fora dela sobreviveria a um Registro que falhou. O upsert de
+         * cada Agendamento só cria linha para Cartão que existe e é do Usuário,
+         * descartando os demais em silêncio (D5).
+         */
+        emTransacao(banco, () => {
+          inserirRegistro.run(
+            registro.id,
+            usuarioId,
+            registro.baralhoId,
+            registro.nomeDoBaralho,
+            registro.origem,
+            registro.concluidaEm,
+            registro.estudados,
+            registro.acertos,
+            registro.erros,
+          );
+
+          for (const item of registro.itens) {
+            inserirItemDoRegistro.run(
+              registro.id,
+              item.posicao,
+              item.frente,
+              item.verso,
+              item.resultado,
+              item.cartaoId ?? null,
+              item.avaliacao ?? null,
+            );
+          }
+
+          for (const agendamento of agendamentos) {
+            gravarAgendamento.run(
+              usuarioId,
+              agendamento.cartaoId,
+              agendamento.algoritmo,
+              agendamento.versaoDoAlgoritmo,
+              JSON.stringify(agendamento.estado),
+              agendamento.proximaRevisaoEm,
+              agendamento.ultimaAvaliacao,
+              agendamento.revisadoEm,
+              agendamento.criadoEm,
+              agendamento.cartaoId,
+              usuarioId,
+            );
+          }
+        });
+
+        return { ok: true, valor: { registro, novo: true } };
+      });
+    },
+
+    async substituirAgendamentos(usuarioId, preferencias, agendamentos) {
+      return comDesfecho(() => {
+        /**
+         * A reconstrução da troca de algoritmo (FR-213): Preferências gravadas,
+         * **todos** os Agendamentos do Usuário apagados e os novos gravados,
+         * numa transação só — nada de estado parcial entre apagar e gravar.
+         */
+        emTransacao(banco, () => {
+          gravarPreferencias.run(
+            usuarioId,
+            preferencias.algoritmo,
+            preferencias.limiteDeNovosPorDia,
+          );
+
+          apagarAgendamentos.run(usuarioId);
+
+          for (const agendamento of agendamentos) {
+            gravarAgendamento.run(
+              usuarioId,
+              agendamento.cartaoId,
+              agendamento.algoritmo,
+              agendamento.versaoDoAlgoritmo,
+              JSON.stringify(agendamento.estado),
+              agendamento.proximaRevisaoEm,
+              agendamento.ultimaAvaliacao,
+              agendamento.revisadoEm,
+              agendamento.criadoEm,
+              agendamento.cartaoId,
+              usuarioId,
+            );
+          }
+        });
+
+        return SEM_CARGA;
+      });
+    },
+
+    async listarItensAvaliados(usuarioId) {
+      return listarItensAvaliados.all(usuarioId).map(itemAvaliadoDaLinha);
     },
   };
 

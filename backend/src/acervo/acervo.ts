@@ -1,13 +1,31 @@
 import { randomUUID } from "node:crypto";
 
 import type {
+  Agendamento,
   ArmazenamentoDoAcervo,
   Baralho,
   Cartao,
   ItemRegistrado,
+  Preferencias,
   RegistroDeSessao,
   RegistroResumido,
 } from "../armazenamento/porta.ts";
+import {
+  ALGORITMOS,
+  algoritmoPorId,
+  previa,
+} from "../repeticao/algoritmo.ts";
+import type {
+  AlgoritmoDeRepeticao,
+  Avaliacao,
+  EstadoDoAgendamento,
+} from "../repeticao/algoritmo.ts";
+import {
+  aplicarAvaliacoes,
+  loteDeRevisao,
+  reconstruir,
+  resumoDaRevisao,
+} from "../repeticao/revisao.ts";
 import {
   validarFrente,
   validarNomeDeBaralho,
@@ -34,6 +52,13 @@ export type {
   RegistroDeSessao,
   RegistroResumido,
 };
+
+/**
+ * A Avaliação em quatro níveis é vocabulário **compartilhado** entre o Module
+ * de repetição e o Histórico, e o `Acervo` a re-exporta para que quem o consome
+ * não precise importar o Module de algoritmo diretamente (FR-192).
+ */
+export type { Avaliacao };
 
 /**
  * O que `criarCartao` recebe: exatamente Frente e Verso (FR-001).
@@ -214,11 +239,18 @@ export type ResultadoDeExclusaoDeBaralho =
  * Corpo de `POST /sessoes` ainda **cru**: tudo é `unknown`, porque vem da rede
  * e nada garante a forma antes de o `Acervo` validar (FR-161, FR-164).
  *
+ * A `origem` diz se a Sessão veio do estudo livre por Baralho (`"baralho"`) ou
+ * da Revisão do dia (`"revisao"`); em `"revisao"`, `baralhoId` e
+ * `nomeDoBaralho` são ignorados e derivados (D5, FR-196). Cada Item traz a
+ * Frente, o Verso, o Cartão de origem e a Avaliação em quatro níveis — o
+ * Resultado é **derivado** dela (FR-193, FR-194).
+ *
  * A validação vive aqui, e não na rota: a mesma Interface de domínio serve a
  * qualquer entrada, e o transporte HTTP continua sendo só transporte (FR-046).
  */
 export interface DadosDeRegistro {
   id: unknown;
+  origem: unknown;
   baralhoId: unknown;
   nomeDoBaralho: unknown;
   itens: unknown;
@@ -230,10 +262,11 @@ export interface DadosDeRegistro {
  * FR-164, FR-166):
  *
  * - `dados_invalidos`: o corpo não descreve um Registro de sessão válido —
- *   identificador fora da forma UUID, Baralho sem identificação, nome do
- *   Baralho fora dos limites vigentes, lista de Itens vazia ou grande demais,
- *   Item com Frente, Verso ou Resultado fora das regras do Cartão. Nada foi
- *   gravado;
+ *   identificador fora da forma UUID, Origem desconhecida, Baralho sem
+ *   identificação ou nome fora dos limites na Sessão de Baralho, lista de
+ *   Itens vazia ou grande demais, Item sem Cartão de origem ou com Avaliação
+ *   fora dos quatro níveis, ou Frente e Verso fora das regras do Cartão. Nada
+ *   foi gravado;
  * - `conflito`: o `id` já pertence a um registro de **outro** Usuário. Nada foi
  *   gravado, e o registro alheio continua invisível para quem tentou (FR-166);
  * - `indisponivel`: o armazenamento falhou. O Resumo continua visível e a
@@ -278,6 +311,89 @@ export type ResultadoDeEstatisticas =
 export type ResultadoDeObterRegistro =
   | { ok: true; registro: RegistroDeSessao; baralhoExiste: boolean }
   | { ok: false; erro: "nao_encontrado" | "indisponivel" };
+
+/**
+ * Resumo da Revisão do dia exibido em Início (FR-198, FR-199): quantos Cartões
+ * vencidos e quantos Cartões novos ainda cabem no limite diário, mais o total
+ * que o botão "Revisar" mostra.
+ */
+export interface ResumoDaRevisao {
+  vencidos: number;
+  novosHoje: number;
+  total: number;
+}
+
+/**
+ * Item do lote da Revisão do dia: o Cartão a estudar e a prévia da próxima
+ * revisão para cada um dos quatro níveis de Avaliação (FR-221).
+ */
+export interface ItemDoLoteDeRevisao {
+  cartao: Cartao;
+  previa: Record<Avaliacao, string>;
+}
+
+/** Algoritmo oferecido na tela de Preferências: identificador e rótulo (FR-212). */
+export interface OpcaoDeAlgoritmo {
+  id: string;
+  rotulo: string;
+}
+
+/**
+ * Preferências de repetição do Usuário como a Interface as devolve: o
+ * algoritmo e o limite escolhidos, mais a lista de algoritmos disponíveis para
+ * a tela de Preferências (FR-212).
+ */
+export interface PreferenciasDoUsuario {
+  algoritmo: string;
+  limiteDeNovosPorDia: number;
+  algoritmos: OpcaoDeAlgoritmo[];
+}
+
+/**
+ * Resultado de `obterResumoDaRevisao`. `dados_invalidos` quando
+ * `inicioDoDia` e `fimDoDia` não formam a janela do dia (ISO-8601, início antes
+ * do fim, até 26 h); `indisponivel` quando o armazenamento falhou, sem
+ * apresentar uma contagem falsa (FR-198).
+ */
+export type ResultadoDoResumoDaRevisao =
+  | { ok: true; resumo: ResumoDaRevisao }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
+
+/**
+ * Resultado de `obterLoteDeRevisao`: os Itens do dia com a prévia de cada um,
+ * ou a recusa pela janela inválida ou pela falha do armazenamento (FR-201).
+ */
+export type ResultadoDoLoteDeRevisao =
+  | { ok: true; itens: ItemDoLoteDeRevisao[] }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
+
+/**
+ * Resultado de `obterPrevias`: a prévia por Cartão informado que ainda existe
+ * no acervo do Usuário. Identificador que não é Cartão do Usuário é **omitido**
+ * do resultado, e não recusado (FR-210, FR-221).
+ */
+export type ResultadoDasPrevias =
+  | { ok: true; previas: Record<string, Record<Avaliacao, string>> }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
+
+/**
+ * Resultado de `obterPreferencias`: as Preferências do Usuário já com a lista
+ * de algoritmos, ou `indisponivel` quando o armazenamento falhou (FR-212).
+ */
+export type ResultadoDeObterPreferencias =
+  | { ok: true; preferencias: PreferenciasDoUsuario }
+  | { ok: false; erro: "indisponivel" };
+
+/**
+ * Resultado de `salvarPreferencias`: as Preferências salvas no mesmo formato
+ * de `obterPreferencias`. `dados_invalidos` quando o algoritmo não está
+ * disponível ou o limite não é inteiro de 0 a 999; `indisponivel` quando o
+ * armazenamento falhou, sem apresentar a gravação como concluída (FR-200,
+ * FR-212).
+ */
+export type ResultadoDeSalvarPreferencias =
+  | { ok: true; preferencias: PreferenciasDoUsuario }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
 
 /**
  * Interface profunda do Module `Acervo` (Princípio IV).
@@ -396,22 +512,23 @@ export interface Acervo {
   excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
 
   /**
-   * Registra a Sessão **concluída** no Histórico do usuário do `Acervo`
-   * (FR-161). A Sessão interrompida continua sem rastro: só quem conclui chega
-   * aqui, e recusa nenhuma grava pela metade (FR-162, FR-164).
+   * Registra a Sessão **concluída** no Histórico do usuário do `Acervo` e
+   * aplica as Avaliações aos Agendamentos dos Cartões, na mesma transação
+   * (FR-161, FR-210). A Sessão interrompida continua sem rastro: só quem
+   * conclui chega aqui, e recusa nenhuma grava pela metade (FR-162, FR-164).
    *
    * O corpo vem cru e é validado nesta Interface: identificador na forma
-   * canônica de UUID — é ele que dá a idempotência —, Baralho identificado,
-   * nome do Baralho dentro dos limites vigentes, de 1 a 1000 Itens, cada um com
-   * Frente e Verso válidos como Cartão e Resultado `acertou` ou `errou`.
-   * `estudados`, `acertos`, `erros` e `posicao` são **derivados** dos Itens, de
-   * modo que o caller não consegue produzir totais que não batam com a lista
-   * (FR-161). O Baralho não precisa existir: o nome é guardado como era
-   * (FR-165).
+   * canônica de UUID — é ele que dá a idempotência —, Origem `"baralho"` ou
+   * `"revisao"`, de 1 a 1000 Itens, cada um com Frente e Verso válidos como
+   * Cartão, Cartão de origem identificado e Avaliação em um dos quatro níveis.
+   * `estudados`, `acertos`, `erros`, o `resultado` de cada Item e a `posicao`
+   * são **derivados**, de modo que o caller não consegue produzir totais que
+   * não batam com a lista (FR-161, FR-194). O Baralho não precisa existir: o
+   * nome é guardado como era (FR-165).
    *
    * O instante de conclusão é definido na primeira gravação: reenviar o mesmo
-   * registro devolve o registro guardado, sem duplicá-lo e sem mudar a data
-   * (FR-163).
+   * registro devolve o registro guardado, sem duplicá-lo, sem mudar a data e
+   * **sem reaplicar** as Avaliações (FR-163, FR-210, SC-085).
    */
   registrarSessao(
     dados: DadosDeRegistro,
@@ -435,6 +552,61 @@ export interface Acervo {
    * inexistente (FR-166, FR-179).
    */
   obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
+
+  /**
+   * Devolve o Resumo da Revisão do dia (FR-198, FR-199): quantos Agendamentos
+   * estão vencidos até `fimDoDia` e quantos Cartões novos ainda cabem no limite
+   * diário das Preferências do Usuário.
+   *
+   * `inicioDoDia` e `fimDoDia` são instantes ISO-8601 do **navegador** (D3):
+   * precisam ser parseáveis, com o início antes do fim e uma janela de até
+   * 26 h — fora disso, `dados_invalidos`.
+   */
+  obterResumoDaRevisao(
+    inicioDoDia: unknown,
+    fimDoDia: unknown,
+  ): Promise<ResultadoDoResumoDaRevisao>;
+
+  /**
+   * Devolve o lote da Revisão do dia (FR-201, FR-203): os vencidos primeiro,
+   * do mais antigo ao mais novo, depois os novos, cada Cartão no máximo uma vez
+   * e até 20 Itens. Cada Item traz também a prévia da próxima revisão para os
+   * quatro níveis de Avaliação, para os botões da tela (FR-221).
+   *
+   * A janela é validada como em `obterResumoDaRevisao`.
+   */
+  obterLoteDeRevisao(
+    inicioDoDia: unknown,
+    fimDoDia: unknown,
+  ): Promise<ResultadoDoLoteDeRevisao>;
+
+  /**
+   * Devolve, para cada Cartão informado que pertence ao Usuário, a prévia da
+   * próxima revisão nos quatro níveis de Avaliação (FR-221) — o insumo dos
+   * botões do estudo livre.
+   *
+   * `cartaoIds` é uma lista de 1 a 200 identificadores não vazios; um
+   * identificador que não é Cartão do Usuário é **omitido** do resultado, e não
+   * recusado (FR-219).
+   */
+  obterPrevias(cartaoIds: unknown): Promise<ResultadoDasPrevias>;
+
+  /**
+   * Devolve as Preferências de repetição do Usuário com a lista de algoritmos
+   * disponíveis para a tela (FR-212).
+   */
+  obterPreferencias(): Promise<ResultadoDeObterPreferencias>;
+
+  /**
+   * Salva as Preferências de repetição do Usuário (FR-212). Trocar o algoritmo
+   * reconstrói **todos** os Agendamentos por replay do Histórico, sem perder
+   * registro algum (FR-213, SC-083).
+   *
+   * O algoritmo precisa estar disponível e o limite precisa ser inteiro de 0 a
+   * 999 — sendo **0** o "não introduzir Cartões novos" (FR-200); fora disso,
+   * `dados_invalidos`.
+   */
+  salvarPreferencias(dados: unknown): Promise<ResultadoDeSalvarPreferencias>;
 }
 
 /**
@@ -494,6 +666,18 @@ const HISTORICO_INDISPONIVEL = { erro: "indisponivel" } as const;
 /** Limite de Itens de um Registro de sessão (contrato da `013`, FR-161). */
 const LIMITE_DE_ITENS_REGISTRADOS = 1000;
 
+/** Rótulo do Baralho derivado na Sessão de Revisão do dia (D5, FR-196). */
+const NOME_DA_REVISAO_DO_DIA = "Revisão do dia";
+
+/** Folga máxima entre os limites do dia informados, em horas (D3, FR-204). */
+const HORAS_MAXIMAS_NA_JANELA_DO_DIA = 26;
+
+/** Quantidade máxima de identificadores numa consulta de prévias (FR-221). */
+const LIMITE_DE_CARTOES_PARA_PREVIA = 200;
+
+/** Maior valor aceito para o limite de Cartões novos por dia (FR-200). */
+const LIMITE_MAXIMO_DE_NOVOS_POR_DIA = 999;
+
 /** Quantas Sessões concluídas Início mostra (FR-169). */
 const LIMITE_DE_SESSOES_RECENTES = 5;
 
@@ -525,6 +709,24 @@ const IDENTIFICADOR_UNICO_UNIVERSAL =
 const INSTANTE_ISO_8601 =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
+/** `true` para um dos quatro níveis de Avaliação do contrato (FR-193). */
+function ehAvaliacao(valor: unknown): valor is Avaliacao {
+  return (
+    valor === "errei" ||
+    valor === "dificil" ||
+    valor === "bom" ||
+    valor === "facil"
+  );
+}
+
+/**
+ * Resultado derivado da Avaliação (FR-194): `errei` vira `errou`; os outros
+ * três níveis contam como acerto. O cliente nunca envia o Resultado.
+ */
+function resultadoDaAvaliacao(avaliacao: Avaliacao): "acertou" | "errou" {
+  return avaliacao === "errei" ? "errou" : "acertou";
+}
+
 /** `true` para objeto não nulo — a forma que um Item decodificado pode ter. */
 function ehObjeto(valor: unknown): valor is Record<string, unknown> {
   return typeof valor === "object" && valor !== null;
@@ -534,11 +736,11 @@ function ehObjeto(valor: unknown): valor is Record<string, unknown> {
  * Interpreta um Item cru do corpo, com a `posicao` da ordem apresentada —
  * nunca informada pelo cliente (FR-161).
  *
- * Devolve `null` quando Frente, Verso ou Resultado não passam nas regras
- * vigentes: as de Cartão são as mesmas da criação e da edição (FR-002, FR-051,
- * FR-052), e o Resultado precisa ser `acertou` ou `errou`. Reaproveitar
- * `validarFrente` e `validarVerso` garante que um Item guardado nunca teria
- * sido recusado como Cartão.
+ * Devolve `null` quando Frente, Verso, Cartão de origem ou Avaliação não
+ * passam nas regras vigentes: as de conteúdo são as mesmas da criação e da
+ * edição (FR-002, FR-051, FR-052), o `cartaoId` precisa ser uma string não
+ * vazia e a Avaliação precisa estar entre os quatro níveis (FR-193). O
+ * Resultado é **derivado** da Avaliação (FR-194), e não vem do cliente.
  */
 function interpretarItem(
   valor: unknown,
@@ -548,7 +750,7 @@ function interpretarItem(
     return null;
   }
 
-  const { frente, verso, resultado } = valor;
+  const { frente, verso, cartaoId, avaliacao } = valor;
 
   if (typeof frente !== "string" || validarFrente(frente) !== null) {
     return null;
@@ -558,39 +760,73 @@ function interpretarItem(
     return null;
   }
 
-  if (resultado === "acertou" || resultado === "errou") {
-    return { posicao, frente, verso, resultado };
+  if (typeof cartaoId !== "string" || cartaoId.trim().length === 0) {
+    return null;
   }
 
-  return null;
+  if (!ehAvaliacao(avaliacao)) {
+    return null;
+  }
+
+  return {
+    posicao,
+    frente,
+    verso,
+    resultado: resultadoDaAvaliacao(avaliacao),
+    cartaoId,
+    avaliacao,
+  };
 }
 
 /**
  * Interpreta o corpo cru como Registro de sessão, derivando `estudados`,
- * `acertos`, `erros` e a `posicao` de cada Item, e datando a conclusão com o
- * relógio do servidor (FR-161, FR-163).
+ * `acertos`, `erros`, o `resultado` de cada Item e a `posicao`, e datando a
+ * conclusão com `agora` (FR-161, FR-163, FR-194).
+ *
+ * A `origem` decide o Baralho: em `"revisao"`, `baralhoId` e `nomeDoBaralho`
+ * são **derivados** para `""` e `"Revisão do dia"`, ignorando o que o cliente
+ * mandar (D5, FR-196); em `"baralho"`, valem as regras da `013` — Baralho
+ * identificado e nome dentro dos limites vigentes. O Baralho **não** precisa
+ * existir: o registro guarda o nome como era, e o Baralho pode ter sido
+ * excluído antes mesmo de a Sessão ser registrada (FR-165, FR-178).
  *
  * Devolve `null` — recusa `dados_invalidos` — quando qualquer invariante do
- * contrato falha. O Baralho **não** precisa existir: o registro guarda o nome
- * como era, e o Baralho pode ter sido excluído antes mesmo de a Sessão ser
- * registrada (FR-165, FR-178).
+ * contrato falha.
  */
-function interpretarRegistro(dados: DadosDeRegistro): RegistroDeSessao | null {
-  const { id, baralhoId, nomeDoBaralho, itens } = dados;
+function interpretarRegistro(
+  dados: DadosDeRegistro,
+  agora: Date,
+): RegistroDeSessao | null {
+  const { id, origem, baralhoId, nomeDoBaralho, itens } = dados;
 
   if (typeof id !== "string" || !IDENTIFICADOR_UNICO_UNIVERSAL.test(id)) {
     return null;
   }
 
-  if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
+  if (origem !== "baralho" && origem !== "revisao") {
     return null;
   }
 
-  if (
-    typeof nomeDoBaralho !== "string" ||
-    validarNomeDeBaralho(nomeDoBaralho) !== null
-  ) {
-    return null;
+  let baralhoDoRegistro: string;
+  let nomeDoBaralhoDoRegistro: string;
+
+  if (origem === "revisao") {
+    baralhoDoRegistro = "";
+    nomeDoBaralhoDoRegistro = NOME_DA_REVISAO_DO_DIA;
+  } else {
+    if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
+      return null;
+    }
+
+    if (
+      typeof nomeDoBaralho !== "string" ||
+      validarNomeDeBaralho(nomeDoBaralho) !== null
+    ) {
+      return null;
+    }
+
+    baralhoDoRegistro = baralhoId;
+    nomeDoBaralhoDoRegistro = nomeDoBaralho;
   }
 
   if (
@@ -619,9 +855,10 @@ function interpretarRegistro(dados: DadosDeRegistro): RegistroDeSessao | null {
 
   return {
     id,
-    baralhoId,
-    nomeDoBaralho,
-    concluidaEm: new Date().toISOString(),
+    baralhoId: baralhoDoRegistro,
+    nomeDoBaralho: nomeDoBaralhoDoRegistro,
+    origem,
+    concluidaEm: agora.toISOString(),
     estudados: registrados.length,
     acertos,
     erros: registrados.length - acertos,
@@ -663,6 +900,125 @@ function interpretarJanela(desde: unknown, agora: Date): string | null {
 }
 
 /**
+ * Interpreta a lista crua de identificadores de Cartão de `obterPrevias`.
+ *
+ * Devolve `null` quando não é uma lista de 1 a 200 strings não vazias
+ * (FR-221). A ordem é preservada, e quem chama omite os identificadores que não
+ * são Cartões do Usuário.
+ */
+function interpretarCartaoIds(valor: unknown): string[] | null {
+  if (
+    !Array.isArray(valor) ||
+    valor.length === 0 ||
+    valor.length > LIMITE_DE_CARTOES_PARA_PREVIA
+  ) {
+    return null;
+  }
+
+  const ids: string[] = [];
+
+  for (const id of valor) {
+    if (typeof id !== "string" || id.trim().length === 0) {
+      return null;
+    }
+
+    ids.push(id);
+  }
+
+  return ids;
+}
+
+/**
+ * Interpreta os limites do dia da Revisão.
+ *
+ * Devolve `null` quando algum dos dois não é um instante ISO-8601 completo
+ * parseável, quando o fim não é posterior ao início ou quando a janela passa
+ * de 26 h — o dia local mais a folga que o fuso do navegador pode impor
+ * (D3, FR-204).
+ */
+function interpretarJanelaDaRevisao(
+  inicioDoDia: unknown,
+  fimDoDia: unknown,
+): { inicio: Date; fim: Date } | null {
+  if (typeof inicioDoDia !== "string" || !INSTANTE_ISO_8601.test(inicioDoDia)) {
+    return null;
+  }
+
+  if (typeof fimDoDia !== "string" || !INSTANTE_ISO_8601.test(fimDoDia)) {
+    return null;
+  }
+
+  const inicio = new Date(inicioDoDia);
+  const fim = new Date(fimDoDia);
+
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) {
+    return null;
+  }
+
+  const duracao = fim.getTime() - inicio.getTime();
+  const duracaoMaxima =
+    HORAS_MAXIMAS_NA_JANELA_DO_DIA * 60 * 60 * 1000;
+
+  if (duracao <= 0 || duracao > duracaoMaxima) {
+    return null;
+  }
+
+  return { inicio, fim };
+}
+
+/**
+ * Interpreta o corpo cru de `salvarPreferencias`.
+ *
+ * Devolve `null` quando o `algoritmo` não está no registro disponível ou quando
+ * `limiteDeNovosPorDia` não é inteiro de 0 a 999 — sendo **0** o "não
+ * introduzir Cartões novos" (FR-200, FR-212).
+ */
+function interpretarPreferencias(
+  valor: unknown,
+  algoritmos: ReadonlyMap<string, AlgoritmoDeRepeticao>,
+): Preferencias | null {
+  if (!ehObjeto(valor)) {
+    return null;
+  }
+
+  const { algoritmo, limiteDeNovosPorDia } = valor;
+
+  if (typeof algoritmo !== "string" || !algoritmos.has(algoritmo)) {
+    return null;
+  }
+
+  if (
+    typeof limiteDeNovosPorDia !== "number" ||
+    !Number.isInteger(limiteDeNovosPorDia) ||
+    limiteDeNovosPorDia < 0 ||
+    limiteDeNovosPorDia > LIMITE_MAXIMO_DE_NOVOS_POR_DIA
+  ) {
+    return null;
+  }
+
+  return { algoritmo, limiteDeNovosPorDia };
+}
+
+/**
+ * Estado opaco do Agendamento como o algoritmo o lê; `null` = Cartão novo
+ * (FR-188). Espelha o `estadoDoAgendamento` do Module de orquestração, que não
+ * é exportado.
+ */
+function estadoDoAgendamento(
+  agendamento: Agendamento | null,
+): EstadoDoAgendamento | null {
+  if (agendamento === null) {
+    return null;
+  }
+
+  return {
+    algoritmo: agendamento.algoritmo,
+    versao: agendamento.versaoDoAlgoritmo,
+    dados: agendamento.estado,
+  };
+}
+
+/**
  * Cria o `Acervo` do Usuário `usuarioId` sobre a Porta de armazenamento
  * informada — o Adapter do armazenamento local na execução local, o de
  * PostgreSQL na nuvem.
@@ -682,7 +1038,33 @@ function interpretarJanela(desde: unknown, agora: Date): string | null {
 export function criarAcervo(
   armazenamento: ArmazenamentoDoAcervo,
   usuarioId: string,
+  /**
+   * Ponto único de injeção de dependência do Module, usado pelos testes para
+   * exercitar a troca de algoritmo com um algoritmo não registrado em
+   * `ALGORITMOS` (FR-191, FR-213). A produção não informa nada: o padrão é
+   * `ALGORITMOS`.
+   */
+  opcoes: { algoritmos?: ReadonlyMap<string, AlgoritmoDeRepeticao> } = {},
 ): Acervo {
+  const algoritmos = opcoes.algoritmos ?? ALGORITMOS;
+
+  /**
+   * Resolve o algoritmo pelo identificador no registro disponível — o injetado
+   * quando houver, `ALGORITMOS` caso contrário. Desconhecido ou removido cai no
+   * padrão (FR-191), como `algoritmoPorId` faz para o registro global.
+   */
+  function resolverAlgoritmo(id: string): AlgoritmoDeRepeticao {
+    return algoritmos.get(id) ?? algoritmoPorId(id);
+  }
+
+  /** As opções de algoritmo que a tela de Preferências exibe (FR-212). */
+  function opcoesDeAlgoritmo(): OpcaoDeAlgoritmo[] {
+    return [...algoritmos.values()].map((algoritmo) => ({
+      id: algoritmo.id,
+      rotulo: algoritmo.rotulo,
+    }));
+  }
+
   return {
     async criarCartao(dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
@@ -911,22 +1293,50 @@ export function criarAcervo(
     },
 
     async registrarSessao(dados) {
-      const registro = interpretarRegistro(dados);
+      const agora = new Date();
+      const registro = interpretarRegistro(dados, agora);
 
       if (registro === null) {
         return { ok: false, ...DADOS_INVALIDOS };
       }
 
       /**
-       * O instante de conclusão vai junto, mas quem manda é a primeira
-       * inserção: se o `id` já existe para este Usuário, a Porta devolve o
-       * registro guardado — com a data original — e o reenvio não duplica nem
-       * reescreve nada (FR-163). O mesmo `id` de outro Usuário é `conflito`
-       * (FR-166).
+       * O Agendamento nasce da Avaliação de cada Item, aplicada na ordem
+       * apresentada sobre o estado atual dos Agendamentos — é o encadeamento
+       * que faz duas Avaliações seguidas do mesmo Cartão avançarem as
+       * repetições (FR-205, FR-210). As Avaliações já foram validadas em quatro
+       * níveis, então todo Item tem Cartão de origem e Avaliação.
        */
-      const gravado = await armazenamento.inserirRegistroDeSessao(
+      const [preferencias, agendamentos] = await Promise.all([
+        armazenamento.obterPreferencias(usuarioId),
+        armazenamento.listarAgendamentos(usuarioId),
+      ]);
+
+      const algoritmo = resolverAlgoritmo(preferencias.algoritmo);
+      const itens = registro.itens.flatMap((item) =>
+        item.cartaoId != null && item.avaliacao != null
+          ? [{ cartaoId: item.cartaoId, avaliacao: item.avaliacao }]
+          : [],
+      );
+      const aplicados = aplicarAvaliacoes(
+        agendamentos,
+        itens,
+        algoritmo,
+        agora,
+      );
+
+      /**
+       * Registro e Agendamentos entram na mesma transação. O instante de
+       * conclusão é definido na primeira inserção: se o `id` já existe para
+       * este Usuário, a Porta devolve o registro guardado — com a data
+       * original e **sem** reaplicar as Avaliações —, e o reenvio não duplica
+       * nem reescreve nada (FR-163, FR-210, SC-085). O mesmo `id` de outro
+       * Usuário é `conflito` (FR-166).
+       */
+      const gravado = await armazenamento.inserirRegistroEAgendamentos(
         usuarioId,
         registro,
+        aplicados,
       );
 
       if (!gravado.ok) {
@@ -935,7 +1345,7 @@ export function criarAcervo(
           : { ok: false, ...HISTORICO_INDISPONIVEL };
       }
 
-      return { ok: true, registro: gravado.valor };
+      return { ok: true, registro: gravado.valor.registro };
     },
 
     async obterEstatisticas(desde) {
@@ -988,6 +1398,19 @@ export function criarAcervo(
       }
 
       /**
+       * A Sessão da Revisão do dia não tem Baralho: o registro é devolvido
+       * como está, com `baralhoExiste: false` e sem sequer consultar o Baralho
+       * (D5, FR-215).
+       */
+      if (encontrado.valor.origem === "revisao") {
+        return {
+          ok: true,
+          registro: encontrado.valor,
+          baralhoExiste: false,
+        };
+      }
+
+      /**
        * O registro é devolvido como está — a Porta não tem como ele mudar
        * (FR-165) —, e a existência do Baralho é conferida na hora da leitura:
        * o Resumo antigo só indica "Baralho excluído" quando ele sumiu de
@@ -1002,6 +1425,186 @@ export function criarAcervo(
         ok: true,
         registro: encontrado.valor,
         baralhoExiste: baralho.ok,
+      };
+    },
+
+    async obterResumoDaRevisao(inicioDoDia, fimDoDia) {
+      const janela = interpretarJanelaDaRevisao(inicioDoDia, fimDoDia);
+
+      if (janela === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const [cartoes, agendamentos, preferencias] = await Promise.all([
+        armazenamento.listarCartoes(usuarioId),
+        armazenamento.listarAgendamentos(usuarioId),
+        armazenamento.obterPreferencias(usuarioId),
+      ]);
+
+      const contagem = resumoDaRevisao(
+        cartoes,
+        agendamentos,
+        preferencias,
+        janela.inicio,
+        janela.fim,
+      );
+
+      return {
+        ok: true,
+        resumo: {
+          vencidos: contagem.vencidos,
+          novosHoje: contagem.novosHoje,
+          total: contagem.vencidos + contagem.novosHoje,
+        },
+      };
+    },
+
+    async obterLoteDeRevisao(inicioDoDia, fimDoDia) {
+      const janela = interpretarJanelaDaRevisao(inicioDoDia, fimDoDia);
+
+      if (janela === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const [cartoes, agendamentos, preferencias] = await Promise.all([
+        armazenamento.listarCartoes(usuarioId),
+        armazenamento.listarAgendamentos(usuarioId),
+        armazenamento.obterPreferencias(usuarioId),
+      ]);
+
+      const algoritmo = resolverAlgoritmo(preferencias.algoritmo);
+      const porCartao = new Map(
+        agendamentos.map((agendamento) => [agendamento.cartaoId, agendamento]),
+      );
+      const agora = new Date();
+
+      return {
+        ok: true,
+        itens: loteDeRevisao(
+          cartoes,
+          agendamentos,
+          preferencias,
+          janela.inicio,
+          janela.fim,
+        ).map((cartao) => ({
+          cartao,
+          previa: previa(
+            algoritmo,
+            estadoDoAgendamento(porCartao.get(cartao.id) ?? null),
+            agora,
+          ),
+        })),
+      };
+    },
+
+    async obterPrevias(cartaoIds) {
+      const ids = interpretarCartaoIds(cartaoIds);
+
+      if (ids === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const [cartoes, agendamentos, preferencias] = await Promise.all([
+        armazenamento.listarCartoes(usuarioId),
+        armazenamento.listarAgendamentos(usuarioId),
+        armazenamento.obterPreferencias(usuarioId),
+      ]);
+
+      const algoritmo = resolverAlgoritmo(preferencias.algoritmo);
+      const existentes = new Set(cartoes.map((cartao) => cartao.id));
+      const porCartao = new Map(
+        agendamentos.map((agendamento) => [agendamento.cartaoId, agendamento]),
+      );
+      const agora = new Date();
+
+      /**
+       * Identificador que não é Cartão do Usuário é **omitido**, e não
+       * recusado: a tela pede a prévia dos Cartões que vai estudar, e um Cartão
+       * excluído nesse meio-tempo não invalida os demais (FR-219).
+       */
+      const previas: Record<string, Record<Avaliacao, string>> = {};
+
+      for (const id of ids) {
+        if (!existentes.has(id)) {
+          continue;
+        }
+
+        previas[id] = previa(
+          algoritmo,
+          estadoDoAgendamento(porCartao.get(id) ?? null),
+          agora,
+        );
+      }
+
+      return { ok: true, previas };
+    },
+
+    async obterPreferencias() {
+      const preferencias = await armazenamento.obterPreferencias(usuarioId);
+
+      return {
+        ok: true,
+        preferencias: {
+          algoritmo: preferencias.algoritmo,
+          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
+          algoritmos: opcoesDeAlgoritmo(),
+        },
+      };
+    },
+
+    async salvarPreferencias(dados) {
+      const preferencias = interpretarPreferencias(dados, algoritmos);
+
+      if (preferencias === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const atuais = await armazenamento.obterPreferencias(usuarioId);
+
+      if (preferencias.algoritmo !== atuais.algoritmo) {
+        /**
+         * Trocar de algoritmo reconstrói **todos** os Agendamentos por replay
+         * do Histórico — nenhum registro se perde, e o Cartão reaparece no dia
+         * que o novo algoritmo calcular (FR-213, SC-083).
+         */
+        const [itensAvaliados, cartoes] = await Promise.all([
+          armazenamento.listarItensAvaliados(usuarioId),
+          armazenamento.listarCartoes(usuarioId),
+        ]);
+
+        const agendamentos = reconstruir(
+          itensAvaliados,
+          cartoes.map((cartao) => cartao.id),
+          resolverAlgoritmo(preferencias.algoritmo),
+        );
+
+        const substituido = await armazenamento.substituirAgendamentos(
+          usuarioId,
+          preferencias,
+          agendamentos,
+        );
+
+        if (!substituido.ok) {
+          return { ok: false, ...HISTORICO_INDISPONIVEL };
+        }
+      } else {
+        const salvo = await armazenamento.salvarPreferencias(
+          usuarioId,
+          preferencias,
+        );
+
+        if (!salvo.ok) {
+          return { ok: false, ...HISTORICO_INDISPONIVEL };
+        }
+      }
+
+      return {
+        ok: true,
+        preferencias: {
+          algoritmo: preferencias.algoritmo,
+          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
+          algoritmos: opcoesDeAlgoritmo(),
+        },
       };
     },
   };

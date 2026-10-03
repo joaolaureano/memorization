@@ -54,14 +54,16 @@ describe("criação do esquema", () => {
     expect(tabela).toEqual({ name: "cartao" });
   });
 
-  it("tem exatamente id, frente, verso e usuario_id, com o dono obrigatório e indexado", () => {
+  it("tem exatamente id, frente, verso, usuario_id e criado_em, com o dono obrigatório e indexado", () => {
     const colunas = banco.prepare("PRAGMA table_info(cartao)").all();
 
+    /** `criado_em` vem da migração 7: a ordem de criação dos Cartões (FR-201). */
     expect(colunas.map((coluna) => coluna.name)).toEqual([
       "id",
       "frente",
       "verso",
       "usuario_id",
+      "criado_em",
     ]);
     expect(colunas[3]).toMatchObject({
       name: "usuario_id",
