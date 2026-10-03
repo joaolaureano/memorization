@@ -167,16 +167,26 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
 
     await expect(itens).toHaveCount(2);
 
-    // FR-144: sem Cartões, cada Baralho se apresenta como não pronto para
-    // estudar e o controle Estudar é um botão desabilitado — não um link.
+    // FR-144 revisado (SC-079): a linha é fina — o nome é o próprio link do
+    // detalhe, com nome acessível exatamente igual ao nome do Baralho; a
+    // contagem fica logo abaixo; a elegibilidade se comunica só pelo controle
+    // Estudar. Não há linha de status, eyebrow nem "Ver baralho".
     for (const item of [itens.nth(0), itens.nth(1)]) {
-      await expect(item).toContainText("0 Cartões");
-      await expect(item).toContainText(
-        "Adicione Cartões para começar a estudar.",
-      );
       await expect(
-        item.getByRole("button", { name: `Estudar ${NOME_DO_BARALHO}` }),
-      ).toBeDisabled();
+        item.getByRole("link", { name: NOME_DO_BARALHO, exact: true }),
+      ).toBeVisible();
+      await expect(item).toContainText("0 Cartões");
+
+      // Sem Cartões, Estudar é um botão desabilitado — não um link — descrito
+      // pelo motivo em texto, nunca só pela cor.
+      const estudar = item.getByRole("button", {
+        name: `Estudar ${NOME_DO_BARALHO}`,
+      });
+
+      await expect(estudar).toBeDisabled();
+      await expect(estudar).toHaveAccessibleDescription(
+        /Sem Cartões para estudar/,
+      );
     }
 
     // Persistência exata conferida também direto na API: os mesmos ids, os

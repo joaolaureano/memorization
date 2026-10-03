@@ -117,7 +117,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     // Cartões vinculados, "Estudar" é um botão desabilitado (spec 012).
     await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
     await expect(
-      page.getByRole("link", { name: `Ver baralho ${NOME_DO_BARALHO}` }),
+      page.getByRole("link", { name: NOME_DO_BARALHO, exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: `Estudar ${NOME_DO_BARALHO}` }),
@@ -245,7 +245,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
 
     // O detalhe segue com o Cartão vinculado (mesmo id, mesma Frente e Verso).
     await page
-      .getByRole("link", { name: `Ver baralho ${NOME_DO_BARALHO}` })
+      .getByRole("link", { name: NOME_DO_BARALHO, exact: true })
       .click();
 
     await expect(

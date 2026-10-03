@@ -13,9 +13,10 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. A criação mora em outra tela: aqui se prova
  * que a lista apenas a alcança por ação da pessoa (FR-140), que cada Baralho
- * aparece com nome, contagem pluralizada, estado e controles de nome acessível
- * único (FR-144), que o estado vazio orienta a primeira ação (FR-153) e que a
- * falha de listagem oferece nova tentativa (FR-148).
+ * aparece como uma linha compacta, com o nome abrindo o detalhe, a contagem e
+ * controles de nome acessível único (FR-144, SC-079), que o estado vazio
+ * orienta a primeira ação (FR-153) e que a falha de listagem oferece nova
+ * tentativa (FR-148).
  *
  * O acervo é semeado pela própria Interface — `criarBaralho`, `criarCartao` e
  * `vincular` —, nunca por um caminho que a tela ofereça.
@@ -62,10 +63,10 @@ function renderizarPaginaDeBaralhos(
   return cliente;
 }
 
-/** O item de lista do Baralho de nome informado. */
+/** O item de lista do Baralho de nome informado, pelo link do próprio nome. */
 function itemDoBaralho(nome: string): HTMLElement {
-  const titulo = screen.getByRole("heading", { level: 2, name: nome });
-  const item = titulo.closest("li");
+  const link = screen.getByRole("link", { name: nome });
+  const item = link.closest("li");
 
   if (item === null) {
     throw new Error(`Item do Baralho "${nome}" não encontrado.`);
@@ -120,23 +121,37 @@ describe("PaginaDeBaralhos", () => {
     ).toHaveAttribute("href", "#/baralhos/novo");
   });
 
-  it("lista cada Baralho com nome, contagem pluralizada e estado (FR-144)", async () => {
+  it("lista cada Baralho em uma linha: o nome abre o detalhe e a contagem fica fora do link (FR-144, SC-079)", async () => {
     const cliente = clienteDeProva();
-    await semearBaralho(cliente, "Inglês", ["Hello", "Goodbye"]);
-    await semearBaralho(cliente, "Alemão");
+    const idDeIngles = await semearBaralho(cliente, "Inglês", [
+      "Hello",
+      "Goodbye",
+    ]);
+    const idDeAlemao = await semearBaralho(cliente, "Alemão");
 
     renderizarPaginaDeBaralhos(cliente);
 
     await screen.findAllByRole("listitem");
 
-    expect(itemDoBaralho("Inglês")).toHaveTextContent("2 Cartões");
-    expect(itemDoBaralho("Inglês")).toHaveTextContent(
-      "Pronto para uma Sessão de estudo.",
-    );
-    expect(itemDoBaralho("Alemão")).toHaveTextContent("0 Cartões");
-    expect(itemDoBaralho("Alemão")).toHaveTextContent(
-      "Adicione Cartões para começar a estudar.",
-    );
+    const itemDeIngles = itemDoBaralho("Inglês");
+    const nomeDeIngles = within(itemDeIngles).getByRole("link", {
+      name: "Inglês",
+    });
+
+    expect(nomeDeIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
+    expect(itemDeIngles).toHaveTextContent("2 Cartões");
+
+    const itemDeAlemao = itemDoBaralho("Alemão");
+
+    expect(
+      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
+    ).toHaveAttribute("href", `#/baralhos/${idDeAlemao}`);
+    expect(itemDeAlemao).toHaveTextContent("0 Cartões");
+
+    // A linha compacta não traz rótulo de tipo nem linha de status.
+    expect(screen.queryByText("Baralho")).toBeNull();
+    expect(within(itemDeIngles).queryByText(/pronto para/i)).toBeNull();
+    expect(within(itemDeAlemao).queryByText(/adicione cartões/i)).toBeNull();
   });
 
   it("pluraliza a contagem de um único Cartão (FR-144)", async () => {
@@ -163,7 +178,7 @@ describe("PaginaDeBaralhos", () => {
     expect(linkDeEstudo).toHaveAttribute("href", `#/baralhos/${id}/estudo`);
   });
 
-  it("o Estudar de um Baralho vazio é um botão desabilitado descrito pelo estado (FR-144)", async () => {
+  it("o Estudar de um Baralho vazio é um botão desabilitado descrito pelo motivo (FR-144)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
@@ -175,11 +190,11 @@ describe("PaginaDeBaralhos", () => {
 
     expect(botaoDeEstudo).toBeDisabled();
     expect(botaoDeEstudo).toHaveAccessibleDescription(
-      "Adicione Cartões para começar a estudar.",
+      "Sem Cartões para estudar.",
     );
   });
 
-  it("os controles de cada Baralho têm nomes acessíveis únicos (FR-144)", async () => {
+  it("cada Baralho tem exatamente dois controles, com nomes acessíveis únicos (FR-144, SC-079)", async () => {
     const cliente = clienteDeProva();
     const idDeIngles = await semearBaralho(cliente, "Inglês", ["Hello"]);
     await semearBaralho(cliente, "Alemão");
@@ -188,22 +203,43 @@ describe("PaginaDeBaralhos", () => {
 
     await screen.findAllByRole("listitem");
 
-    const verIngles = screen.getByRole("link", { name: "Ver baralho Inglês" });
-    expect(verIngles).toHaveTextContent("Ver baralho");
-    expect(verIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
+    const itemDeIngles = itemDoBaralho("Inglês");
 
+    // Só dois controles: o nome (detalhe) e o Estudar. Nada de "Ver baralho".
+    expect(within(itemDeIngles).getAllByRole("link")).toHaveLength(2);
+    expect(within(itemDeIngles).queryAllByRole("button")).toHaveLength(0);
+
+    const nomeDeIngles = within(itemDeIngles).getByRole("link", {
+      name: "Inglês",
+    });
+    expect(nomeDeIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
+
+    const estudarIngles = within(itemDeIngles).getByRole("link", {
+      name: "Estudar Inglês",
+    });
+    expect(estudarIngles).toHaveTextContent("Estudar");
+    expect(estudarIngles).toHaveAttribute(
+      "href",
+      `#/baralhos/${idDeIngles}/estudo`,
+    );
+
+    const itemDeAlemao = itemDoBaralho("Alemão");
+
+    // O Baralho vazio troca o link por um botão desabilitado, e o nome segue
+    // sendo o único outro controle.
+    expect(within(itemDeAlemao).getAllByRole("link")).toHaveLength(1);
     expect(
-      screen.getByRole("link", { name: "Ver baralho Alemão" }),
-    ).toHaveTextContent("Ver baralho");
+      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Estudar Inglês" }),
-    ).toHaveTextContent("Estudar");
-    expect(
-      screen.getByRole("button", { name: "Estudar Alemão" }),
+      within(itemDeAlemao).getByRole("button", { name: "Estudar Alemão" }),
     ).toBeDisabled();
     expect(
       screen.queryByRole("link", { name: "Estudar Alemão" }),
     ).not.toBeInTheDocument();
+
+    // Nenhum nome acessível se repete entre os Baralhos.
+    expect(screen.queryByRole("link", { name: /ver baralho/i })).toBeNull();
   });
 
   it("a falha de listagem traz a mensagem da Interface e relê o acervo na nova tentativa (FR-046, FR-148)", async () => {

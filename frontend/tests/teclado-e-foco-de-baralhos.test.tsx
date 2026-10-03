@@ -15,9 +15,9 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * A tela é exercitada pela superfície da Seam `ClienteDoAcervo` com o
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
- * 1. A ordem de tabulação segue a disposição visual — Criar baralho, depois
- *    Ver baralho e Estudar de cada Baralho —, com o elemento focado conferido
- *    a cada passo por `document.activeElement`.
+ * 1. A ordem de tabulação segue a disposição visual — Criar baralho, depois o
+ *    nome e o Estudar de cada Baralho —, com o elemento focado conferido a
+ *    cada passo por `document.activeElement`.
  * 2. O Estudar de um Baralho vazio fica fora da ordem de tabulação, por ser um
  *    controle desabilitado, e a falha de listagem deixa a nova tentativa como
  *    única ação além do cabeçalho, acionável por Enter.
@@ -98,7 +98,7 @@ async function semearBaralho(
 }
 
 describe("PaginaDeBaralhos por teclado", () => {
-  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Ver baralho → Estudar (FR-144)", async () => {
+  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → nome → Estudar (FR-144)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
 
@@ -110,9 +110,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     expect(controles[0]).toBe(
       screen.getByRole("link", { name: "Criar baralho" }),
     );
-    expect(controles[1]).toBe(
-      screen.getByRole("link", { name: "Ver baralho Inglês" }),
-    );
+    expect(controles[1]).toBe(screen.getByRole("link", { name: "Inglês" }));
     expect(controles[2]).toBe(
       screen.getByRole("link", { name: "Estudar Inglês" }),
     );
@@ -146,7 +144,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     apertarTab();
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Ver baralho Alemão" }),
+      screen.getByRole("link", { name: "Alemão" }),
     );
   });
 

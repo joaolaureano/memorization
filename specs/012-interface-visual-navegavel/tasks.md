@@ -161,3 +161,15 @@ e `npm run build`. Nas fases 6 e 7 também `npm run test:e2e`, na raiz, e
 | T1121 | As quatro ações do Baralho ficam no primeiro viewport e antes dos Cartões no Tab, com 0, 1 e 40 Cartões, de 360 a 1440 px; Remover deste baralho continua em cada Cartão | FR-145 (revisado), SC-078 | — | testes de tela e e2e verdes; CI e deploy verdes |
 
 </details>
+
+## Revisão de 2026-10-02 — lista de Baralhos compacta
+
+- [X] T1122 `PaginaDeBaralhos.tsx` + `estilos.css`: uma linha por Baralho (nome = link do detalhe, quantidade, Estudar à direita; sem rótulo, status ou "Ver baralho"); testes de tela; e2e de densidade (linha ≤ 72 px; ≥ 6 Baralhos em 390 × 844) e specs que usavam "Ver baralho"
+
+<details><summary>Metadados</summary>
+
+| ID | Objetivo observável | Requisitos | Depende | Concluída quando |
+|---|---|---|---|---|
+| T1122 | Lista compacta com Estudar acessível (desativado com motivo associado quando vazio), alvos de 44 px e sem rolagem horizontal | FR-144 (revisado), SC-079 | — | testes de tela e e2e verdes; CI e deploy verdes |
+
+</details>

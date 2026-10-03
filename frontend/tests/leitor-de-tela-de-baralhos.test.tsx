@@ -14,10 +14,10 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * `getByRole`, nome por `getByRole`/`toHaveAccessibleDescription` e estado de
  * região ativa por `aria-live`. O carregamento é uma região ativa polida
  * (`role="status"`); a falha é uma região assertiva (`role="alert"`), com a
- * mensagem da Interface e a ação de nova tentativa. Cada Baralho é um item de
- * lista com título próprio e ações de nome acessível único, e a elegibilidade
- * se comunica pelo próprio controle Estudar — nunca por um texto de
- * elegibilidade.
+ * mensagem da Interface e a ação de nova tentativa. Cada Baralho é um item
+ * de lista cujo nome é o próprio link do detalhe, com ações de nome acessível
+ * único, e a elegibilidade se comunica pelo controle Estudar — quando vazio,
+ * por um motivo em texto associado ao botão desabilitado.
  */
 
 /** Cria um Baralho já vinculado aos Cartões informados, pela Interface. */
@@ -50,10 +50,10 @@ async function semearBaralho(
   }
 }
 
-/** O item de lista do Baralho de nome informado. */
+/** O item de lista do Baralho de nome informado, pelo link do próprio nome. */
 function itemDoBaralho(nome: string): HTMLElement {
-  const titulo = screen.getByRole("heading", { level: 2, name: nome });
-  const item = titulo.closest("li");
+  const link = screen.getByRole("link", { name: nome });
+  const item = link.closest("li");
 
   if (item === null) {
     throw new Error(`Item do Baralho "${nome}" não encontrado.`);
@@ -124,7 +124,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 
-  it("cada Baralho é um item de lista com título próprio e ações nomeadas (FR-144)", async () => {
+  it("cada Baralho é um item de lista cujo nome abre o detalhe, com ações nomeadas (FR-144)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
     await semearBaralho(cliente, "Alemão");
@@ -136,11 +136,8 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     const itemDeIngles = itemDoBaralho("Inglês");
 
     expect(
-      within(itemDeIngles).getByRole("heading", { level: 2, name: "Inglês" }),
-    ).toBeInTheDocument();
-    expect(
-      within(itemDeIngles).getByRole("link", { name: "Ver baralho Inglês" }),
-    ).toBeInTheDocument();
+      within(itemDeIngles).getByRole("link", { name: "Inglês" }),
+    ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/.+$/));
     expect(
       within(itemDeIngles).getByRole("link", { name: "Estudar Inglês" }),
     ).toBeInTheDocument();
@@ -148,14 +145,14 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     const itemDeAlemao = itemDoBaralho("Alemão");
 
     expect(
-      within(itemDeAlemao).getByRole("link", { name: "Ver baralho Alemão" }),
+      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
     ).toBeInTheDocument();
     expect(
       within(itemDeAlemao).getByRole("button", { name: "Estudar Alemão" }),
     ).toBeDisabled();
   });
 
-  it("o Estudar desabilitado é descrito pelo estado do Baralho, sem texto de elegibilidade (FR-144)", async () => {
+  it("o Estudar desabilitado expõe o motivo em texto, não só pela cor (FR-144)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
@@ -170,7 +167,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
 
     expect(botaoDeEstudo).toBeDisabled();
     expect(botaoDeEstudo).toHaveAccessibleDescription(
-      "Adicione Cartões para começar a estudar.",
+      "Sem Cartões para estudar.",
     );
     expect(within(item).queryByText(/elegível/i)).not.toBeInTheDocument();
   });

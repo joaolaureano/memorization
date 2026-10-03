@@ -182,6 +182,14 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     await expect(
       page.getByRole("listitem").filter({ hasText: BARALHO_RESTANTE }),
     ).toHaveCount(1);
+    // Com Cartões, a elegibilidade aparece como o link Estudar visível na
+    // linha fina da lista (FR-144 revisado, SC-079).
+    await expect(
+      page
+        .getByRole("listitem")
+        .filter({ hasText: BARALHO_RESTANTE })
+        .getByRole("link", { name: `Estudar ${BARALHO_RESTANTE}` }),
+    ).toBeVisible();
 
     const respostaDoBaralhoRemovido = await fetch(
       `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoARemover.id)}`,
@@ -260,14 +268,35 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
 
     await expect(itemDoBaralhoRestante).toHaveCount(1);
     await expect(itemDoBaralhoRestante).toContainText("0 Cartões");
-    await expect(itemDoBaralhoRestante).toContainText(
+
+    // Linha fina da lista (FR-144 revisado, SC-079): o nome é o próprio link
+    // do detalhe, com nome acessível exatamente o nome do Baralho. A linha de
+    // status — "Adicione Cartões para começar a estudar." — e o rótulo
+    // "Baralho"/"Ver baralho" não existem mais.
+    await expect(
+      itemDoBaralhoRestante.getByRole("link", {
+        name: BARALHO_RESTANTE,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(itemDoBaralhoRestante).not.toContainText(
       "Adicione Cartões para começar a estudar.",
     );
-    await expect(
-      itemDoBaralhoRestante.getByRole("button", {
-        name: `Estudar ${BARALHO_RESTANTE}`,
-      }),
-    ).toBeDisabled();
+    await expect(itemDoBaralhoRestante).not.toContainText(
+      "Pronto para uma Sessão de estudo.",
+    );
+
+    // Sem Cartões, o controle Estudar é um botão desabilitado descrito pelo
+    // motivo em texto — nunca apenas pela cor (FR-144).
+    const controleEstudarDoBaralhoRestante = itemDoBaralhoRestante.getByRole(
+      "button",
+      { name: `Estudar ${BARALHO_RESTANTE}` },
+    );
+
+    await expect(controleEstudarDoBaralhoRestante).toBeDisabled();
+    await expect(controleEstudarDoBaralhoRestante).toHaveAccessibleDescription(
+      /Sem Cartões para estudar/,
+    );
   } finally {
     await encerrarProcesso(frontend);
     await encerrarProcesso(api);

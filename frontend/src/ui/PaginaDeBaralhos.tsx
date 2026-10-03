@@ -21,9 +21,11 @@ import { hashDaRota } from "./navegacao";
  * Carregando, falha e vazio vêm de `EstadoDaCarga` (FR-153), e a falha oferece
  * "Tentar novamente", que relê a lista pela Interface (FR-148).
  *
- * A elegibilidade não vira texto: ela se comunica pelo próprio controle
- * Estudar — link quando o Baralho tem Cartões, botão desabilitado descrito
- * pelo estado do Baralho quando não tem (FR-144).
+ * Cada Baralho é uma linha fina (FR-144 revisado, SC-079): o nome é o próprio
+ * link do detalhe — sem rótulo de tipo, linha de status ou botão separado —,
+ * a contagem fica logo abaixo e a elegibilidade se comunica pelo controle
+ * Estudar: link quando o Baralho tem Cartões, botão desabilitado descrito
+ * pelo motivo quando não tem (FR-144).
  */
 
 interface PropriedadesDaPaginaDeBaralhos {
@@ -106,7 +108,7 @@ export function PaginaDeBaralhos({
           }
         />
       ) : (
-        <ul className="lista">
+        <ul className="lista lista--compacta">
           {baralhos.map((baralho) => (
             <ItemDeBaralho key={baralho.id} baralho={baralho} />
           ))}
@@ -117,57 +119,55 @@ export function PaginaDeBaralhos({
 }
 
 /**
- * Um Baralho na lista (FR-144).
+ * Um Baralho na linha compacta da lista (FR-144 revisado, SC-079).
  *
- * A elegibilidade não vira texto próprio: o controle Estudar a comunica — link
- * para a Sessão de estudo quando o Baralho tem Cartões, botão desabilitado
- * descrito pelo estado do Baralho quando não tem. Os `aria-label` mantêm o
- * texto visível curto e, ao mesmo tempo, um nome acessível único por Baralho.
+ * O nome é o próprio link do detalhe: sem `aria-label` e sem texto extra
+ * dentro do link, o nome acessível é exatamente o nome do Baralho, e a
+ * contagem fica fora dele, logo abaixo. O controle Estudar mantém um nome
+ * acessível único e, quando não há Cartões, é um botão desabilitado descrito
+ * pelo motivo em texto — nunca apenas pela cor.
  */
 function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
-  const estadoDoBaralhoId = `estado-do-baralho-${baralho.id}`;
+  const motivoSemCartoesId = `motivo-sem-cartoes-${baralho.id}`;
   const temCartoes = baralho.quantidadeDeCartoes > 0;
 
   return (
-    <li className="cartao">
-      <p className="sobretitulo">Baralho</p>
-      <h2 className="titulo-do-item">{baralho.nome}</h2>
-      <p className="texto-secundario">
-        {contagemDeCartoes(baralho.quantidadeDeCartoes)}
-      </p>
-      <p id={estadoDoBaralhoId} className="texto-secundario">
-        {temCartoes
-          ? "Pronto para uma Sessão de estudo."
-          : "Adicione Cartões para começar a estudar."}
-      </p>
-      <div className="acoes">
+    <li className="linha-de-baralho">
+      <div className="linha-de-baralho__texto">
+        <a
+          className="linha-de-baralho__nome"
+          href={hashDaRota({ nome: "baralho", id: baralho.id })}
+        >
+          {baralho.nome}
+        </a>
+        <p className="texto-secundario linha-de-baralho__contagem">
+          {contagemDeCartoes(baralho.quantidadeDeCartoes)}
+        </p>
+      </div>
+      {temCartoes ? (
         <a
           className="botao botao--secundario"
-          href={hashDaRota({ nome: "baralho", id: baralho.id })}
-          aria-label={`Ver baralho ${baralho.nome}`}
+          href={hashDaRota({ nome: "estudo", id: baralho.id })}
+          aria-label={`Estudar ${baralho.nome}`}
         >
-          Ver baralho
+          Estudar
         </a>
-        {baralho.elegivel ? (
-          <a
-            className="botao botao--secundario"
-            href={hashDaRota({ nome: "estudo", id: baralho.id })}
-            aria-label={`Estudar ${baralho.nome}`}
-          >
-            Estudar
-          </a>
-        ) : (
-          <button
-            type="button"
-            className="botao botao--secundario"
-            disabled
-            aria-describedby={estadoDoBaralhoId}
-            aria-label={`Estudar ${baralho.nome}`}
-          >
-            Estudar
-          </button>
-        )}
-      </div>
+      ) : (
+        <button
+          type="button"
+          className="botao botao--secundario"
+          disabled
+          aria-describedby={motivoSemCartoesId}
+          aria-label={`Estudar ${baralho.nome}`}
+        >
+          Estudar
+        </button>
+      )}
+      {temCartoes ? null : (
+        <span id={motivoSemCartoesId} className="visualmente-oculto">
+          Sem Cartões para estudar.
+        </span>
+      )}
     </li>
   );
 }

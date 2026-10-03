@@ -15,6 +15,8 @@
  *             grafico-semanal__trilho, grafico-semanal__barra,
  *             grafico-semanal__valor, grafico-semanal__rotulo,
  *             item-da-lista, item-da-lista__nome, item-da-lista__percentual
+ * Baralhos:   lista--compacta, linha-de-baralho, linha-de-baralho__texto,
+ *             linha-de-baralho__nome, linha-de-baralho__contagem
  * Utilitários: lista, voltar, visualmente-oculto
  */
 
@@ -801,6 +803,60 @@ dialog .acoes {
   list-style: none;
   display: grid;
   gap: 0.75rem;
+}
+
+/* Lista compacta de Baralhos (FR-144 revisado, SC-079): uma única superfície
+ * com divisórias, uma linha fina por Baralho — nome (link do detalhe) e
+ * contagem à esquerda, Estudar à direita. */
+.lista--compacta {
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.lista--compacta > .linha-de-baralho + .linha-de-baralho {
+  border-top: 1px solid var(--border);
+}
+
+.linha-de-baralho {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 16px;
+}
+
+/* O texto leva a sobra da linha; Estudar fica à direita, sem encolher. */
+.linha-de-baralho__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* O nome é o próprio link do detalhe: bloco com alvo de 44px, sem rótulo
+ * extra. A contagem cabe dentro do mesmo bloco, logo abaixo do nome, de modo
+ * que a linha não passe de 72px com nomes de até 40 caracteres. */
+.linha-de-baralho__nome {
+  display: flex;
+  align-items: flex-end;
+  min-height: 44px;
+  color: var(--accent);
+  font-weight: 650;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.linha-de-baralho__contagem {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.linha-de-baralho > .botao {
+  flex: 0 0 auto;
 }
 
 /* Ritmo vertical: o bloco que segue a lista mantém 16px de respiro. */

@@ -208,13 +208,13 @@ async function percursoPorTeclado(
   );
   await expect(linkExato(page, "Criar cartão")).toBeVisible();
 
-  // De volta ao Baralho: navegação Principal → lista → "Ver baralho".
+  // De volta ao Baralho: navegação Principal → lista → nome do Baralho.
   await acionarPorTab(page, linkExato(page, "Baralhos"));
   await expect(
     page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
   ).toBeVisible();
 
-  await acionarPorTab(page, linkExato(page, `Ver baralho ${NOME_DO_BARALHO}`));
+  await acionarPorTab(page, linkExato(page, NOME_DO_BARALHO));
   await expect(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();
@@ -244,7 +244,7 @@ async function percursoPorTeclado(
   await expect(
     page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
   ).toBeVisible();
-  await acionarPorTab(page, linkExato(page, `Ver baralho ${NOME_DO_BARALHO}`));
+  await acionarPorTab(page, linkExato(page, NOME_DO_BARALHO));
   await expect(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();

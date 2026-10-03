@@ -16,7 +16,8 @@ import {
 //
 // Provas: sem rolagem horizontal em viewport de telefone (scrollWidth <=
 // clientWidth, no topo e no fim da lista) e um Baralho conhecido é visualmente
-// localizável sem busca ou paginação, com a elegibilidade comunicada por texto.
+// localizável sem busca ou paginação, com a elegibilidade comunicada pelo
+// controle Estudar desabilitado e por sua descrição acessível (FR-144 revisado).
 
 const PORTA_DO_FRONTEND = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
 const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
@@ -103,7 +104,7 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
 
   // A lista é navegável até o fim: a rolagem vertical alcança o último
   // Baralho, e o Baralho conhecido é visualmente localizável sem busca ou
-  // paginação, com o estado comunicado por texto e pelo controle Estudar.
+  // paginação, com o estado comunicado pelo controle Estudar.
   const ultimoBaralho = baralhos[QUANTIDADE_DE_BARALHOS - 1];
   const itemConhecido = page
     .getByRole('listitem')
@@ -111,14 +112,25 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
 
   await itemConhecido.scrollIntoViewIfNeeded();
   await expect(itemConhecido).toBeVisible();
-  await expect(itemConhecido).toContainText(
-    'Adicione Cartões para começar a estudar.',
-  );
+
+  // FR-144 revisado: cada Baralho é uma linha fina — o nome é o próprio link
+  // do detalhe (nome acessível exatamente o nome do Baralho), seguido da
+  // contagem e do controle Estudar. A antiga linha de status ("Adicione
+  // Cartões para começar a estudar.") não existe mais.
   await expect(
-    itemConhecido.getByRole('button', {
-      name: `Estudar ${ultimoBaralho.nome}`,
-    }),
-  ).toBeDisabled();
+    itemConhecido.getByRole('link', { name: ultimoBaralho.nome }),
+  ).toBeVisible();
+
+  // Sem Cartões, Estudar é um botão desabilitado cujo motivo chega pela
+  // descrição acessível "Sem Cartões para estudar." — nunca apenas pela cor.
+  const controlarEstudar = itemConhecido.getByRole('button', {
+    name: `Estudar ${ultimoBaralho.nome}`,
+  });
+
+  await expect(controlarEstudar).toBeDisabled();
+  await expect(controlarEstudar).toHaveAccessibleDescription(
+    /Sem Cartões para estudar/,
+  );
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
