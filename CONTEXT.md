@@ -126,10 +126,29 @@ Escolhas do usuário que valem para todo o seu acervo: o algoritmo de repetiçã
 espaçada e o limite diário de cartões novos.
 _Avoid_: configurações, settings, ajustes, opções
 
+### Agenda de estudo
+
+**Agenda de estudo**:
+Organização dos compromissos de estudo de um usuário por dia, com o que foi
+programado e o que foi concluído. Na interface, é chamada Agenda.
+_Avoid_: agendamento do cartão, revisão do dia, calendário de revisões
+
+**Rotina de estudo**:
+Regra semanal de um usuário para estudar um baralho nos dias escolhidos,
+com todos os cartões ou uma quantidade definida.
+_Avoid_: agendamento do cartão, lembrete, tarefa, meta
+
+**Compromisso de estudo**:
+Estudo previsto por uma rotina em uma data específica. Sua conclusão está
+associada a um registro de sessão iniciado por esse compromisso.
+_Avoid_: agendamento do cartão, evento, tarefa, revisão do dia
+
 ### Acesso
 
 **Usuário**:
-Quem se cadastra na aplicação, identificado pelo nome de usuário.
+Quem se cadastra na aplicação, identificado pelo nome de usuário. Na interface,
+os dados do usuário aparecem em "Minha conta", e excluí-lo é rotulado
+"Excluir conta"; excluir um usuário remove tudo o que lhe pertence.
 _Avoid_: user, conta, perfil, account, cliente
 
 **Nome de usuário**:
@@ -147,9 +166,15 @@ rotulada "Criar conta".
 _Avoid_: registro, signup, inscrição
 
 **Credencial**:
-Nome de usuário e Senha mantidos apenas na memória da página aberta,
-apresentados a cada operação.
+Nome de usuário e Senha informados ao Entrar, mantidos apenas na memória da
+página aberta e nunca guardados no navegador.
 _Avoid_: token, sessão, cookie, login, crachá
+
+**Acesso temporário**:
+Comprovante emitido ao Entrar que permite continuar operando no mesmo navegador,
+sem reapresentar a Credencial, até expirar por inatividade ou ser encerrado.
+Não revela a Senha nem o Nome de usuário.
+_Avoid_: token, sessão, cookie, login, lembrar-me
 
 **Entrar**:
 O ato de apresentar a Credencial para acessar o próprio acervo.

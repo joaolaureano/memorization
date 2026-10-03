@@ -82,6 +82,14 @@ sair, confirmando que a saída é barrada.
 - **FR-046**: O sistema MUST apresentar toda a sua interface em português, empregando os termos canônicos de `CONTEXT.md` e MUST NOT empregar os sinônimos listados como `_Avoid_`.
 - **FR-067**: O sistema MUST permitir editar, confirmar descarte e salvar por teclado, mantendo foco visível que não dependa apenas de cor e levando-o ao campo recusado.
 
+### Verificação dos Requisitos Negativos
+
+| Requisito | Afirmação | Como é verificado |
+|---|---|---|
+| FR-015 | Renomear não afeta Vínculos | Renomear Baralho com Cartões e conferir os mesmos Vínculos |
+| FR-044 | Edição não persistida não aparece como concluída | Simular falha de gravação e verificar erro e conteúdo preservado |
+| FR-050 | Alterações não são descartadas sem confirmação | Cancelar saída e conferir que todos os campos permanecem intactos |
+
 ### Key Entities
 
 Sem entidade nova. Atua sobre **Cartão**, **Baralho** e **Vínculo**, definidos

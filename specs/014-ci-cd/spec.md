@@ -78,10 +78,10 @@ O mantenedor publica o app automaticamente após a aprovação da CI na main.
 
 ## Success Criteria *(mandatory)*
 
-- Toda execução para push na main ou pull request inclui os portões de FR-180.
-- Toda publicação automática depende de CI verde na main e da habilitação do deploy.
-- Nenhuma execução sem permissões de publicação chega à migração.
-- Toda publicação concluída inclui a conferência de saúde de FR-181.
+- **SC-091**: Toda execução para push na main ou pull request inclui os portões de FR-180.
+- **SC-092**: Toda publicação automática depende de CI verde na main e da habilitação do deploy.
+- **SC-093**: Nenhuma execução sem permissões de publicação chega à migração.
+- **SC-094**: Toda publicação concluída inclui a conferência de saúde de FR-181.
 
 ## Invariantes de Domínio
 

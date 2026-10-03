@@ -12,9 +12,12 @@ requisito: onde código e spec divergem, a spec vence e o código é corrigido.
 
 ### II. Auditabilidade Append-Only
 
-Toda sessão de planejamento ou implementação é registrada em SESSION.md, na
-raiz, em modo append-only. Eventos anteriores nunca são reescritos para alterar
-a narrativa. Registram-se prompts sanitizados, decisões declaradas, ações
+Toda sessão de planejamento ou implementação deixa registro auditável em modo
+append-only: as decisões, com contexto e alternativas, no `research.md` da
+feature e nas notas de revisão dos artefatos do Spec Kit; as ações e as
+verificações, nas mensagens de commit. Histórico já publicado nunca é reescrito
+para alterar a narrativa. O antigo SESSION.md é preservado intacto apenas na tag
+`v1.0.0` e não é mantido na `main`. Registram-se prompts sanitizados, decisões declaradas, ações
 verificáveis e resultados observáveis — nunca raciocínio privado ou deliberação
 interna de modelos. A sanitização precede a escrita: nenhum segredo é escrito
 para ser removido depois. Todo valor sensível vira [REDACTED].
@@ -66,7 +69,7 @@ ativamente para tornar o acidente improvável, e arquivos que aparentem ser
 credenciais não são commitados mesmo quando solicitados. A revisão que precede
 todo commit inclui a verificação explícita de que nenhum valor sensível está
 sendo introduzido. Esta regra vale para todo o repositório; a sanitização de
-SESSION.md exigida pelo Princípio II é um caso particular dela, não seu limite.
+dos registros exigida pelo Princípio II é um caso particular dela, não seu limite.
 
 ### IX. Rastreabilidade Requisito–Teste
 
@@ -105,8 +108,9 @@ autoria delegada não traria verificação melhor.
 As skills locais em `.agents/skills/` integram a metodologia e não substituem os
 artefatos do Spec Kit. Antes de uma atividade coberta por uma skill, o agente
 responsável lê integralmente o SKILL.md e os documentos que ela referencia,
-aplica sua terminologia e seus critérios, e registra em SESSION.md qual skill foi
-aplicada, por que se aplicava e quais decisões ou artefatos ela influenciou.
+aplica sua terminologia e seus critérios, e registra no `research.md` da
+feature qual skill foi aplicada, por que se aplicava e quais decisões ou
+artefatos ela influenciou.
 
 - **domain-modeling**: descoberta, especificação, clarify, linguagem de domínio,
   invariantes, cenários-limite e mudanças funcionais.
@@ -115,8 +119,8 @@ aplicada, por que se aplicava e quais decisões ou artefatos ela influenciou.
   estratégia de testes e revisão estrutural.
 
 Este projeto **não utiliza ADRs**. Decisões arquiteturais e de domínio, com seu
-contexto, suas alternativas rejeitadas e suas consequências, são registradas em
-SESSION.md, que é a fonte única do histórico decisório. Não se cria `docs/adr/`,
+contexto, suas alternativas rejeitadas e suas consequências, são registradas no
+`research.md` de cada feature, que é a fonte do histórico decisório. Não se cria `docs/adr/`,
 e o documento ADR-FORMAT.md da skill domain-modeling é inaplicável a este
 projeto.
 
@@ -154,7 +158,7 @@ converge alternado com implement até o resultado ser Converged.
 O histórico Git representa a evolução real do produto. Commits são pequenos,
 coesos e funcionalmente significativos, em Conventional Commits, relacionados a
 requisitos e task IDs. Código, testes, documentação e a atualização
-correspondente de SESSION.md pertencem ao mesmo incremento lógico. Não se agrupa
+correspondente dos artefatos do Spec Kit pertencem ao mesmo incremento lógico. Não se agrupa
 funcionalidade independente, não se commita código quebrado, não se alteram
 arquivos alheios à tarefa. Amend, rebase, squash e force push exigem autorização
 explícita do Product Owner. Um commit não contém o próprio hash: o evento
@@ -171,8 +175,15 @@ inspeção do diff, dos testes e dos artefatos correspondentes.
 ## Governance
 
 Esta constituição supersede qualquer outra prática. Emendas exigem aprovação
-explícita do Product Owner, registro em SESSION.md e nota de versão abaixo.
+explícita do Product Owner, registro no commit da emenda e nota de versão abaixo.
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 2.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-09-20
+**Version**: 3.0.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-10-03
+
+**Nota da versão 3.0.0 (2026-10-03)**: emenda aprovada pelo Product Owner. O
+Princípio II mantém a auditabilidade append-only, mas o registro deixa de ser o
+SESSION.md, preservado apenas na tag `v1.0.0`, e passa a ser o `research.md` de
+cada feature, as notas de revisão dos artefatos do Spec Kit e as mensagens de
+commit. As regras que citavam o SESSION.md (skills obrigatórias, ADRs, fluxo de
+commits e governança) foram ajustadas da mesma forma.
