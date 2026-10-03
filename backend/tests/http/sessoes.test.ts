@@ -17,6 +17,7 @@ import type { Acervo } from "../../src/acervo/acervo.ts";
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDeRevisao,
   registrarRotasDeSessoes,
 } from "../../src/http/rotas.ts";
 
@@ -26,8 +27,9 @@ import {
  *
  * O servidor é montado como na aplicação, com o hook que exige a Credencial: as
  * rotas de Cartão e de Baralho entram só para dar existência real ao acervo —
- * é assim que se verifica a contagem de Início e o `baralhoExiste` —, e as
- * rotas de Sessão e de Estatísticas, o objeto do teste. Toda asserção
+ * é assim que se verifica a contagem de Início e o `baralhoExiste` —, as rotas
+ * de Revisão dão a prévia que revela se uma Avaliação foi reaplicada, e as
+ * rotas de Sessão e de Estatísticas são o objeto do teste. Toda asserção
  * atravessa `inject`, a mesma superfície que um cliente HTTP usa.
  */
 
@@ -48,10 +50,13 @@ interface ItemDoRegistroEsperado {
   frente: string;
   verso: string;
   resultado: "acertou" | "errou";
+  cartaoId: string;
+  avaliacao: "errei" | "dificil" | "bom" | "facil";
 }
 
 interface RegistroEsperado {
   id: string;
+  origem: "baralho" | "revisao";
   baralhoId: string;
   nomeDoBaralho: string;
   concluidaEm: string;
@@ -67,6 +72,7 @@ type ResumoEsperado = Omit<RegistroEsperado, "itens">;
 function resumoDe(registro: RegistroEsperado): ResumoEsperado {
   return {
     id: registro.id,
+    origem: registro.origem,
     baralhoId: registro.baralhoId,
     nomeDoBaralho: registro.nomeDoBaralho,
     concluidaEm: registro.concluidaEm,
@@ -96,6 +102,7 @@ beforeEach(async () => {
     registrarRotasDeCartoes(servidor, acervoDe);
     registrarRotasDeBaralhos(servidor, acervoDe);
     registrarRotasDeSessoes(servidor, acervoDe);
+    registrarRotasDeRevisao(servidor, acervoDe);
   });
   servidor = contrato.servidor;
 });
@@ -115,11 +122,22 @@ function registroCru(
 ): Record<string, unknown> {
   return {
     id: randomUUID(),
+    origem: "baralho",
     baralhoId: randomUUID(),
     nomeDoBaralho: "Inglês",
     itens: [
-      { frente: "casa", verso: "house", resultado: "acertou" },
-      { frente: "gato", verso: "cat", resultado: "errou" },
+      {
+        frente: "casa",
+        verso: "house",
+        cartaoId: randomUUID(),
+        avaliacao: "bom",
+      },
+      {
+        frente: "gato",
+        verso: "cat",
+        cartaoId: randomUUID(),
+        avaliacao: "errei",
+      },
     ],
     ...sobrescreve,
   };
@@ -155,13 +173,38 @@ async function criarBaralho(): Promise<string> {
   return resposta.json().id as string;
 }
 
-async function criarCartao(): Promise<void> {
+/** Cria um Cartão real e devolve o identificador, para o Agendamento existir. */
+async function criarCartao(): Promise<string> {
   const resposta = await pedir({
     method: "POST",
     url: "/cartoes",
     payload: { frente: "casa", verso: "house" },
   });
   expect(resposta.statusCode).toBe(201);
+  return resposta.json().id as string;
+}
+
+/** A prévia de um Cartão, lida pela rota da Revisão (SC-085). */
+async function lerPrevia(cartaoId: string): Promise<Record<string, string>> {
+  const resposta = await pedir({
+    method: "POST",
+    url: "/previas",
+    payload: { cartaoIds: [cartaoId] },
+  });
+
+  expect(resposta.statusCode).toBe(200);
+
+  const previas = resposta.json().previas as Record<
+    string,
+    Record<string, string>
+  >;
+
+  return previas[cartaoId];
+}
+
+/** O intervalo, em dias, entre agora e o instante ISO informado (SC-085). */
+function diasAte(iso: string): number {
+  return (Date.parse(iso) - Date.now()) / (24 * UMA_HORA_EM_MILISSEGUNDOS);
 }
 
 /** A leitura de Estatísticas com a janela padrão dos cenários. */
@@ -183,6 +226,7 @@ describe("POST /sessoes — criação conforme o contrato", () => {
     const registro = resposta.json() as RegistroEsperado;
     expect(registro).toEqual({
       id: expect.any(String),
+      origem: "baralho",
       baralhoId: expect.any(String),
       nomeDoBaralho: "Inglês",
       concluidaEm: expect.any(String),
@@ -190,8 +234,22 @@ describe("POST /sessoes — criação conforme o contrato", () => {
       acertos: 1,
       erros: 1,
       itens: [
-        { posicao: 0, frente: "casa", verso: "house", resultado: "acertou" },
-        { posicao: 1, frente: "gato", verso: "cat", resultado: "errou" },
+        {
+          posicao: 0,
+          frente: "casa",
+          verso: "house",
+          resultado: "acertou",
+          cartaoId: expect.any(String),
+          avaliacao: "bom",
+        },
+        {
+          posicao: 1,
+          frente: "gato",
+          verso: "cat",
+          resultado: "errou",
+          cartaoId: expect.any(String),
+          avaliacao: "errei",
+        },
       ],
     });
     expect(Number.isNaN(Date.parse(registro.concluidaEm))).toBe(false);
@@ -214,7 +272,8 @@ describe("POST /sessoes — criação conforme o contrato", () => {
           {
             frente: "casa",
             verso: "house",
-            resultado: "acertou",
+            cartaoId: randomUUID(),
+            avaliacao: "bom",
             extra: "propriedade que não existe em ItemRegistrado",
           },
         ],
@@ -231,6 +290,8 @@ describe("POST /sessoes — criação conforme o contrato", () => {
       frente: "casa",
       verso: "house",
       resultado: "acertou",
+      cartaoId: expect.any(String),
+      avaliacao: "bom",
     });
   });
 });
@@ -263,7 +324,14 @@ describe("POST /sessoes — idempotência pelo id (FR-163)", () => {
       registroCru({
         id: corpo.id,
         nomeDoBaralho: "Outro nome",
-        itens: [{ frente: "sol", verso: "sun", resultado: "errou" }],
+        itens: [
+          {
+            frente: "sol",
+            verso: "sun",
+            cartaoId: randomUUID(),
+            avaliacao: "errei",
+          },
+        ],
       }),
     );
 
@@ -339,12 +407,26 @@ describe("POST /sessoes — recusas de dados inválidos, sem gravar nada", () =>
     expect(resposta.json()).toEqual(RECUSA);
   });
 
-  it("recusa Resultado desconhecido com 400 (FR-161)", async () => {
+  it("recusa Avaliação desconhecida com 400 (FR-193)", async () => {
     const resposta = await postarSessao(
       registroCru({
-        itens: [{ frente: "casa", verso: "house", resultado: "talvez" }],
+        itens: [
+          {
+            frente: "casa",
+            verso: "house",
+            cartaoId: randomUUID(),
+            avaliacao: "talvez",
+          },
+        ],
       }),
     );
+
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.json()).toEqual(RECUSA);
+  });
+
+  it("recusa Origem desconhecida com 400 (FR-196)", async () => {
+    const resposta = await postarSessao(registroCru({ origem: "aleatoria" }));
 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA);
@@ -666,5 +748,73 @@ describe("Indisponibilidade do armazenamento (FR-173)", () => {
       erro: "indisponivel",
       mensagem: "O armazenamento está indisponível.",
     });
+  });
+});
+
+describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
+  it("deriva Baralho vazio e o nome 'Revisão do dia', ignorando o corpo", async () => {
+    const resposta = await postarSessao(
+      registroCru({
+        origem: "revisao",
+        baralhoId: "ignorado",
+        nomeDoBaralho: "ignorado",
+      }),
+    );
+
+    expect(resposta.statusCode).toBe(201);
+
+    const registro = resposta.json() as RegistroEsperado;
+    expect(registro.origem).toBe("revisao");
+    expect(registro.baralhoId).toBe("");
+    expect(registro.nomeDoBaralho).toBe("Revisão do dia");
+  });
+
+  it("a leitura do registro mostra 'Revisão do dia' e nenhum Baralho (FR-215)", async () => {
+    const criado = await registrarSessao({ origem: "revisao" });
+
+    const resposta = await pedir({
+      method: "GET",
+      url: `/sessoes/${criado.id}`,
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual({
+      registro: criado,
+      baralhoExiste: false,
+    });
+  });
+});
+
+describe("POST /sessoes — reenvio não reaplica a Avaliação (SC-085, FR-210)", () => {
+  it("mantém o Agendamento da primeira gravação e não avança a repetição de novo", async () => {
+    const cartaoId = await criarCartao();
+    const corpo = registroCru({
+      itens: [
+        { frente: "casa", verso: "house", cartaoId, avaliacao: "bom" },
+      ],
+    });
+
+    expect((await postarSessao(corpo)).statusCode).toBe(201);
+
+    /**
+     * A prévia de "bom" lê o intervalo do próximo passo. Depois de um "bom" num
+     * Cartão novo o SM-2 fica em n=1, I=1, e o passo seguinte da tabela R12 é
+     * 6 dias (SC-082).
+     */
+    const antes = await lerPrevia(cartaoId);
+    expect(diasAte(antes.bom)).toBeCloseTo(6, 0);
+
+    await pausa(5);
+
+    expect((await postarSessao(corpo)).statusCode).toBe(200);
+
+    /**
+     * Se o reenvio tivesse reaplicado a Avaliação, o estado avançaria para
+     * n=2, I=6 e a prévia de "bom" saltaria para 15 dias — o que não pode
+     * acontecer (SC-085, FR-210).
+     */
+    const depois = await lerPrevia(cartaoId);
+    expect(diasAte(depois.bom)).toBeCloseTo(6, 0);
+    expect(diasAte(depois.bom)).not.toBeCloseTo(15, 0);
   });
 });

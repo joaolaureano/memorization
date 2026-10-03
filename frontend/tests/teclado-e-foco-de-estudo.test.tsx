@@ -14,8 +14,12 @@ import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
  * auxiliares reproduzem esses comportamentos, sempre disparando antes o evento
  * de teclado real. A prova central é a posição do foco após cada ação: ao
  * iniciar, o foco vai para a Frente do primeiro Item; ao revelar, para o
- * Verso; ao registrar o Resultado, para a Frente do Item seguinte; ao
+ * Verso; ao registrar a Avaliação, para a Frente do Item seguinte; ao
  * concluir, para o Resumo.
+ *
+ * A 015 substitui Acertei/Errei pelas quatro Avaliações (FR-192), então a
+ * ordem de tabulação depois da Revelação passa a ser Interromper, Errei,
+ * Difícil, Bom e Fácil; a Sessão é percorrida escolhendo "Bom".
  */
 
 const SELETOR_DE_CONTROLES_INTERATIVOS = [
@@ -173,18 +177,29 @@ describe("PaginaDeEstudo por teclado", () => {
     });
     expect(document.activeElement).toBe(primeiroVerso);
 
-    // Depois do Verso, os dois Resultados são os próximos controles.
+    // Depois do Verso, as quatro Avaliações são os próximos controles, na
+    // ordem Errei, Difícil, Bom e Fácil (FR-192).
     apertarTab();
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Interromper" }),
     );
 
     apertarTab();
-    const botaoAcertei = screen.getByRole("button", { name: "Acertei" });
-    expect(document.activeElement).toBe(botaoAcertei);
-    apertarEnter(botaoAcertei);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Errei/ }),
+    );
 
-    // Ao registrar o Resultado, o foco vai para a Frente do Item seguinte.
+    apertarTab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Difícil/ }),
+    );
+
+    apertarTab();
+    const botaoBom = screen.getByRole("button", { name: /^Bom/ });
+    expect(document.activeElement).toBe(botaoBom);
+    apertarEnter(botaoBom);
+
+    // Ao registrar a Avaliação, o foco vai para a Frente do Item seguinte.
     const segundaFrente = await screen.findByRole("heading", {
       name: "Frente",
     });
@@ -211,9 +226,19 @@ describe("PaginaDeEstudo por teclado", () => {
     );
 
     apertarTab();
-    const segundoAcertei = screen.getByRole("button", { name: "Acertei" });
-    expect(document.activeElement).toBe(segundoAcertei);
-    apertarEnter(segundoAcertei);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Errei/ }),
+    );
+
+    apertarTab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: /^Difícil/ }),
+    );
+
+    apertarTab();
+    const segundoBom = screen.getByRole("button", { name: /^Bom/ });
+    expect(document.activeElement).toBe(segundoBom);
+    apertarEnter(segundoBom);
 
     // Ao concluir, o foco vai para o Resumo.
     const resumo = await screen.findByRole("heading", {

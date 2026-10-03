@@ -14,12 +14,41 @@ import type { ItemDoResumo } from "../src/ui/ResumoDaSessao";
  * independente com `aria-expanded`/`aria-controls`, o conteúdo de cada lista, o
  * grupo vazio desabilitado e descrito, o acionamento por teclado e os
  * percentuais de SC-073.
+ *
+ * T1512 acrescenta os casos da 015 (FR-216, FR-197): a contagem por nível de
+ * Avaliação quando todos os Itens a têm, a sua ausência nos Registros
+ * anteriores à 015 e o comportamento anterior intacto.
  */
 
 const ITENS_DE_PROVA: ItemDoResumo[] = [
   { frente: "Frente A", verso: "Verso A", resultado: "acertou" },
   { frente: "Frente B", verso: "Verso B", resultado: "errou" },
   { frente: "Frente C", verso: "Verso C", resultado: "acertou" },
+];
+
+/**
+ * Itens da 015, todos com Avaliação: 2 acertos (`bom`) e 1 erro (`errei`),
+ * dando Errei 1 · Difícil 0 · Bom 2 · Fácil 0 (FR-216).
+ */
+const ITENS_COM_AVALIACAO: ItemDoResumo[] = [
+  {
+    frente: "Frente A",
+    verso: "Verso A",
+    resultado: "errou",
+    avaliacao: "errei",
+  },
+  {
+    frente: "Frente B",
+    verso: "Verso B",
+    resultado: "acertou",
+    avaliacao: "bom",
+  },
+  {
+    frente: "Frente C",
+    verso: "Verso C",
+    resultado: "acertou",
+    avaliacao: "bom",
+  },
 ];
 
 function renderizar(itens: readonly ItemDoResumo[]): void {
@@ -231,5 +260,68 @@ describe("ResumoDaSessao", () => {
       percentual.compareDocumentPosition(acao) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("mostra a contagem por nível quando todos os Itens têm Avaliação (FR-216)", () => {
+    renderizar(ITENS_COM_AVALIACAO);
+
+    const lista = screen.getByRole("list", {
+      name: "Contagem por nível de Avaliação",
+    });
+    const niveis = within(lista).getAllByRole("listitem");
+
+    expect(niveis.map((nivel) => nivel.textContent)).toEqual([
+      "Errei 1",
+      "Difícil 0",
+      "Bom 2",
+      "Fácil 0",
+    ]);
+  });
+
+  it("não mostra a contagem por nível em Registros anteriores à 015 (FR-197)", () => {
+    renderizar(ITENS_DE_PROVA);
+
+    expect(
+      screen.queryByRole("list", {
+        name: "Contagem por nível de Avaliação",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/^(Errei|Difícil|Bom|Fácil) \d+$/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("não mostra a contagem quando só parte dos Itens tem Avaliação (FR-197)", () => {
+    renderizar([
+      {
+        frente: "Frente A",
+        verso: "Verso A",
+        resultado: "errou",
+        avaliacao: "errei",
+      },
+      { frente: "Frente B", verso: "Verso B", resultado: "acertou" },
+    ]);
+
+    expect(screen.queryByText("Errei 1")).not.toBeInTheDocument();
+  });
+
+  it("mantém percentual, contagens e grupos com a contagem por nível presente (FR-197)", () => {
+    renderizar(ITENS_COM_AVALIACAO);
+
+    expect(screen.getByText("67%")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3 Itens")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Acertos (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Erros (1)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("aceita a origem da Sessão sem trazer o título, que é da página (FR-196)", () => {
+    render(<ResumoDaSessao itens={ITENS_COM_AVALIACAO} origem="revisao" />);
+
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(screen.queryByText("Revisão do dia")).not.toBeInTheDocument();
   });
 });

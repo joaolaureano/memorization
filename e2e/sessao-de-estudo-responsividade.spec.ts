@@ -16,9 +16,10 @@ import {
 //
 // Provas: sem rolagem horizontal em viewport de telefone no início, depois da
 // Revelação e depois do Resultado; e os controles canônicos — Iniciar Sessão,
-// Revelar verso, Acertei, Errei e Interromper — permanecem visíveis e em
-// português. O "Interromper" abre a confirmação "Interromper a Sessão?", também
-// em português, e "Cancelar" mantém o Item em curso (FR-046).
+// Revelar verso, Errei, Difícil, Bom, Fácil e Interromper — permanecem
+// visíveis e em português (FR-193, SC-088). O "Interromper" abre a confirmação
+// "Interromper a Sessão?", também em português, e "Cancelar" mantém o Item em
+// curso (FR-046).
 
 const PORTA_DO_FRONTEND = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
 const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
@@ -110,14 +111,20 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
 
   await expect(page.getByRole('heading', { name: 'Verso' })).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Acertei' }),
+    page.getByRole('button', { name: /^Errei/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Errei' }),
+    page.getByRole('button', { name: /^Difícil/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /^Bom/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /^Fácil/ }),
   ).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
-  await page.getByRole('button', { name: 'Acertei' }).click();
+  await page.getByRole('button', { name: /^Bom/ }).click();
 
   await expect(page.getByText('Item 2 de 2')).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);

@@ -3,9 +3,12 @@ import {
   MENSAGEM_DE_CONFLITO_DE_SESSAO,
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_DADOS_INVALIDOS,
+  MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
@@ -13,6 +16,7 @@ import {
   NAO_AUTENTICADO,
 } from "./cliente";
 import type {
+  Avaliacao,
   Baralho,
   BaralhoComCartoes,
   Cartao,
@@ -22,8 +26,12 @@ import type {
   DadosDeCartao,
   DadosDeRegistro,
   DadosDeUsuario,
+  OpcaoDeAlgoritmo,
+  Preferencias,
+  Previa,
   RegistroDeSessao,
   RegistroResumido,
+  ResultadoDasPrevias,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
@@ -37,9 +45,14 @@ import type {
   ResultadoDeListagemDeCartoes,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
+  ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
+  ResultadoDeSalvarPreferencias,
   ResultadoDeVinculacao,
+  ResultadoDoItemRegistrado,
+  ResultadoDoLoteDeRevisao,
+  ResultadoDoResumoDaRevisao,
 } from "./cliente";
 import {
   NOME_DE_USUARIO_EXISTENTE,
@@ -49,6 +62,27 @@ import {
   validarSenha,
   validarVerso,
 } from "./validacao";
+
+/** O algoritmo padrão e a lista oferecida pela tela de Preferências (FR-212). */
+const ALGORITMOS_DISPONIVEIS: OpcaoDeAlgoritmo[] = [
+  { id: "sm2", rotulo: "SM-2" },
+];
+
+/** O algoritmo e o limite padrão quando o Usuário nunca salvou Preferências (D5). */
+const ALGORITMO_PADRAO = "sm2";
+const LIMITE_DE_NOVOS_PADRAO = 20;
+
+/**
+ * A prévia fixa do stand-in, em dias, por Avaliação. **Não é o SM-2**: é uma
+ * tabela simples e documentada só para a interface ser testável sem servidor
+ * (D7). O algoritmo real é testado no backend.
+ */
+const DIAS_DA_PREVIA: Record<Avaliacao, number> = {
+  errei: 1,
+  dificil: 1,
+  bom: 3,
+  facil: 6,
+};
 
 /**
  * Adapter em memória do `ClienteDoAcervo` (T008, T106, T208, T403, T503, T607;
@@ -672,15 +706,20 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     const estudados = dados.itens.length;
     const acertos = dados.itens.filter(
-      (item) => item.resultado === "acertou",
+      (item) => resultadoDaAvaliacao(item.avaliacao) === "acertou",
     ).length;
+    const ehRevisao = dados.origem === "revisao";
+    const agora = new Date();
 
     const registro: RegistroDaBase = {
       id: dados.id,
       usuarioId: dono.id,
-      baralhoId: dados.baralhoId,
-      nomeDoBaralho: dados.nomeDoBaralho,
-      concluidaEm: new Date().toISOString(),
+      origem: dados.origem,
+      // Na Revisão do dia, o Baralho é derivado: sem Baralho e com o nome
+      // fixo (FR-196, D5).
+      baralhoId: ehRevisao ? "" : dados.baralhoId,
+      nomeDoBaralho: ehRevisao ? "Revisão do dia" : dados.nomeDoBaralho,
+      concluidaEm: agora.toISOString(),
       estudados,
       acertos,
       erros: estudados - acertos,
@@ -688,11 +727,17 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         posicao,
         frente: item.frente,
         verso: item.verso,
-        resultado: item.resultado,
+        resultado: resultadoDaAvaliacao(item.avaliacao),
+        cartaoId: item.cartaoId,
+        avaliacao: item.avaliacao,
       })),
     };
 
     this.base.registros.push(registro);
+
+    // Só no Registro novo as Avaliações alcançam os Agendamentos (FR-210,
+    // SC-085): o reenvio do mesmo `id` não reaplica nada.
+    this.atualizarAgendamentos(dono.id, dados, agora);
 
     return { ok: true, registro: registroSemDono(registro) };
   }
@@ -774,6 +819,194 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     };
   }
 
+  /** O resumo da Revisão do dia (FR-198, FR-199). */
+  async obterResumoDaRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoResumoDaRevisao> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const contagem = this.contagemDaRevisao(dono.id, inicioDoDia, fimDoDia);
+
+    return {
+      ok: true,
+      resumo: {
+        vencidos: contagem.vencidos,
+        novosHoje: contagem.novosHoje,
+        total: contagem.vencidos + contagem.novosHoje,
+      },
+    };
+  }
+
+  /**
+   * O lote da Revisão do dia: vencidos por `proximaRevisaoEm` ascendente,
+   * depois os novos na ordem de criação, limitados ao que ainda cabe hoje e a
+   * 20 Itens no total (FR-201, FR-203).
+   */
+  async obterLoteDeRevisao(
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): Promise<ResultadoDoLoteDeRevisao> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const agora = new Date();
+    const cartoes = this.base.cartoes.filter(
+      (cartao) => cartao.usuarioId === dono.id,
+    );
+    const agendamentos = this.base.agendamentos.filter(
+      (agendamento) => agendamento.usuarioId === dono.id,
+    );
+
+    const porCartao = new Map<string, AgendamentoDoDono>();
+
+    for (const agendamento of agendamentos) {
+      porCartao.set(agendamento.cartaoId, agendamento);
+    }
+
+    const vencidos = cartoes
+      .filter((cartao) => {
+        const agendamento = porCartao.get(cartao.id);
+
+        return (
+          agendamento !== undefined && agendamento.proximaRevisaoEm < fimDoDia
+        );
+      })
+      .sort((a, b) => {
+        const primeiro = porCartao.get(a.id)?.proximaRevisaoEm ?? "";
+        const segundo = porCartao.get(b.id)?.proximaRevisaoEm ?? "";
+
+        if (primeiro === segundo) {
+          return 0;
+        }
+
+        return primeiro < segundo ? -1 : 1;
+      });
+
+    const novos = cartoes
+      .filter((cartao) => !porCartao.has(cartao.id))
+      .slice(
+        0,
+        this.contagemDaRevisao(dono.id, inicioDoDia, fimDoDia).novosHoje,
+      );
+
+    return {
+      ok: true,
+      itens: [...vencidos, ...novos].slice(0, 20).map((cartao) => ({
+        cartao: cartaoSemDono(cartao),
+        previa: previaFixa(agora),
+      })),
+    };
+  }
+
+  /**
+   * A prévia dos Cartões informados (FR-221). Como a prévia do stand-in é
+   * fixa, cada `cartaoId` recebe a mesma tabela — ela não depende do Cartão.
+   */
+  async obterPrevias(cartaoIds: string[]): Promise<ResultadoDasPrevias> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDeRevisao();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const agora = new Date();
+    const previas: Record<string, Previa> = {};
+
+    if (Array.isArray(cartaoIds)) {
+      for (const cartaoId of cartaoIds) {
+        if (typeof cartaoId === "string") {
+          previas[cartaoId] = previaFixa(agora);
+        }
+      }
+    }
+
+    return { ok: true, previas };
+  }
+
+  /** As Preferências do Usuário mais a lista de algoritmos (FR-212). */
+  async obterPreferencias(): Promise<ResultadoDePreferencias> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDePreferencias();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    return { ok: true, preferencias: this.preferenciasDoDono(dono.id) };
+  }
+
+  /**
+   * Salva as Preferências (FR-200). O limite precisa ser inteiro de 0 a 999 e
+   * o algoritmo precisa existir; qualquer desvio é `dados_invalidos`.
+   */
+  async salvarPreferencias(preferencias: {
+    algoritmo: string;
+    limiteDeNovosPorDia: number;
+  }): Promise<ResultadoDeSalvarPreferencias> {
+    if (this.indisponivel) {
+      return this.falhaDeIndisponibilidadeDePreferencias();
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    if (
+      preferencias.algoritmo !== ALGORITMO_PADRAO ||
+      !Number.isInteger(preferencias.limiteDeNovosPorDia) ||
+      preferencias.limiteDeNovosPorDia < 0 ||
+      preferencias.limiteDeNovosPorDia > 999
+    ) {
+      return {
+        ok: false,
+        erro: "dados_invalidos",
+        mensagem: MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS,
+      };
+    }
+
+    const existente = this.base.preferencias.find(
+      (salvas) => salvas.usuarioId === dono.id,
+    );
+
+    if (existente === undefined) {
+      this.base.preferencias.push({
+        usuarioId: dono.id,
+        algoritmo: preferencias.algoritmo,
+        limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
+      });
+    } else {
+      existente.algoritmo = preferencias.algoritmo;
+      existente.limiteDeNovosPorDia = preferencias.limiteDeNovosPorDia;
+    }
+
+    return { ok: true, preferencias: this.preferenciasDoDono(dono.id) };
+  }
+
   /**
    * Simula a indisponibilidade do transporte (uso de teste). Enquanto
    * simulada, nenhuma operação é concluída nem gravada.
@@ -850,6 +1083,95 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     return usuario;
   }
 
+  /**
+   * A contagem do dia (FR-198, FR-199, FR-201): os Agendamentos vencidos até o
+   * fim do dia e quantos Cartões novos ainda cabem no limite, descontados os
+   * já introduzidos hoje.
+   */
+  private contagemDaRevisao(
+    usuarioId: string,
+    inicioDoDia: string,
+    fimDoDia: string,
+  ): { vencidos: number; novosHoje: number } {
+    const agendamentos = this.base.agendamentos.filter(
+      (agendamento) => agendamento.usuarioId === usuarioId,
+    );
+
+    const vencidos = agendamentos.filter(
+      (agendamento) => agendamento.proximaRevisaoEm < fimDoDia,
+    ).length;
+
+    const introduzidosHoje = agendamentos.filter(
+      (agendamento) =>
+        agendamento.criadoEm >= inicioDoDia && agendamento.criadoEm < fimDoDia,
+    ).length;
+
+    const comAgendamento = new Set(
+      agendamentos.map((agendamento) => agendamento.cartaoId),
+    );
+    const semAgendamento = this.base.cartoes.filter(
+      (cartao) =>
+        cartao.usuarioId === usuarioId && !comAgendamento.has(cartao.id),
+    ).length;
+
+    const limite = this.preferenciasDoDono(usuarioId).limiteDeNovosPorDia;
+    const novosHoje = Math.min(
+      semAgendamento,
+      Math.max(0, limite - introduzidosHoje),
+    );
+
+    return { vencidos, novosHoje };
+  }
+
+  /**
+   * Aplica as Avaliações do Registro novo aos Agendamentos do dono, na ordem
+   * dos Itens: cria o Agendamento na primeira Avaliação e atualiza a próxima
+   * revisão nas seguintes (FR-205, FR-210).
+   */
+  private atualizarAgendamentos(
+    usuarioId: string,
+    dados: DadosDeRegistro,
+    agora: Date,
+  ): void {
+    for (const item of dados.itens) {
+      const proximaRevisaoEm = previaFixa(agora)[item.avaliacao];
+      const existente = this.base.agendamentos.find(
+        (agendamento) =>
+          agendamento.usuarioId === usuarioId &&
+          agendamento.cartaoId === item.cartaoId,
+      );
+
+      if (existente === undefined) {
+        this.base.agendamentos.push({
+          usuarioId,
+          cartaoId: item.cartaoId,
+          proximaRevisaoEm,
+          criadoEm: agora.toISOString(),
+        });
+      } else {
+        existente.proximaRevisaoEm = proximaRevisaoEm;
+      }
+    }
+  }
+
+  /**
+   * As Preferências do dono no formato da Interface: quando ele nunca salvou
+   * nada, valem os padrões, e a lista de algoritmos acompanha sempre
+   * (D5, FR-212).
+   */
+  private preferenciasDoDono(usuarioId: string): Preferencias {
+    const salvas = this.base.preferencias.find(
+      (preferencias) => preferencias.usuarioId === usuarioId,
+    );
+
+    return {
+      algoritmo: salvas?.algoritmo ?? ALGORITMO_PADRAO,
+      limiteDeNovosPorDia:
+        salvas?.limiteDeNovosPorDia ?? LIMITE_DE_NOVOS_PADRAO,
+      algoritmos: ALGORITMOS_DISPONIVEIS.map((opcao) => ({ ...opcao })),
+    };
+  }
+
   private falhaDeNaoAutenticado(): {
     ok: false;
     erro: typeof NAO_AUTENTICADO;
@@ -871,6 +1193,30 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDeRevisao(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+    };
+  }
+
+  private falhaDeIndisponibilidadeDePreferencias(): {
+    ok: false;
+    erro: typeof INDISPONIVEL;
+    mensagem: string;
+  } {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS,
     };
   }
 
@@ -941,6 +1287,8 @@ interface BaseEmMemoria {
   baralhos: BaralhoDoDono[];
   vinculos: VinculoDoDono[];
   registros: RegistroDaBase[];
+  agendamentos: AgendamentoDoDono[];
+  preferencias: PreferenciasDoDono[];
   sequenciaDeCartoes: number;
   sequenciaDeBaralhos: number;
   sequenciaDeUsuarios: number;
@@ -977,6 +1325,26 @@ interface VinculoDoDono {
   baralhoId: string;
 }
 
+/**
+ * Agendamento em memória do stand-in: o dono, o Cartão, a próxima revisão e o
+ * instante em que ele foi introduzido — insumo da contagem de novos do dia
+ * (FR-198, FR-205). O estado opaco do algoritmo real não existe aqui: a prévia
+ * é fixa (D7).
+ */
+interface AgendamentoDoDono {
+  usuarioId: string;
+  cartaoId: string;
+  proximaRevisaoEm: string;
+  criadoEm: string;
+}
+
+/** Preferências salvas do dono; a ausência equivale aos padrões (D5). */
+interface PreferenciasDoDono {
+  usuarioId: string;
+  algoritmo: string;
+  limiteDeNovosPorDia: number;
+}
+
 /** Uma base nova, já com os Usuários que a prova informou. */
 function novaBaseEmMemoria(
   usuariosJaCadastrados: readonly DadosDeUsuario[],
@@ -987,6 +1355,8 @@ function novaBaseEmMemoria(
     baralhos: [],
     vinculos: [],
     registros: [],
+    agendamentos: [],
+    preferencias: [],
     sequenciaDeCartoes: 0,
     sequenciaDeBaralhos: 0,
     sequenciaDeUsuarios: 0,
@@ -1022,6 +1392,7 @@ interface RegistroDaBase extends RegistroDeSessao {
 function registroSemDono(registro: RegistroDaBase): RegistroDeSessao {
   return {
     id: registro.id,
+    origem: registro.origem,
     baralhoId: registro.baralhoId,
     nomeDoBaralho: registro.nomeDoBaralho,
     concluidaEm: registro.concluidaEm,
@@ -1036,6 +1407,7 @@ function registroSemDono(registro: RegistroDaBase): RegistroDeSessao {
 function registroResumido(registro: RegistroDaBase): RegistroResumido {
   return {
     id: registro.id,
+    origem: registro.origem,
     baralhoId: registro.baralhoId,
     nomeDoBaralho: registro.nomeDoBaralho,
     concluidaEm: registro.concluidaEm,
@@ -1050,6 +1422,26 @@ const FORMATO_DE_UUID =
 
 function ehUuid(valor: unknown): valor is string {
   return typeof valor === "string" && FORMATO_DE_UUID.test(valor);
+}
+
+/**
+ * Reconhece uma das 4 Avaliações (FR-193).
+ */
+function ehAvaliacao(valor: unknown): valor is Avaliacao {
+  return (
+    valor === "errei" ||
+    valor === "dificil" ||
+    valor === "bom" ||
+    valor === "facil"
+  );
+}
+
+/**
+ * O `resultado` de dois níveis **derivado** da Avaliação (FR-194): `errei` é o
+ * único erro; os demais são acerto.
+ */
+function resultadoDaAvaliacao(avaliacao: Avaliacao): ResultadoDoItemRegistrado {
+  return avaliacao === "errei" ? "errou" : "acertou";
 }
 
 function itemDeRegistroValido(item: unknown): boolean {
@@ -1073,27 +1465,39 @@ function itemDeRegistroValido(item: unknown): boolean {
     return false;
   }
 
-  return campos.resultado === "acertou" || campos.resultado === "errou";
+  // O Item da 015 carrega o Cartão de origem e a Avaliação (FR-196).
+  if (typeof campos.cartaoId !== "string" || campos.cartaoId === "") {
+    return false;
+  }
+
+  return ehAvaliacao(campos.avaliacao);
 }
 
 /**
- * As invariantes de `registrarSessao` (FR-161): só dados assim chegam à base.
- * Qualquer desvio é `dados_invalidos`, e nada é gravado.
+ * As invariantes de `registrarSessao` (FR-161, FR-194, FR-196): só dados assim
+ * chegam à base. Qualquer desvio é `dados_invalidos`, e nada é gravado.
  */
 function dadosDeRegistroValidos(dados: DadosDeRegistro): boolean {
   if (!ehUuid(dados.id)) {
     return false;
   }
 
-  if (typeof dados.baralhoId !== "string" || dados.baralhoId === "") {
+  if (dados.origem !== "baralho" && dados.origem !== "revisao") {
     return false;
   }
 
-  if (
-    typeof dados.nomeDoBaralho !== "string" ||
-    validarNomeDeBaralho(dados.nomeDoBaralho) !== null
-  ) {
-    return false;
+  // Na Revisão do dia, Baralho e nome são derivados, não validados (FR-196).
+  if (dados.origem === "baralho") {
+    if (typeof dados.baralhoId !== "string" || dados.baralhoId === "") {
+      return false;
+    }
+
+    if (
+      typeof dados.nomeDoBaralho !== "string" ||
+      validarNomeDeBaralho(dados.nomeDoBaralho) !== null
+    ) {
+      return false;
+    }
   }
 
   if (!Array.isArray(dados.itens)) {
@@ -1105,4 +1509,24 @@ function dadosDeRegistroValidos(dados: DadosDeRegistro): boolean {
   }
 
   return dados.itens.every(itemDeRegistroValido);
+}
+
+/**
+ * A prévia fixa do stand-in: errei/dificil em 1 dia, bom em 3 e facil em 6, a
+ * contar de `agora`. **Não é o SM-2** — o algoritmo real é testado no backend
+ * (D7); aqui basta uma tabela simples e documentada para a interface ser
+ * testável sem servidor.
+ */
+function previaFixa(agora: Date): Previa {
+  return {
+    errei: somarDias(agora, DIAS_DA_PREVIA.errei),
+    dificil: somarDias(agora, DIAS_DA_PREVIA.dificil),
+    bom: somarDias(agora, DIAS_DA_PREVIA.bom),
+    facil: somarDias(agora, DIAS_DA_PREVIA.facil),
+  };
+}
+
+/** O instante ISO a `dias` dias de 24 h de `agora`. */
+function somarDias(agora: Date, dias: number): string {
+  return new Date(agora.getTime() + dias * 24 * 60 * 60 * 1000).toISOString();
 }

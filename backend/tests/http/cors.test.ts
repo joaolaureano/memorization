@@ -7,8 +7,11 @@ import { randomBytes } from "node:crypto";
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDePreferencias,
+  registrarRotasDeRevisao,
   registrarRotasDeUsuarios,
 } from "../../src/http/rotas.ts";
+import { registrarRotasDaAplicacao } from "../../src/http/servidor.ts";
 import {
   montarServidorDeContrato,
   pedirComCredencial,
@@ -46,6 +49,8 @@ beforeEach(async () => {
   contrato = await montarServidorDeContrato(({ servidor, acervoDe, identidade }) => {
     registrarRotasDeCartoes(servidor, acervoDe);
     registrarRotasDeBaralhos(servidor, acervoDe);
+    registrarRotasDeRevisao(servidor, acervoDe);
+    registrarRotasDePreferencias(servidor, acervoDe);
     registrarRotasDeUsuarios(servidor, identidade);
   });
   servidor = contrato.servidor;
@@ -342,6 +347,199 @@ describe("CORS para o frontend local", () => {
 
     expect(resposta.statusCode).toBe(200);
     expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("responde ao pré-voo de GET /revisao com 204 e lê o resumo com access-control-allow-origin (FR-198)", async () => {
+    const preVoo = await pedir({
+      method: "OPTIONS",
+      url: "/revisao",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(preVoo.statusCode).toBe(204);
+    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
+    /** Sem `authorization`, o navegador recusaria o `fetch` com Credencial. */
+    expect(preVoo.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+
+    const resposta = await pedir({
+      method: "GET",
+      url: "/revisao?inicioDoDia=2026-01-01T00:00:00.000Z&fimDoDia=2026-01-01T23:59:59.999Z",
+    });
+
+    expect(resposta.statusCode).not.toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de GET /revisao/lote com 204 e lê o lote com access-control-allow-origin (FR-201)", async () => {
+    const preVoo = await pedir({
+      method: "OPTIONS",
+      url: "/revisao/lote",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(preVoo.statusCode).toBe(204);
+    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
+    expect(preVoo.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+
+    const resposta = await pedir({
+      method: "GET",
+      url: "/revisao/lote?inicioDoDia=2026-01-01T00:00:00.000Z&fimDoDia=2026-01-01T23:59:59.999Z",
+    });
+
+    expect(resposta.statusCode).not.toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de POST /previas com 204 e lê a resposta com access-control-allow-origin (FR-221)", async () => {
+    const preVoo = await pedir({
+      method: "OPTIONS",
+      url: "/previas",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(preVoo.statusCode).toBe(204);
+    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-methods"]).toContain("POST");
+    expect(preVoo.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+
+    const resposta = await pedir({
+      method: "POST",
+      url: "/previas",
+      payload: { cartaoIds: [] },
+    });
+
+    /** A recusa de domínio também precisa ser legível do navegador (FR-044). */
+    expect(resposta.statusCode).not.toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de GET /preferencias com 204 e lê as Preferências com access-control-allow-origin (FR-212)", async () => {
+    const preVoo = await pedir({
+      method: "OPTIONS",
+      url: "/preferencias",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(preVoo.statusCode).toBe(204);
+    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
+    expect(preVoo.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+
+    const resposta = await pedir({ method: "GET", url: "/preferencias" });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+
+  it("responde ao pré-voo de PUT /preferencias com 204 e salva as Preferências com access-control-allow-origin (FR-213)", async () => {
+    const preVoo = await pedir({
+      method: "OPTIONS",
+      url: "/preferencias",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "authorization",
+      },
+    });
+
+    expect(preVoo.statusCode).toBe(204);
+    expect(preVoo.headers["access-control-allow-origin"]).toBe("*");
+    expect(preVoo.headers["access-control-allow-methods"]).toContain("PUT");
+    expect(preVoo.headers["access-control-allow-headers"]).toContain(
+      "authorization",
+    );
+
+    /** O `PUT` reenvia as Preferências atuais, para exercitar o caminho de sucesso. */
+    const atuais = await pedir({ method: "GET", url: "/preferencias" });
+    expect(atuais.statusCode).toBe(200);
+    const { algoritmo, limiteDeNovosPorDia } = atuais.json();
+
+    const resposta = await pedir({
+      method: "PUT",
+      url: "/preferencias",
+      payload: { algoritmo, limiteDeNovosPorDia },
+    });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.headers["access-control-allow-origin"]).toBe("*");
+  });
+});
+
+/**
+ * Guarda de CORS (T-c8): a lista de caminhos com pré-voo e cabeçalho
+ * permissivo vive em `criarServidor`, separada de `registrarRotasDaAplicacao`.
+ * Esta prova percorre **todas** as rotas efetivamente registradas pela
+ * aplicação e exige o pré-voo de cada uma, de modo que uma rota nova — como as
+ * da `015` foram um dia — não passe esquecida sem CORS (FR-128, SC-056).
+ */
+describe("guarda: toda rota da aplicação tem pré-voo permitido (T-c8)", () => {
+  it("responde ao pré-voo de cada rota registrada por registrarRotasDaAplicacao com 204 e os cabeçalhos de CORS", async () => {
+    const rotas: string[] = [];
+
+    const aplicacao = await montarServidorDeContrato(
+      ({ servidor, acervoDe, identidade }) => {
+        /** Captura cada rota que a aplicação registra, antes de registrá-las. */
+        servidor.addHook("onRoute", (rota) => {
+          rotas.push(rota.path);
+        });
+
+        registrarRotasDaAplicacao(servidor, identidade, acervoDe);
+      },
+    );
+
+    try {
+      expect(rotas.length).toBeGreaterThan(0);
+
+      for (const caminho of rotas) {
+        const resposta = await pedirComCredencial(
+          aplicacao.servidor,
+          aplicacao.credencial,
+          {
+            method: "OPTIONS",
+            url: caminho,
+            headers: {
+              origin: ORIGEM_DO_FRONTEND,
+              "access-control-request-method": "GET",
+              "access-control-request-headers": "authorization",
+            },
+          },
+        );
+
+        expect(resposta.statusCode, `pré-voo de ${caminho}`).toBe(204);
+        expect(
+          resposta.headers["access-control-allow-origin"],
+          `origem de ${caminho}`,
+        ).toBe("*");
+      }
+    } finally {
+      await aplicacao.encerrar();
+    }
   });
 });
 

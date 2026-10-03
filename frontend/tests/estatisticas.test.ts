@@ -27,6 +27,7 @@ function registro(
 ): RegistroResumido {
   return {
     id: "s1",
+    origem: "baralho",
     baralhoId: "b1",
     nomeDoBaralho: "Inglês",
     concluidaEm: concluidaEm.toISOString(),

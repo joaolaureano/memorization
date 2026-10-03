@@ -5,7 +5,9 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
 } from "../src/acervo-cliente/cliente";
+import type { Avaliacao, DadosDeRegistro } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
@@ -15,7 +17,6 @@ import {
 } from "../src/sessao-de-estudo/sessao-de-estudo";
 import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
-import type { ItemDoResumo } from "../src/ui/ResumoDaSessao";
 
 /**
  * T304 — telas de início e de Item da Sessão de estudo
@@ -26,6 +27,11 @@ import type { ItemDoResumo } from "../src/ui/ResumoDaSessao";
  * inelegível, a comunicação da quantidade disponível, o aviso de limite antes
  * do primeiro Item, a recusa de quantidade inválida, a posição contínua e os
  * textos em português.
+ *
+ * A 015 acrescenta as quatro Avaliações (FR-192), a prévia da próxima revisão
+ * nos botões e no nome acessível (FR-221), a falha de prévia que não bloqueia
+ * o estudo e os atalhos 1 a 4 (FR-218), além do Registro com `origem` e a
+ * Avaliação de cada Item (FR-196).
  */
 
 const VALORES_DETERMINISTICOS = [0, 0, 0, 0];
@@ -96,14 +102,34 @@ function conteudoApresentado(indice: number): string {
   return conteudos[indice]?.textContent ?? "";
 }
 
+/** O Item como o Registro transporta, sem o `cartaoId` (que é opaco). */
+type ItemDaProva = Omit<DadosDeRegistro["itens"][number], "cartaoId">;
+
 /**
- * Responde o Item em exibição e devolve o que foi apresentado — Frente, Verso
- * e Resultado —, para que a prova compare o Registro com a ordem vista na
- * tela.
+ * O nome acessível de cada Avaliação começa pelo rótulo (FR-192); a prévia,
+ * quando existe, entra depois, então o casamento por prefixo serve aos dois
+ * casos (FR-221).
  */
-async function responderItem(
-  resultado: "acertou" | "errou",
-): Promise<ItemDoResumo> {
+const ROTULO_POR_AVALIACAO: Record<Avaliacao, RegExp> = {
+  errei: /^Errei/,
+  dificil: /^Difícil/,
+  bom: /^Bom/,
+  facil: /^Fácil/,
+};
+
+/** Aciona o botão de uma Avaliação (FR-192, FR-193). */
+function escolherAvaliacao(avaliacao: Avaliacao): void {
+  fireEvent.click(
+    screen.getByRole("button", { name: ROTULO_POR_AVALIACAO[avaliacao] }),
+  );
+}
+
+/**
+ * Responde o Item em exibição com a Avaliação informada e devolve o que foi
+ * apresentado — Frente, Verso e Avaliação —, para que a prova compare o
+ * Registro com a ordem vista na tela (FR-193, FR-196).
+ */
+async function responderItem(avaliacao: Avaliacao): Promise<ItemDaProva> {
   const frente = conteudoApresentado(0);
 
   fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
@@ -111,13 +137,18 @@ async function responderItem(
 
   const verso = conteudoApresentado(1);
 
-  fireEvent.click(
-    screen.getByRole("button", {
-      name: resultado === "acertou" ? "Acertei" : "Errei",
-    }),
-  );
+  escolherAvaliacao(avaliacao);
 
-  return { frente, verso, resultado };
+  return { frente, verso, avaliacao };
+}
+
+/** Instante ISO a `dias` dias locais de hoje, ao meio-dia (FR-221). */
+function isoDaquiA(dias: number): string {
+  const data = new Date();
+  data.setDate(data.getDate() + dias);
+  data.setHours(12, 0, 0, 0);
+
+  return data.toISOString();
 }
 
 /** Preenche a quantidade e inicia a Sessão pela interface. */
@@ -199,7 +230,7 @@ describe("PaginaDeEstudo", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
-    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+    escolherAvaliacao("bom");
 
     expect(await screen.findByText("Item 2 de 3")).toBeInTheDocument();
     expect(
@@ -301,12 +332,12 @@ describe("PaginaDeEstudo", () => {
     expect(
       await screen.findByRole("heading", { name: "Verso" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Errei/ })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Acertei" }),
+      screen.getByRole("button", { name: /^Difícil/ }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Errei" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Bom/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Fácil/ })).toBeInTheDocument();
   });
 
   it("PaginaDoBaralho oferece o link para a Sessão de estudo (FR-145)", async () => {
@@ -328,7 +359,7 @@ describe("PaginaDeEstudo", () => {
     ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
   });
 
-  it("só oferece Acertei e Errei depois de revelar o Verso (FR-032, FR-034)", async () => {
+  it("só oferece as quatro Avaliações depois de revelar o Verso (FR-032, FR-034, FR-193)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
     renderizar(cliente, idDoBaralho);
 
@@ -345,20 +376,22 @@ describe("PaginaDeEstudo", () => {
       screen.getByText("O Verso está oculto. Tente lembrar antes de revelar."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Acertei" }),
+      screen.queryByRole("button", { name: /^Errei/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Errei" }),
+      screen.queryByRole("button", { name: /^Bom/ }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
 
     expect(
-      await screen.findByRole("button", { name: "Acertei" }),
+      await screen.findByRole("button", { name: /^Errei/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Errei" }),
+      screen.getByRole("button", { name: /^Difícil/ }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Bom/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Fácil/ })).toBeInTheDocument();
   });
 
   it("mostra o percentual de acertos e as contagens do Resumo (FR-152, FR-174, SC-067, SC-073)", async () => {
@@ -374,15 +407,15 @@ describe("PaginaDeEstudo", () => {
     await screen.findByText("Item 1 de 3");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
-    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+    escolherAvaliacao("bom");
     await screen.findByText("Item 2 de 3");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
-    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+    escolherAvaliacao("bom");
     await screen.findByText("Item 3 de 3");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
-    fireEvent.click(screen.getByRole("button", { name: "Errei" }));
+    escolherAvaliacao("errei");
 
     expect(
       await screen.findByRole("heading", { name: "Resumo da Sessão" }),
@@ -413,7 +446,7 @@ describe("PaginaDeEstudo", () => {
     await screen.findByText("Item 1 de 1");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
-    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+    escolherAvaliacao("bom");
 
     await screen.findByRole("heading", { name: "Resumo da Sessão" });
 
@@ -452,8 +485,8 @@ describe("PaginaDeEstudo", () => {
     await screen.findByText("Item 1 de 2");
 
     const itensApresentados = [
-      await responderItem("acertou"),
-      await responderItem("errou"),
+      await responderItem("bom"),
+      await responderItem("errei"),
     ];
 
     expect(
@@ -462,9 +495,13 @@ describe("PaginaDeEstudo", () => {
     expect(espiao).toHaveBeenCalledTimes(1);
     expect(espiao.mock.calls[0][0]).toEqual({
       id: expect.any(String),
+      origem: "baralho",
       baralhoId: idDoBaralho,
       nomeDoBaralho: "Inglês",
-      itens: itensApresentados,
+      itens: itensApresentados.map((item) => ({
+        ...item,
+        cartaoId: expect.any(String),
+      })),
     });
   });
 
@@ -482,7 +519,7 @@ describe("PaginaDeEstudo", () => {
     iniciarCom("2");
     await screen.findByText("Item 1 de 2");
 
-    await responderItem("acertou");
+    await responderItem("bom");
 
     fireEvent.click(screen.getByRole("button", { name: "Interromper" }));
 
@@ -513,7 +550,7 @@ describe("PaginaDeEstudo", () => {
     iniciarCom("1");
     await screen.findByText("Item 1 de 1");
 
-    await responderItem("acertou");
+    await responderItem("bom");
 
     const alerta = await screen.findByRole("alert");
 
@@ -550,7 +587,7 @@ describe("PaginaDeEstudo", () => {
     iniciarCom("1");
     await screen.findByText("Item 1 de 1");
 
-    await responderItem("acertou");
+    await responderItem("bom");
     await screen.findByRole("alert");
 
     fireEvent.click(
@@ -564,5 +601,118 @@ describe("PaginaDeEstudo", () => {
     expect(
       screen.getByText("Esta Sessão não ficará no seu histórico."),
     ).toBeInTheDocument();
+  });
+
+  it("mostra as quatro Avaliações com a prévia no texto e no nome acessível (FR-192, FR-221)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(1);
+
+    const cartoes = await cliente.listarCartoes();
+
+    if (!cartoes.ok) {
+      throw new Error("a listagem de Cartões deveria ser aceita");
+    }
+
+    const cartaoId = cartoes.cartoes[0].id;
+
+    vi.spyOn(cliente, "obterPrevias").mockResolvedValue({
+      ok: true,
+      previas: {
+        [cartaoId]: {
+          errei: isoDaquiA(0),
+          dificil: isoDaquiA(1),
+          bom: isoDaquiA(3),
+          facil: isoDaquiA(5),
+        },
+      },
+    });
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Estudar Inglês",
+    });
+
+    iniciarCom("1");
+    await screen.findByText("Item 1 de 1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
+    await screen.findByRole("heading", { name: "Verso" });
+
+    const botaoBom = await screen.findByRole("button", {
+      name: "Bom, próxima revisão em 3 dias",
+    });
+
+    expect(botaoBom).toHaveTextContent("Bom · 3 dias");
+    expect(
+      screen.getByRole("button", { name: "Errei, próxima revisão hoje" }),
+    ).toHaveTextContent("Errei · hoje");
+    expect(
+      screen.getByRole("button", { name: "Difícil, próxima revisão amanhã" }),
+    ).toHaveTextContent("Difícil · amanhã");
+    expect(
+      screen.getByRole("button", { name: "Fácil, próxima revisão em 5 dias" }),
+    ).toHaveTextContent("Fácil · 5 dias");
+  });
+
+  it("uma falha ao obter as prévias é anunciada sem impedir o estudo (FR-221)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(1);
+
+    vi.spyOn(cliente, "obterPrevias").mockResolvedValue({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+    });
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Estudar Inglês",
+    });
+
+    iniciarCom("1");
+    await screen.findByText("Item 1 de 1");
+
+    expect(
+      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
+    await screen.findByRole("heading", { name: "Verso" });
+
+    expect(screen.getByRole("button", { name: "Bom" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Errei" })).toBeInTheDocument();
+
+    escolherAvaliacao("bom");
+
+    expect(
+      await screen.findByRole("heading", { name: "Resumo da Sessão" }),
+    ).toBeInTheDocument();
+  });
+
+  it("os atalhos 1 a 4 registram a Avaliação somente após a Revelação (FR-218)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Estudar Inglês",
+    });
+
+    iniciarCom("2");
+    await screen.findByText("Item 1 de 2");
+
+    // Antes da Revelação o atalho é ignorado: a Sessão não avança.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "4" });
+    expect(screen.getByText("Item 1 de 2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
+    await screen.findByRole("heading", { name: "Verso" });
+
+    // 3 corresponde a Bom (FR-192, FR-218).
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "3" });
+
+    expect(await screen.findByText("Item 2 de 2")).toBeInTheDocument();
   });
 });

@@ -98,6 +98,8 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       "#/baralhos",
       "#/baralhos/b1",
       "#/baralhos/b1/estudo",
+      "#/revisao",
+      "#/preferencias",
       "#/inexistente",
     ]) {
       expect(interpretarRota(hash, false)).toEqual({ nome: "entrar" });
@@ -124,6 +126,11 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       id: "s1",
     });
     expect(interpretarRota("#/cartoes/", true)).toEqual({ nome: "cartoes" });
+    expect(interpretarRota("#/revisao", true)).toEqual({ nome: "revisao" });
+    expect(interpretarRota("#/revisao/", true)).toEqual({ nome: "revisao" });
+    expect(interpretarRota("#/preferencias", true)).toEqual({
+      nome: "preferencias",
+    });
     expect(interpretarRota("#/baralhos", true)).toEqual({ nome: "baralhos" });
     expect(interpretarRota("#/baralhos/", true)).toEqual({ nome: "baralhos" });
     expect(interpretarRota("#/baralhos/b1", true)).toEqual({
@@ -178,6 +185,20 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
     });
   });
 
+  it("reconhece as rotas da Revisão do dia e das Preferências (FR-212)", () => {
+    expect(interpretarRota("#/revisao", true)).toEqual({ nome: "revisao" });
+    expect(interpretarRota("#/revisao/", true)).toEqual({ nome: "revisao" });
+    expect(interpretarRota("#/preferencias", true)).toEqual({
+      nome: "preferencias",
+    });
+    expect(interpretarRota("#/preferencias/", true)).toEqual({
+      nome: "preferencias",
+    });
+
+    expect(hashDaRota({ nome: "revisao" })).toBe("#/revisao");
+    expect(hashDaRota({ nome: "preferencias" })).toBe("#/preferencias");
+  });
+
   it("`novo` é palavra reservada: nunca é tratado como o id de um Baralho", () => {
     const rota = interpretarRota("#/baralhos/novo", true);
 
@@ -228,6 +249,7 @@ describe("destinoAtivo", () => {
   it("aponta o destino da moldura de cada rota publicada (FR-139, FR-168)", () => {
     expect(destinoAtivo({ nome: "inicio" })).toBe("inicio");
     expect(destinoAtivo({ nome: "registro", id: "s1" })).toBe("inicio");
+    expect(destinoAtivo({ nome: "revisao" })).toBe("inicio");
 
     expect(destinoAtivo({ nome: "cartoes" })).toBe("cartoes");
     expect(destinoAtivo({ nome: "novo-cartao" })).toBe("cartoes");
@@ -241,6 +263,8 @@ describe("destinoAtivo", () => {
       "baralhos",
     );
     expect(destinoAtivo({ nome: "estudo", id: "7" })).toBe("baralhos");
+
+    expect(destinoAtivo({ nome: "preferencias" })).toBe("preferencias");
 
     // Entrar e Criar conta não têm moldura de navegação (FR-098).
     expect(destinoAtivo({ nome: "entrar" })).toBeNull();
@@ -306,7 +330,7 @@ describe("Aplicacao sem Credencial", () => {
 });
 
 describe("Aplicacao depois de Entrar", () => {
-  it("oferece Início, Baralhos, Cartões e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168)", async () => {
+  it("oferece Início, Baralhos, Cartões, Preferências e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168, FR-212)", async () => {
     const servidor = clienteDeProva();
 
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
@@ -329,19 +353,23 @@ describe("Aplicacao depois de Entrar", () => {
     const linkDeBaralhos = within(navegacao).getByRole("link", {
       name: "Baralhos",
     });
+    const linkDePreferencias = within(navegacao).getByRole("link", {
+      name: "Preferências",
+    });
 
     expect(linkDeCartoes).toHaveAttribute("href", "#/cartoes");
     expect(linkDeBaralhos).toHaveAttribute("href", "#/baralhos");
+    expect(linkDePreferencias).toHaveAttribute("href", "#/preferencias");
     expect(linkDeCartoes).toHaveAttribute("aria-current", "page");
     expect(linkDeBaralhos).not.toHaveAttribute("aria-current");
 
-    // FR-139 e FR-168: a navegação lista Início, Baralhos e Cartões, nessa
-    // ordem.
+    // FR-139, FR-168 e FR-212: a navegação lista Início, Baralhos, Cartões e
+    // Preferências, nessa ordem.
     expect(
       within(navegacao)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Baralhos", "Cartões"]);
+    ).toEqual(["Início", "Baralhos", "Cartões", "Preferências"]);
 
     // FR-139: "Sair" vive na moldura, fora da navegação "Principal".
     expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
@@ -645,9 +673,17 @@ describe("Aplicacao depois de Entrar", () => {
 
     const registro = await servidor.registrarSessao({
       id: globalThis.crypto.randomUUID(),
+      origem: "baralho",
       baralhoId: baralho.baralho.id,
       nomeDoBaralho: "Inglês",
-      itens: [{ frente: "To walk", verso: "Caminhar", resultado: "acertou" }],
+      itens: [
+        {
+          frente: "To walk",
+          verso: "Caminhar",
+          cartaoId: "cartao-1",
+          avaliacao: "bom",
+        },
+      ],
     });
 
     if (!registro.ok) {

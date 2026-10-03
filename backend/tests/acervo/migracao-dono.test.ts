@@ -175,10 +175,15 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
         for (const tabela of ["cartao", "baralho"]) {
           const colunas = banco.prepare(`PRAGMA table_info(${tabela})`).all();
 
+          /**
+           * `cartao` recebeu `criado_em` na migração 7 — a ordem de criação dos
+           * Cartões novos (FR-201) —; `baralho` segue só com nome e dono.
+           */
           expect(colunas.map((coluna) => coluna.name)).toEqual([
             "id",
-            ...(tabela === "cartao" ? ["frente", "verso"] : ["nome"]),
-            "usuario_id",
+            ...(tabela === "cartao"
+              ? ["frente", "verso", "usuario_id", "criado_em"]
+              : ["nome", "usuario_id"]),
           ]);
 
           const dono = colunas.find((coluna) => coluna.name === "usuario_id");

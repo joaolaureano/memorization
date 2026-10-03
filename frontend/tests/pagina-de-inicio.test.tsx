@@ -12,10 +12,12 @@ import type {
   ClienteDoAcervo,
   Estatisticas,
   RegistroResumido,
+  ResumoDaRevisao,
 } from "../src/acervo-cliente/cliente";
 import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
 } from "../src/acervo-cliente/cliente";
 import { PaginaDeInicio } from "../src/ui/PaginaDeInicio";
 
@@ -40,8 +42,12 @@ afterEach(() => {
  */
 function clienteComEstatisticas(
   obterEstatisticas: ClienteDoAcervo["obterEstatisticas"],
+  obterResumoDaRevisao: ClienteDoAcervo["obterResumoDaRevisao"] = async () => ({
+    ok: true,
+    resumo: { vencidos: 0, novosHoje: 0, total: 0 },
+  }),
 ): ClienteDoAcervo {
-  return { obterEstatisticas } as ClienteDoAcervo;
+  return { obterEstatisticas, obterResumoDaRevisao } as ClienteDoAcervo;
 }
 
 /** Um Registro de Sessão de prova, com os totais e o resto informados. */
@@ -56,6 +62,7 @@ function registroDeProva(
 ): RegistroResumido {
   return {
     id,
+    origem: "baralho",
     baralhoId: extras.baralhoId ?? "baralho-1",
     nomeDoBaralho: extras.nomeDoBaralho ?? "Inglês",
     concluidaEm: extras.concluidaEm ?? new Date().toISOString(),
@@ -72,11 +79,21 @@ function valorDaEstatistica(rotulo: string): string {
   return tile?.querySelector(".estatistica__valor")?.textContent ?? "";
 }
 
-/** Os clientes de prova devolvem sempre as mesmas Estatísticas. */
-function renderDaPagina(estatisticas: Estatisticas): void {
+/**
+ * Os clientes de prova devolvem sempre as mesmas Estatísticas e o mesmo resumo
+ * da Revisão do dia. O resumo padrão é o de "nada para revisar", de modo que
+ * os testes das Estatísticas não precisem conhecê-lo.
+ */
+function renderDaPagina(
+  estatisticas: Estatisticas,
+  resumo: ResumoDaRevisao = { vencidos: 0, novosHoje: 0, total: 0 },
+): void {
   render(
     <PaginaDeInicio
-      cliente={clienteComEstatisticas(async () => ({ ok: true, estatisticas }))}
+      cliente={clienteComEstatisticas(
+        async () => ({ ok: true, estatisticas }),
+        async () => ({ ok: true, resumo }),
+      )}
       nomeDeUsuario="joao"
     />,
   );
@@ -239,6 +256,109 @@ describe("PaginaDeInicio", () => {
 
     await waitFor(() => {
       expect(valorDaEstatistica("Cartões")).toBe("1");
+    });
+    expect(tentativas).toBe(2);
+  });
+
+  it("mostra quantos vencem e quantos novos entram, com o link para a Revisão do dia (FR-198, FR-199)", async () => {
+    renderDaPagina(
+      { cartoes: 8, baralhos: 2, registrosDaJanela: [], recentes: [] },
+      { vencidos: 3, novosHoje: 5, total: 8 },
+    );
+
+    expect(await screen.findByText("Revisão do dia")).toBeTruthy();
+    expect(screen.getByText("3 Cartões para revisar hoje")).toBeTruthy();
+    expect(screen.getByText("5 Cartões novos entram hoje")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Revisar" }).getAttribute("href"),
+    ).toBe("#/revisao");
+  });
+
+  it("usa o singular para um Cartão vencido e um novo (FR-198, FR-199)", async () => {
+    renderDaPagina(
+      { cartoes: 2, baralhos: 1, registrosDaJanela: [], recentes: [] },
+      { vencidos: 1, novosHoje: 1, total: 2 },
+    );
+
+    expect(await screen.findByText("1 Cartão para revisar hoje")).toBeTruthy();
+    expect(screen.getByText("1 Cartão novo entra hoje")).toBeTruthy();
+  });
+
+  it("avisa que nenhum Cartão venceu quando só há novos, mantendo Revisar ativo (FR-198, FR-199)", async () => {
+    renderDaPagina(
+      { cartoes: 4, baralhos: 1, registrosDaJanela: [], recentes: [] },
+      { vencidos: 0, novosHoje: 4, total: 4 },
+    );
+
+    expect(await screen.findByText("Nenhum Cartão vencido hoje")).toBeTruthy();
+    expect(screen.getByText("4 Cartões novos entram hoje")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Revisar" }).getAttribute("href"),
+    ).toBe("#/revisao");
+  });
+
+  it("mostra 'Nada para revisar hoje' e desabilita Revisar com a explicação associada (FR-202)", async () => {
+    renderDaPagina({
+      cartoes: 5,
+      baralhos: 1,
+      registrosDaJanela: [],
+      recentes: [],
+    });
+
+    expect(await screen.findByText("Nada para revisar hoje")).toBeTruthy();
+    // Sem nada para revisar, "Revisar" deixa de ser um link...
+    expect(screen.queryByRole("link", { name: "Revisar" })).toBeNull();
+    // ...e vira um botão desabilitado, com a explicação associada (FR-202).
+    const revisar = screen.getByRole("button", { name: "Revisar" });
+    expect((revisar as HTMLButtonElement).disabled).toBe(true);
+    expect(revisar.getAttribute("aria-describedby")).toBe(
+      "explicacao-da-revisao",
+    );
+  });
+
+  it("não deixa a falha da Revisão esconder as Estatísticas, e permite tentar de novo (FR-217)", async () => {
+    let tentativas = 0;
+
+    render(
+      <PaginaDeInicio
+        cliente={clienteComEstatisticas(
+          async () => ({
+            ok: true,
+            estatisticas: {
+              cartoes: 7,
+              baralhos: 2,
+              registrosDaJanela: [],
+              recentes: [],
+            },
+          }),
+          async () => {
+            tentativas += 1;
+
+            return tentativas === 1
+              ? {
+                  ok: false,
+                  erro: INDISPONIVEL,
+                  mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+                }
+              : { ok: true, resumo: { vencidos: 2, novosHoje: 0, total: 2 } };
+          },
+        )}
+        nomeDeUsuario="joao"
+      />,
+    );
+
+    // A falha do bloco de revisão aparece, mas os números seguem à vista.
+    expect(
+      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(valorDaEstatistica("Cartões")).toBe("7");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("2 Cartões para revisar hoje")).toBeTruthy();
     });
     expect(tentativas).toBe(2);
   });

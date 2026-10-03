@@ -445,3 +445,155 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
     });
   });
 });
+
+describe("migração 7 — repetição espaçada", () => {
+  /** Sobe a base até a versão 6, a última antes das tabelas da repetição espaçada. */
+  function ateAVersaoSeis(banco: DatabaseSync): void {
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 6),
+    );
+  }
+
+  /** O DDL de uma tabela, lido do catálogo do SQLite. */
+  function ddlDaTabela(banco: DatabaseSync, nome: string): string {
+    const linha = banco
+      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(nome);
+
+    return linha === undefined ? "" : String(linha.sql);
+  }
+
+  it("preserva Cartões, Baralhos, Vínculos e Registros anteriores e não cria Agendamento (FR-214, FR-220)", () => {
+    comBanco((banco) => {
+      ateAVersaoSeis(banco);
+
+      const dono = gravarDono(banco);
+
+      gravarCartao(banco, dono, "c1");
+      gravarBaralho(banco, dono, "b1", "Inglês");
+      gravarVinculo(banco, "c1", "b1");
+
+      /** Um Registro da 013, gravado como a migração 6 o deixava em disco. */
+      banco
+        .prepare(
+          `INSERT INTO registro_de_sessao
+             (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+              estudados, acertos, erros)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run("r1", dono, "b1", "Inglês", "2026-01-01T00:00:00.000Z", 1, 1, 0);
+      banco
+        .prepare(
+          `INSERT INTO item_de_registro
+             (registro_id, posicao, frente, verso, resultado)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run("r1", 0, "To walk", "Caminhar", "acertou");
+
+      expect(existeTabela(banco, "agendamento")).toBe(false);
+      expect(existeTabela(banco, "preferencias")).toBe(false);
+
+      aplicarEsquema(banco);
+
+      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(7);
+
+      expect(existeTabela(banco, "agendamento")).toBe(true);
+      expect(existeTabela(banco, "preferencias")).toBe(true);
+
+      /** Nenhum dado existente é alterado nem perdido (FR-220). */
+      expect(contarLinhas(banco, "cartao")).toBe(1);
+      expect(contarLinhas(banco, "baralho")).toBe(1);
+      expect(contarLinhas(banco, "vinculo")).toBe(1);
+      expect(contarLinhas(banco, "registro_de_sessao")).toBe(1);
+      expect(contarLinhas(banco, "item_de_registro")).toBe(1);
+
+      /**
+       * Nenhum Agendamento nasce na migração: o acervo pré-015 vira Cartões
+       * novos, e os Agendamentos surgem na primeira Avaliação (FR-214).
+       */
+      expect(contarLinhas(banco, "agendamento")).toBe(0);
+
+      /** Registros anteriores ganham origem 'baralho' (FR-197). */
+      const registro = banco
+        .prepare("SELECT origem FROM registro_de_sessao WHERE id = ?")
+        .get("r1");
+
+      expect(registro?.origem).toBe("baralho");
+
+      /** Itens anteriores ficam com cartao_id e avaliacao NULL (FR-197). */
+      const item = banco
+        .prepare(
+          "SELECT cartao_id, avaliacao FROM item_de_registro WHERE registro_id = ?",
+        )
+        .get("r1");
+
+      expect(item?.cartao_id).toBeNull();
+      expect(item?.avaliacao).toBeNull();
+
+      /** As linhas antigas ficam sem instante de criação (FR-201). */
+      const cartao = banco
+        .prepare("SELECT criado_em FROM cartao WHERE id = ?")
+        .get("c1");
+
+      expect(cartao?.criado_em).toBeNull();
+    });
+  });
+
+  it("cria o índice de vencimento e recusa Avaliação inválida e limite fora de 0..999 (FR-187, FR-192, FR-200)", () => {
+    comBanco((banco) => {
+      aplicarEsquema(banco);
+
+      const indice = banco
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+        )
+        .get("indice_agendamento_por_usuario_vencimento");
+
+      expect(indice?.name).toBe("indice_agendamento_por_usuario_vencimento");
+
+      expect(ddlDaTabela(banco, "agendamento")).toMatch(
+        /ultima_avaliacao IN/,
+      );
+      expect(ddlDaTabela(banco, "preferencias")).toMatch(
+        /limite_de_novos_por_dia BETWEEN 0 AND 999/,
+      );
+
+      const dono = gravarDono(banco);
+
+      gravarCartao(banco, dono, "c1");
+
+      /** Avaliação fora dos 4 níveis é recusada pelo esquema (FR-192). */
+      expect(() =>
+        banco
+          .prepare(
+            `INSERT INTO agendamento
+               (usuario_id, cartao_id, algoritmo, versao_do_algoritmo, estado,
+                proxima_revisao_em, ultima_avaliacao, revisado_em, criado_em)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            dono,
+            "c1",
+            "sm2",
+            1,
+            "{}",
+            "2026-01-02T00:00:00.000Z",
+            "otima",
+            "2026-01-01T00:00:00.000Z",
+            "2026-01-01T00:00:00.000Z",
+          ),
+      ).toThrow();
+
+      /** O limite de Cartões novos é inteiro de 0 a 999 (FR-200). */
+      const gravarPreferencias = banco.prepare(
+        `INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
+         VALUES (?, ?, ?)`,
+      );
+
+      expect(() => gravarPreferencias.run(dono, "sm2", 1000)).toThrow();
+      expect(() => gravarPreferencias.run(dono, "sm2", -1)).toThrow();
+    });
+  });
+});

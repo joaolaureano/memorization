@@ -166,13 +166,19 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       await page.getByRole("button", { name: "Revelar verso" }).click();
 
       await expect(page.getByRole("heading", { name: "Verso" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Acertei" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Errei" })).toBeVisible();
+      // Os quatro níveis substituíram Acertei/Errei (FR-193, SC-088): "Bom" é
+      // o equivalente do antigo Acerto e "Errei" continua Errei.
+      await expect(
+        page.getByRole("button", { name: /^Bom/ }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /^Errei/ }),
+      ).toBeVisible();
 
       if (item === 3) {
-        await page.getByRole("button", { name: "Errei" }).click();
+        await page.getByRole("button", { name: /^Errei/ }).click();
       } else {
-        await page.getByRole("button", { name: "Acertei" }).click();
+        await page.getByRole("button", { name: /^Bom/ }).click();
       }
     }
 

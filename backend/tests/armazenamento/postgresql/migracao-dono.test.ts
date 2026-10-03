@@ -177,7 +177,14 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
 
       expect(colunas.map((coluna) => coluna.nome)).toEqual(
         tabela === "cartao"
-          ? ["frente", "id", "usuario_id", "verso"]
+          ? [
+              "criado_em",
+              "frente",
+              "id",
+              "ordem_de_insercao",
+              "usuario_id",
+              "verso",
+            ]
           : ["id", "nome", "usuario_id"],
       );
       expect(

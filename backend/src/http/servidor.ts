@@ -10,6 +10,8 @@ import {
   registrarRotaDeEntrada,
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
+  registrarRotasDePreferencias,
+  registrarRotasDeRevisao,
   registrarRotasDeSessoes,
   registrarRotasDeUsuarios,
   type AcervoDeUsuario,
@@ -63,6 +65,28 @@ export const CAMINHO_DAS_SESSOES = "/sessoes";
  * Caminho da rota de Estatísticas (contrato da `013`), com o mesmo CORS.
  */
 export const CAMINHO_DAS_ESTATISTICAS = "/estatisticas";
+
+/**
+ * Caminho das rotas de Revisão (contrato da `015`, §4). Recebe o mesmo
+ * tratamento de CORS mínimo das demais, porque o Estudo de hoje é consumido do
+ * navegador, em outra origem.
+ */
+export const CAMINHO_DA_REVISAO = "/revisao";
+
+/**
+ * Caminho do lote de Revisão (contrato da `015`, §4), com o mesmo CORS.
+ */
+export const CAMINHO_DO_LOTE_DE_REVISAO = "/revisao/lote";
+
+/**
+ * Caminho da rota de Prévias (contrato da `015`, §4), com o mesmo CORS.
+ */
+export const CAMINHO_DAS_PREVIAS = "/previas";
+
+/**
+ * Caminho das rotas de Preferências (contrato da `015`, §4), com o mesmo CORS.
+ */
+export const CAMINHO_DAS_PREFERENCIAS = "/preferencias";
 
 /**
  * Erro lançado quando o servidor está escutando fora do loopback.
@@ -221,6 +245,14 @@ export function criarServidor(
    * exclusivamente em 127.0.0.1, permitir qualquer origem é a configuração
    * mínima segura — o serviço não é alcançável pela rede.
    *
+   * Toda rota nova do contrato precisa entrar **também** nesta lista, além de
+   * ser registrada em `registrarRotasDaAplicacao`: registrar a rota sem
+   * acrescentá-la aqui a deixa sem pré-voo e sem cabeçalho permissivo, e o
+   * navegador recusa a chamada de outra origem — foi assim que `GET /revisao`
+   * respondia `404` ao pré-voo e deixava a Revisão sem CORS. O teste-guarda de
+   * `cors.test.ts` percorre as rotas registradas para que esse esquecimento
+   * falhe.
+   *
    * Com `politicaDeOutraOrigem` desligada, nem o pré-voo nem o `onSend` são
    * registrados: em produção, com SPA e API na mesma origem do CloudFront, a
    * resposta da função simplesmente **não tem** cabeçalho permissivo — a
@@ -239,6 +271,10 @@ export function criarServidor(
       CAMINHO_DAS_SESSOES,
       "/sessoes/:id",
       CAMINHO_DAS_ESTATISTICAS,
+      CAMINHO_DA_REVISAO,
+      CAMINHO_DO_LOTE_DE_REVISAO,
+      CAMINHO_DAS_PREVIAS,
+      CAMINHO_DAS_PREFERENCIAS,
     ]) {
       permitirPreVoo(servidor, caminho);
     }
@@ -255,7 +291,11 @@ export function criarServidor(
         caminho === CAMINHO_DE_ENTRAR ||
         caminho === CAMINHO_DAS_SESSOES ||
         caminho.startsWith("/sessoes/") ||
-        caminho === CAMINHO_DAS_ESTATISTICAS
+        caminho === CAMINHO_DAS_ESTATISTICAS ||
+        caminho === CAMINHO_DA_REVISAO ||
+        caminho === CAMINHO_DO_LOTE_DE_REVISAO ||
+        caminho === CAMINHO_DAS_PREVIAS ||
+        caminho === CAMINHO_DAS_PREFERENCIAS
       ) {
         resposta.header("access-control-allow-origin", "*");
       }
@@ -298,7 +338,8 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 
 /**
  * Registra **todas** as rotas da aplicação sobre o servidor já montado:
- * Cartões, Baralhos, Sessões, Usuários e Entrar. É a **única fonte da verdade**
+ * Cartões, Baralhos, Sessões, Revisão, Preferências, Usuários e Entrar. É a
+ * **única fonte da verdade**
  * da lista de rotas, e as duas entradas — a local, por `iniciarServidor`, e a da
  * nuvem, pela fábrica da `funcao` — precisam chamá-la.
  *
@@ -319,6 +360,8 @@ export function registrarRotasDaAplicacao(
   registrarRotasDeCartoes(servidor, acervoDe);
   registrarRotasDeBaralhos(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
+  registrarRotasDeRevisao(servidor, acervoDe);
+  registrarRotasDePreferencias(servidor, acervoDe);
   registrarRotasDeUsuarios(servidor, identidade);
   registrarRotaDeEntrada(servidor);
 }

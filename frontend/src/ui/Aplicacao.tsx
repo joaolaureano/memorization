@@ -6,6 +6,7 @@ import { Moldura } from "./Moldura";
 import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
 import type { Rota } from "./navegacao";
 import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
+import { PaginaDaRevisao } from "./PaginaDaRevisao";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
@@ -13,6 +14,7 @@ import { MENSAGEM_DE_SAIDA, PaginaDeEntrada } from "./PaginaDeEntrada";
 import type { AvisoDaEntrada } from "./PaginaDeEntrada";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
 import { PaginaDeInicio } from "./PaginaDeInicio";
+import { PaginaDePreferencias } from "./PaginaDePreferencias";
 import { PaginaDoBaralho } from "./PaginaDoBaralho";
 import { PaginaDoFormularioDeBaralho } from "./PaginaDoFormularioDeBaralho";
 import { PaginaDoFormularioDeCartao } from "./PaginaDoFormularioDeCartao";
@@ -315,6 +317,15 @@ function TelaDaRota({
     case "editar-cartao":
       // FR-141: a edição de Cartão ganha tela própria.
       return <PaginaDoFormularioDeCartao cliente={cliente} id={rota.id} />;
+
+    case "revisao":
+      // FR-198: a Revisão do dia é lançada de Início e tem tela própria; por
+      // isso `destinoAtivo` a marca como pertencente ao Início (§7).
+      return <PaginaDaRevisao cliente={cliente} />;
+
+    case "preferencias":
+      // FR-212: as Preferências têm tela própria, alcançável pela Moldura.
+      return <PaginaDePreferencias cliente={cliente} />;
 
     default: {
       // Inalcançável enquanto o `switch` cobrir todas as rotas: é a checagem

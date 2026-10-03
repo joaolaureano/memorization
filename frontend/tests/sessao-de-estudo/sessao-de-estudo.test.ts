@@ -3,24 +3,23 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { Cartao } from "../../src/acervo-cliente/cliente";
+import type { Avaliacao, Cartao } from "../../src/acervo-cliente/cliente";
 import {
   AleatoriedadeDeterministica,
   AleatoriedadeReal,
 } from "../../src/sessao-de-estudo/aleatoriedade";
 import {
+  MENSAGEM_DE_AVALIACAO_INVALIDA,
   MENSAGEM_DE_BARALHO_INELEGIVEL,
   MENSAGEM_DE_QUANTIDADE_INVALIDA,
-  MENSAGEM_DE_RESULTADO_INVALIDO,
   MENSAGEM_DE_REVELACAO_AUSENTE,
+  MENSAGEM_DE_REVISAO_VAZIA,
   MENSAGEM_DE_SESSAO_CONCLUIDA,
   SessaoDeEstudo,
+  derivarResultado,
   percentualDeAcertos,
 } from "../../src/sessao-de-estudo/sessao-de-estudo";
-import type {
-  ResumoDaSessao,
-  ResultadoDoItem,
-} from "../../src/sessao-de-estudo/sessao-de-estudo";
+import type { ResumoDaSessao } from "../../src/sessao-de-estudo/sessao-de-estudo";
 
 /**
  * T301–T303 — bateria do Module `SessaoDeEstudo`
@@ -68,22 +67,19 @@ function iniciarComSucesso(
   return resultado.sessao;
 }
 
-/** Revela e registra o Resultado do Item corrente, exigindo sucesso. */
-function responder(
-  sessao: SessaoDeEstudo,
-  resultado: ResultadoDoItem,
-): void {
+/** Revela e registra a Avaliação do Item corrente, exigindo sucesso. */
+function responder(sessao: SessaoDeEstudo, avaliacao: Avaliacao): void {
   const revelacao = sessao.revelar();
 
   if (!revelacao.ok) {
     throw new Error(`a Revelação deveria ser aceita: ${revelacao.mensagem}`);
   }
 
-  const registro = sessao.registrarResultado(resultado);
+  const registro = sessao.registrarAvaliacao(avaliacao);
 
   if (!registro.ok) {
     throw new Error(
-      `o Resultado deveria ser aceito: ${registro.mensagem}`,
+      `a Avaliação deveria ser aceita: ${registro.mensagem}`,
     );
   }
 }
@@ -220,7 +216,7 @@ describe("SessaoDeEstudo — início (T301)", () => {
 
     const ordemInicial = sessao.estadoAtual().itens.map((item) => item.cartaoId);
 
-    responder(sessao, "acertou");
+    responder(sessao, "bom");
 
     const ordemDepois = sessao.estadoAtual().itens.map((item) => item.cartaoId);
 
@@ -297,10 +293,10 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
     expect(estado.itemAtual.revelado).toBe(true);
   });
 
-  it("recusa Resultado antes da Revelação (FR-034)", () => {
+  it("recusa a Avaliação antes da Revelação (FR-034, FR-193)", () => {
     const sessao = iniciarComSucesso(1, ["c1"], []);
 
-    const registro = sessao.registrarResultado("acertou");
+    const registro = sessao.registrarAvaliacao("bom");
 
     expect(registro).toEqual({
       ok: false,
@@ -310,25 +306,23 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
     expect(sessao.estadoAtual().concluida).toBe(false);
   });
 
-  it("aceita apenas acertou e errou como Resultado (FR-036)", () => {
+  it("aceita apenas as 4 Avaliações como entrada (FR-192, FR-193)", () => {
     const sessao = iniciarComSucesso(1, ["c1"], []);
     sessao.revelar();
 
-    const registro = sessao.registrarResultado(
-      "correto" as ResultadoDoItem,
-    );
+    const registro = sessao.registrarAvaliacao("correto" as Avaliacao);
 
     expect(registro).toEqual({
       ok: false,
-      erro: "resultado_invalido",
-      mensagem: MENSAGEM_DE_RESULTADO_INVALIDO,
+      erro: "avaliacao_invalida",
+      mensagem: MENSAGEM_DE_AVALIACAO_INVALIDA,
     });
   });
 
-  it("registra um único Resultado e avança para o próximo Item (FR-035)", () => {
+  it("registra uma única Avaliação e avança para o próximo Item (FR-035, FR-150)", () => {
     const sessao = iniciarComSucesso(2, ["c1", "c2"], [0.99]);
 
-    responder(sessao, "acertou");
+    responder(sessao, "bom");
 
     const estado = sessao.estadoAtual();
 
@@ -345,13 +339,14 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
     expect(primeiro.revelado).toBe(true);
 
     if (primeiro.revelado) {
+      expect(primeiro.avaliacao).toBe("bom");
       expect(primeiro.resultado).toBe("acertou");
       expect(Object.isFrozen(primeiro)).toBe(true);
     }
 
     // Uma nova tentativa de registro agora mira o Item seguinte, ainda com o
-    // Verso oculto; é recusada, e o Resultado anterior permanece intacto.
-    expect(sessao.registrarResultado("errou")).toEqual({
+    // Verso oculto; é recusada, e a Avaliação anterior permanece intacta.
+    expect(sessao.registrarAvaliacao("errei")).toEqual({
       ok: false,
       erro: "revelacao_ausente",
       mensagem: MENSAGEM_DE_REVELACAO_AUSENTE,
@@ -359,17 +354,33 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
 
     const depois = sessao.estadoAtual().itens[0];
     if (depois.revelado) {
+      expect(depois.avaliacao).toBe("bom");
       expect(depois.resultado).toBe("acertou");
     }
+  });
+
+  it("recusa uma segunda Avaliação no mesmo Item (FR-150)", () => {
+    const sessao = iniciarComSucesso(2, ["c1", "c2"], [0.99]);
+
+    responder(sessao, "bom");
+
+    // Após a Avaliação, o Item anterior está fechado: sem uma nova Revelação
+    // do Item seguinte, qualquer Avaliação é recusada.
+    expect(sessao.registrarAvaliacao("facil")).toEqual({
+      ok: false,
+      erro: "revelacao_ausente",
+      mensagem: MENSAGEM_DE_REVELACAO_AUSENTE,
+    });
+    expect(sessao.estadoAtual().itens[0].resultado).toBe("acertou");
   });
 
   it("Resumo coerente ao final: acertos + erros = estudados (FR-037)", () => {
     const sessao = iniciarComSucesso(3, ["c1", "c2", "c3"], [0.99, 0.99]);
 
-    responder(sessao, "acertou");
-    responder(sessao, "errou");
+    responder(sessao, "bom");
+    responder(sessao, "errei");
     sessao.revelar();
-    const registro = sessao.registrarResultado("acertou");
+    const registro = sessao.registrarAvaliacao("facil");
 
     if (!registro.ok || !("resumo" in registro)) {
       throw new Error("a Sessão deveria concluir com Resumo");
@@ -393,9 +404,9 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
   it("Resumo com todos os Itens errados tem zero acertos (edge case)", () => {
     const sessao = iniciarComSucesso(2, ["c1", "c2"], [0.99]);
 
-    responder(sessao, "errou");
+    responder(sessao, "errei");
     sessao.revelar();
-    const registro = sessao.registrarResultado("errou");
+    const registro = sessao.registrarAvaliacao("errei");
 
     if (!registro.ok || !("resumo" in registro)) {
       throw new Error("a Sessão deveria concluir com Resumo");
@@ -404,20 +415,114 @@ describe("SessaoDeEstudo — Revelação, Resultado e Resumo (T302)", () => {
     expect(registro.resumo).toEqual({ estudados: 2, acertos: 0, erros: 2 });
   });
 
-  it("recusa Revelação e Resultado após a conclusão", () => {
+  it("recusa Revelação e Avaliação após a conclusão", () => {
     const sessao = iniciarComSucesso(1, ["c1"], []);
-    responder(sessao, "acertou");
+    responder(sessao, "bom");
 
     expect(sessao.revelar()).toEqual({
       ok: false,
       erro: "sessao_concluida",
       mensagem: MENSAGEM_DE_SESSAO_CONCLUIDA,
     });
-    expect(sessao.registrarResultado("errou")).toEqual({
+    expect(sessao.registrarAvaliacao("errei")).toEqual({
       ok: false,
       erro: "sessao_concluida",
       mensagem: MENSAGEM_DE_SESSAO_CONCLUIDA,
     });
+  });
+});
+
+describe("SessaoDeEstudo — Avaliação em 4 níveis e derivação (T1511, FR-192–FR-195)", () => {
+  const derivacoes: ReadonlyArray<[Avaliacao, "acertou" | "errou"]> = [
+    ["errei", "errou"],
+    ["dificil", "acertou"],
+    ["bom", "acertou"],
+    ["facil", "acertou"],
+  ];
+
+  for (const [avaliacao, esperado] of derivacoes) {
+    it(`registra a Avaliação ${avaliacao} e deriva o Resultado ${esperado} (FR-193, FR-194)`, () => {
+      const sessao = iniciarComSucesso(1, ["c1"], []);
+
+      responder(sessao, avaliacao);
+
+      const item = sessao.estadoAtual().itens[0];
+
+      expect(item.revelado).toBe(true);
+      if (item.revelado) {
+        expect(item.avaliacao).toBe(avaliacao);
+        expect(item.resultado).toBe(esperado);
+      }
+    });
+  }
+
+  it("derivarResultado traduz as 4 Avaliações para as 2 vias (FR-194, FR-195)", () => {
+    expect(derivarResultado("errei")).toBe("errou");
+    expect(derivarResultado("dificil")).toBe("acertou");
+    expect(derivarResultado("bom")).toBe("acertou");
+    expect(derivarResultado("facil")).toBe("acertou");
+  });
+
+  it("cada Item guarda o cartaoId do Cartão de origem (FR-196)", () => {
+    const sessao = iniciarComSucesso(2, ["c7", "c9"], [0.99]);
+
+    expect(sessao.estadoAtual().itens.map((item) => item.cartaoId)).toEqual([
+      "c7",
+      "c9",
+    ]);
+  });
+});
+
+describe("SessaoDeEstudo — Revisão do dia (T1511, FR-201)", () => {
+  it("cria a Sessão a partir da lista já ordenada, sem embaralhar (FR-201)", () => {
+    const resultado = SessaoDeEstudo.iniciarDaRevisao(
+      cartoes(["c3", "c1", "c2"]),
+    );
+
+    if (!resultado.ok) {
+      throw new Error(`a Sessão deveria iniciar: ${resultado.mensagem}`);
+    }
+
+    const estado = resultado.sessao.estadoAtual();
+
+    expect(estado.total).toBe(3);
+    expect(estado.itens.map((item) => item.cartaoId)).toEqual([
+      "c3",
+      "c1",
+      "c2",
+    ]);
+
+    if (estado.concluida) {
+      throw new Error("a Sessão deveria estar em andamento");
+    }
+    expect(estado.itemAtual.cartaoId).toBe("c3");
+    expect(estado.itemAtual.revelado).toBe(false);
+  });
+
+  it("recusa a Revisão sem Cartões, com código próprio (FR-201)", () => {
+    const resultado = SessaoDeEstudo.iniciarDaRevisao([]);
+
+    expect(resultado).toEqual({
+      ok: false,
+      erro: "revisao_vazia",
+      mensagem: MENSAGEM_DE_REVISAO_VAZIA,
+    });
+  });
+
+  it("a Sessão da Revisão aceita Avaliação normalmente (FR-201)", () => {
+    const resultado = SessaoDeEstudo.iniciarDaRevisao(cartoes(["c1", "c2"]));
+
+    if (!resultado.ok) {
+      throw new Error(`a Sessão deveria iniciar: ${resultado.mensagem}`);
+    }
+
+    responder(resultado.sessao, "bom");
+
+    const item = resultado.sessao.estadoAtual().itens[0];
+    if (item.revelado) {
+      expect(item.avaliacao).toBe("bom");
+      expect(item.resultado).toBe("acertou");
+    }
   });
 });
 
@@ -428,7 +533,7 @@ describe("SessaoDeEstudo — interrupção e ausência de persistência (T303)",
       ["c1", "c2", "c3"],
       [0.99, 0.99],
     );
-    responder(primeira, "acertou");
+    responder(primeira, "bom");
 
     // Interromper é abandonar a instância; não há retomada. Uma nova Sessão
     // do mesmo Baralho nasce do zero, sem posição, Revelação ou Resultado.
@@ -454,7 +559,7 @@ describe("SessaoDeEstudo — interrupção e ausência de persistência (T303)",
     sessionStorage.clear();
 
     const sessao = iniciarComSucesso(1, ["c1"], []);
-    responder(sessao, "acertou");
+    responder(sessao, "bom");
 
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);

@@ -12,7 +12,7 @@ import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
  * (specs/004-sessao-de-estudo/tasks.md, FR-049).
  *
  * O jsdom não executa leitor de tela: o anúncio é comprovado pela semântica
- * que o dispara. Verso revelado, Resultado registrado e Sessão concluída são
+ * que o dispara. Verso revelado, Avaliação registrada e Sessão concluída são
  * inseridos numa região ativa polida (`role="status"`) com nome acessível e
  * `aria-live`/`aria-atomic` explícitos. A recusa de início é uma região
  * assertiva (`role="alert"`), nomeada no contexto da operação e sem
@@ -104,14 +104,14 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("o Resultado registrado é anunciado em região ativa polida (FR-049)", async () => {
+  it("a Avaliação registrada é anunciada em região ativa polida (FR-049, FR-193)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
     await iniciarSessao(cliente, idDoBaralho, "2");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByText(/Verso revelado\./);
 
-    fireEvent.click(screen.getByRole("button", { name: "Acertei" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Bom/ }));
 
     const anuncio = await screen.findByRole("status", {
       name: "Mudança de estado da Sessão",
@@ -120,7 +120,7 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
     expect(anuncio).toHaveAttribute("aria-live", "polite");
     expect(anuncio).toHaveAttribute("aria-atomic", "true");
-    expect(anuncio).toHaveTextContent(/Resultado registrado: acertou\./);
+    expect(anuncio).toHaveTextContent(/Avaliação registrada: Bom\./);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByText(/Verso revelado\./);
 
-    fireEvent.click(screen.getByRole("button", { name: "Errei" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Errei/ }));
 
     const anuncio = await screen.findByRole("status", {
       name: "Mudança de estado da Sessão",

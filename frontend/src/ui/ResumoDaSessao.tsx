@@ -1,6 +1,19 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
+import type { Avaliacao } from "../acervo-cliente/cliente";
+
+/** Os 4 níveis de Avaliação na ordem exibida, com os rótulos de texto (FR-216). */
+const NIVEIS_DE_AVALIACAO: readonly {
+  readonly avaliacao: Avaliacao;
+  readonly rotulo: string;
+}[] = [
+  { avaliacao: "errei", rotulo: "Errei" },
+  { avaliacao: "dificil", rotulo: "Difícil" },
+  { avaliacao: "bom", rotulo: "Bom" },
+  { avaliacao: "facil", rotulo: "Fácil" },
+];
+
 /**
  * Resumo da Sessão (T1208; specs/013-estatisticas-e-historico/contracts/contratos.md §7).
  *
@@ -15,6 +28,13 @@ import type { ReactNode } from "react";
  * recolhidos. Um grupo vazio é apenas um botão desabilitado, descrito pelo
  * texto "Nenhum acerto nesta Sessão" / "Nenhum erro nesta Sessão" (FR-175).
  *
+ * Quando **todos** os Itens trazem Avaliação, o Resumo acrescenta, entre o
+ * percentual e os grupos, a contagem por nível de Avaliação (Errei, Difícil,
+ * Bom, Fácil) numa lista acessível de rótulos de texto, sem depender de cor
+ * (FR-216). Registros anteriores à 015, sem Avaliação, aparecem exatamente
+ * como antes (FR-197, FR-214). A prop `origem` identifica a Sessão (FR-196);
+ * o rótulo "Revisão do dia" e as ações cabem à página que usa o componente.
+ *
  * O componente **não** tem `h1`: o título ("Resumo da Sessão") pertence à
  * página que o usa, que também é dona das ações — recebidas em `children` e
  * renderizadas ao fim (FR-174).
@@ -25,6 +45,12 @@ export interface ItemDoResumo {
   frente: string;
   verso: string;
   resultado: "acertou" | "errou";
+  /**
+   * Avaliação em 4 níveis escolhida na Sessão (FR-193); ausente ou nula nos
+   * Registros anteriores à 015, que o Resumo exibe exatamente como sempre os
+   * exibiu (FR-196, FR-197).
+   */
+  avaliacao?: Avaliacao | null;
 }
 
 export function ResumoDaSessao({
@@ -32,6 +58,7 @@ export function ResumoDaSessao({
   children,
 }: {
   itens: readonly ItemDoResumo[];
+  origem?: "baralho" | "revisao";
   children?: ReactNode;
 }) {
   const acertos = itens.filter((item) => item.resultado === "acertou");
@@ -39,6 +66,27 @@ export function ResumoDaSessao({
   const estudados = itens.length;
   const percentual =
     estudados === 0 ? 0 : Math.round((acertos.length / estudados) * 100);
+
+  // A contagem por nível só existe quando **todos** os Itens trazem Avaliação;
+  // sem Avaliação — Registros anteriores à 015 —, o Resumo aparece exatamente
+  // como antes (FR-197, FR-216).
+  const contagemPorNivel: Record<Avaliacao, number> = {
+    errei: 0,
+    dificil: 0,
+    bom: 0,
+    facil: 0,
+  };
+  const mostrarContagemPorNivel = itens.every(
+    (item) => item.avaliacao != null,
+  );
+
+  if (mostrarContagemPorNivel) {
+    for (const item of itens) {
+      if (item.avaliacao != null) {
+        contagemPorNivel[item.avaliacao] += 1;
+      }
+    }
+  }
 
   const listaDeAcertos = useId();
   const listaDeErros = useId();
@@ -57,6 +105,19 @@ export function ResumoDaSessao({
       <p className="texto-secundario">
         {acertos.length} de {estudados} Itens
       </p>
+
+      {mostrarContagemPorNivel && (
+        <ul
+          className="contagem-por-nivel"
+          aria-label="Contagem por nível de Avaliação"
+        >
+          {NIVEIS_DE_AVALIACAO.map(({ avaliacao, rotulo }) => (
+            <li key={avaliacao}>
+              {rotulo} {contagemPorNivel[avaliacao]}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="acoes">
         <button

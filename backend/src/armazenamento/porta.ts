@@ -30,6 +30,15 @@
  * continuam conhecendo apenas `ArmazenamentoDoAcervo`.
  */
 
+import type { Avaliacao } from "../repeticao/algoritmo.ts";
+
+/**
+ * A Avaliação em quatro níveis é vocabulário **compartilhado**: o Module de
+ * repetição a produz e a Porta a grava, e por isso a Porta a re-exporta, como
+ * já faz com outros tipos do domínio (FR-192).
+ */
+export type { Avaliacao };
+
 /**
  * Cartão como o armazenamento o guarda: identificador opaco, Frente e Verso
  * (FR-009). É a Porta quem declara esta forma, porque é ela quem troca esses
@@ -85,6 +94,10 @@ export interface ItemRegistrado {
   readonly frente: string;
   readonly verso: string;
   readonly resultado: ResultadoDoItemRegistrado;
+  /** Cartão de origem; ausente/nulo em Itens anteriores à 015 (FR-196, FR-197). */
+  readonly cartaoId?: string | null;
+  /** Avaliação em 4 níveis; ausente/nula em Itens anteriores à 015 (FR-196, FR-197). */
+  readonly avaliacao?: Avaliacao | null;
 }
 
 /**
@@ -103,6 +116,12 @@ export interface RegistroDeSessao {
   readonly id: string;
   readonly baralhoId: string;
   readonly nomeDoBaralho: string;
+  /**
+   * Origem da Sessão: estudo livre por Baralho (`"baralho"`) ou Revisão do dia
+   * (`"revisao"`) (FR-196). Na Revisão do dia, `baralhoId` vale `""` e
+   * `nomeDoBaralho` vale `"Revisão do dia"` — ambos derivados pelo Module (D5).
+   */
+  readonly origem: "baralho" | "revisao";
   /** ISO-8601 UTC, definido pelo Module na primeira inserção. */
   readonly concluidaEm: string;
   readonly estudados: number;
@@ -119,6 +138,67 @@ export interface RegistroDeSessao {
  * (FR-169, SC-077).
  */
 export type RegistroResumido = Omit<RegistroDeSessao, "itens">;
+
+/**
+ * Agendamento do Cartão: a relação entre um Usuário e um Cartão que guarda
+ * quando aquele Cartão deve ser revisto (FR-187). É por Cartão e por Usuário,
+ * **nunca** por Vínculo (FR-207): o mesmo Agendamento vale em todos os Baralhos
+ * a que o Cartão esteja vinculado.
+ *
+ * `estado` é **opaco**: só o Algoritmo de repetição o interpreta (FR-188,
+ * FR-189). O único campo que o restante do produto lê, além do Cartão e do
+ * Usuário donos, é `proximaRevisaoEm` (FR-189).
+ */
+export interface Agendamento {
+  readonly cartaoId: string;
+  /** Identificador do algoritmo que produziu o estado; hoje `"sm2"`. */
+  readonly algoritmo: string;
+  /** Versão do algoritmo; estado de outra versão não é lido (D1, D4). */
+  readonly versaoDoAlgoritmo: number;
+  /** Estado opaco próprio do algoritmo; a Porta apenas o guarda (FR-188). */
+  readonly estado: unknown;
+  /** ISO-8601 UTC: a próxima data de revisão do Cartão (FR-187, FR-189). */
+  readonly proximaRevisaoEm: string;
+  /** Última Avaliação declarada; o `CHECK` do esquema é a rede de segurança. */
+  readonly ultimaAvaliacao: Avaliacao;
+  /** ISO-8601 UTC: o instante da última revisão. */
+  readonly revisadoEm: string;
+  /**
+   * ISO-8601 UTC: o instante da **primeira** Avaliação que originou o
+   * Agendamento. É preservado em toda atualização posterior e é o que faz o
+   * Cartão contar no limite de Cartões novos do dia (D3, FR-199, FR-200).
+   */
+  readonly criadoEm: string;
+}
+
+/**
+ * Preferências de repetição espaçada de um Usuário (FR-212). A **ausência de
+ * linha** equivale aos padrões — `algoritmo = "sm2"` e `limiteDeNovosPorDia =
+ * 20` —, que a Porta sintetiza na leitura, sem gravar linha a priori (D5).
+ */
+export interface Preferencias {
+  /** Identificador do algoritmo escolhido; precisa estar em `ALGORITMOS`. */
+  readonly algoritmo: string;
+  /**
+   * Inteiro de 0 a 999; **0** significa não introduzir Cartões novos
+   * (FR-200).
+   */
+  readonly limiteDeNovosPorDia: number;
+}
+
+/**
+ * Item do Histórico com Avaliação e Cartão de origem — o insumo do replay que
+ * reconstrói os Agendamentos na troca de algoritmo (FR-213). Itens anteriores
+ * à 015, com `avaliacao` ou `cartaoId` ausentes, ficam de fora.
+ */
+export interface ItemAvaliado {
+  readonly cartaoId: string;
+  readonly avaliacao: Avaliacao;
+  /** ISO-8601 UTC: o instante da conclusão da Sessão a que o Item pertence. */
+  readonly concluidaEm: string;
+  /** Posição do Item na ordem apresentada: `0..n-1`. */
+  readonly posicao: number;
+}
 
 /**
  * Códigos de falha tipada da Porta. São vocabulário de armazenamento, nunca
@@ -393,4 +473,65 @@ export interface ArmazenamentoDoAcervo {
     usuarioId: string,
     id: string,
   ): Promise<Desfecho<RegistroDeSessao>>;
+
+  /**
+   * Devolve as Preferências de repetição espaçada de `usuarioId` (FR-212).
+   * Ausência de linha **não** é `nao_encontrado`: a Porta sintetiza os padrões
+   * (`algoritmo = "sm2"`, `limiteDeNovosPorDia = 20`) e nunca grava linha a
+   * priori (D5).
+   */
+  obterPreferencias(usuarioId: string): Promise<Preferencias>;
+
+  /**
+   * Grava (insert ou update) as Preferências de `usuarioId` (FR-212). Já
+   * validadas pelo Module, a Porta apenas as guarda; a falha do armazenamento
+   * chega como `indisponivel`, jamais como concluído (FR-044, FR-107).
+   */
+  salvarPreferencias(
+    usuarioId: string,
+    preferencias: Preferencias,
+  ): Promise<Desfecho<Preferencias>>;
+
+  /** Devolve os Agendamentos de `usuarioId`, sem prometer ordem alguma. */
+  listarAgendamentos(usuarioId: string): Promise<Agendamento[]>;
+
+  /**
+   * Numa **única transação**, guarda um Registro de sessão concluída e aplica
+   * a ele os Agendamentos resultantes das Avaliações (FR-167, FR-210).
+   *
+   * Se o `id` do Registro já existe **para o mesmo Usuário**, devolve o
+   * Registro já guardado com `novo: false` e **não** grava Agendamento algum —
+   * é a idempotência do Histórico estendida aos Agendamentos (FR-163,
+   * FR-210). O mesmo `id` de **outro** Usuário é recusado como `conflito`,
+   * como em `inserirRegistroDeSessao` (FR-166). A falha do armazenamento chega
+   * como `indisponivel`, jamais como concluído (FR-164).
+   *
+   * Agendamento de Cartão inexistente — excluído entre a leitura e a gravação —
+   * é descartado em silêncio, sem derrubar a transação (D5).
+   */
+  inserirRegistroEAgendamentos(
+    usuarioId: string,
+    registro: RegistroDeSessao,
+    agendamentos: readonly Agendamento[],
+  ): Promise<Desfecho<{ registro: RegistroDeSessao; novo: boolean }>>;
+
+  /**
+   * Numa **única transação**, salva as Preferências de `usuarioId`, apaga
+   * **todos** os Agendamentos dele e grava os novos — a reconstrução que a
+   * troca de algoritmo dispara (FR-212, FR-213). A falha do armazenamento
+   * chega como `indisponivel`.
+   */
+  substituirAgendamentos(
+    usuarioId: string,
+    preferencias: Preferencias,
+    agendamentos: readonly Agendamento[],
+  ): Promise<Desfecho<void>>;
+
+  /**
+   * Devolve os Itens de `usuarioId` que têm Avaliação e Cartão de origem,
+   * **em ordem `(concluidaEm, posicao)`** — o insumo do replay que reconstrói
+   * os Agendamentos (FR-213). Itens anteriores à 015, com `avaliacao` ou
+   * `cartaoId` ausentes, ficam de fora.
+   */
+  listarItensAvaliados(usuarioId: string): Promise<ItemAvaliado[]>;
 }

@@ -5,13 +5,14 @@ import { Moldura } from "../src/ui/Moldura";
 import type { Rota } from "../src/ui/navegacao";
 
 /**
- * Moldura (FR-139, FR-168).
+ * Moldura (FR-139, FR-168, FR-212).
  *
  * A marca e os destinos do acervo apontam para as rotas canônicas, e o destino
  * corrente é decidido por `destinoAtivo` — por isso a prova percorre cada
- * família de rota: o Início e o Registro de Sessão marcam Início, as de Cartões
- * marcam Cartões, as de Baralho (inclusive a Sessão de estudo, que pertence ao
- * Baralho) marcam Baralhos, e Entrar e Criar conta não marcam nenhum destino.
+ * família de rota: o Início, o Registro de Sessão e a Revisão do dia marcam
+ * Início, as de Cartões marcam Cartões, as de Baralho (inclusive a Sessão de
+ * estudo, que pertence ao Baralho) marcam Baralhos, Preferências marca
+ * Preferências, e Entrar e Criar conta não marcam nenhum destino.
  *
  * Sair é irmão do `<nav>`: em telas de até 600px só a navegação desce para a
  * barra inferior, e Sair precisa continuar no cabeçalho.
@@ -20,7 +21,7 @@ import type { Rota } from "../src/ui/navegacao";
 const CASOS: ReadonlyArray<{
   descricao: string;
   rota: Rota;
-  ativo: "Início" | "Baralhos" | "Cartões" | null;
+  ativo: "Início" | "Baralhos" | "Cartões" | "Preferências" | null;
 }> = [
   { descricao: "Início", rota: { nome: "inicio" }, ativo: "Início" },
   {
@@ -28,6 +29,7 @@ const CASOS: ReadonlyArray<{
     rota: { nome: "registro", id: "s1" },
     ativo: "Início",
   },
+  { descricao: "Revisão do dia", rota: { nome: "revisao" }, ativo: "Início" },
   { descricao: "Baralhos", rota: { nome: "baralhos" }, ativo: "Baralhos" },
   { descricao: "Novo Baralho", rota: { nome: "novo-baralho" }, ativo: "Baralhos" },
   { descricao: "Detalhe do Baralho", rota: { nome: "baralho", id: "b1" }, ativo: "Baralhos" },
@@ -37,6 +39,7 @@ const CASOS: ReadonlyArray<{
   { descricao: "Cartões", rota: { nome: "cartoes" }, ativo: "Cartões" },
   { descricao: "Novo Cartão", rota: { nome: "novo-cartao" }, ativo: "Cartões" },
   { descricao: "Editar Cartão", rota: { nome: "editar-cartao", id: "c1" }, ativo: "Cartões" },
+  { descricao: "Preferências", rota: { nome: "preferencias" }, ativo: "Preferências" },
   { descricao: "Entrar", rota: { nome: "entrar" }, ativo: null },
   { descricao: "Criar conta", rota: { nome: "cadastro" }, ativo: null },
 ];
@@ -63,13 +66,18 @@ describe("Moldura — marca e destinos", () => {
       "href",
       "#/cartoes",
     );
+    expect(screen.getByRole("link", { name: "Preferências" })).toHaveAttribute(
+      "href",
+      "#/preferencias",
+    );
 
-    // FR-168: a navegação lista Início, Baralhos e Cartões, nessa ordem.
+    // FR-168 e FR-212: a navegação lista Início, Baralhos, Cartões e
+    // Preferências, nessa ordem.
     expect(
       within(screen.getByRole("navigation", { name: "Principal" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Baralhos", "Cartões"]);
+    ).toEqual(["Início", "Baralhos", "Cartões", "Preferências"]);
   });
 });
 
@@ -77,7 +85,12 @@ describe("Moldura — destino corrente", () => {
   it.each(CASOS)("marca o destino de $descricao", ({ rota, ativo }) => {
     render(<Moldura rota={rota} aoSair={() => {}} />);
 
-    for (const nome of ["Início", "Baralhos", "Cartões"] as const) {
+    for (const nome of [
+      "Início",
+      "Baralhos",
+      "Cartões",
+      "Preferências",
+    ] as const) {
       const link = screen.getByRole("link", { name: nome });
 
       if (nome === ativo) {

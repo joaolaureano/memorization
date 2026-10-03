@@ -40,11 +40,12 @@ const INSTANTE_INICIAL = new Date("2026-10-01T12:00:00.000Z");
 const UM_SEGUNDO_EM_MILISSEGUNDOS = 1000;
 const UM_DIA_EM_MILISSEGUNDOS = 24 * 60 * 60 * 1000;
 
-type ResultadoDeItem = "acertou" | "errou";
+/** Nível de Avaliação de um Item (FR-193); o Resultado é derivado dele. */
+type NivelDeAvaliacao = "errei" | "dificil" | "bom" | "facil";
 
 /** 1001 Itens válidos — um acima do limite do contrato. */
 const ITENS_ACIMA_DO_LIMITE = Array.from({ length: 1001 }, () =>
-  itemDe(FRENTE, VERSO, "acertou"),
+  itemDe(FRENTE, VERSO, "bom"),
 );
 
 let aberto: ArmazenamentoSqliteAberto;
@@ -91,23 +92,31 @@ function corpoDeRegistro(
 ): DadosDeRegistro {
   return {
     id: randomUUID(),
+    origem: "baralho",
     baralhoId: "baralho-1",
     nomeDoBaralho: BARALHO,
-    itens: [
-      { frente: FRENTE, verso: VERSO, resultado: "acertou" },
-      { frente: "To run", verso: "Correr", resultado: "errou" },
-    ],
+    itens: [itemDe(FRENTE, VERSO, "bom"), itemDe("To run", "Correr", "errei")],
     ...mudancas,
   };
 }
 
-/** Item cru do corpo. */
+/**
+ * Item cru do corpo: Frente, Verso, Cartão de origem e Avaliação (FR-193). O
+ * `cartaoId` é gerado quando o teste não aponta um Cartão de verdade — o
+ * Registro é preservado mesmo quando ele já não existe (FR-165).
+ */
 function itemDe(
   frente: string,
   verso: string,
-  resultado: ResultadoDeItem,
-): { frente: string; verso: string; resultado: ResultadoDeItem } {
-  return { frente, verso, resultado };
+  avaliacao: NivelDeAvaliacao,
+  cartaoId: string = randomUUID(),
+): {
+  frente: string;
+  verso: string;
+  cartaoId: string;
+  avaliacao: NivelDeAvaliacao;
+} {
+  return { frente, verso, cartaoId, avaliacao };
 }
 
 /** Desembrulha o Registro de uma gravação aceita; falha se foi recusada. */
@@ -126,6 +135,7 @@ function resumoDo(registro: RegistroDeSessao): RegistroResumido {
     baralhoId: registro.baralhoId,
     nomeDoBaralho: registro.nomeDoBaralho,
     concluidaEm: registro.concluidaEm,
+    origem: registro.origem,
     estudados: registro.estudados,
     acertos: registro.acertos,
     erros: registro.erros,
@@ -174,14 +184,12 @@ async function criarAcervoDeOutroUsuario(): Promise<Acervo> {
 }
 
 describe("registrarSessao — registro da Sessão concluída", () => {
-  it("registra a Sessão derivando totais e posições dos Itens", async () => {
-    const corpo = corpoDeRegistro({
-      itens: [
-        itemDe(FRENTE, VERSO, "acertou"),
-        itemDe("To run", "Correr", "errou"),
-        itemDe("To sleep", "Dormir", "acertou"),
-      ],
-    });
+  it("registra a Sessão derivando totais, resultados e posições dos Itens", async () => {
+    const primeiro = itemDe(FRENTE, VERSO, "bom");
+    const segundo = itemDe("To run", "Correr", "errei");
+    const terceiro = itemDe("To sleep", "Dormir", "facil");
+
+    const corpo = corpoDeRegistro({ itens: [primeiro, segundo, terceiro] });
 
     const registro = registroDo(await acervo.registrarSessao(corpo));
 
@@ -189,18 +197,35 @@ describe("registrarSessao — registro da Sessão concluída", () => {
       id: corpo.id,
       baralhoId: corpo.baralhoId,
       nomeDoBaralho: corpo.nomeDoBaralho,
+      origem: "baralho",
       concluidaEm: INSTANTE_INICIAL.toISOString(),
       estudados: 3,
       acertos: 2,
       erros: 1,
       itens: [
-        { posicao: 0, frente: FRENTE, verso: VERSO, resultado: "acertou" },
-        { posicao: 1, frente: "To run", verso: "Correr", resultado: "errou" },
+        {
+          posicao: 0,
+          frente: FRENTE,
+          verso: VERSO,
+          resultado: "acertou",
+          cartaoId: primeiro.cartaoId,
+          avaliacao: "bom",
+        },
+        {
+          posicao: 1,
+          frente: "To run",
+          verso: "Correr",
+          resultado: "errou",
+          cartaoId: segundo.cartaoId,
+          avaliacao: "errei",
+        },
         {
           posicao: 2,
           frente: "To sleep",
           verso: "Dormir",
           resultado: "acertou",
+          cartaoId: terceiro.cartaoId,
+          avaliacao: "facil",
         },
       ],
     });
@@ -209,13 +234,13 @@ describe("registrarSessao — registro da Sessão concluída", () => {
   it("registra Sessão de 1 Item com o percentual correspondente", async () => {
     const comAcerto = registroDo(
       await acervo.registrarSessao(
-        corpoDeRegistro({ itens: [itemDe(FRENTE, VERSO, "acertou")] }),
+        corpoDeRegistro({ itens: [itemDe(FRENTE, VERSO, "bom")] }),
       ),
     );
 
     const comErro = registroDo(
       await acervo.registrarSessao(
-        corpoDeRegistro({ itens: [itemDe(FRENTE, VERSO, "errou")] }),
+        corpoDeRegistro({ itens: [itemDe(FRENTE, VERSO, "errei")] }),
       ),
     );
 
@@ -274,11 +299,11 @@ describe("registrarSessao — registro da Sessão concluída", () => {
 
   it("recusa Item com Frente ou Verso fora das regras de Cartão como dados_invalidos", async () => {
     const casos = [
-      [itemDe("", VERSO, "acertou")],
-      [itemDe("   ", VERSO, "acertou")],
-      [itemDe(FRENTE, "", "acertou")],
-      [itemDe("a".repeat(1001), VERSO, "acertou")],
-      [itemDe(FRENTE, "a".repeat(1001), "acertou")],
+      [itemDe("", VERSO, "bom")],
+      [itemDe("   ", VERSO, "bom")],
+      [itemDe(FRENTE, "", "bom")],
+      [itemDe("a".repeat(1001), VERSO, "bom")],
+      [itemDe(FRENTE, "a".repeat(1001), "bom")],
     ];
 
     for (const itens of casos) {
@@ -289,8 +314,8 @@ describe("registrarSessao — registro da Sessão concluída", () => {
     }
   });
 
-  it("recusa Item com Resultado desconhecido como dados_invalidos", async () => {
-    for (const resultado of [
+  it("recusa Item com Avaliação desconhecida como dados_invalidos", async () => {
+    for (const avaliacao of [
       "acerto",
       "erro",
       "ACERTOU",
@@ -299,7 +324,9 @@ describe("registrarSessao — registro da Sessão concluída", () => {
       null,
       undefined,
     ]) {
-      const itens = [{ frente: FRENTE, verso: VERSO, resultado }];
+      const itens = [
+        { frente: FRENTE, verso: VERSO, cartaoId: randomUUID(), avaliacao },
+      ];
 
       expect(await acervo.registrarSessao(corpoDeRegistro({ itens }))).toEqual({
         ok: false,
@@ -408,7 +435,7 @@ describe("obterRegistroDeSessao — registro imutável", () => {
         corpoDeRegistro({
           baralhoId: baralho.id,
           nomeDoBaralho: baralho.nome,
-          itens: [itemDe(cartao.frente, cartao.verso, "errou")],
+          itens: [itemDe(cartao.frente, cartao.verso, "errei", cartao.id)],
         }),
       ),
     );
@@ -450,7 +477,7 @@ describe("obterRegistroDeSessao — registro imutável", () => {
     const registro = registroDo(
       await acervo.registrarSessao(
         corpoDeRegistro({
-          itens: [itemDe(cartao.frente, cartao.verso, "acertou")],
+          itens: [itemDe(cartao.frente, cartao.verso, "bom", cartao.id)],
         }),
       ),
     );
@@ -500,7 +527,7 @@ describe("obterEstatisticas — números de Início", () => {
         corpoDeRegistro({
           baralhoId: baralho.id,
           nomeDoBaralho: baralho.nome,
-          itens: [itemDe(FRENTE, VERSO, "errou")],
+          itens: [itemDe(FRENTE, VERSO, "errei")],
         }),
       ),
     );

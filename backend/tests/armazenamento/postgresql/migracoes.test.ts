@@ -135,9 +135,11 @@ describe("base nova e vazia", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome).sort()).toEqual([
+        "agendamento",
         "baralho",
         "cartao",
         "item_de_registro",
+        "preferencias",
         "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
@@ -443,9 +445,11 @@ describe("falha no meio da migração — sem estado parcial", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+        "agendamento",
         "baralho",
         "cartao",
         "item_de_registro",
+        "preferencias",
         "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
@@ -603,9 +607,11 @@ describe("migração 4 — tabela usuario", () => {
       );
 
       expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "agendamento",
         "baralho",
         "cartao",
         "item_de_registro",
+        "preferencias",
         "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
@@ -676,9 +682,11 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
       );
 
       expect(tabelas.map((tabela) => tabela.nome)).toEqual([
+        "agendamento",
         "baralho",
         "cartao",
         "item_de_registro",
+        "preferencias",
         "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
@@ -701,6 +709,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "estudados",
         "id",
         "nome_do_baralho",
+        "origem",
         "usuario_id",
       ]);
 
@@ -824,9 +833,11 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
       );
 
       expect(tabelas.rows.map((linha) => linha.nome)).toEqual([
+        "agendamento",
         "baralho",
         "cartao",
         "item_de_registro",
+        "preferencias",
         "registro_de_sessao",
         "usuario",
         "versao_do_esquema",
@@ -977,9 +988,11 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     );
 
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "agendamento",
       "baralho",
       "cartao",
       "item_de_registro",
+      "preferencias",
       "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
@@ -1025,9 +1038,11 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect(gravado).toEqual([{ id: "c1" }]);
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "agendamento",
       "baralho",
       "cartao",
       "item_de_registro",
+      "preferencias",
       "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
@@ -1047,9 +1062,11 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect([primeiro.codigo, segundo.codigo]).toEqual([0, 0]);
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
+      "agendamento",
       "baralho",
       "cartao",
       "item_de_registro",
+      "preferencias",
       "registro_de_sessao",
       "usuario",
       "versao_do_esquema",
@@ -1121,4 +1138,270 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     },
     60_000,
   );
+});
+
+/**
+ * T1508, no dialeto da nuvem — a migração 7 acrescenta a repetição espaçada:
+ * as tabelas `agendamento` e `preferencias` e as colunas novas do Histórico e
+ * de `cartao` (FR-214, FR-220).
+ *
+ * A verificação é do esquema: `agendamento` tem a chave primária composta
+ * `(usuario_id, cartao_id)`, `estado` em `JSONB`, as duas cascatas e o índice
+ * por dono e vencimento; `preferencias` tem o `CHECK` de 0 a 999; e os `ADD
+ * COLUMN` preservam as linhas antigas — `origem` fica `'baralho'`,
+ * `cartao_id`/`avaliacao` e `cartao.criado_em` ficam `NULL` —, sem criar
+ * Agendamento algum: o acervo pré-015 vira Cartões novos (FR-214).
+ */
+describe("migração 7 — repetição espaçada", () => {
+  it("guarda agendamento e preferencias com a PK composta, o JSONB e o índice", async () => {
+    await comBaseVazia("repeticao-forma", async (piscina, consultar) => {
+      await aplicarMigracoes(piscina);
+
+      const colunas = await consultar<{ nome: string; tipo: string }>(
+        `SELECT column_name AS nome, data_type AS tipo
+           FROM information_schema.columns
+          WHERE table_name = 'agendamento' ORDER BY column_name;`,
+      );
+
+      expect(colunas.map((coluna) => coluna.nome)).toEqual([
+        "algoritmo",
+        "cartao_id",
+        "criado_em",
+        "estado",
+        "proxima_revisao_em",
+        "revisado_em",
+        "ultima_avaliacao",
+        "usuario_id",
+        "versao_do_algoritmo",
+      ]);
+
+      /** `estado` é o `dados` opaco do algoritmo, e viaja como objeto (FR-188). */
+      expect(colunas.find((coluna) => coluna.nome === "estado")?.tipo).toBe(
+        "jsonb",
+      );
+
+      const restricoes = await consultar<{ nome: string; definicao: string }>(
+        `SELECT conname AS nome, pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'agendamento'::regclass
+          ORDER BY conname;`,
+      );
+
+      const chave = restricoes.find(
+        (restricao) => restricao.nome === "agendamento_pkey",
+      );
+
+      /** Um Agendamento por Cartão por Usuário (FR-207). */
+      expect(chave?.definicao).toContain("PRIMARY KEY (usuario_id, cartao_id)");
+
+      const estrangeiras = restricoes.filter((restricao) =>
+        /REFERENCES/.test(restricao.definicao),
+      );
+
+      expect(estrangeiras).toHaveLength(2);
+      for (const restricao of estrangeiras) {
+        expect(restricao.definicao).toMatch(/ON DELETE CASCADE/);
+      }
+      expect(estrangeiras.map((r) => r.definicao).join(" ")).toMatch(
+        /REFERENCES cartao\(id\)/,
+      );
+
+      /** O índice é o que faz a contagem de vencidos e a ordem responderem. */
+      const indices = await consultar<{ nome: string; definicao: string }>(
+        `SELECT indexname AS nome, indexdef AS definicao
+           FROM pg_indexes WHERE tablename = 'agendamento';`,
+      );
+      const porDonoEVencimento = indices.find(
+        (indice) => indice.nome === "indice_agendamento_por_usuario_vencimento",
+      );
+
+      expect(porDonoEVencimento?.definicao).toMatch(/usuario_id/);
+      expect(porDonoEVencimento?.definicao).toMatch(/proxima_revisao_em/);
+
+      /** O `CHECK` de 0 a 999 duplica FR-200 como rede de segurança (D5). */
+      const dasPreferencias = await consultar<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'preferencias'::regclass AND contype = 'c';`,
+      );
+
+      /**
+       * O PostgreSQL normaliza `BETWEEN 0 AND 999` para a forma explícita com
+       * `>=` e `<=`; as duas expressam a mesma regra de FR-200.
+       */
+      expect(dasPreferencias.map((r) => r.definicao).join(" ")).toMatch(
+        /limite_de_novos_por_dia >= 0\)? AND \(?limite_de_novos_por_dia <= 999/,
+      );
+    });
+  });
+
+  it("restringe a Avaliação aos 4 níveis no Agendamento e no Item", async () => {
+    const nomeDaBase = await criarBaseMigrada("repeticao-avaliacoes");
+    const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+    try {
+      const dono = await criarDonoNaBase(nomeDaBase);
+
+      await piscina.query(
+        `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
+         VALUES ('c1', 'To walk', 'Caminhar', $1, now());`,
+        [dono],
+      );
+
+      const inserirAgendamento = (avaliacao: string) =>
+        piscina.query(
+          `INSERT INTO agendamento
+                  (usuario_id, cartao_id, algoritmo, versao_do_algoritmo, estado,
+                   proxima_revisao_em, ultima_avaliacao, revisado_em, criado_em)
+           VALUES ($1, 'c1', 'sm2', 1, '{}'::jsonb, now(), $2, now(), now());`,
+          [dono, avaliacao],
+        );
+
+      await expect(inserirAgendamento("otimo")).rejects.toThrow();
+      await expect(inserirAgendamento("errei")).resolves.toBeDefined();
+
+      /** A chave composta recusa um segundo Agendamento do mesmo Cartão. */
+      await expect(inserirAgendamento("bom")).rejects.toThrow();
+
+      await piscina.query(
+        `INSERT INTO registro_de_sessao
+                (id, usuario_id, baralho_id, nome_do_baralho, origem, concluida_em, estudados, acertos, erros)
+         VALUES ('r1', $1, '', 'Revisão do dia', 'revisao', now(), 1, 1, 0);`,
+        [dono],
+      );
+
+      const inserirItem = (posicao: number, avaliacao: string | null) =>
+        piscina.query(
+          `INSERT INTO item_de_registro
+                  (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
+           VALUES ('r1', $1, 'To walk', 'Caminhar', 'acertou', 'c1', $2);`,
+          [posicao, avaliacao],
+        );
+
+      await expect(inserirItem(0, "otimo")).rejects.toThrow();
+      /** Item anterior à 015, sem Avaliação, é legítimo (FR-197). */
+      await expect(inserirItem(0, null)).resolves.toBeDefined();
+      await expect(inserirItem(1, "bom")).resolves.toBeDefined();
+
+      await expect(
+        piscina.query(
+          "INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia) VALUES ($1, 'sm2', 1000);",
+          [dono],
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await piscina.end();
+    }
+  });
+
+  it("leva uma base na versão 6 à corrente, preservando o Histórico e sem criar Agendamento", async () => {
+    const apoio = await servidorDeTeste();
+    const nomeDaBase = await apoio.criarBase("repeticao-base-instalada");
+    const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+    try {
+      /** O que a feature anterior deixou instalado: as migrações 1 a 6. */
+      await aplicarMigracoes(piscina, MIGRACOES.slice(0, 6));
+
+      /** O dono entra por INSERT direto: abrir o Adapter migraria a base. */
+      const dono = "dono-um";
+
+      await piscina.query(
+        `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+         VALUES ($1, $2, $3, $4, '{}');`,
+        [dono, "ana.silva", Buffer.alloc(16), Buffer.from("hash-sintetico")],
+      );
+      await piscina.query(
+        "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ('c1', 'To walk', 'Caminhar', $1);",
+        [dono],
+      );
+      await piscina.query(
+        "INSERT INTO baralho (id, nome, usuario_id) VALUES ('b1', 'Inglês', $1);",
+        [dono],
+      );
+      await piscina.query(
+        "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
+      );
+
+      /** Uma Sessão da 013: sem `origem`, sem `cartao_id` e sem `avaliacao`. */
+      await piscina.query(
+        `INSERT INTO registro_de_sessao
+                (id, usuario_id, baralho_id, nome_do_baralho, concluida_em, estudados, acertos, erros)
+         VALUES ('r1', $1, 'b1', 'Inglês', '2026-01-01T10:00:00Z', 1, 1, 0);`,
+        [dono],
+      );
+      await piscina.query(
+        `INSERT INTO item_de_registro (registro_id, posicao, frente, verso, resultado)
+         VALUES ('r1', 0, 'To walk', 'Caminhar', 'acertou');`,
+      );
+
+      expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
+
+      /** O acervo e o Histórico sobrevivem intactos à migração (FR-220). */
+      expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
+        { id: "c1" },
+      ]);
+      expect(
+        (await piscina.query("SELECT id FROM registro_de_sessao;")).rows,
+      ).toEqual([{ id: "r1" }]);
+
+      /** Nenhum Agendamento nasce na migração: o acervo vira Cartões novos (FR-214). */
+      const agendamentos = await piscina.query<{ total: string }>(
+        "SELECT COUNT(*) AS total FROM agendamento;",
+      );
+
+      expect(Number(agendamentos.rows[0]?.total)).toBe(0);
+
+      /** A linha antiga recebe o default `'baralho'` (FR-197, FR-214). */
+      const registros = await piscina.query<{ origem: string }>(
+        "SELECT origem FROM registro_de_sessao WHERE id = 'r1';",
+      );
+
+      expect(registros.rows).toEqual([{ origem: "baralho" }]);
+
+      /** Os campos novos do Item antigo ficam nulos; o Histórico segue exibível. */
+      const itens = await piscina.query<{
+        cartaoId: string | null;
+        avaliacao: string | null;
+      }>(
+        `SELECT cartao_id AS "cartaoId", avaliacao
+           FROM item_de_registro WHERE registro_id = 'r1';`,
+      );
+
+      expect(itens.rows).toEqual([{ cartaoId: null, avaliacao: null }]);
+
+      /** O Cartão anterior à 015 fica primeiro na ordem, com `criado_em` nulo (FR-201). */
+      const cartoes = await piscina.query<{ criadoEm: string | null }>(
+        `SELECT criado_em AS "criadoEm" FROM cartao WHERE id = 'c1';`,
+      );
+
+      expect(cartoes.rows).toEqual([{ criadoEm: null }]);
+
+      /** E a ordem de inserção desempata os Cartões de mesmo instante (FR-201). */
+      const colunasDoCartao = await piscina.query<{ nome: string }>(
+        `SELECT column_name AS nome
+           FROM information_schema.columns
+          WHERE table_name = 'cartao' ORDER BY column_name;`,
+      );
+
+      expect(colunasDoCartao.rows.map((linha) => linha.nome)).toEqual([
+        "criado_em",
+        "frente",
+        "id",
+        "ordem_de_insercao",
+        "usuario_id",
+        "verso",
+      ]);
+
+      const versoes = await piscina.query<{ versao: number }>(
+        "SELECT versao FROM versao_do_esquema;",
+      );
+
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
+        versaoCorrenteConhecida(),
+      ]);
+    } finally {
+      await piscina.end();
+    }
+  });
 });
