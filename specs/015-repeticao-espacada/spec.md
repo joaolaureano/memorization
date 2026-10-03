@@ -10,7 +10,7 @@
 
 **Depende de**: `001` a `013`. Usa o Registro de sessão e o Histórico de estudo da `013`, a Sessão de estudo de `004`/`012` e a persistência por Usuário de `008` a `010`.
 
-## Objetivo e escopo
+### Objetivo e escopo
 
 O Memorization passa a agendar quando cada Cartão deve ser revisto. O **Agendamento do Cartão** é calculado por um **Algoritmo de repetição espaçada** escolhido pelo Usuário em **Preferências**; nesta entrega há apenas o SM-2, e outros (FSRS, Leitner) entram depois sem alterar telas nem dados guardados. A **Avaliação** de um Item passa a ter quatro níveis — Errei, Difícil, Bom e Fácil — e substitui os botões Acertei/Errei em toda Sessão, sempre após a Revelação.
 
@@ -47,8 +47,6 @@ Depois de Entrar, a pessoa vê em Início quantos Cartões precisa revisar hoje 
 3. **Given** Cartões de vários Baralhos e Cartões sem Vínculo, **When** a Revisão do dia reúne, **Then** ela inclui os Cartões de todos os Baralhos do Usuário e os sem Vínculo.
 4. **Given** nenhum vencido e nenhum novo disponível, **When** Início abre, **Then** mostra "Nada para revisar hoje" e o botão fica indisponível com a explicação.
 
----
-
 ### User Story 2 - Avaliar em 4 níveis em qualquer Sessão (Priority: P1)
 
 Após revelar o Verso, a pessoa escolhe Errei, Difícil, Bom ou Fácil, e isso define a próxima revisão do Cartão.
@@ -65,8 +63,6 @@ Após revelar o Verso, a pessoa escolhe Errei, Difícil, Bom ou Fácil, e isso d
 4. **Given** uma Avaliação Errei, **When** o Histórico e as Estatísticas contam, **Then** ela conta como erro; Difícil, Bom e Fácil contam como acerto.
 5. **Given** o Verso revelado, **When** os botões aparecem, **Then** cada um mostra a próxima revisão que resultaria dele (ex.: "Bom · 3 dias", "Errei · 1 dia").
 
----
-
 ### User Story 3 - Estudo livre por Baralho alimenta o Agendamento (Priority: P2)
 
 Estudar livremente um Baralho continua possível e também faz o Cartão progredir no agendamento.
@@ -80,8 +76,6 @@ Estudar livremente um Baralho continua possível e também faz o Cartão progred
 1. **Given** estudo livre por Baralho, **When** a Sessão é concluída, **Then** cada Avaliação atualiza o Agendamento do Cartão, mesmo que ele não estivesse vencido.
 2. **Given** um Cartão novo estudado no estudo livre, **When** a Sessão é concluída, **Then** ele deixa de ser novo e conta no limite de novos do dia.
 3. **Given** um Cartão vinculado a vários Baralhos, **When** estudado livremente por um deles, **Then** o Agendamento do Cartão é único e atualizado uma única vez.
-
----
 
 ### User Story 4 - Preferências: escolher o algoritmo e o limite de novos (Priority: P2)
 
@@ -98,8 +92,6 @@ Em Preferências, a pessoa escolhe o Algoritmo de repetição espaçada e o limi
 3. **Given** falha ao salvar, **When** ocorre, **Then** é explicada e há nova tentativa (FR-155), sem perder o que estava escolhido.
 4. **Given** troca de algoritmo, **When** ela é salva, **Then** o novo algoritmo reconstrói o Agendamento de cada Cartão a partir das Avaliações do Histórico, e nenhum registro do Histórico é perdido.
 
----
-
 ### User Story 5 - O acervo existente entra na repetição espaçada como Cartões novos (Priority: P3)
 
 Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introduzidos aos poucos pelo limite diário. O Histórico antigo continua intacto.
@@ -113,8 +105,6 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 1. **Given** a primeira ativação da 015, **When** Início abre, **Then** todos os Cartões do Usuário são Cartões novos, inclusive os já estudados.
 2. **Given** Registros de sessão anteriores à 015, **When** o Histórico, as Estatísticas e os Resumos antigos são abertos, **Then** aparecem exatamente como antes.
 3. **Given** Registros sem Avaliação, **When** um algoritmo reconstrói Agendamentos (FR-213), **Then** esses Itens são ignorados no cálculo.
-
----
 
 ### Edge Cases
 
@@ -201,6 +191,14 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 
 **Transversais reutilizados**: FR-148, FR-150, FR-152, FR-153–FR-159, FR-161–FR-179 da `012` e da `013` valem para todas as telas e fluxos novos.
 
+### Verificação dos Requisitos Negativos
+
+| Requisito | Afirmação | Como é verificado |
+|---|---|---|
+| FR-219 | Usuário não acessa Agendamentos ou Preferências alheios | Consultar e alterar os recursos com Credenciais de dois Usuários. |
+| FR-193 | Avaliação não ocorre antes da Revelação | Tentar avaliar por botão e atalho antes de revelar; conferir ausência de avanço. |
+| FR-220 | Migração não perde dados existentes | Migrar banco preenchido e conferir acervo, registros e preferências. |
+
 ### Key Entities
 
 - **Agendamento do Cartão**: relação entre um Usuário e um Cartão. Guarda o algoritmo e a versão, o estado próprio do algoritmo, a próxima data de revisão, a última Avaliação e o instante da última revisão.
@@ -211,8 +209,6 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 - **Registro de sessão** (ampliado): ganha a origem ("Baralho" ou "Revisão do dia") e a Avaliação de cada Item.
 
 ## Success Criteria *(mandatory)*
-
-### Measurable Outcomes
 
 - **SC-080**: Em 100% das aberturas de Início, "N Cartões para revisar hoje" é igual ao número de Cartões vencidos do Usuário.
 - **SC-081**: Nunca entram mais Cartões novos do que o limite diário, em todos os cenários de teste (limite 0, 1 e 20).
@@ -226,7 +222,7 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 - **SC-088**: As telas novas atendem SC-062/063/068 da `012`: percurso por teclado, larguras de 360 a 1440 px, zoom de 200%, alvos de 44 px e contraste.
 - **SC-089**: Concluir um lote de 20 Itens em revisões longas produz Registros e Agendamentos corretos, e Início reflete o N restante.
 
-## Compatibilidade com specs anteriores
+### Compatibilidade com specs anteriores
 
 | Tema | Mudança |
 | --- | --- |
@@ -238,7 +234,14 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 | Sessão de estudo (`004`, `CONTEXT.md`) | "de um único baralho" passa a admitir também a Revisão do dia. |
 | `013` "Fora do escopo" | "repetição espaçada" sai do fora do escopo e entra nesta feature. |
 
-## Fora do escopo
+## Invariantes de Domínio
+
+1. Cada Agendamento do Cartão pertence ao par Usuário e Cartão.
+2. A Avaliação só é declarada após a Revelação; Errei é erro e os demais níveis são acertos.
+3. Registro e atualização de Agendamentos são atômicos e o reenvio é idempotente.
+4. O limite diário restringe a introdução de Cartões novos na Revisão do dia.
+
+## Funcionalidades Adiadas
 
 - FSRS, Leitner e outros algoritmos (apenas a porta e o SM-2);
 - ajuste fino de parâmetros do algoritmo pelo Usuário;

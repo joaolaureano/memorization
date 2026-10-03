@@ -26,7 +26,7 @@ const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
 
 const CARTOES = [
   { id: 'c1', frente: 'To walk', verso: 'Caminhar' },
-  { id: 'c2', frente: 'To run', verso: 'Correr' },
+  { id: 'c2', frente: 'Frente longa '.repeat(76), verso: 'Verso longo '.repeat(83) },
   { id: 'c3', frente: 'To read', verso: 'Ler' },
 ];
 
@@ -36,7 +36,9 @@ test.use({
   hasTouch: true,
 });
 
-test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefone (FR-042, FR-046)', async ({ page, browserName }) => {
+for (const largura of [360, 390, 768, 1440]) {
+test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em telefone (FR-042, FR-046)`, async ({ page, browserName }) => {
+  await page.setViewportSize({ width: largura, height: 900 });
   // Navegador real: Chromium em viewport de telefone, não um DOM simulado.
   expect(browserName).toBe('chromium');
 
@@ -111,7 +113,15 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
   ).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
+  const cartao = page.getByRole('article');
+  const medir = () => cartao.evaluate((elemento) => {
+    const caixa = elemento.getBoundingClientRect();
+    return { width: caixa.width, height: caixa.height, top: caixa.top + window.scrollY };
+  });
+  const inicial = await medir();
   await page.getByRole('button', { name: 'Revelar verso' }).click();
+  expect(await medir()).toEqual(inicial);
+  const botoes = await page.locator('.botoes-de-resultado').boundingBox();
 
   await expect(page.getByRole('heading', { name: 'Verso' })).toBeVisible();
   await expect(
@@ -134,4 +144,10 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
     page.getByRole("article", { name: "Item 2 de 2" }),
   ).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
+  expect(await medir()).toEqual(inicial);
+  await page.getByRole('button', { name: 'Revelar verso' }).click();
+  expect(await medir()).toEqual(inicial);
+  expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(botoes);
 });
+}
+

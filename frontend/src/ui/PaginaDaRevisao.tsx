@@ -231,9 +231,9 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
     alvoDeFoco.current = null;
 
     if (alvo === "frente") {
-      frenteRef.current?.focus();
+      frenteRef.current?.focus({ preventScroll: true });
     } else if (alvo === "verso") {
-      versoRef.current?.focus();
+      versoRef.current?.focus({ preventScroll: true });
     } else {
       resumoRef.current?.focus();
     }
@@ -661,7 +661,7 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <p className="conteudo-do-cartao">{itemAtual.frente}</p>
+        <p className="conteudo-do-cartao" tabIndex={0}>{itemAtual.frente}</p>
 
         {!itemAtual.revelado ? (
           <>
@@ -681,7 +681,7 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
               Verso
             </h2>
-            <p className="conteudo-do-cartao">{itemAtual.verso}</p>
+            <p className="conteudo-do-cartao" tabIndex={0}>{itemAtual.verso}</p>
             <div className="botoes-de-resultado">
               {NIVEIS_DE_AVALIACAO.map((nivel) => {
                 const previa =
