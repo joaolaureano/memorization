@@ -28,8 +28,9 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // 1440x900), porque a navegação por teclado e o foco visível precisam valer
 // também no telefone (FR-158, FR-159).
 //
-// Ao final, a tela do Resumo não pode apresentar rolagem horizontal
-// (`scrollWidth <= clientWidth`) em nenhuma das larguras (FR-159).
+// Ao final, as telas percorridas — o Resumo, as Preferências e a Revisão do
+// dia — não podem apresentar rolagem horizontal (`scrollWidth <=
+// clientWidth`) em nenhuma das larguras (FR-159, SC-088).
 
 const NOME_DO_BARALHO = "Inglês";
 const FRENTE_DO_CARTAO = "Pão";
@@ -272,14 +273,15 @@ async function percursoPorTeclado(
   );
   await expect(page.getByText("Item 1 de 1")).toBeVisible();
 
-  // Revelar verso e acertar o único Item.
+  // Revelar verso e avaliar o único Item como "Bom" — o nível que substituiu o
+  // antigo Acerto (FR-193, SC-088).
   await acionarPorTab(
     page,
     page.getByRole("button", { name: "Revelar verso", exact: true }),
   );
   await acionarPorTab(
     page,
-    page.getByRole("button", { name: "Acertei", exact: true }),
+    page.getByRole("button", { name: /^Bom/ }),
   );
 
   // Resumo com 100% de acertos.
@@ -299,12 +301,57 @@ async function percursoPorTeclado(
   ).toHaveText(/Sessão registrada no seu histórico\./);
   await expect(linkExato(page, "Ver em Início")).toBeVisible();
 
-  // Nenhuma rolagem horizontal na largura testada (FR-159).
-  const medidas = await page.evaluate(() => ({
-    conteudo: document.documentElement.scrollWidth,
-    visivel: document.documentElement.clientWidth,
-  }));
-  expect(medidas.conteudo).toBeLessThanOrEqual(medidas.visivel);
+  // Preferências, pela navegação Principal: o quarto destino da Moldura
+  // (FR-212, SC-088). A travessia continua sendo só de teclado.
+  await acionarPorTab(page, linkExato(page, "Preferências"));
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Preferências", exact: true }),
+  ).toBeVisible();
+  await conferirSemTransbordo(page);
+
+  // Revisão do dia, lançada de Início (FR-198, FR-202): volta a Início pelo
+  // link textual e segue para a Revisão. Estudado o único Cartão, não há
+  // vencidos nem novos, e "Revisar" nasce indisponível (FR-202); com algo a
+  // revisar, é um link para #/revisao, e é ele que o teclado aciona.
+  await acionarPorTab(page, linkExato(page, "Início"));
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: `Olá, ${credencial.nomeDeUsuario}`,
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  const linkRevisar = linkExato(page, "Revisar");
+  const botaoRevisar = page.getByRole("button", {
+    name: "Revisar",
+    exact: true,
+  });
+
+  if ((await linkRevisar.count()) > 0) {
+    await acionarPorTab(page, linkRevisar);
+  } else {
+    // Nada para revisar (FR-202): "Revisar" fica indisponível e fora da ordem
+    // de foco — um <button disabled> que o Tab não alcança —, e o bloco "Nada
+    // para revisar hoje" explica o porquê. A tela da Revisão do dia é aberta
+    // pela rota, para a conferência de transbordo (FR-159, SC-088).
+    if ((await botaoRevisar.count()) > 0) {
+      await expect(botaoRevisar).toBeDisabled();
+    } else {
+      await expect(page.getByText("Revisar", { exact: true })).toBeVisible();
+    }
+
+    await expect(page.getByText("Nada para revisar hoje")).toBeVisible();
+    await page.goto(`${enderecoDoFrontend}/#/revisao`);
+  }
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Revisão do dia",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await conferirSemTransbordo(page);
 }
 
 /** Locator de link pelo nome acessível exato. */
@@ -317,6 +364,16 @@ function acionavel(page: Page, nome: string): Locator {
   return linkExato(page, nome).or(
     page.getByRole("button", { name: nome, exact: true }),
   );
+}
+
+/** Confere que a tela atual não apresenta rolagem horizontal (FR-159). */
+async function conferirSemTransbordo(page: Page): Promise<void> {
+  const medidas = await page.evaluate(() => ({
+    conteudo: document.documentElement.scrollWidth,
+    visivel: document.documentElement.clientWidth,
+  }));
+
+  expect(medidas.conteudo).toBeLessThanOrEqual(medidas.visivel);
 }
 
 /** Foca o alvo com Enter (links) ou Space (botões). */

@@ -447,7 +447,7 @@ async function abrirBaralhos(
   await irParaTela(pagina, "#/baralhos", "Baralhos");
 }
 
-/** Percorre todas as Telas da spec 012 e 013 auditando cada uma no cenário dado. */
+/** Percorre todas as Telas das specs 012, 013 e 015 auditando cada uma no cenário dado. */
 async function visitarAsTelas(
   pagina: Page,
   cenario: Cenario,
@@ -515,6 +515,14 @@ async function visitarAsTelas(
     "Editar Cartão",
   );
 
+  // Preferências (FR-200, FR-212): algoritmo e limite de novos por dia.
+  await irParaTela(pagina, "#/preferencias", "Preferências");
+  await conferirTela(pagina, cenario, "Preferências");
+
+  // Revisão do dia (FR-198, FR-202): a tela lançada de Início.
+  await irParaTela(pagina, "#/revisao", "Revisão do dia");
+  await conferirTela(pagina, cenario, "Revisão do dia");
+
   // Estudo — configuração.
   await irParaTela(
     pagina,
@@ -535,8 +543,8 @@ async function visitarAsTelas(
   });
   await conferirTela(pagina, cenario, "Sessão (Verso revelado)");
 
-  // Resumo: o acerto encerra a Sessão e apresenta o balanço.
-  await pagina.getByRole("button", { name: "Acertei" }).click();
+  // Resumo: "Bom" encerra a Sessão e apresenta o balanço (FR-193, SC-088).
+  await pagina.getByRole("button", { name: /^Bom/ }).click();
   await expect(
     pagina.getByRole("heading", { name: "Resumo da Sessão" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
@@ -567,12 +575,12 @@ async function visitarAsTelas(
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
-  await pagina.getByRole("button", { name: "Acertei" }).click();
+  await pagina.getByRole("button", { name: /^Bom/ }).click();
   await expect(pagina.getByText("Item 2 de 2")).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
-  await pagina.getByRole("button", { name: "Errei" }).click();
+  await pagina.getByRole("button", { name: /^Errei/ }).click();
   await expect(
     pagina.getByRole("heading", { name: "Resumo da Sessão" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
@@ -840,15 +848,16 @@ async function conferirNavegacaoPrincipal(
   await expect(navegacao).toBeVisible();
 
   if (cenario.largura === 390) {
-    // A Navegação "Principal" passou a ter três destinos — Início, Baralhos e
-    // Cartões, nessa ordem — e os três precisam caber no rodapé sem transbordo
-    // (SC-076).
+    // A Navegação "Principal" passou a ter quatro destinos — Início, Baralhos,
+    // Cartões e Preferências, nessa ordem — e os quatro precisam caber no
+    // rodapé sem transbordo (FR-212, SC-076, SC-088).
     const destinos = navegacao.getByRole("link");
 
-    await expect(destinos).toHaveCount(3);
+    await expect(destinos).toHaveCount(4);
     await expect(destinos.nth(0)).toHaveText("Início");
     await expect(destinos.nth(1)).toHaveText("Baralhos");
     await expect(destinos.nth(2)).toHaveText("Cartões");
+    await expect(destinos.nth(3)).toHaveText("Preferências");
 
     const medidasDaNavegacao = await navegacao.evaluate((elemento) => {
       const links = Array.from(elemento.querySelectorAll("a")).map((link) => ({

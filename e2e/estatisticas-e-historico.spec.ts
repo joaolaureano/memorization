@@ -199,9 +199,11 @@ async function responderItens(
 
     const verso = (await conteudos.last().textContent())?.trim() ?? "";
 
+    // Os quatro níveis substituíram Acertei/Errei (FR-193, SC-088): "Bom" é o
+    // equivalente do antigo Acerto e o nome acessível começa pelo nível.
     await page
       .getByRole("button", {
-        name: resultado === "acertou" ? "Acertei" : "Errei",
+        name: resultado === "acertou" ? /^Bom/ : /^Errei/,
       })
       .click();
 
