@@ -72,11 +72,14 @@ variable "github_subject_prefix" {
   default     = "repo:joaolaureano@42150235/memorization@1378691316"
 }
 
-# A role de CI nasce com boundary porque o robot so cria roles assim. O valor
-# vazio remove a boundary: use num apply de admin quando ela bloquear a
-# publicacao (ver README).
+# A role de CI foi aplicada SEM boundary em 2026-10-02, por um perfil admin: a
+# robot-ec2-boundary nao permite lambda:UpdateFunctionCode, entao mante-la aqui
+# quebraria a publicacao no proximo apply. As permissoes efetivas da role sao
+# apenas a policy inline de menor privilegio dela. O robot, por sua vez, so
+# cria/atualiza roles com boundary - por isso mexer nesta role exige um perfil
+# admin.
 variable "ci_permissions_boundary_name" {
-  description = "Nome da policy usada como permissions boundary da role de publicacao continua. Vazio desliga a boundary."
+  description = "Nome da policy usada como permissions boundary da role de publicacao continua. Vazio (padrao) significa que a role de CI roda sem boundary."
   type        = string
-  default     = "robot-ec2-boundary"
+  default     = ""
 }

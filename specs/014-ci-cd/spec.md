@@ -1,6 +1,6 @@
 # Feature Specification: CI e publicação contínua
 
-**Created**: 2026-10-02 | **Status**: Em implantação
+**Created**: 2026-10-02 | **Status**: Implantado — CI e deploy automático ativos desde 2026-10-03
 
 **Input**: "Começar a viabilizar a CI." Decisões do PO: deploy automático a cada push na `main` com CI verde; o deploy publica **só o app** (a infraestrutura continua aplicada à mão); a CI entra direto na `main`.
 

@@ -93,6 +93,14 @@ por OIDC, sem chave de acesso e sem segredo de longa duração. A role e a polic
 do robot continuam sendo criadas pelo operador: **aplicar IAM é `tofu apply`**,
 nunca o workflow.
 
+A role de CI foi aplicada **sem permissions boundary** em 2026-10-02, por um
+perfil admin: a `robot-ec2-boundary` não permite `lambda:UpdateFunctionCode` e
+derrubaria a publicação. As permissões efetivas da role são apenas a policy
+inline de menor privilégio dela; por isso o padrão de
+`ci_permissions_boundary_name` é vazio — um apply futuro não reintroduz a
+boundary. O robot só cria/atualiza roles com boundary, então qualquer mudança
+nesta role exige um perfil admin.
+
 No GitHub, o ambiente `production` (aceito apenas a partir da `main`) guarda:
 
 - secret `DB_URL`: connection string do Neon pelo endpoint **direto** (sem
@@ -103,12 +111,6 @@ No GitHub, o ambiente `production` (aceito apenas a partir da `main`) guarda:
   (`tofu output -raw health_url`), além de `AWS_REGION` quando a região não for
   a padrão.
 
-Se a permissions boundary (`ci_permissions_boundary_name`) bloquear a
-publicação, refaça o apply com ela desligada, num perfil admin:
-
-```bash
-tofu apply -var ci_permissions_boundary_name=""
-```
 
 ## Operação do Neon
 
