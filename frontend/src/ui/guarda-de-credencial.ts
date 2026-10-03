@@ -4,7 +4,9 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeInicioDeCompromisso,
   DadosDeRegistro,
+  DadosDeRotina,
   DadosDeUsuario,
 } from "../acervo-cliente/cliente";
 
@@ -118,5 +120,16 @@ export function comGuardaDeCredencial(
       algoritmo: string;
       limiteDeNovosPorDia: number;
     }) => vigiar(await cliente.salvarPreferencias(preferencias)),
+
+    obterAgenda: async (inicio: string, fuso: string) =>
+      vigiar(await cliente.obterAgenda(inicio, fuso)),
+
+    listarRotinas: async () => vigiar(await cliente.listarRotinas()),
+
+    salvarRotina: async (dados: DadosDeRotina) =>
+      vigiar(await cliente.salvarRotina(dados)),
+
+    iniciarCompromisso: async (dados: DadosDeInicioDeCompromisso) =>
+      vigiar(await cliente.iniciarCompromisso(dados)),
   };
 }

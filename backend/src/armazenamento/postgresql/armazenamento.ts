@@ -7,17 +7,24 @@ import type {
   Avaliacao,
   Baralho,
   Cartao,
+  CompromissoPersistido,
   ContagemPorBaralho,
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  DesfechoDeRotina,
+  EstadoDaRotina,
+  EstadoPersistidoDoCompromisso,
+  InicioAutorizado,
   ItemAvaliado,
   ItemRegistrado,
   Preferencias,
   RegistroDeSessao,
   RegistroResumido,
   ResultadoDoItemRegistrado,
+  RotinaArmazenada,
   Usuario,
+  VersaoDaRotina,
 } from "../porta.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
 
@@ -430,6 +437,177 @@ SELECT id, nome_de_usuario, sal, hash, parametros
  WHERE lower(nome_de_usuario) = lower($1);
 `;
 
+/**
+ * A serialização por Usuário de `gravarRotina` (FR-248): a linha de `usuario` é
+ * travada com `FOR UPDATE` no início da transação, de modo que a verificação de
+ * `operacaoId`, a existência/CAS e as gravações da Rotina acontecem atômicas —
+ * duas chamadas do mesmo Usuário serializam, e a segunda lê o resultado da
+ * primeira como reenvio ou reuso.
+ */
+const TRAVAR_USUARIO_PARA_GRAVACAO = `
+SELECT 1 FROM usuario WHERE id = $1 FOR UPDATE;
+`;
+
+/**
+ * A inserção da Rotina nova (FR-248). `criada_em` é `TIMESTAMPTZ` e `versoes` é
+ * `JSONB`, como as demais tabelas do acervo.
+ */
+const INSERIR_ROTINA = `
+INSERT INTO rotina_de_estudo
+       (id, usuario_id, baralho_id, estado, versao, criada_em, versoes)
+VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::jsonb);
+`;
+
+/**
+ * O CAS da Rotina (FR-248): grava só se a versão guardada é a esperada, e a
+ * ausência de linha alterada distingue a Rotina inexistente ou de outro dono da
+ * versão divergente.
+ */
+const ATUALIZAR_ROTINA_POR_CAS = `
+UPDATE rotina_de_estudo
+   SET baralho_id = $1, estado = $2, versao = $3, versoes = $4::jsonb
+ WHERE id = $5 AND usuario_id = $6 AND versao = $7;
+`;
+
+const OBTER_ROTINA_DO_USUARIO = `
+SELECT id,
+       baralho_id AS "baralhoId",
+       estado,
+       versao,
+       criada_em  AS "criadaEm",
+       versoes
+  FROM rotina_de_estudo
+ WHERE id = $1 AND usuario_id = $2;
+`;
+
+/** Confere a posse da Rotina sem carregar a programação (FR-248, FR-250). */
+const VERIFICAR_ROTINA_DO_USUARIO = `
+SELECT 1 FROM rotina_de_estudo WHERE id = $1 AND usuario_id = $2;
+`;
+
+/**
+ * A busca por `id` sem escopo de dono é deliberada: é ela que reconhece a
+ * criação com `id` repetido — de qualquer dono — como `conflito`, sem que a
+ * Rotina alheia atravesse a Porta (FR-248).
+ */
+const OBTER_ROTINA_POR_ID = `
+SELECT id FROM rotina_de_estudo WHERE id = $1;
+`;
+
+/** Distingue a Rotina ausente da versão divergente após um UPDATE sem linha. */
+const OBTER_VERSAO_DA_ROTINA = `
+SELECT versao FROM rotina_de_estudo WHERE id = $1 AND usuario_id = $2;
+`;
+
+const LISTAR_ROTINAS = `
+SELECT id,
+       baralho_id AS "baralhoId",
+       estado,
+       versao,
+       criada_em  AS "criadaEm",
+       versoes
+  FROM rotina_de_estudo
+ WHERE usuario_id = $1;
+`;
+
+const OBTER_OPERACAO_DE_ROTINA = `
+SELECT intencao, resultado
+  FROM operacao_de_rotina
+ WHERE usuario_id = $1 AND operacao_id = $2;
+`;
+
+/**
+ * O registro da operação de Rotina (FR-248). A chave primária `(usuario_id,
+ * operacao_id)` é o que faz o reenvio idempotente parar aqui; o `ON CONFLICT
+ * ... DO NOTHING` transforma a criação concorrente com o mesmo `operacaoId` em
+ * reenvio/conflito, sem que o `23505` do driver vaze (FR-248).
+ */
+const INSERIR_OPERACAO_DE_ROTINA = `
+INSERT INTO operacao_de_rotina
+       (usuario_id, operacao_id, rotina_id, intencao, resultado)
+VALUES ($1, $2, $3, $4, $5::jsonb)
+ON CONFLICT (usuario_id, operacao_id) DO NOTHING;
+`;
+
+const INSERIR_COMPROMISSO = `
+INSERT INTO compromisso_de_estudo
+       (rotina_id, data, usuario_id, estado, registro_id, baralho_id,
+        nome_do_baralho, quantidade)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+`;
+
+const ATUALIZAR_COMPROMISSO = `
+UPDATE compromisso_de_estudo
+   SET estado = $1, registro_id = $2, baralho_id = $3,
+       nome_do_baralho = $4, quantidade = $5
+ WHERE rotina_id = $6 AND data = $7 AND usuario_id = $8;
+`;
+
+const OBTER_COMPROMISSO_DO_USUARIO = `
+SELECT rotina_id       AS "rotinaId",
+       data,
+       estado,
+       registro_id     AS "registroId",
+       baralho_id      AS "baralhoId",
+       nome_do_baralho AS "nomeDoBaralho",
+       quantidade
+  FROM compromisso_de_estudo
+ WHERE rotina_id = $1 AND data = $2 AND usuario_id = $3;
+`;
+
+const LISTAR_COMPROMISSOS = `
+SELECT rotina_id       AS "rotinaId",
+       data,
+       estado,
+       registro_id     AS "registroId",
+       baralho_id      AS "baralhoId",
+       nome_do_baralho AS "nomeDoBaralho",
+       quantidade
+  FROM compromisso_de_estudo
+ WHERE usuario_id = $1 AND data >= $2 AND data <= $3;
+`;
+
+const INSERIR_INICIO = `
+INSERT INTO inicio_de_compromisso
+       (id, usuario_id, rotina_id, data, iniciado_em, fuso, baralho_id,
+        nome_do_baralho, quantidade, cartoes)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8, $9, $10::jsonb);
+`;
+
+/**
+ * A busca por `id` sem escopo de dono é deliberada: é ela que distingue o
+ * reenvio do mesmo Usuário do `id` que já pertence a outro (FR-250), como em
+ * `registro_de_sessao`.
+ */
+const OBTER_INICIO_POR_ID = `
+SELECT id,
+       usuario_id      AS "usuarioId",
+       rotina_id       AS "rotinaId",
+       data,
+       iniciado_em     AS "iniciadoEm",
+       fuso,
+       baralho_id      AS "baralhoId",
+       nome_do_baralho AS "nomeDoBaralho",
+       quantidade,
+       cartoes
+  FROM inicio_de_compromisso
+ WHERE id = $1;
+`;
+
+const OBTER_INICIO_DO_USUARIO = `
+SELECT id,
+       rotina_id       AS "rotinaId",
+       data,
+       iniciado_em     AS "iniciadoEm",
+       fuso,
+       baralho_id      AS "baralhoId",
+       nome_do_baralho AS "nomeDoBaralho",
+       quantidade,
+       cartoes
+  FROM inicio_de_compromisso
+ WHERE id = $1 AND usuario_id = $2;
+`;
+
 /** Linha de `cartao` como o Adapter a lê, sem deixar a forma do driver passar. */
 type LinhaDeCartao = {
   id: string;
@@ -515,6 +693,52 @@ type LinhaDeItemAvaliado = {
   concluidaEm: Instante;
   posicao: number;
 };
+
+/** Linha de `rotina_de_estudo`; `versoes` é `JSONB` e chega já como objeto. */
+type LinhaDeRotina = {
+  id: string;
+  baralhoId: string | null;
+  estado: EstadoDaRotina;
+  versao: number;
+  criadaEm: Instante;
+  versoes: readonly VersaoDaRotina[];
+};
+
+/**
+ * Linha de `operacao_de_rotina`; `resultado` é `JSONB` e chega já como objeto —
+ * é o retrato da Rotina gravada naquela operação (FR-248).
+ */
+type LinhaDeOperacaoDeRotina = {
+  intencao: string;
+  resultado: RotinaArmazenada;
+};
+
+/** Linha de `compromisso_de_estudo`; só exceções e conclusões (FR-250). */
+type LinhaDeCompromisso = {
+  rotinaId: string;
+  data: string;
+  estado: EstadoPersistidoDoCompromisso;
+  registroId: string | null;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  quantidade: number | null;
+};
+
+/** Linha de `inicio_de_compromisso`; `cartoes` é `JSONB` e chega como objeto. */
+type LinhaDeInicio = {
+  id: string;
+  rotinaId: string;
+  data: string;
+  iniciadoEm: Instante;
+  fuso: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  quantidade: number | null;
+  cartoes: readonly Cartao[];
+};
+
+/** Linha de `inicio_de_compromisso` com o dono, para a distinção do conflito. */
+type LinhaDeInicioComDono = LinhaDeInicio & { usuarioId: string };
 
 /** Uma conexão que sabe executar consultas: a piscina ou uma conexão dela. */
 type Conexao = Pool | PoolClient;
@@ -718,6 +942,113 @@ const PREFERENCIAS_PADRAO: Preferencias = {
   algoritmo: "sm2",
   limiteDeNovosPorDia: 20,
 };
+
+/**
+ * Desfecho do `id` de Rotina já usado — de qualquer dono — ou do `operacaoId`
+ * reutilizado com outra intenção (FR-248). É recusa de domínio, como o
+ * `conflito` do Registro, e nunca revela a Rotina de outro Usuário.
+ */
+const CONFLITO_DE_ROTINA: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "conflito",
+};
+
+/** Desfecho de Rotina ausente; a de outro dono é indistinguível (FR-248). */
+const ROTINA_NAO_ENCONTRADA: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "nao_encontrado",
+};
+
+/**
+ * Desfecho do CAS recusado: a Rotina existe e é do Usuário, mas a versão
+ * guardada divergiu da esperada (FR-248).
+ */
+const CONFLITO_DE_VERSAO: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "conflito_de_versao",
+};
+
+/** Desfecho de falha do armazenamento nas operações de Rotina (FR-248). */
+const ROTINA_INDISPONIVEL: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "indisponivel",
+};
+
+/**
+ * Sinal interno de que a inserção em `operacao_de_rotina` colidiu com a PK:
+ * outra transação do mesmo Usuário já gravou este `operacaoId`. A decisão
+ * entre reenvio e conflito acontece num `emTransacao` novo, depois do
+ * rollback da transação em curso (FR-248).
+ */
+class OperacaoDeRotinaConcorrente extends Error {}
+
+/**
+ * Executa a operação e traduz a falha do driver em `indisponivel` no
+ * vocabulário próprio da Porta de Rotina (FR-248). Como nas demais operações,
+ * nenhum erro do driver atravessa a Interface (FR-107).
+ */
+async function comDesfechoDeRotina<T>(
+  operacao: () => Promise<DesfechoDeRotina<T>>,
+): Promise<DesfechoDeRotina<T>> {
+  try {
+    return await operacao();
+  } catch {
+    return ROTINA_INDISPONIVEL;
+  }
+}
+
+/**
+ * Lê a linha como Rotina de estudo (FR-248); `versoes` chega já como objeto do
+ * driver, porque a coluna é `JSONB`, e o `baralho_id` nulo é a Rotina
+ * indisponível — o Baralho foi excluído e a programação permanece.
+ */
+function rotinaDaLinha(linha: LinhaDeRotina): RotinaArmazenada {
+  return {
+    id: linha.id,
+    criadaEm: instanteIso(linha.criadaEm),
+    versao: linha.versao,
+    estado: linha.estado,
+    baralhoId: linha.baralhoId,
+    versoes: linha.versoes,
+  };
+}
+
+/**
+ * Lê a linha como Compromisso persistido (FR-250): só exceções e conclusões,
+ * com a configuração capturada no momento do compromisso.
+ */
+function compromissoDaLinha(
+  linha: LinhaDeCompromisso,
+): CompromissoPersistido {
+  return {
+    rotinaId: linha.rotinaId,
+    data: linha.data,
+    estado: linha.estado,
+    registroId: linha.registroId,
+    baralhoId: linha.baralhoId,
+    nomeDoBaralho: linha.nomeDoBaralho,
+    quantidade: linha.quantidade,
+  };
+}
+
+/**
+ * Lê a linha como Início autorizado (FR-250); `cartoes` chega já como objeto do
+ * driver, porque a coluna é `JSONB`, e a ordem preservada é a que o servidor
+ * escolheu.
+ */
+function inicioDaLinha(linha: LinhaDeInicio): InicioAutorizado {
+  return {
+    id: linha.id,
+    rotinaId: linha.rotinaId,
+    data: linha.data,
+    iniciadoEm: instanteIso(linha.iniciadoEm),
+    fuso: linha.fuso,
+    baralhoId: linha.baralhoId,
+    nomeDoBaralho: linha.nomeDoBaralho,
+    quantidade: linha.quantidade,
+    cartoes: linha.cartoes,
+  };
+}
 
 /** Os parâmetros da inserção do Registro, na ordem da consulta. */
 function parametrosDoRegistro(
@@ -1217,6 +1548,385 @@ export async function abrirArmazenamentoPostgresql(
           return SEM_CARGA;
         }),
       );
+    },
+
+    /**
+     * Grava uma Rotina de estudo no acervo de `usuarioId` (FR-248), numa única
+     * transação idempotente e serializada por Usuário: a linha de `usuario` é
+     * travada com `FOR UPDATE`, de modo que a verificação de `operacaoId`, a
+     * existência/CAS e as gravações acontecem atômicas. Mesma `intencao`
+     * devolve a Rotina guardada com `repetida: true`, sem gravar; outra
+     * `intencao` recusa como `conflito`. `versaoEsperada === null` insere; caso
+     * contrário, atualiza com CAS pela versão guardada, distinguindo
+     * `nao_encontrado` de `conflito_de_versao`. A PK de `operacao_de_rotina` é
+     * tratada como reenvio/conflito, sem vazar erro do driver (FR-044, FR-107,
+     * FR-248).
+     */
+    async gravarRotina(usuarioId, gravacao) {
+      return comDesfechoDeRotina<{
+        rotina: RotinaArmazenada;
+        repetida: boolean;
+      }>(async () => {
+        try {
+          return await emTransacao<
+            DesfechoDeRotina<{ rotina: RotinaArmazenada; repetida: boolean }>
+          >(piscina, async (cliente) => {
+            await cliente.query(TRAVAR_USUARIO_PARA_GRAVACAO, [usuarioId]);
+
+            /**
+             * A idempotência por `operacaoId`: a mesma `intencao` devolve a
+             * Rotina guardada como resultado daquela operação, sem gravar de
+             * novo; `intencao` diferente é reuso indevido e recusa como
+             * `conflito` (FR-248).
+             */
+            const { rows: operacoes } =
+              await cliente.query<LinhaDeOperacaoDeRotina>(
+                OBTER_OPERACAO_DE_ROTINA,
+                [usuarioId, gravacao.operacaoId],
+              );
+
+            if (operacoes[0] !== undefined) {
+              return operacoes[0].intencao === gravacao.intencao
+                ? {
+                    ok: true,
+                    valor: {
+                      rotina: operacoes[0].resultado,
+                      repetida: true,
+                    },
+                  }
+                : CONFLITO_DE_ROTINA;
+            }
+
+            if (gravacao.versaoEsperada === null) {
+              /**
+               * Criação: `id` de Rotina repetido — de qualquer dono — é
+               * `conflito`, reconhecido dentro da transação antes do INSERT
+               * (FR-248).
+               */
+              const { rows: existentes } = await cliente.query<{ id: string }>(
+                OBTER_ROTINA_POR_ID,
+                [gravacao.rotina.id],
+              );
+
+              if (existentes[0] !== undefined) {
+                return CONFLITO_DE_ROTINA;
+              }
+
+              await cliente.query(INSERIR_ROTINA, [
+                gravacao.rotina.id,
+                usuarioId,
+                gravacao.rotina.baralhoId,
+                gravacao.rotina.estado,
+                gravacao.rotina.versao,
+                gravacao.rotina.criadaEm,
+                JSON.stringify(gravacao.rotina.versoes),
+              ]);
+            } else {
+              /**
+               * Atualização com CAS: só grava se a versão guardada é a
+               * esperada. Nenhuma linha alterada distingue a Rotina
+               * inexistente ou de outro dono (`nao_encontrado`) da versão
+               * divergente (`conflito_de_versao`) (FR-248).
+               */
+              const { rowCount } = await cliente.query(
+                ATUALIZAR_ROTINA_POR_CAS,
+                [
+                  gravacao.rotina.baralhoId,
+                  gravacao.rotina.estado,
+                  gravacao.rotina.versao,
+                  JSON.stringify(gravacao.rotina.versoes),
+                  gravacao.rotina.id,
+                  usuarioId,
+                  gravacao.versaoEsperada,
+                ],
+              );
+
+              if ((rowCount ?? 0) === 0) {
+                const { rows: versoes } = await cliente.query<{
+                  versao: number;
+                }>(OBTER_VERSAO_DA_ROTINA, [
+                  gravacao.rotina.id,
+                  usuarioId,
+                ]);
+
+                return versoes[0] === undefined
+                  ? ROTINA_NAO_ENCONTRADA
+                  : CONFLITO_DE_VERSAO;
+              }
+            }
+
+            /**
+             * A operação guarda o JSON da Rotina gravada: é ele que o reenvio
+             * idempotente devolve como resultado (FR-248).
+             */
+            const { rowCount: inseridas } = await cliente.query(
+              INSERIR_OPERACAO_DE_ROTINA,
+              [
+                usuarioId,
+                gravacao.operacaoId,
+                gravacao.rotina.id,
+                gravacao.intencao,
+                JSON.stringify(gravacao.rotina),
+              ],
+            );
+
+            if ((inseridas ?? 0) === 0) {
+              throw new OperacaoDeRotinaConcorrente();
+            }
+
+            return {
+              ok: true,
+              valor: { rotina: gravacao.rotina, repetida: false },
+            };
+          });
+        } catch (erro) {
+          if (erro instanceof OperacaoDeRotinaConcorrente) {
+            /**
+             * A criação concorrente do mesmo `operacaoId` desfaz as gravações
+             * desta transação e re-lê a operação já confirmada: reenvio
+             * idempotente quando a `intencao` coincide, `conflito` quando
+             * diverge (FR-248).
+             */
+            return emTransacao<
+              DesfechoDeRotina<{
+                rotina: RotinaArmazenada;
+                repetida: boolean;
+              }>
+            >(piscina, async (cliente) => {
+              const { rows } = await cliente.query<LinhaDeOperacaoDeRotina>(
+                OBTER_OPERACAO_DE_ROTINA,
+                [usuarioId, gravacao.operacaoId],
+              );
+
+              if (rows[0] === undefined) {
+                return CONFLITO_DE_ROTINA;
+              }
+
+              return rows[0].intencao === gravacao.intencao
+                ? {
+                    ok: true,
+                    valor: { rotina: rows[0].resultado, repetida: true },
+                  }
+                : CONFLITO_DE_ROTINA;
+            });
+          }
+
+          throw erro;
+        }
+      });
+    },
+
+    /**
+     * Devolve a Rotina de `id` no acervo de `usuarioId` (FR-248); ausente —
+     * inclusive quando é de outro dono — é `nao_encontrado`.
+     */
+    async obterRotina(usuarioId, id) {
+      return comDesfecho<RotinaArmazenada>(async () => {
+        const { rows } = await piscina.query<LinhaDeRotina>(
+          OBTER_ROTINA_DO_USUARIO,
+          [id, usuarioId],
+        );
+
+        return rows[0] === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: rotinaDaLinha(rows[0]) };
+      });
+    },
+
+    /**
+     * As Rotinas do Usuário, incluindo as excluídas (tombstones), sem ordem
+     * prometida (FR-248).
+     */
+    async listarRotinas(usuarioId) {
+      const { rows } = await piscina.query<LinhaDeRotina>(LISTAR_ROTINAS, [
+        usuarioId,
+      ]);
+
+      return rows.map(rotinaDaLinha);
+    },
+
+    /**
+     * Grava uma exceção ou conclusão de Compromisso no acervo de `usuarioId`
+     * (FR-250) numa transação: Rotina inexistente ou de outro dono é
+     * `nao_encontrado`. Sem linha para `(rotinaId, data)`, insere com
+     * `alterado: true`. Com linha `concluido`, devolve a existente intacta
+     * (`alterado: false`; conclusão imutável). Com linha `cancelado`, atualiza
+     * estado, registro e configuração, preservando o `registroId` existente.
+     */
+    async gravarCompromisso(usuarioId, compromisso) {
+      return comDesfecho<{
+        compromisso: CompromissoPersistido;
+        alterado: boolean;
+      }>(() =>
+        emTransacao<
+          Desfecho<{ compromisso: CompromissoPersistido; alterado: boolean }>
+        >(piscina, async (cliente) => {
+          const { rowCount: rotinas } = await cliente.query(
+            VERIFICAR_ROTINA_DO_USUARIO,
+            [compromisso.rotinaId, usuarioId],
+          );
+
+          if ((rotinas ?? 0) === 0) {
+            return NAO_ENCONTRADO;
+          }
+
+          const { rows: existentes } =
+            await cliente.query<LinhaDeCompromisso>(
+              OBTER_COMPROMISSO_DO_USUARIO,
+              [compromisso.rotinaId, compromisso.data, usuarioId],
+            );
+
+          if (existentes[0] === undefined) {
+            await cliente.query(INSERIR_COMPROMISSO, [
+              compromisso.rotinaId,
+              compromisso.data,
+              usuarioId,
+              compromisso.estado,
+              compromisso.registroId,
+              compromisso.baralhoId,
+              compromisso.nomeDoBaralho,
+              compromisso.quantidade,
+            ]);
+
+            return { ok: true, valor: { compromisso, alterado: true } };
+          }
+
+          /**
+           * A conclusão é imutável: a linha `concluido` volta intacta, com o
+           * `registroId` preservado (FR-250).
+           */
+          if (existentes[0].estado === "concluido") {
+            return {
+              ok: true,
+              valor: {
+                compromisso: compromissoDaLinha(existentes[0]),
+                alterado: false,
+              },
+            };
+          }
+
+          const registroId =
+            compromisso.registroId ?? existentes[0].registroId;
+
+          await cliente.query(ATUALIZAR_COMPROMISSO, [
+            compromisso.estado,
+            registroId,
+            compromisso.baralhoId,
+            compromisso.nomeDoBaralho,
+            compromisso.quantidade,
+            compromisso.rotinaId,
+            compromisso.data,
+            usuarioId,
+          ]);
+
+          return {
+            ok: true,
+            valor: {
+              compromisso: { ...compromisso, registroId },
+              alterado: true,
+            },
+          };
+        }),
+      );
+    },
+
+    /**
+     * Devolve o Compromisso de `(rotinaId, data)` no acervo de `usuarioId`
+     * (FR-250); ausente — inclusive quando é de outro dono — é
+     * `nao_encontrado`.
+     */
+    async obterCompromisso(usuarioId, rotinaId, data) {
+      return comDesfecho<CompromissoPersistido>(async () => {
+        const { rows } = await piscina.query<LinhaDeCompromisso>(
+          OBTER_COMPROMISSO_DO_USUARIO,
+          [rotinaId, data, usuarioId],
+        );
+
+        return rows[0] === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: compromissoDaLinha(rows[0]) };
+      });
+    },
+
+    /**
+     * Os Compromissos do Usuário na janela inclusiva, sem ordem prometida
+     * (FR-250).
+     */
+    async listarCompromissos(usuarioId, de, ate) {
+      const { rows } = await piscina.query<LinhaDeCompromisso>(
+        LISTAR_COMPROMISSOS,
+        [usuarioId, de, ate],
+      );
+
+      return rows.map(compromissoDaLinha);
+    },
+
+    /**
+     * Guarda um Início autorizado no acervo de `usuarioId` (FR-250). Rotina
+     * inexistente ou de outro dono é `nao_encontrado`; mesmo `id` de outro
+     * Usuário é `conflito`; mesmo `id` do mesmo Usuário devolve o já guardado
+     * sem alterar, como o Registro de Sessão.
+     */
+    async gravarInicio(usuarioId, inicio) {
+      return comDesfecho<InicioAutorizado>(() =>
+        emTransacao<Desfecho<InicioAutorizado>>(
+          piscina,
+          async (cliente) => {
+            const { rowCount: rotinas } = await cliente.query(
+              VERIFICAR_ROTINA_DO_USUARIO,
+              [inicio.rotinaId, usuarioId],
+            );
+
+            if ((rotinas ?? 0) === 0) {
+              return NAO_ENCONTRADO;
+            }
+
+            const { rows: existentes } =
+              await cliente.query<LinhaDeInicioComDono>(
+                OBTER_INICIO_POR_ID,
+                [inicio.id],
+              );
+
+            if (existentes[0] !== undefined) {
+              return existentes[0].usuarioId === usuarioId
+                ? { ok: true, valor: inicioDaLinha(existentes[0]) }
+                : CONFLITO_DE_REGISTRO;
+            }
+
+            await cliente.query(INSERIR_INICIO, [
+              inicio.id,
+              usuarioId,
+              inicio.rotinaId,
+              inicio.data,
+              inicio.iniciadoEm,
+              inicio.fuso,
+              inicio.baralhoId,
+              inicio.nomeDoBaralho,
+              inicio.quantidade,
+              JSON.stringify(inicio.cartoes),
+            ]);
+
+            return { ok: true, valor: inicio };
+          },
+        ),
+      );
+    },
+
+    /**
+     * Devolve o Início de `id` no acervo de `usuarioId` (FR-250); ausente —
+     * inclusive quando é de outro dono — é `nao_encontrado`.
+     */
+    async obterInicio(usuarioId, id) {
+      return comDesfecho<InicioAutorizado>(async () => {
+        const { rows } = await piscina.query<LinhaDeInicio>(
+          OBTER_INICIO_DO_USUARIO,
+          [id, usuarioId],
+        );
+
+        return rows[0] === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: inicioDaLinha(rows[0]) };
+      });
     },
 
     /** Os Itens com Avaliação e Cartão de origem, em `(concluida_em, posicao)` (FR-213). */

@@ -1,5 +1,6 @@
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_AGENDA_INDISPONIVEL,
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
@@ -22,7 +23,9 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeInicioDeCompromisso,
   DadosDeRegistro,
+  DadosDeRotina,
   DadosDeUsuario,
   Estatisticas,
   ItemDoLoteDeRevisao,
@@ -43,14 +46,18 @@ import type {
   ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
+  ResultadoDeIniciarCompromisso,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
+  ResultadoDeListarRotinas,
+  ResultadoDeObterAgenda,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
   ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeSalvarPreferencias,
+  ResultadoDeSalvarRotina,
   ResultadoDeVinculacao,
   ResultadoDoLoteDeRevisao,
   ResultadoDoResumoDaRevisao,
@@ -568,6 +575,47 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  /**
+   * Stubs da Agenda (FR-248, FR-250): o transporte completo chega na Onda B
+   * (T1606+). Até lá, nenhuma das quatro operações é concluída.
+   */
+  async obterAgenda(
+    _inicio: string,
+    _fuso: string,
+  ): Promise<ResultadoDeObterAgenda> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async listarRotinas(): Promise<ResultadoDeListarRotinas> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async salvarRotina(_dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async iniciarCompromisso(
+    _dados: DadosDeInicioDeCompromisso,
+  ): Promise<ResultadoDeIniciarCompromisso> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
   async registrarSessao(
     dados: DadosDeRegistro,
   ): Promise<ResultadoDeRegistroDeSessao> {
@@ -580,6 +628,9 @@ export class ClienteHttp implements ClienteDoAcervo {
           origem: dados.origem,
           baralhoId: dados.baralhoId,
           nomeDoBaralho: dados.nomeDoBaralho,
+          ...(dados.inicioAgendaId !== undefined
+            ? { inicioAgendaId: dados.inicioAgendaId }
+            : {}),
           itens: dados.itens.map((item) => ({
             frente: item.frente,
             verso: item.verso,

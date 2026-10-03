@@ -539,6 +539,10 @@ export interface DadosDeRegistro {
   baralhoId: string;
   nomeDoBaralho: string;
   /**
+   * Id do início autorizado da Agenda (FR-254); ausente no estudo livre.
+   */
+  inicioAgendaId?: string;
+  /**
    * Cada Item carrega o Cartão de origem e a Avaliação (FR-196); o
    * `resultado` **não** vem do cliente — é o servidor que o deriva
    * (`errei` → `errou`; os demais → `acertou`) (FR-194).
@@ -717,6 +721,151 @@ export type ResultadoDeSalvarPreferencias =
       erro: "dados_invalidos" | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
+
+/**
+ * Estado de uma Rotina de estudo (FR-248): ativa, pausada ou excluída.
+ */
+export type EstadoDaRotina = "ativa" | "pausada" | "excluida";
+
+/**
+ * Uma Rotina de estudo agendada (FR-248, FR-250): os dias da semana
+ * (1=segunda a 7=domingo) e a quantidade de Cartões por dia.
+ */
+export interface RotinaDeEstudo {
+  id: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  dias: number[];
+  quantidade: number | null;
+  estado: EstadoDaRotina;
+  versao: number;
+  criadaEm: string;
+}
+
+/**
+ * Estado de um Compromisso de estudo (FR-248, FR-250).
+ */
+export type EstadoDoCompromisso =
+  | "pendente"
+  | "programado"
+  | "nao_realizado"
+  | "concluido"
+  | "cancelado";
+
+/**
+ * Um Compromisso de estudo do dia (FR-248, FR-250): a Rotina que o gerou, a
+ * data, o Baralho e o Registro quando concluído.
+ */
+export interface CompromissoDeEstudo {
+  rotinaId: string;
+  data: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  quantidade: number | null;
+  estado: EstadoDoCompromisso;
+  indisponivel: boolean;
+  registroId: string | null;
+}
+
+/**
+ * A semana da Agenda (FR-248, FR-250): o início, hoje e o fuso consultados,
+ * com os Compromissos da semana e os de hoje.
+ */
+export interface SemanaDaAgenda {
+  inicio: string;
+  hoje: string;
+  fuso: string;
+  compromissos: CompromissoDeEstudo[];
+  compromissosDeHoje: CompromissoDeEstudo[];
+}
+
+/**
+ * O início autorizado de um Compromisso (FR-248, FR-250): o snapshot dos
+ * Cartões selecionados pelo servidor para a Sessão.
+ */
+export interface InicioDeCompromisso {
+  id: string;
+  rotinaId: string;
+  data: string;
+  baralhoId: string;
+  nomeDoBaralho: string;
+  cartoes: Cartao[];
+  quantidadeSolicitada: number | null;
+}
+
+/**
+ * A ação de uma Rotina de estudo (FR-248, FR-250).
+ */
+export type AcaoDeRotina =
+  | "criar"
+  | "editar"
+  | "pausar"
+  | "retomar"
+  | "excluir";
+
+/**
+ * O que `salvarRotina` envia (FR-248, FR-250): a intenção idempotente pelo
+ * `operacaoId`, com os campos exigidos por cada ação.
+ */
+export interface DadosDeRotina {
+  operacaoId: string;
+  id?: string;
+  versao?: number;
+  acao: AcaoDeRotina;
+  baralhoId?: string;
+  dias?: number[];
+  quantidade?: number | null;
+  confirmarSobreposicao?: boolean;
+  fuso: string;
+}
+
+/**
+ * O que `iniciarCompromisso` envia (FR-248, FR-250): a Rotina, a data e o
+ * fuso.
+ */
+export interface DadosDeInicioDeCompromisso {
+  rotinaId: string;
+  data: string;
+  fuso: string;
+}
+
+/**
+ * Os códigos de erro estáveis das operações da Agenda (FR-248, FR-250).
+ */
+export type CodigoDeErroDeAgenda =
+  | "dados_invalidos"
+  | "nao_encontrado"
+  | "conflito"
+  | "sobreposicao"
+  | typeof INDISPONIVEL
+  | typeof NAO_AUTENTICADO;
+
+/** Resultado de `obterAgenda` (FR-248, FR-250). */
+export type ResultadoDeObterAgenda =
+  | { ok: true; agenda: SemanaDaAgenda }
+  | { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string };
+
+/** Resultado de `listarRotinas` (FR-248, FR-250). */
+export type ResultadoDeListarRotinas =
+  | { ok: true; rotinas: RotinaDeEstudo[] }
+  | { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string };
+
+/** Resultado de `salvarRotina` (FR-248, FR-250). */
+export type ResultadoDeSalvarRotina =
+  | { ok: true; rotina: RotinaDeEstudo }
+  | { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string };
+
+/** Resultado de `iniciarCompromisso` (FR-248, FR-250). */
+export type ResultadoDeIniciarCompromisso =
+  | { ok: true; inicio: InicioDeCompromisso }
+  | { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string };
+
+/**
+ * Mensagem em português para quando as rotas da Agenda não estão disponíveis
+ * (FR-248, FR-250).
+ */
+export const MENSAGEM_DE_AGENDA_INDISPONIVEL =
+  "A Agenda ainda não está disponível.";
 
 /**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
@@ -899,4 +1048,30 @@ export interface ClienteDoAcervo {
     algoritmo: string;
     limiteDeNovosPorDia: number;
   }): Promise<ResultadoDeSalvarPreferencias>;
+
+  /**
+   * A semana da Agenda (FR-248, FR-250): os Compromissos entre `inicio` e os
+   * sete dias seguintes, e os de hoje, no fuso informado.
+   */
+  obterAgenda(inicio: string, fuso: string): Promise<ResultadoDeObterAgenda>;
+
+  /**
+   * Lista as Rotinas de estudo ativas e pausadas (FR-248, FR-250), na ordem
+   * de criação.
+   */
+  listarRotinas(): Promise<ResultadoDeListarRotinas>;
+
+  /**
+   * Salva uma Rotina de estudo (FR-248, FR-250): criar, editar, pausar,
+   * retomar ou excluir, de forma idempotente pelo `operacaoId`.
+   */
+  salvarRotina(dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina>;
+
+  /**
+   * Inicia uma Sessão autorizada a partir de um Compromisso elegível
+   * (FR-248, FR-250). Só hoje e pendente; cada início tem seu próprio id.
+   */
+  iniciarCompromisso(
+    dados: DadosDeInicioDeCompromisso,
+  ): Promise<ResultadoDeIniciarCompromisso>;
 }

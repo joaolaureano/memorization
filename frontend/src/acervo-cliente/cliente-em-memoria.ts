@@ -1,5 +1,6 @@
 import {
   INDISPONIVEL,
+  MENSAGEM_DE_AGENDA_INDISPONIVEL,
   MENSAGEM_DE_CONFLITO_DE_SESSAO,
   MENSAGEM_DE_CREDENCIAL_INVALIDA,
   MENSAGEM_DE_DADOS_INVALIDOS,
@@ -24,7 +25,9 @@ import type {
   Credencial,
   DadosDeBaralho,
   DadosDeCartao,
+  DadosDeInicioDeCompromisso,
   DadosDeRegistro,
+  DadosDeRotina,
   DadosDeUsuario,
   OpcaoDeAlgoritmo,
   Preferencias,
@@ -41,14 +44,18 @@ import type {
   ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
+  ResultadoDeIniciarCompromisso,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
+  ResultadoDeListarRotinas,
+  ResultadoDeObterAgenda,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
   ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeSalvarPreferencias,
+  ResultadoDeSalvarRotina,
   ResultadoDeVinculacao,
   ResultadoDoItemRegistrado,
   ResultadoDoLoteDeRevisao,
@@ -667,6 +674,47 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
    * Registro alheio. Os totais e a `concluidaEm` são derivados aqui, como o
    * servidor os derivaria, e nunca aceitos do cliente.
    */
+  /**
+   * Stubs da Agenda (FR-248, FR-250): o comportamento completo chega na Onda B
+   * (T1606+). Até lá, nenhuma das quatro operações é concluída nem grava.
+   */
+  async obterAgenda(
+    _inicio: string,
+    _fuso: string,
+  ): Promise<ResultadoDeObterAgenda> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async listarRotinas(): Promise<ResultadoDeListarRotinas> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async salvarRotina(_dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
+  async iniciarCompromisso(
+    _dados: DadosDeInicioDeCompromisso,
+  ): Promise<ResultadoDeIniciarCompromisso> {
+    return {
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_AGENDA_INDISPONIVEL,
+    };
+  }
+
   async registrarSessao(
     dados: DadosDeRegistro,
   ): Promise<ResultadoDeRegistroDeSessao> {

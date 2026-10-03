@@ -31,6 +31,15 @@ import {
   validarNomeDeBaralho,
   validarVerso,
 } from "./invariantes.ts";
+import { criarAgenda } from "../agenda/agenda.ts";
+import type {
+  DadosDeInicio,
+  DadosDeRotina,
+  ResultadoDeIniciarCompromisso,
+  ResultadoDeListarRotinas,
+  ResultadoDeObterAgenda,
+  ResultadoDeSalvarRotina,
+} from "../agenda/agenda.ts";
 import type {
   CodigoDeErroDeBaralho,
   CodigoDeErroDeCartao,
@@ -59,6 +68,29 @@ export type {
  * não precise importar o Module de algoritmo diretamente (FR-192).
  */
 export type { Avaliacao };
+
+/**
+ * Os tipos públicos da Agenda (FR-248, FR-250) são reexportados na Interface do
+ * `Acervo`, como os tipos da Porta e da repetição: quem consome o acervo não
+ * precisa importar o Module `Agenda` diretamente.
+ */
+export type {
+  AcaoDeRotina,
+  CodigoDeErroDeAgenda,
+  CompromissoDeEstudo,
+  DadosDeInicio,
+  DadosDeRotina,
+  EstadoDaRotinaPublico,
+  EstadoDoCompromisso,
+  FalhaDeAgenda,
+  InicioDeCompromisso,
+  ResultadoDeIniciarCompromisso,
+  ResultadoDeListarRotinas,
+  ResultadoDeObterAgenda,
+  ResultadoDeSalvarRotina,
+  RotinaDeEstudo,
+  SemanaDaAgenda,
+} from "../agenda/tipos.ts";
 
 /**
  * O que `criarCartao` recebe: exatamente Frente e Verso (FR-001).
@@ -607,6 +639,35 @@ export interface Acervo {
    * `dados_invalidos`.
    */
   salvarPreferencias(dados: unknown): Promise<ResultadoDeSalvarPreferencias>;
+
+  /**
+   * Devolve a Semana da Agenda (FR-248): as ocorrências das Rotinas entre
+   * `inicio` e `inicio + 6`, mais o `hoje` no fuso pedido. `inicio` precisa ser
+   * data civil válida e segunda-feira, e `fuso` precisa ser IANA.
+   */
+  obterAgenda(inicio: string, fuso: string): Promise<ResultadoDeObterAgenda>;
+
+  /**
+   * Lista as Rotinas de estudo do Usuário (FR-248): ativas e pausadas na ordem
+   * criadaEm/id, omitindo as excluídas.
+   */
+  listarRotinas(): Promise<ResultadoDeListarRotinas>;
+
+  /**
+   * Grava uma Rotina de estudo (FR-248): cria, edita, pausa, retoma ou exclui
+   * conforme a ação, com idempotência por `operacaoId` e concorrência otimista
+   * por `versao`. `criada` é `true` quando a Rotina foi criada agora.
+   */
+  salvarRotina(dados: DadosDeRotina): Promise<ResultadoDeSalvarRotina>;
+
+  /**
+   * Autoriza o início de um Compromisso (FR-250): seleciona os Cartões no
+   * servidor e devolve o Início de estudo. `data` precisa ser data civil
+   * válida e `fuso` precisa ser IANA.
+   */
+  iniciarCompromisso(
+    dados: DadosDeInicio,
+  ): Promise<ResultadoDeIniciarCompromisso>;
 }
 
 /**
@@ -1044,9 +1105,20 @@ export function criarAcervo(
    * `ALGORITMOS` (FR-191, FR-213). A produção não informa nada: o padrão é
    * `ALGORITMOS`.
    */
-  opcoes: { algoritmos?: ReadonlyMap<string, AlgoritmoDeRepeticao> } = {},
+  opcoes: {
+    algoritmos?: ReadonlyMap<string, AlgoritmoDeRepeticao>;
+    /** Relógio injetável para os testes da Agenda; padrão `() => new Date()`. */
+    agora?: () => Date;
+  } = {},
 ): Acervo {
   const algoritmos = opcoes.algoritmos ?? ALGORITMOS;
+
+  /**
+   * O Module `Agenda` (FR-248, FR-250) recebe a mesma Porta e o mesmo dono do
+   * `Acervo`, além do relógio injetável das opções, para que a projeção da
+   * semana e a eleição de `hoje` sejam testáveis junto do restante do acervo.
+   */
+  const agenda = criarAgenda(armazenamento, usuarioId, { agora: opcoes.agora });
 
   /**
    * Resolve o algoritmo pelo identificador no registro disponível — o injetado
@@ -1607,5 +1679,13 @@ export function criarAcervo(
         },
       };
     },
+
+    obterAgenda: (inicio, fuso) => agenda.obterAgenda(inicio, fuso),
+
+    listarRotinas: () => agenda.listarRotinas(),
+
+    salvarRotina: (dados) => agenda.salvarRotina(dados),
+
+    iniciarCompromisso: (dados) => agenda.iniciarCompromisso(dados),
   };
 }

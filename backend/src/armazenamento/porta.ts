@@ -201,6 +201,127 @@ export interface ItemAvaliado {
 }
 
 /**
+ * Estado da Rotina de estudo (FR-248): `ativa` programa ocorrências;
+ * `pausada` interrompe a programação sem apagar o histórico; `excluida` é o
+ * tombstone que preserva a identidade da Rotina e a programação já registrada.
+ */
+export type EstadoDaRotina = "ativa" | "pausada" | "excluida";
+
+/**
+ * Versão da configuração de uma Rotina, vigente a partir de `iniciaEm`
+ * (data civil YYYY-MM-DD), como o armazenamento a guarda (FR-248). Cada
+ * alteração cria uma versão nova, e as versões antigas permanecem para que a
+ * programação passada continue explicável.
+ */
+export interface VersaoDaRotina {
+  /** Ordem de alteração: 1, 2, 3... */
+  readonly ordem: number;
+  /** Data civil a partir da qual esta versão vale. */
+  readonly iniciaEm: string;
+  readonly baralhoId: string;
+  /** Nome do Baralho como era nesta versão; rótulo histórico. */
+  readonly nomeDoBaralho: string;
+  /** Dias da semana: inteiros únicos de 1 a 7. */
+  readonly dias: readonly number[];
+  /** Quantidade de Cartões por ocorrência; `null` significa Todos. */
+  readonly quantidade: number | null;
+  /** Estado vigente a partir de `iniciaEm`; pausa e exclusão têm efeito de data. */
+  readonly estado: EstadoDaRotina;
+}
+
+/**
+ * Rotina de estudo como o armazenamento a guarda (FR-248). `versao` é a
+ * concorrência otimista da Rotina; `versoes` guarda o histórico de
+ * configurações, cada uma com o `baralhoId` próprio.
+ */
+export interface RotinaArmazenada {
+  readonly id: string;
+  /** ISO-8601 UTC. */
+  readonly criadaEm: string;
+  /** Inteiro >= 1; incrementado pelo Module a cada gravação. */
+  readonly versao: number;
+  /** Estado atual; `excluida` é tombstone. */
+  readonly estado: EstadoDaRotina;
+  /**
+   * Baralho atual da Rotina; `null` quando o Baralho foi excluído. A Rotina
+   * fica indisponível, mas a programação permanece (FR-248).
+   */
+  readonly baralhoId: string | null;
+  /** Versões ordenadas por `ordem`; cada uma guarda o `baralhoId` da época. */
+  readonly versoes: readonly VersaoDaRotina[];
+}
+
+/** Estado persistido de um Compromisso: exceções e conclusões (FR-250). */
+export type EstadoPersistidoDoCompromisso = "cancelado" | "concluido";
+
+/**
+ * Compromisso persistido (FR-250): só exceções (`cancelado`) e conclusões.
+ * Ocorrências comuns da Rotina são projetadas pelo Module, não guardadas.
+ */
+export interface CompromissoPersistido {
+  readonly rotinaId: string;
+  /** Data civil YYYY-MM-DD da ocorrência. */
+  readonly data: string;
+  readonly estado: EstadoPersistidoDoCompromisso;
+  /** Primeiro Registro confirmado; imutável uma vez gravado. */
+  readonly registroId: string | null;
+  /** Configuração capturada no momento do compromisso. */
+  readonly baralhoId: string;
+  readonly nomeDoBaralho: string;
+  readonly quantidade: number | null;
+}
+
+/**
+ * Início de estudo autorizado pelo servidor (FR-250): a lista de Cartões já
+ * selecionada e imutável, guardada para reabrir a sessão.
+ */
+export interface InicioAutorizado {
+  /** Identificador aleatório, gerado no servidor. */
+  readonly id: string;
+  readonly rotinaId: string;
+  readonly data: string;
+  /** ISO-8601 UTC. */
+  readonly iniciadoEm: string;
+  readonly fuso: string;
+  readonly baralhoId: string;
+  readonly nomeDoBaralho: string;
+  /** Quantidade solicitada; `null` significa Todos. */
+  readonly quantidade: number | null;
+  /** Cartões selecionados no servidor, com a ordem preservada. */
+  readonly cartoes: readonly Cartao[];
+}
+
+/**
+ * Códigos de falha tipada das operações de Rotina (FR-248). Como os demais
+ * códigos da Porta, não são mensagem: a frase que o usuário lê nasce no Module.
+ */
+export type CodigoDeFalhaDeRotina =
+  | "nao_encontrado"
+  | "conflito_de_versao"
+  | "conflito"
+  | "indisponivel";
+
+/** Desfecho tipado das operações de Rotina (FR-248). */
+export type DesfechoDeRotina<T> =
+  | { ok: true; valor: T }
+  | { ok: false; erro: CodigoDeFalhaDeRotina };
+
+/**
+ * Intenção de gravação de uma Rotina (FR-248): `operacaoId` é a chave de
+ * idempotência, `intencao` distingue reenvio de reuso indevido e
+ * `versaoEsperada` implementa o CAS da concorrência otimista.
+ */
+export interface GravacaoDeRotina {
+  readonly operacaoId: string;
+  /** Texto canônico da intenção; decide entre reenvio e conflito. */
+  readonly intencao: string;
+  /** `null` = criação; número = atualização com CAS pela versão guardada. */
+  readonly versaoEsperada: number | null;
+  /** Estado completo a gravar; o Module já incrementou `versao`. */
+  readonly rotina: RotinaArmazenada;
+}
+
+/**
  * Códigos de falha tipada da Porta. São vocabulário de armazenamento, nunca
  * mensagem: `nao_encontrado` é a ausência de linha a ler, a alterar ou a
  * excluir; `vinculo_duplicado` é o par (Cartão, Baralho) repetido, reconhecido
@@ -534,4 +655,86 @@ export interface ArmazenamentoDoAcervo {
    * `cartaoId` ausentes, ficam de fora.
    */
   listarItensAvaliados(usuarioId: string): Promise<ItemAvaliado[]>;
+
+  /**
+   * Grava uma Rotina de estudo no acervo de `usuarioId` (FR-248), numa única
+   * transação idempotente. Se `(usuarioId, operacaoId)` já existe: mesma
+   * `intencao` devolve a Rotina guardada com `repetida: true`, sem gravar; outra
+   * `intencao` recusa como `conflito`. `versaoEsperada === null` insere; caso
+   * contrário, atualiza com CAS pela versão guardada, distinguindo
+   * `nao_encontrado` de `conflito_de_versao`. Falha do armazenamento é
+   * `indisponivel`, jamais gravação parcial (FR-044, FR-107, FR-248).
+   */
+  gravarRotina(
+    usuarioId: string,
+    gravacao: GravacaoDeRotina,
+  ): Promise<DesfechoDeRotina<{ rotina: RotinaArmazenada; repetida: boolean }>>;
+
+  /**
+   * Devolve a Rotina de `id` no acervo de `usuarioId` (FR-248); ausente —
+   * inclusive quando é de outro Usuário — é `nao_encontrado`.
+   */
+  obterRotina(
+    usuarioId: string,
+    id: string,
+  ): Promise<Desfecho<RotinaArmazenada>>;
+
+  /**
+   * Devolve as Rotinas de `usuarioId`, incluindo as excluídas (tombstones),
+   * sem prometer ordem (FR-248).
+   */
+  listarRotinas(usuarioId: string): Promise<RotinaArmazenada[]>;
+
+  /**
+   * Grava uma exceção ou conclusão de Compromisso no acervo de `usuarioId`
+   * (FR-250). Rotina inexistente ou de outro dono é `nao_encontrado`. Sem
+   * linha para `(rotinaId, data)`, insere com `alterado: true`. Com linha
+   * `concluido`, devolve a existente intacta (`alterado: false`; conclusão
+   * imutável). Com linha `cancelado`, atualiza estado, registro e
+   * configuração, preservando `registroId` existente.
+   */
+  gravarCompromisso(
+    usuarioId: string,
+    compromisso: CompromissoPersistido,
+  ): Promise<Desfecho<{ compromisso: CompromissoPersistido; alterado: boolean }>>;
+
+  /**
+   * Devolve o Compromisso de `(rotinaId, data)` no acervo de `usuarioId`
+   * (FR-250); ausente é `nao_encontrado`.
+   */
+  obterCompromisso(
+    usuarioId: string,
+    rotinaId: string,
+    data: string,
+  ): Promise<Desfecho<CompromissoPersistido>>;
+
+  /**
+   * Devolve os Compromissos de `usuarioId` entre `de` e `ate`, datas
+   * YYYY-MM-DD inclusivas, sem ordem prometida (FR-250).
+   */
+  listarCompromissos(
+    usuarioId: string,
+    de: string,
+    ate: string,
+  ): Promise<CompromissoPersistido[]>;
+
+  /**
+   * Guarda um Início autorizado no acervo de `usuarioId` (FR-250). Rotina
+   * inexistente ou de outro dono é `nao_encontrado`; mesmo `id` de outro
+   * Usuário é `conflito`; mesmo `id` do mesmo Usuário devolve o já guardado
+   * sem alterar.
+   */
+  gravarInicio(
+    usuarioId: string,
+    inicio: InicioAutorizado,
+  ): Promise<Desfecho<InicioAutorizado>>;
+
+  /**
+   * Devolve o Início de `id` no acervo de `usuarioId` (FR-250); ausente —
+   * inclusive quando é de outro Usuário — é `nao_encontrado`.
+   */
+  obterInicio(
+    usuarioId: string,
+    id: string,
+  ): Promise<Desfecho<InicioAutorizado>>;
 }

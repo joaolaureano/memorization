@@ -8,18 +8,18 @@
 
 ## Phase 1: Setup
 
-- [ ] T1601 Conferir contratos e portão de análise em specs/016-agendamento-de-estudo/plan.md e contracts/api-agenda.md. Requisitos: FR-222–FR-256.
+- [X] T1601 Conferir contratos e portão de análise em specs/016-agendamento-de-estudo/plan.md e contracts/api-agenda.md. Requisitos: FR-222–FR-256.
 
 ## Phase 2: Foundational
 
-- [ ] T1602 Adicionar tipos/Porta e migração 8 em backend/src/armazenamento/porta.ts e sqlite/postgresql/migracoes.ts; testar upgrade preservando dados. Requisitos: FR-248, FR-250.
+- [X] T1602 Adicionar tipos/Porta e migração 8 em backend/src/armazenamento/porta.ts e sqlite/postgresql/migracoes.ts; testar upgrade preservando dados. Requisitos: FR-248, FR-250.
   - Restrições literais do data-model: `dias` = inteiros únicos 1=segunda … 7=domingo, ao menos um; `quantidade` = `null` (Todos os Cartões) ou inteiro 1..999; `estado` da Rotina ∈ `ativa|pausada|excluida` (excluída é tombstone); `versao` positiva de concorrência; versões da configuração com data civil de início; `operacaoId` com resultado guardado para reenvio idempotente.
   - Compromisso: no máximo um por Rotina + data `YYYY-MM-DD` dentro do dono (unicidade também no banco); `registroId` opcional, primeiro Registro confirmado, imutável. Persistir só exceções (cancelado) e conclusões; ocorrências comuns são projetadas.
   - Início de Compromisso: id aleatório gerado no servidor, usuarioId, rotinaId, data, iniciadoEm, fuso, baralhoId, nomeDoBaralho, quantidade efetiva e Cartões selecionados com Frente/Verso capturados; sem Avaliações intermediárias.
   - FK de Baralho MUST NOT apagar a programação: excluir o Baralho deixa a Rotina indisponível (sem `ON DELETE CASCADE` para `baralho`).
   - Índices por dono para a consulta da semana (SC-102).
   - Restrição da 017 (data-model, seção "Restrição vinda da 017"): toda tabela da Agenda com dados de um Usuário MUST ter `REFERENCES usuario(id) ON DELETE CASCADE`, direto ou pela cadeia de chaves estrangeiras, nos dois Adapters; o teste prova que excluir um Usuário remove a Agenda dele e preserva a de outro.
-- [ ] T1603 Adicionar Module Agenda em backend/src/agenda/agenda.ts e tipos.ts, composição Acervo e tipos de cliente em frontend/src/acervo-cliente/cliente.ts. Requisitos: FR-222–FR-256.
+- [X] T1603 Adicionar Module Agenda em backend/src/agenda/agenda.ts e tipos.ts, composição Acervo e tipos de cliente em frontend/src/acervo-cliente/cliente.ts. Requisitos: FR-222–FR-256.
   - Tipos públicos exatamente como em contracts/api-agenda.md (`RotinaDeEstudo`, `CompromissoDeEstudo`, `SemanaDaAgenda`, `InicioDeCompromisso`); sem `usuarioId` público e sem JSON de versões. Datas civis `YYYY-MM-DD` validadas estritamente (rejeitar 31/02) e fuso IANA validado; hoje derivado no servidor nesse fuso.
 
 ## Phase 3: User Story 1 — Programar estudo

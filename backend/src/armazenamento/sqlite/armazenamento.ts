@@ -6,16 +6,21 @@ import type {
   ArmazenamentoDeUsuarios,
   Baralho,
   Cartao,
+  CompromissoPersistido,
   ContagemPorBaralho,
   Desfecho,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
+  DesfechoDeRotina,
+  InicioAutorizado,
   ItemAvaliado,
   ItemRegistrado,
   Preferencias,
   RegistroDeSessao,
   RegistroResumido,
+  RotinaArmazenada,
   Usuario,
+  VersaoDaRotina,
 } from "../porta.ts";
 import { abrirBanco } from "./esquema.ts";
 
@@ -286,6 +291,104 @@ function itemAvaliadoDaLinha(linha: Record<string, unknown>): ItemAvaliado {
  * duplicata, que é resultado de domínio, da violação da chave primária de `id`
  * (errcode 1555), que é falha do armazenamento.
  */
+/**
+ * Desfecho do `id` de Rotina já usado — de qualquer dono — ou do `operacaoId`
+ * reutilizado com outra intenção (FR-248). É recusa de domínio, como o
+ * `conflito` do Registro, e nunca revela a Rotina de outro Usuário.
+ */
+const CONFLITO_DE_ROTINA: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "conflito",
+};
+
+/** Desfecho de Rotina ausente; a de outro dono é indistinguível (FR-248). */
+const ROTINA_NAO_ENCONTRADA: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "nao_encontrado",
+};
+
+/**
+ * Desfecho do CAS recusado: a Rotina existe e é do Usuário, mas a versão
+ * guardada divergiu da esperada (FR-248).
+ */
+const CONFLITO_DE_VERSAO: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "conflito_de_versao",
+};
+
+/** Desfecho de falha do armazenamento nas operações de Rotina (FR-248). */
+const ROTINA_INDISPONIVEL: DesfechoDeRotina<never> = {
+  ok: false,
+  erro: "indisponivel",
+};
+
+/**
+ * Executa a operação e traduz a falha do SQLite em `indisponivel` no
+ * vocabulário próprio da Porta de Rotina (FR-248). Como nas demais operações,
+ * nenhum erro do driver atravessa a Interface (FR-107).
+ */
+function comDesfechoDeRotina<T>(
+  operacao: () => DesfechoDeRotina<T>,
+): DesfechoDeRotina<T> {
+  try {
+    return operacao();
+  } catch {
+    return ROTINA_INDISPONIVEL;
+  }
+}
+
+/**
+ * Lê a linha como Rotina de estudo, desfazendo o JSON guardado em `versoes`
+ * (FR-248). O `baralho_id` nulo é a Rotina indisponível: o Baralho foi
+ * excluído e a programação permanece.
+ */
+function rotinaDaLinha(linha: Record<string, unknown>): RotinaArmazenada {
+  return {
+    id: linha.id as string,
+    criadaEm: comoInstanteIso(linha.criada_em),
+    versao: Number(linha.versao),
+    estado: linha.estado as RotinaArmazenada["estado"],
+    baralhoId: (linha.baralho_id as string | null) ?? null,
+    versoes: JSON.parse(linha.versoes as string) as readonly VersaoDaRotina[],
+  };
+}
+
+/**
+ * Lê a linha como Compromisso persistido (FR-250): só exceções e conclusões,
+ * com a configuração capturada no momento do compromisso.
+ */
+function compromissoDaLinha(
+  linha: Record<string, unknown>,
+): CompromissoPersistido {
+  return {
+    rotinaId: linha.rotina_id as string,
+    data: linha.data as string,
+    estado: linha.estado as CompromissoPersistido["estado"],
+    registroId: (linha.registro_id as string | null) ?? null,
+    baralhoId: linha.baralho_id as string,
+    nomeDoBaralho: linha.nome_do_baralho as string,
+    quantidade: (linha.quantidade as number | null) ?? null,
+  };
+}
+
+/**
+ * Lê a linha como Início autorizado, desfazendo o JSON dos Cartões
+ * selecionados (FR-250); a ordem preservada é a que o servidor escolheu.
+ */
+function inicioDaLinha(linha: Record<string, unknown>): InicioAutorizado {
+  return {
+    id: linha.id as string,
+    rotinaId: linha.rotina_id as string,
+    data: linha.data as string,
+    iniciadoEm: comoInstanteIso(linha.iniciado_em),
+    fuso: linha.fuso as string,
+    baralhoId: linha.baralho_id as string,
+    nomeDoBaralho: linha.nome_do_baralho as string,
+    quantidade: (linha.quantidade as number | null) ?? null,
+    cartoes: JSON.parse(linha.cartoes as string) as readonly Cartao[],
+  };
+}
+
 function ehNomeDeUsuarioExistente(erro: unknown): boolean {
   if (typeof erro !== "object" || erro === null) {
     return false;
@@ -561,6 +664,110 @@ export async function abrirArmazenamentoSqlite(
     `SELECT id, nome_de_usuario, sal, hash, parametros
        FROM usuario
       WHERE nome_de_usuario = ?`,
+  );
+
+  /**
+   * As consultas da agenda de estudo (FR-248, FR-250). Toda leitura e gravação
+   * de Rotina, de Compromisso e de Início é escopada por `usuario_id`: a linha
+   * de outro dono é indistinguível de inexistente — `nao_encontrado`
+   * (FR-092, SC-030). As listas em JSON (`versoes`, `cartoes`) trafegam como
+   * texto e o Adapter as desfaz na leitura.
+   */
+  const inserirRotina = banco.prepare(
+    `INSERT INTO rotina_de_estudo
+       (id, usuario_id, baralho_id, estado, versao, criada_em, versoes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  /**
+   * O CAS da Rotina: grava só se a versão guardada é a esperada. `criada_em` e
+   * `id` ficam de fora do `SET` de propósito — não mudam na atualização
+   * (FR-248).
+   */
+  const atualizarRotinaPorCas = banco.prepare(
+    `UPDATE rotina_de_estudo
+        SET baralho_id = ?, estado = ?, versao = ?, versoes = ?
+      WHERE id = ? AND usuario_id = ? AND versao = ?`,
+  );
+  const obterRotinaDoUsuario = banco.prepare(
+    `SELECT id, baralho_id, estado, versao, criada_em, versoes
+       FROM rotina_de_estudo
+      WHERE id = ? AND usuario_id = ?`,
+  );
+  /**
+   * A busca por `id` sem escopo de dono é deliberada: é ela que reconhece a
+   * criação com `id` repetido — de qualquer dono — como `conflito`, sem que a
+   * Rotina alheia atravesse a Porta (FR-248).
+   */
+  const obterRotinaPorIdDeQualquerDono = banco.prepare(
+    "SELECT id FROM rotina_de_estudo WHERE id = ?",
+  );
+  /** Distingue a Rotina ausente da versão divergente após um UPDATE sem linha. */
+  const obterVersaoDaRotina = banco.prepare(
+    "SELECT versao FROM rotina_de_estudo WHERE id = ? AND usuario_id = ?",
+  );
+  const listarRotinas = banco.prepare(
+    `SELECT id, baralho_id, estado, versao, criada_em, versoes
+       FROM rotina_de_estudo
+      WHERE usuario_id = ?`,
+  );
+  const obterOperacaoDeRotina = banco.prepare(
+    `SELECT intencao, resultado
+       FROM operacao_de_rotina
+      WHERE usuario_id = ? AND operacao_id = ?`,
+  );
+  const inserirOperacaoDeRotina = banco.prepare(
+    `INSERT INTO operacao_de_rotina
+       (usuario_id, operacao_id, rotina_id, intencao, resultado)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+
+  const inserirCompromisso = banco.prepare(
+    `INSERT INTO compromisso_de_estudo
+       (rotina_id, data, usuario_id, estado, registro_id, baralho_id,
+        nome_do_baralho, quantidade)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const atualizarCompromisso = banco.prepare(
+    `UPDATE compromisso_de_estudo
+        SET estado = ?, registro_id = ?, baralho_id = ?, nome_do_baralho = ?,
+            quantidade = ?
+      WHERE rotina_id = ? AND data = ? AND usuario_id = ?`,
+  );
+  const obterCompromissoDoUsuario = banco.prepare(
+    `SELECT rotina_id, data, estado, registro_id, baralho_id,
+            nome_do_baralho, quantidade
+       FROM compromisso_de_estudo
+      WHERE rotina_id = ? AND data = ? AND usuario_id = ?`,
+  );
+  const listarCompromissos = banco.prepare(
+    `SELECT rotina_id, data, estado, registro_id, baralho_id,
+            nome_do_baralho, quantidade
+       FROM compromisso_de_estudo
+      WHERE usuario_id = ? AND data >= ? AND data <= ?`,
+  );
+
+  const inserirInicio = banco.prepare(
+    `INSERT INTO inicio_de_compromisso
+       (id, usuario_id, rotina_id, data, iniciado_em, fuso, baralho_id,
+        nome_do_baralho, quantidade, cartoes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  /**
+   * Mesma idempotência do Registro: a busca por `id` sem escopo de dono
+   * distingue o reenvio do mesmo Usuário do `id` que já pertence a outro
+   * (FR-250).
+   */
+  const obterInicioPorId = banco.prepare(
+    `SELECT id, usuario_id, rotina_id, data, iniciado_em, fuso, baralho_id,
+            nome_do_baralho, quantidade, cartoes
+       FROM inicio_de_compromisso
+      WHERE id = ?`,
+  );
+  const obterInicioDoUsuario = banco.prepare(
+    `SELECT id, rotina_id, data, iniciado_em, fuso, baralho_id,
+            nome_do_baralho, quantidade, cartoes
+       FROM inicio_de_compromisso
+      WHERE id = ? AND usuario_id = ?`,
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
@@ -960,6 +1167,271 @@ export async function abrirArmazenamentoSqlite(
         });
 
         return SEM_CARGA;
+      });
+    },
+
+    async gravarRotina(usuarioId, gravacao) {
+      return comDesfechoDeRotina<{
+        rotina: RotinaArmazenada;
+        repetida: boolean;
+      }>(() =>
+        emTransacao(banco, () => {
+          /**
+           * A idempotência por `operacaoId`: a mesma `intencao` devolve a
+           * Rotina guardada como resultado daquela operação, sem gravar de
+           * novo; `intencao` diferente é reuso indevido e recusa como
+           * `conflito` (FR-248).
+           */
+          const operacao = obterOperacaoDeRotina.get(
+            usuarioId,
+            gravacao.operacaoId,
+          );
+
+          if (operacao !== undefined) {
+            return (operacao.intencao as string) === gravacao.intencao
+              ? {
+                  ok: true,
+                  valor: {
+                    rotina: JSON.parse(
+                      operacao.resultado as string,
+                    ) as RotinaArmazenada,
+                    repetida: true,
+                  },
+                }
+              : CONFLITO_DE_ROTINA;
+          }
+
+          if (gravacao.versaoEsperada === null) {
+            /**
+             * Criação: `id` de Rotina repetido — de qualquer dono — é
+             * `conflito`, reconhecido dentro da transação antes do INSERT
+             * (FR-248).
+             */
+            if (
+              obterRotinaPorIdDeQualquerDono.get(gravacao.rotina.id) !==
+              undefined
+            ) {
+              return CONFLITO_DE_ROTINA;
+            }
+
+            inserirRotina.run(
+              gravacao.rotina.id,
+              usuarioId,
+              gravacao.rotina.baralhoId,
+              gravacao.rotina.estado,
+              gravacao.rotina.versao,
+              gravacao.rotina.criadaEm,
+              JSON.stringify(gravacao.rotina.versoes),
+            );
+          } else {
+            /**
+             * Atualização com CAS: só grava se a versão guardada é a esperada.
+             * Nenhuma linha alterada distingue a Rotina inexistente ou de
+             * outro dono (`nao_encontrado`) da versão divergente
+             * (`conflito_de_versao`) (FR-248).
+             */
+            const alteradas = atualizarRotinaPorCas.run(
+              gravacao.rotina.baralhoId,
+              gravacao.rotina.estado,
+              gravacao.rotina.versao,
+              JSON.stringify(gravacao.rotina.versoes),
+              gravacao.rotina.id,
+              usuarioId,
+              gravacao.versaoEsperada,
+            );
+
+            if (Number(alteradas.changes) === 0) {
+              return obterVersaoDaRotina.get(gravacao.rotina.id, usuarioId) ===
+                undefined
+                ? ROTINA_NAO_ENCONTRADA
+                : CONFLITO_DE_VERSAO;
+            }
+          }
+
+          /**
+           * A operação guarda o JSON da Rotina gravada: é ele que o reenvio
+           * idempotente devolve como resultado (FR-248).
+           */
+          inserirOperacaoDeRotina.run(
+            usuarioId,
+            gravacao.operacaoId,
+            gravacao.rotina.id,
+            gravacao.intencao,
+            JSON.stringify(gravacao.rotina),
+          );
+
+          return {
+            ok: true,
+            valor: { rotina: gravacao.rotina, repetida: false },
+          };
+        }),
+      );
+    },
+
+    async obterRotina(usuarioId, id) {
+      return comDesfecho(() => {
+        const linha = obterRotinaDoUsuario.get(id, usuarioId);
+
+        return linha === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: rotinaDaLinha(linha) };
+      });
+    },
+
+    async listarRotinas(usuarioId) {
+      return listarRotinas.all(usuarioId).map(rotinaDaLinha);
+    },
+
+    async gravarCompromisso(usuarioId, compromisso) {
+      return comDesfecho<{
+        compromisso: CompromissoPersistido;
+        alterado: boolean;
+      }>(() =>
+        emTransacao(banco, () => {
+          /**
+           * A posse da Rotina é conferida no escopo do dono: Rotina
+           * inexistente ou de outro Usuário é `nao_encontrado` (FR-250).
+           */
+          if (
+            obterRotinaDoUsuario.get(compromisso.rotinaId, usuarioId) ===
+            undefined
+          ) {
+            return NAO_ENCONTRADO;
+          }
+
+          const existente = obterCompromissoDoUsuario.get(
+            compromisso.rotinaId,
+            compromisso.data,
+            usuarioId,
+          );
+
+          if (existente === undefined) {
+            inserirCompromisso.run(
+              compromisso.rotinaId,
+              compromisso.data,
+              usuarioId,
+              compromisso.estado,
+              compromisso.registroId,
+              compromisso.baralhoId,
+              compromisso.nomeDoBaralho,
+              compromisso.quantidade,
+            );
+
+            return { ok: true, valor: { compromisso, alterado: true } };
+          }
+
+          /**
+           * A conclusão é imutável: a linha `concluido` volta intacta, com o
+           * `registroId` preservado (FR-250).
+           */
+          if ((existente.estado as string) === "concluido") {
+            return {
+              ok: true,
+              valor: {
+                compromisso: compromissoDaLinha(existente),
+                alterado: false,
+              },
+            };
+          }
+
+          /**
+           * Linha `cancelado`: atualiza estado, registro e configuração,
+           * mantendo o `registroId` já existente quando o novo vem nulo
+           * (FR-250).
+           */
+          const registroId =
+            compromisso.registroId ??
+            ((existente.registro_id as string | null) ?? null);
+
+          atualizarCompromisso.run(
+            compromisso.estado,
+            registroId,
+            compromisso.baralhoId,
+            compromisso.nomeDoBaralho,
+            compromisso.quantidade,
+            compromisso.rotinaId,
+            compromisso.data,
+            usuarioId,
+          );
+
+          return {
+            ok: true,
+            valor: {
+              compromisso: { ...compromisso, registroId },
+              alterado: true,
+            },
+          };
+        }),
+      );
+    },
+
+    async obterCompromisso(usuarioId, rotinaId, data) {
+      return comDesfecho(() => {
+        const linha = obterCompromissoDoUsuario.get(rotinaId, data, usuarioId);
+
+        return linha === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: compromissoDaLinha(linha) };
+      });
+    },
+
+    async listarCompromissos(usuarioId, de, ate) {
+      return listarCompromissos
+        .all(usuarioId, de, ate)
+        .map(compromissoDaLinha);
+    },
+
+    async gravarInicio(usuarioId, inicio) {
+      return comDesfecho<InicioAutorizado>(() =>
+        emTransacao(banco, () => {
+          /**
+           * A posse da Rotina é conferida primeiro: Rotina inexistente ou de
+           * outro dono é `nao_encontrado` (FR-250).
+           */
+          if (
+            obterRotinaDoUsuario.get(inicio.rotinaId, usuarioId) === undefined
+          ) {
+            return NAO_ENCONTRADO;
+          }
+
+          const existente = obterInicioPorId.get(inicio.id);
+
+          if (existente !== undefined) {
+            /**
+             * O mesmo `id` do mesmo Usuário devolve o Início já guardado, sem
+             * alterar; o `id` de outro Usuário é `conflito`, como no Registro
+             * de Sessão (FR-250).
+             */
+            return (existente.usuario_id as string) === usuarioId
+              ? { ok: true, valor: inicioDaLinha(existente) }
+              : CONFLITO;
+          }
+
+          inserirInicio.run(
+            inicio.id,
+            usuarioId,
+            inicio.rotinaId,
+            inicio.data,
+            inicio.iniciadoEm,
+            inicio.fuso,
+            inicio.baralhoId,
+            inicio.nomeDoBaralho,
+            inicio.quantidade,
+            JSON.stringify(inicio.cartoes),
+          );
+
+          return { ok: true, valor: inicio };
+        }),
+      );
+    },
+
+    async obterInicio(usuarioId, id) {
+      return comDesfecho(() => {
+        const linha = obterInicioDoUsuario.get(id, usuarioId);
+
+        return linha === undefined
+          ? NAO_ENCONTRADO
+          : { ok: true, valor: inicioDaLinha(linha) };
       });
     },
 

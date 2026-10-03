@@ -7,10 +7,13 @@ import type {
   Avaliacao,
   Baralho,
   Cartao,
+  CompromissoPersistido,
   ContagemPorBaralho,
+  InicioAutorizado,
   ItemRegistrado,
   RegistroDeSessao,
   RegistroResumido,
+  RotinaArmazenada,
 } from "../../src/armazenamento/porta.ts";
 import { criarDonoDeTeste } from "./usuarios-de-teste.ts";
 
@@ -1344,6 +1347,610 @@ export function bateriaDaPorta(
             posicao: 0,
           },
         ]);
+      });
+    });
+
+    describe("Agenda de estudo (FR-248, FR-250)", () => {
+      /**
+       * Rotina como o armazenamento a guarda. O Baralho referenciado precisa
+       * existir antes da gravação, porque `baralhoId` é chave estrangeira
+       * (FR-248).
+       */
+      function rotinaDe(
+        id: string,
+        baralhoId: string,
+        versao = 1,
+        nomeDoBaralho = "Inglês",
+        criadaEm = "2026-01-01T00:00:00.000Z",
+        estado: RotinaArmazenada["estado"] = "ativa",
+        versoes: RotinaArmazenada["versoes"] = [
+          {
+            ordem: 1,
+            iniciaEm: "2026-01-01",
+            baralhoId,
+            nomeDoBaralho,
+            dias: [1, 3, 5],
+            quantidade: 10,
+            estado,
+          },
+        ],
+      ): RotinaArmazenada {
+        return { id, criadaEm, versao, estado, baralhoId, versoes };
+      }
+
+      /** Compromisso persistido com a configuração capturada (FR-250). */
+      function compromissoDe(
+        rotinaId: string,
+        data: string,
+        estado: CompromissoPersistido["estado"] = "cancelado",
+        registroId: string | null = null,
+        baralhoId = "b1",
+        nomeDoBaralho = "Inglês",
+        quantidade: number | null = 10,
+      ): CompromissoPersistido {
+        return {
+          rotinaId,
+          data,
+          estado,
+          registroId,
+          baralhoId,
+          nomeDoBaralho,
+          quantidade,
+        };
+      }
+
+      /** Início autorizado com os Cartões selecionados e a ordem preservada (FR-250). */
+      function inicioDe(
+        id: string,
+        rotinaId: string,
+        data: string,
+        cartoes: readonly Cartao[] = [cartaoDe("c1")],
+        quantidade: number | null = null,
+        iniciadoEm = "2026-01-01T00:00:00.000Z",
+        fuso = "America/Sao_Paulo",
+        baralhoId = "b1",
+        nomeDoBaralho = "Inglês",
+      ): InicioAutorizado {
+        return {
+          id,
+          rotinaId,
+          data,
+          iniciadoEm,
+          fuso,
+          baralhoId,
+          nomeDoBaralho,
+          quantidade,
+          cartoes,
+        };
+      }
+
+      describe("Rotina", () => {
+        it("grava uma Rotina e a devolve inteira na leitura e na listagem (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op1",
+              intencao: "criar",
+              versaoEsperada: null,
+              rotina,
+            }),
+          ).toEqual({ ok: true, valor: { rotina, repetida: false } });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: rotina,
+          });
+          expect(await armazenamento().listarRotinas(DONO_UM)).toEqual([rotina]);
+        });
+
+        it("atualiza com versaoEsperada correta e recusa a versão errada sem alterar (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina,
+          });
+
+          const atualizada = rotinaDe(
+            "r1",
+            "b1",
+            2,
+            "Inglês",
+            rotina.criadaEm,
+            "ativa",
+            [
+              ...rotina.versoes,
+              {
+                ordem: 2,
+                iniciaEm: "2026-01-02",
+                baralhoId: "b1",
+                nomeDoBaralho: "Inglês",
+                dias: [2, 4],
+                quantidade: null,
+                estado: "ativa",
+              },
+            ],
+          );
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op2",
+              intencao: "alterar",
+              versaoEsperada: 1,
+              rotina: atualizada,
+            }),
+          ).toEqual({ ok: true, valor: { rotina: atualizada, repetida: false } });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: atualizada,
+          });
+
+          const tentativa = rotinaDe("r1", "b1", 3, "Inglês");
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op3",
+              intencao: "alterar",
+              versaoEsperada: 1,
+              rotina: tentativa,
+            }),
+          ).toEqual({ ok: false, erro: "conflito_de_versao" });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: atualizada,
+          });
+        });
+
+        it("recusa a atualização de Rotina inexistente ou de outro dono como nao_encontrado (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().inserirBaralho(
+            DONO_DOIS,
+            baralhoDe("b2", "Espanhol"),
+          );
+
+          await armazenamento().gravarRotina(DONO_DOIS, {
+            operacaoId: "op-r2",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r2", "b2", 1, "Espanhol"),
+          });
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op-inexistente",
+              intencao: "alterar",
+              versaoEsperada: 1,
+              rotina: rotinaDe("inexistente", "b1"),
+            }),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op-outro-dono",
+              intencao: "alterar",
+              versaoEsperada: 1,
+              rotina: rotinaDe("r2", "b1", 2, "Inglês"),
+            }),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+
+        it("reenvia o mesmo operacaoId e intencao devolvendo repetida:true sem alterar (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const primeira = rotinaDe("r1", "b1");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: primeira,
+          });
+
+          const reenvio = rotinaDe("r1", "b1", 2, "Outro nome");
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op1",
+              intencao: "criar",
+              versaoEsperada: null,
+              rotina: reenvio,
+            }),
+          ).toEqual({ ok: true, valor: { rotina: primeira, repetida: true } });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: primeira,
+          });
+          expect(await armazenamento().listarRotinas(DONO_UM)).toEqual([primeira]);
+        });
+
+        it("recusa o mesmo operacaoId com outra intencao como conflito (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina,
+          });
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op1",
+              intencao: "alterar",
+              versaoEsperada: 1,
+              rotina: rotinaDe("r1", "b1", 2, "Inglês"),
+            }),
+          ).toEqual({ ok: false, erro: "conflito" });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: rotina,
+          });
+        });
+
+        it("recusa criar uma Rotina com id já existente em outro operacaoId como conflito (FR-248)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina,
+          });
+
+          expect(
+            await armazenamento().gravarRotina(DONO_UM, {
+              operacaoId: "op2",
+              intencao: "criar",
+              versaoEsperada: null,
+              rotina,
+            }),
+          ).toEqual({ ok: false, erro: "conflito" });
+
+          expect(await armazenamento().listarRotinas(DONO_UM)).toEqual([rotina]);
+        });
+      });
+
+      describe("Compromisso", () => {
+        it("grava, atualiza e mantém uma única linha para a mesma Rotina e data (FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+
+          const cancelado = compromissoDe("r1", "2026-01-10");
+          const concluido = compromissoDe(
+            "r1",
+            "2026-01-10",
+            "concluido",
+            "reg-1",
+          );
+          const canceladoDepois = compromissoDe(
+            "r1",
+            "2026-01-10",
+            "cancelado",
+            "reg-2",
+            "b1",
+            "Inglês",
+            5,
+          );
+
+          expect(
+            await armazenamento().gravarCompromisso(DONO_UM, cancelado),
+          ).toEqual({ ok: true, valor: { compromisso: cancelado, alterado: true } });
+
+          expect(
+            await armazenamento().gravarCompromisso(DONO_UM, concluido),
+          ).toEqual({ ok: true, valor: { compromisso: concluido, alterado: true } });
+
+          expect(
+            await armazenamento().gravarCompromisso(DONO_UM, canceladoDepois),
+          ).toEqual({
+            ok: true,
+            valor: { compromisso: concluido, alterado: false },
+          });
+
+          expect(
+            await armazenamento().listarCompromissos(
+              DONO_UM,
+              "2026-01-01",
+              "2026-01-31",
+            ),
+          ).toEqual([concluido]);
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-10"),
+          ).toEqual({ ok: true, valor: concluido });
+        });
+
+        it("recusa Compromisso de Rotina inexistente como nao_encontrado (FR-250)", async () => {
+          expect(
+            await armazenamento().gravarCompromisso(
+              DONO_UM,
+              compromissoDe("inexistente", "2026-01-10"),
+            ),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+
+        it("lista Compromissos na janela inclusiva de/ate (FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+
+          for (const data of ["2026-01-10", "2026-01-11", "2026-01-12"]) {
+            await armazenamento().gravarCompromisso(
+              DONO_UM,
+              compromissoDe("r1", data),
+            );
+          }
+
+          const naJanela = await armazenamento().listarCompromissos(
+            DONO_UM,
+            "2026-01-11",
+            "2026-01-12",
+          );
+
+          expect(naJanela.map((compromisso) => compromisso.data).sort()).toEqual([
+            "2026-01-11",
+            "2026-01-12",
+          ]);
+
+          expect(
+            await armazenamento().listarCompromissos(
+              DONO_UM,
+              "2026-01-13",
+              "2026-01-14",
+            ),
+          ).toEqual([]);
+        });
+      });
+
+      describe("Início", () => {
+        it("grava e lê o Início com Cartões na ordem e quantidade null ou número (FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+
+          const semQuantidade = inicioDe(
+            "i1",
+            "r1",
+            "2026-01-10",
+            [cartaoDe("c1"), cartaoDe("c2", "To read", "Ler")],
+            null,
+          );
+          const comQuantidade = inicioDe(
+            "i2",
+            "r1",
+            "2026-01-11",
+            [cartaoDe("c1")],
+            5,
+          );
+
+          expect(
+            await armazenamento().gravarInicio(DONO_UM, semQuantidade),
+          ).toEqual({ ok: true, valor: semQuantidade });
+          expect(await armazenamento().obterInicio(DONO_UM, "i1")).toEqual({
+            ok: true,
+            valor: semQuantidade,
+          });
+          expect(
+            await armazenamento().gravarInicio(DONO_UM, comQuantidade),
+          ).toEqual({ ok: true, valor: comQuantidade });
+          expect(await armazenamento().obterInicio(DONO_UM, "i2")).toEqual({
+            ok: true,
+            valor: comQuantidade,
+          });
+        });
+
+        it("reenvia o mesmo Início pelo mesmo dono e devolve o primeiro sem alterar (FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+
+          const primeiro = inicioDe(
+            "i1",
+            "r1",
+            "2026-01-10",
+            [cartaoDe("c1")],
+            null,
+          );
+          await armazenamento().gravarInicio(DONO_UM, primeiro);
+
+          const reenvio = inicioDe(
+            "i1",
+            "r1",
+            "2026-02-01",
+            [cartaoDe("c2", "To read", "Ler")],
+            5,
+            "2026-02-01T00:00:00.000Z",
+          );
+
+          expect(await armazenamento().gravarInicio(DONO_UM, reenvio)).toEqual({
+            ok: true,
+            valor: primeiro,
+          });
+          expect(await armazenamento().obterInicio(DONO_UM, "i1")).toEqual({
+            ok: true,
+            valor: primeiro,
+          });
+        });
+
+        it("recusa o mesmo Início vindo de outro dono como conflito (FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+          await armazenamento().inserirBaralho(
+            DONO_DOIS,
+            baralhoDe("b2", "Espanhol"),
+          );
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+          await armazenamento().gravarRotina(DONO_DOIS, {
+            operacaoId: "op-r2",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r2", "b2", 1, "Espanhol"),
+          });
+          await armazenamento().gravarInicio(
+            DONO_UM,
+            inicioDe("i1", "r1", "2026-01-10"),
+          );
+
+          expect(
+            await armazenamento().gravarInicio(
+              DONO_DOIS,
+              inicioDe(
+                "i1",
+                "r2",
+                "2026-01-10",
+                [cartaoDe("c1")],
+                null,
+                "2026-01-01T00:00:00.000Z",
+                "America/Sao_Paulo",
+                "b2",
+                "Espanhol",
+              ),
+            ),
+          ).toEqual({ ok: false, erro: "conflito" });
+
+          expect(await armazenamento().obterInicio(DONO_DOIS, "i1")).toEqual({
+            ok: false,
+            erro: "nao_encontrado",
+          });
+        });
+
+        it("recusa Início para Rotina de outro dono como nao_encontrado (FR-250)", async () => {
+          await armazenamento().inserirBaralho(
+            DONO_DOIS,
+            baralhoDe("b2", "Espanhol"),
+          );
+          await armazenamento().gravarRotina(DONO_DOIS, {
+            operacaoId: "op-r2",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r2", "b2", 1, "Espanhol"),
+          });
+
+          expect(
+            await armazenamento().gravarInicio(
+              DONO_UM,
+              inicioDe("i1", "r2", "2026-01-10"),
+            ),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+        });
+      });
+
+      describe("isolamento entre Usuários", () => {
+        it("não devolve Rotina, Compromisso nem Início de outro dono (FR-248, FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina: rotinaDe("r1", "b1"),
+          });
+          await armazenamento().gravarCompromisso(
+            DONO_UM,
+            compromissoDe("r1", "2026-01-10"),
+          );
+          await armazenamento().gravarInicio(
+            DONO_UM,
+            inicioDe("i1", "r1", "2026-01-10"),
+          );
+
+          expect(await armazenamento().obterRotina(DONO_DOIS, "r1")).toEqual({
+            ok: false,
+            erro: "nao_encontrado",
+          });
+          expect(await armazenamento().listarRotinas(DONO_DOIS)).toEqual([]);
+          expect(
+            await armazenamento().obterCompromisso(
+              DONO_DOIS,
+              "r1",
+              "2026-01-10",
+            ),
+          ).toEqual({ ok: false, erro: "nao_encontrado" });
+          expect(
+            await armazenamento().listarCompromissos(
+              DONO_DOIS,
+              "2026-01-01",
+              "2026-12-31",
+            ),
+          ).toEqual([]);
+          expect(await armazenamento().obterInicio(DONO_DOIS, "i1")).toEqual({
+            ok: false,
+            erro: "nao_encontrado",
+          });
+        });
+      });
+
+      describe("exclusão do Baralho", () => {
+        it("preserva a Rotina com baralhoId nulo e os Compromissos (FR-248, FR-250)", async () => {
+          await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+          const rotina = rotinaDe("r1", "b1");
+          await armazenamento().gravarRotina(DONO_UM, {
+            operacaoId: "op-r1",
+            intencao: "criar",
+            versaoEsperada: null,
+            rotina,
+          });
+
+          const compromisso = compromissoDe("r1", "2026-01-10");
+          await armazenamento().gravarCompromisso(DONO_UM, compromisso);
+
+          expect(await armazenamento().excluirBaralho(DONO_UM, "b1")).toEqual({
+            ok: true,
+            valor: undefined,
+          });
+
+          expect(await armazenamento().obterRotina(DONO_UM, "r1")).toEqual({
+            ok: true,
+            valor: { ...rotina, baralhoId: null },
+          });
+          expect(
+            await armazenamento().listarCompromissos(
+              DONO_UM,
+              "2026-01-01",
+              "2026-01-31",
+            ),
+          ).toEqual([compromisso]);
+          expect(
+            await armazenamento().obterCompromisso(DONO_UM, "r1", "2026-01-10"),
+          ).toEqual({ ok: true, valor: compromisso });
+        });
       });
     });
   });
