@@ -248,7 +248,13 @@ async function verificarGruposDoResumo(
     await expect(botaoErros).toHaveAttribute("aria-expanded", "true");
 
     for (const erro of erros) {
-      await expect(page.getByText(erro.frente, { exact: true })).toBeVisible();
+      const botaoDoCartao = page.getByRole("button", {
+        name: erro.frente,
+        exact: true,
+      });
+
+      await expect(botaoDoCartao).toBeVisible();
+      await botaoDoCartao.click();
       await expect(page.getByText(erro.verso, { exact: true })).toBeVisible();
     }
   }
@@ -259,7 +265,13 @@ async function verificarGruposDoResumo(
     await expect(botaoAcertos).toHaveAttribute("aria-expanded", "true");
 
     for (const acerto of acertos) {
-      await expect(page.getByText(acerto.frente, { exact: true })).toBeVisible();
+      const botaoDoCartao = page.getByRole("button", {
+        name: acerto.frente,
+        exact: true,
+      });
+
+      await expect(botaoDoCartao).toBeVisible();
+      await botaoDoCartao.click();
       await expect(page.getByText(acerto.verso, { exact: true })).toBeVisible();
     }
   }
@@ -306,24 +318,25 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
     );
 
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     const itens = await responderItens(page, ["acertou", "acertou", "errou"]);
 
     // O Resumo aparece com o percentual, o total e os grupos (FR-176).
     await expect(
-      page.getByRole("heading", { level: 1, name: "Resumo da Sessão" }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
-    await expect(page.getByText("67%", { exact: true })).toBeVisible();
-    await expect(page.getByText("de acertos")).toBeVisible();
-    await expect(page.getByText("2 de 3 Itens")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Placar da Sessão" }),
+    ).toContainText("67%");
+    await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
 
     await verificarGruposDoResumo(page, itens);
 
     // O Registro é confirmado no histórico (FR-161, FR-163, FR-164).
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     // Início reflete a Sessão concluída (FR-168 a FR-171, SC-072).
     await irParaInicio(page, credencial.nomeDeUsuario);
@@ -369,8 +382,9 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
     await linkDaSessao.click();
 
     await expect(
-      page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
+    await expect(page.getByText(NOME_DO_BARALHO)).toBeVisible();
     await expect(page.getByText("Baralho excluído")).toHaveCount(0);
 
     await verificarGruposDoResumo(page, itens);
@@ -399,8 +413,8 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 1, credencial);
     await responderItens(page, ["acertou"]);
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     await irParaInicio(page, credencial.nomeDeUsuario);
     await expect(
@@ -411,7 +425,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
 
     // Interromper uma Sessão em andamento (com confirmação) não registra.
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
 
@@ -437,7 +451,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
 
     // Recarregar no meio de outra Sessão também descarta, sem registrar.
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     await page.reload();
     await entrarSeNecessario(page, credencial);
@@ -445,7 +459,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     await expect(
       page.getByRole("heading", { level: 1, name: `Estudar ${NOME_DO_BARALHO}` }),
     ).toBeVisible();
-    await expect(page.getByText("Item 1 de 3")).toHaveCount(0);
+    await expect(page.getByText("Faltam 3 Cartões")).toHaveCount(0);
 
     await irParaInicio(page, credencial.nomeDeUsuario);
     await expect(
@@ -479,8 +493,8 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 1, credencial);
     const itens = await responderItens(page, ["acertou"]);
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     // Guarda o endereço do Registro a partir de Início.
     await irParaInicio(page, credencial.nomeDeUsuario);
@@ -547,8 +561,9 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
     await entrarSeNecessario(page, credencial);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
+    await expect(page.getByText(NOME_DO_BARALHO)).toBeVisible();
     await expect(page.getByText("Baralho excluído")).toBeVisible();
 
     await verificarGruposDoResumo(page, itens);
@@ -585,8 +600,8 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
     await iniciarSessaoPelaUi(paginaA, ambiente, baralho.id, 3, credencialA);
     await responderItens(paginaA, ["acertou", "acertou", "errou"]);
     await expect(
-      paginaA.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     await irParaInicio(paginaA, credencialA.nomeDeUsuario);
 
@@ -638,7 +653,7 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
     }, hrefDoRegistro);
 
     await expect(paginaB.getByText("Sessão não encontrada.")).toBeVisible();
-    await expect(paginaB.getByText("2 de 3 Itens")).toHaveCount(0);
+    await expect(paginaB.getByText("2 de 3 Cartões")).toHaveCount(0);
   } finally {
     await contextoA.close();
     await contextoB.close();
@@ -685,9 +700,9 @@ test("Falha ao registrar oferece nova tentativa e não duplica o Registro (FR-16
 
     // O Resumo continua visível e explica a falha, oferecendo nova tentativa.
     await expect(
-      page.getByRole("heading", { level: 1, name: "Resumo da Sessão" }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
-    await expect(page.getByText("2 de 3 Itens")).toBeVisible();
+    await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Tentar registrar novamente" }),
     ).toBeVisible();
@@ -697,8 +712,8 @@ test("Falha ao registrar oferece nova tentativa e não duplica o Registro (FR-16
       .getByRole("button", { name: "Tentar registrar novamente" })
       .click();
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     // Exatamente uma Sessão no Histórico — nada foi duplicado (SC-071).
     await irParaInicio(page, credencial.nomeDeUsuario);

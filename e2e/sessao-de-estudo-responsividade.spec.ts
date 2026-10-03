@@ -91,7 +91,7 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
   await page.getByLabel('Quantidade de Cartões').fill('2');
   await page.getByRole('button', { name: 'Iniciar Sessão' }).click();
 
-  await expect(page.getByText('Item 1 de 2')).toBeVisible();
+  await expect(page.getByText('Faltam 2 Cartões')).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Revelar verso' }),
   ).toBeVisible();
@@ -104,7 +104,7 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
   await page.getByRole('button', { name: 'Interromper' }).click();
   await expect(page.getByText('Interromper a Sessão?')).toBeVisible();
   await page.getByRole('button', { name: 'Cancelar' }).click();
-  await expect(page.getByText('Item 1 de 2')).toBeVisible();
+  await expect(page.getByText('Faltam 2 Cartões')).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
   await page.getByRole('button', { name: 'Revelar verso' }).click();
@@ -126,6 +126,6 @@ test('Sessão de estudo permanece utilizável e sem rolagem horizontal em telefo
 
   await page.getByRole('button', { name: /^Bom/ }).click();
 
-  await expect(page.getByText('Item 2 de 2')).toBeVisible();
+  await expect(page.getByText('Falta 1 Cartão')).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 });

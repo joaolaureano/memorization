@@ -119,7 +119,9 @@ describe("PaginaDoRegistro", () => {
       />,
     );
 
-    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
+    ).toBeTruthy();
     expect(screen.getByText("Inglês")).toBeTruthy();
     expect(screen.getByText(/2026/)).toBeTruthy();
     expect(
@@ -160,10 +162,10 @@ describe("PaginaDoRegistro", () => {
       />,
     );
 
-    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "Revisão do dia" }),
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeTruthy();
+    expect(screen.getByText("Revisão do dia")).toBeTruthy();
     // A ausência de Baralho é própria da Revisão, e não de um Baralho excluído:
     // nem selo, nem link quebrado (FR-215).
     expect(screen.queryByText("Baralho excluído")).toBeNull();
@@ -188,7 +190,9 @@ describe("PaginaDoRegistro", () => {
       />,
     );
 
-    expect(await screen.findByText("Sessão registrada")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
+    ).toBeTruthy();
     expect(
       screen.queryByRole("heading", { name: "Revisão do dia" }),
     ).toBeNull();

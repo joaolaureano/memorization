@@ -704,8 +704,9 @@ describe("Aplicacao depois de Entrar", () => {
     // O Registro é alcançado pelo id da Sessão, e traz o nome do Baralho como
     // era no momento da conclusão (FR-166, FR-177).
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
+      await screen.findByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Inglês")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ver baralho" })).toHaveAttribute(
       "href",
       `#/baralhos/${baralho.baralho.id}`,

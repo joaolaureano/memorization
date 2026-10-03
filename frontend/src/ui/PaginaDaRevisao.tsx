@@ -525,15 +525,12 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
   if (estado.concluida) {
     return (
       <div className="pilha">
-        <header className="cabecalho-da-pagina">
+        <header className="cabecalho-da-pagina resumo__cabecalho">
           <div>
-            <p className="sobretitulo">Sessão concluída</p>
+            <p className="sobretitulo">{NOME_DA_REVISAO}</p>
             <h1 ref={resumoRef} tabIndex={-1}>
-              Resumo da Sessão
+              Sessão concluída
             </h1>
-            {/* O nome do Baralho da Sessão — sempre "Revisão do dia" — é o
-                contexto que a página exibe junto do Resumo (FR-215). */}
-            <p className="texto-secundario">{NOME_DA_REVISAO}</p>
           </div>
         </header>
 
@@ -568,7 +565,7 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
               aria-label="Situação do registro da Sessão"
               className="aviso aviso--sucesso"
             >
-              Sessão registrada no seu histórico.{" "}
+              <span aria-hidden="true">✓</span> Registrada no seu histórico{" "}
               <a href="#/inicio">Ver em Início</a>
             </p>
           )}
@@ -590,7 +587,7 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
             </div>
           )}
 
-          <div className="acoes">
+          <div className="acoes resumo__acoes">
             <button
               className="botao botao--primario"
               type="button"
@@ -636,9 +633,6 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
 
       <header className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">
-            Item {estado.posicao} de {estado.total}
-          </p>
           <h1>{NOME_DA_REVISAO}</h1>
         </div>
       </header>
@@ -647,23 +641,14 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
 
-      <div>
-        <p className="texto-secundario">
-          {descricaoDeAndamento(estado.posicao, estado.total)}
-        </p>
-        <div className="progresso">
-          <progress
-            className="progresso__barra"
-            value={estado.posicao - 1}
-            max={estado.total}
-            aria-label="Progresso da Sessão"
-          />
-        </div>
-      </div>
+      <p className="texto-secundario">
+        {textoDoQueFalta(estado.posicao, estado.total)}
+      </p>
 
       {anuncio !== null && (
         <p
           key={sequenciaDeAnuncio}
+          className="visualmente-oculto"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -684,9 +669,6 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
 
         {!itemAtual.revelado ? (
           <>
-            <p className="texto-secundario">
-              O Verso está oculto. Tente lembrar antes de revelar.
-            </p>
             <div className="acoes">
               <button
                 className="botao botao--primario"
@@ -734,14 +716,14 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
   );
 }
 
-function descricaoDeAndamento(posicao: number, total: number): string {
-  const respondidos = posicao - 1;
-  const faltam = total - respondidos;
+/**
+ * O que ainda falta na Sessão (FR-150, SC-015): a partir da posição atual,
+ * conta os Cartões ainda não respondidos, incluindo o Item apresentado.
+ */
+function textoDoQueFalta(posicao: number, total: number): string {
+  const faltam = total - (posicao - 1);
 
-  return (
-    `${respondidos} ${respondidos === 1 ? "Item respondido" : "Itens respondidos"}; ` +
-    `${faltam} ${faltam === 1 ? "Item faltando" : "Itens faltando"}.`
-  );
+  return faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`;
 }
 
 /**

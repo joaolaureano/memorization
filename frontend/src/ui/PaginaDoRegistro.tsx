@@ -107,12 +107,14 @@ export function PaginaDoRegistro({
 
       {registro.estado === "pronta" ? (
         <>
-          <div className="cabecalho-da-pagina">
+          <header className="cabecalho-da-pagina resumo__cabecalho">
             <div>
-              <p className="sobretitulo">Sessão registrada</p>
-              <h1>{tituloDaSessao(registro.registro)}</h1>
+              <p className="sobretitulo">
+                {tituloDaSessao(registro.registro)}
+              </p>
+              <h1>Sessão concluída</h1>
             </div>
-          </div>
+          </header>
 
           <p className="texto-secundario">
             {instanteLocal(registro.registro.concluidaEm)}

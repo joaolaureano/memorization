@@ -32,6 +32,7 @@
   --muted: #b0b9cb;
   --success: #57dfa2;
   --danger: #ff9393;
+  --warning: #ffc76b;
   --accent: #8aa4ff;
   --on-accent: #0b1020;
   --radius: 16px;
@@ -380,6 +381,11 @@ summary:focus-visible {
 .botoes-de-resultado {
   display: flex;
   gap: 12px;
+  margin-top: 32px;
+}
+
+.cartao-de-estudo .acoes {
+  margin-top: 32px;
 }
 
 /* Os botões de resultado dividem a largura em partes iguais. */
@@ -642,6 +648,144 @@ progress {
  * número (o .pilha contribui com 20px entre blocos). */
 .percentual + .texto-secundario {
   margin-top: -12px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Placar da Sessão (FR-174, FR-216): número grande, barra segmentada e
+ * legenda de texto; os grupos de Erros e Acertos vêm logo abaixo.
+ * ------------------------------------------------------------------------- */
+
+.resumo__cabecalho {
+  text-align: center;
+}
+
+.placar {
+  padding: clamp(20px, 4vw, 40px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  text-align: center;
+  display: grid;
+  gap: 12px;
+}
+
+.placar__percentual {
+  font-size: clamp(48px, 10vw, 72px);
+  font-weight: 800;
+  line-height: 1;
+  margin: 0;
+}
+
+.placar__total {
+  color: var(--muted);
+  margin: 0;
+}
+
+.placar__barra {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--border);
+  gap: 2px;
+}
+
+.placar__segmento--errei {
+  background: var(--danger);
+}
+
+.placar__segmento--dificil {
+  background: var(--warning);
+}
+
+.placar__segmento--bom {
+  background: var(--success);
+}
+
+.placar__segmento--facil {
+  background: var(--accent);
+}
+
+.placar__legenda {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+}
+
+.placar__marca {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.placar__marca--errei {
+  background: var(--danger);
+}
+
+.placar__marca--dificil {
+  background: var(--warning);
+}
+
+.placar__marca--bom {
+  background: var(--success);
+}
+
+.placar__marca--facil {
+  background: var(--accent);
+}
+
+.resumo__grupo {
+  width: 100%;
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.resumo__cartoes {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.resumo__cartao {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.resumo__cartao:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.resumo__cartao[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.resumo__verso {
+  padding: 8px 16px 12px;
+}
+
+.resumo__nivel {
+  color: var(--muted);
+}
+
+.resumo__acoes {
+  justify-content: center;
 }
 
 /* ---------------------------------------------------------------------------

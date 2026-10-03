@@ -155,7 +155,7 @@ describe("PaginaDeEstudo por teclado", () => {
       name: "Frente",
     });
     expect(document.activeElement).toBe(primeiraFrente);
-    expect(screen.getByText("Item 1 de 2")).toBeInTheDocument();
+    expect(screen.getByText("Faltam 2 Cartões")).toBeInTheDocument();
 
     // Interromper e Revelar verso são os próximos controles na ordem de
     // tabulação.
@@ -204,7 +204,7 @@ describe("PaginaDeEstudo por teclado", () => {
       name: "Frente",
     });
     expect(document.activeElement).toBe(segundaFrente);
-    expect(screen.getByText("Item 2 de 2")).toBeInTheDocument();
+    expect(screen.getByText("Falta 1 Cartão")).toBeInTheDocument();
 
     apertarTab();
     expect(document.activeElement).toBe(
@@ -242,11 +242,11 @@ describe("PaginaDeEstudo por teclado", () => {
 
     // Ao concluir, o foco vai para o Resumo.
     const resumo = await screen.findByRole("heading", {
-      name: "Resumo da Sessão",
+      name: "Sessão concluída",
     });
     expect(document.activeElement).toBe(resumo);
     expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("2 de 2 Itens")).toBeInTheDocument();
+    expect(screen.getByText("2 de 2 Cartões")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Acertos (2)" }),
     ).toBeInTheDocument();

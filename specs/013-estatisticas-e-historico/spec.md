@@ -121,7 +121,7 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 
 **Resumo detalhado**
 
-- **FR-174**: O Resumo (da Sessão recém-concluída e de um registro aberto) MUST oferecer os botões "Acertos (n)" e "Erros (n)". Cada um expande e recolhe a lista dos Itens do grupo, com Frente e Verso, e expõe o estado por `aria-expanded`/`aria-controls`. Os botões são independentes, e ambos começam recolhidos.
+- **FR-174**: O Resumo (da Sessão recém-concluída e de um registro aberto) MUST oferecer os botões "Acertos (n)" e "Erros (n)". Cada um expande e recolhe a lista dos Itens do grupo, com Frente e Verso, e expõe o estado por `aria-expanded`/`aria-controls`. Os botões são independentes, e ambos começam recolhidos. *(Revisado em 2026-10-03 a pedido do Product Owner: o Resumo vira um placar — percentual em destaque, "x de y Cartões" e barra segmentada por nível de Avaliação com legenda em texto —; os botões "Erros (n)" e "Acertos (n)" abrem a lista dos Cartões do grupo mostrando **apenas a Frente** de cada um, e cada Cartão é um botão próprio (`aria-expanded`/`aria-controls`) que revela ou recolhe o seu Verso e o nível da Avaliação. O título da tela passa a ser "Sessão concluída", com o nome do Baralho — ou "Revisão do dia" — acima dele.)*
 - **FR-175**: Um grupo vazio MUST deixar o botão indisponível, com a explicação ("Nenhum acerto nesta Sessão" / "Nenhum erro nesta Sessão").
 - **FR-176**: O Resumo MUST apresentar o percentual (FR-152) e o total no texto ("2 de 3 Itens"). O ladrilho separado "Itens estudados" MUST ser removido.
 

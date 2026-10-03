@@ -297,7 +297,7 @@ describe("PaginaDaRevisao", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Bom/ }));
 
     expect(
-      await screen.findByRole("heading", { name: "Resumo da Sessão" }),
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeTruthy();
     expect(await screen.findByText("Revisão do dia")).toBeTruthy();
   });
@@ -367,7 +367,7 @@ describe("PaginaDaRevisao", () => {
 
     // A Sessão continua no mesmo Item, sem Resumo.
     expect(screen.getByText("Frente única")).toBeTruthy();
-    expect(screen.queryByText("Resumo da Sessão")).toBeNull();
+    expect(screen.queryByText("Sessão concluída")).toBeNull();
     expect(registrarSessao).not.toHaveBeenCalled();
   });
 

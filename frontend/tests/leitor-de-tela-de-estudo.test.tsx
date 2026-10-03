@@ -140,11 +140,11 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
     expect(anuncio).toHaveTextContent(/Sessão concluída\./);
     expect(
-      await screen.findByRole("heading", { name: "Resumo da Sessão" }),
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeInTheDocument();
     expect(screen.getByText("0%")).toBeInTheDocument();
     expect(screen.getByText("de acertos")).toBeInTheDocument();
-    expect(screen.getByText("0 de 1 Itens")).toBeInTheDocument();
+    expect(screen.getByText("0 de 1 Cartão")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Acertos (0)" }),
     ).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -203,7 +203,7 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("3");
 
-    expect(await screen.findByText("Item 1 de 3")).toBeInTheDocument();
+    expect(await screen.findByText("Faltam 3 Cartões")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Frente" })).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Verso" }),
@@ -213,7 +213,7 @@ describe("PaginaDeEstudo", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("informa a qualquer momento quantos Itens já foram respondidos e quantos faltam (SC-015)", async () => {
+  it("informa a qualquer momento quantos Cartões faltam (SC-015, FR-150)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(3);
     renderizar(cliente, idDoBaralho);
 
@@ -224,18 +224,32 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("3");
 
-    expect(await screen.findByText("Item 1 de 3")).toBeInTheDocument();
-    expect(
-      screen.getByText("0 Itens respondidos; 3 Itens faltando."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Faltam 3 Cartões")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
 
-    expect(await screen.findByText("Item 2 de 3")).toBeInTheDocument();
-    expect(
-      screen.getByText("1 Item respondido; 2 Itens faltando."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Faltam 2 Cartões")).toBeInTheDocument();
+  });
+
+  it("mantém o anúncio visualmente oculto e não renderiza barra de progresso (FR-150)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Estudar Inglês",
+    });
+
+    iniciarCom("2");
+    await screen.findByText("Faltam 2 Cartões");
+
+    const anuncio = screen.getByRole("status", {
+      name: "Mudança de estado da Sessão",
+    });
+
+    expect(anuncio).toHaveClass("visualmente-oculto");
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("solicitar mais que o disponível inicia com todos e avisa antes do primeiro Item (FR-029)", async () => {
@@ -249,7 +263,7 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("50");
 
-    expect(await screen.findByText("Item 1 de 5")).toBeInTheDocument();
+    expect(await screen.findByText("Faltam 5 Cartões")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Você pediu 50 Cartões, mas este Baralho tem 5. A Sessão terá 5 Itens.",
@@ -275,7 +289,7 @@ describe("PaginaDeEstudo", () => {
       expect(alerta).toHaveTextContent(MENSAGEM_DE_QUANTIDADE_INVALIDA);
       expect(screen.getByLabelText("Quantidade de Cartões")).toHaveFocus();
       expect(
-        screen.queryByText(/^Item \d+ de \d+$/),
+        screen.queryByText(/^(Falta 1 Cartão|Faltam \d+ Cartões)$/),
       ).not.toBeInTheDocument();
     },
   );
@@ -317,7 +331,7 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("2");
 
-    await screen.findByText("Item 1 de 2");
+    await screen.findByText("Faltam 2 Cartões");
 
     expect(screen.getByRole("heading", { name: "Frente" })).toBeInTheDocument();
     expect(
@@ -370,10 +384,13 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("2");
 
-    await screen.findByText("Item 1 de 2");
+    await screen.findByText("Faltam 2 Cartões");
 
     expect(
-      screen.getByText("O Verso está oculto. Tente lembrar antes de revelar."),
+      screen.queryByText("O Verso está oculto. Tente lembrar antes de revelar."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Revelar verso" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Errei/ }),
@@ -404,26 +421,26 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("3");
-    await screen.findByText("Item 1 de 3");
+    await screen.findByText("Faltam 3 Cartões");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
-    await screen.findByText("Item 2 de 3");
+    await screen.findByText("Faltam 2 Cartões");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
-    await screen.findByText("Item 3 de 3");
+    await screen.findByText("Falta 1 Cartão");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("errei");
 
     expect(
-      await screen.findByRole("heading", { name: "Resumo da Sessão" }),
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Sessão concluída")).toBeInTheDocument();
     expect(screen.getByText("67%")).toBeInTheDocument();
     expect(screen.getByText("de acertos")).toBeInTheDocument();
-    expect(screen.getByText("2 de 3 Itens")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3 Cartões")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Acertos (2)" }),
     ).toBeInTheDocument();
@@ -443,12 +460,12 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Item 1 de 1");
+    await screen.findByText("Falta 1 Cartão");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
 
-    await screen.findByRole("heading", { name: "Resumo da Sessão" });
+    await screen.findByRole("heading", { name: "Sessão concluída" });
 
     expect(
       screen.getByRole("link", { name: "Voltar para o Baralho" }),
@@ -482,15 +499,22 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Item 1 de 2");
+    await screen.findByText("Faltam 2 Cartões");
 
     const itensApresentados = [
       await responderItem("bom"),
       await responderItem("errei"),
     ];
 
+    await waitFor(() => {
+      expect(
+        screen.getByRole("status", {
+          name: "Situação do registro da Sessão",
+        }),
+      ).toHaveTextContent(/Registrada no seu histórico/);
+    });
     expect(
-      await screen.findByText("Sessão registrada no seu histórico."),
+      screen.getByRole("link", { name: "Ver em Início" }),
     ).toBeInTheDocument();
     expect(espiao).toHaveBeenCalledTimes(1);
     expect(espiao.mock.calls[0][0]).toEqual({
@@ -517,7 +541,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Item 1 de 2");
+    await screen.findByText("Faltam 2 Cartões");
 
     await responderItem("bom");
 
@@ -548,7 +572,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Item 1 de 1");
+    await screen.findByText("Falta 1 Cartão");
 
     await responderItem("bom");
 
@@ -562,8 +586,15 @@ describe("PaginaDeEstudo", () => {
       screen.getByRole("button", { name: "Tentar registrar novamente" }),
     );
 
+    await waitFor(() => {
+      expect(
+        screen.getByRole("status", {
+          name: "Situação do registro da Sessão",
+        }),
+      ).toHaveTextContent(/Registrada no seu histórico/);
+    });
     expect(
-      await screen.findByText("Sessão registrada no seu histórico."),
+      screen.getByRole("link", { name: "Ver em Início" }),
     ).toBeInTheDocument();
     expect(espiao).toHaveBeenCalledTimes(2);
     expect(espiao.mock.calls[1][0].id).toBe(espiao.mock.calls[0][0].id);
@@ -585,7 +616,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Item 1 de 1");
+    await screen.findByText("Falta 1 Cartão");
 
     await responderItem("bom");
     await screen.findByRole("alert");
@@ -634,7 +665,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Item 1 de 1");
+    await screen.findByText("Falta 1 Cartão");
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByRole("heading", { name: "Verso" });
@@ -672,7 +703,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Item 1 de 1");
+    await screen.findByText("Falta 1 Cartão");
 
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO),
@@ -687,7 +718,7 @@ describe("PaginaDeEstudo", () => {
     escolherAvaliacao("bom");
 
     expect(
-      await screen.findByRole("heading", { name: "Resumo da Sessão" }),
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeInTheDocument();
   });
 
@@ -701,11 +732,11 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Item 1 de 2");
+    await screen.findByText("Faltam 2 Cartões");
 
     // Antes da Revelação o atalho é ignorado: a Sessão não avança.
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "4" });
-    expect(screen.getByText("Item 1 de 2")).toBeInTheDocument();
+    expect(screen.getByText("Faltam 2 Cartões")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByRole("heading", { name: "Verso" });
@@ -713,6 +744,6 @@ describe("PaginaDeEstudo", () => {
     // 3 corresponde a Bom (FR-192, FR-218).
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "3" });
 
-    expect(await screen.findByText("Item 2 de 2")).toBeInTheDocument();
+    expect(await screen.findByText("Falta 1 Cartão")).toBeInTheDocument();
   });
 });

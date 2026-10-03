@@ -615,11 +615,11 @@ export function PaginaDeEstudo({
   if (estado.concluida) {
     return (
       <div className="pilha">
-        <header className="cabecalho-da-pagina">
+        <header className="cabecalho-da-pagina resumo__cabecalho">
           <div>
-            <p className="sobretitulo">Sessão concluída</p>
+            <p className="sobretitulo">{baralho.nome}</p>
             <h1 ref={resumoRef} tabIndex={-1}>
-              Resumo da Sessão
+              Sessão concluída
             </h1>
           </div>
         </header>
@@ -655,7 +655,7 @@ export function PaginaDeEstudo({
               aria-label="Situação do registro da Sessão"
               className="aviso aviso--sucesso"
             >
-              Sessão registrada no seu histórico.{" "}
+              <span aria-hidden="true">✓</span> Registrada no seu histórico{" "}
               <a href="#/inicio">Ver em Início</a>
             </p>
           )}
@@ -677,9 +677,16 @@ export function PaginaDeEstudo({
             </div>
           )}
 
-          <div className="acoes">
-            <a
+          <div className="acoes resumo__acoes">
+            <button
               className="botao botao--primario"
+              type="button"
+              onClick={estudarNovamente}
+            >
+              Estudar novamente
+            </button>
+            <a
+              className="botao botao--secundario"
               href={`#/baralhos/${id}`}
               onClick={(evento) => {
                 // Sair do Resumo é uma ação da própria página: sem proteção
@@ -691,13 +698,6 @@ export function PaginaDeEstudo({
             >
               Voltar para o Baralho
             </a>
-            <button
-              className="botao botao--secundario"
-              type="button"
-              onClick={estudarNovamente}
-            >
-              Estudar novamente
-            </button>
           </div>
         </ResumoDaSessao>
       </div>
@@ -718,9 +718,6 @@ export function PaginaDeEstudo({
 
       <header className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">
-            Item {estado.posicao} de {estado.total}
-          </p>
           <h1>Estudar {baralho.nome}</h1>
         </div>
       </header>
@@ -729,23 +726,14 @@ export function PaginaDeEstudo({
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
 
-      <div>
-        <p className="texto-secundario">
-          {descricaoDeAndamento(estado.posicao, estado.total)}
-        </p>
-        <div className="progresso">
-          <progress
-            className="progresso__barra"
-            value={estado.posicao - 1}
-            max={estado.total}
-            aria-label="Progresso da Sessão"
-          />
-        </div>
-      </div>
+      <p className="texto-secundario">
+        {textoDoQueFalta(estado.posicao, estado.total)}
+      </p>
 
       {anuncio !== null && (
         <p
           key={sequenciaDeAnuncio}
+          className="visualmente-oculto"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -766,9 +754,6 @@ export function PaginaDeEstudo({
 
         {!estado.itemAtual.revelado ? (
           <>
-            <p className="texto-secundario">
-              O Verso está oculto. Tente lembrar antes de revelar.
-            </p>
             <div className="acoes">
               <button
                 className="botao botao--primario"
@@ -815,14 +800,14 @@ export function PaginaDeEstudo({
   );
 }
 
-function descricaoDeAndamento(posicao: number, total: number): string {
-  const respondidos = posicao - 1;
-  const faltam = total - respondidos;
+/**
+ * O que ainda falta na Sessão (FR-150, SC-015): a partir da posição atual,
+ * conta os Cartões ainda não respondidos, incluindo o Item apresentado.
+ */
+function textoDoQueFalta(posicao: number, total: number): string {
+  const faltam = total - (posicao - 1);
 
-  return (
-    `${respondidos} ${respondidos === 1 ? "Item respondido" : "Itens respondidos"}; ` +
-    `${faltam} ${faltam === 1 ? "Item faltando" : "Itens faltando"}.`
-  );
+  return faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`;
 }
 
 /**

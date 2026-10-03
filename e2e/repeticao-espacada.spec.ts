@@ -514,13 +514,18 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
         .first(),
     ).toBeVisible();
     await iniciarRevisaoSeHouverBotao(page);
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     const conteudos = page.locator(".cartao-de-estudo .conteudo-do-cartao");
     const avaliacoesDaSessao: Avaliacao[] = ["errei", "bom", "facil"];
 
     for (let indice = 0; indice < CARTOES.length; indice += 1) {
-      await expect(page.getByText(`Item ${indice + 1} de 3`)).toBeVisible();
+      const faltam = CARTOES.length - indice;
+      await expect(
+        page.getByText(
+          faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`,
+        ),
+      ).toBeVisible();
 
       const frente = (await conteudos.first().textContent())?.trim();
 
@@ -535,7 +540,7 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
 
     // O Resumo nomeia "Revisão do dia" e conta por nível (FR-215, FR-216).
     await expect(
-      page.getByRole("heading", { level: 1, name: "Resumo da Sessão" }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
     await expect(
       page
@@ -543,12 +548,14 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
         .getByText("Revisão do dia", { exact: false })
         .first(),
     ).toBeVisible();
-    await expect(page.getByText("67%", { exact: true })).toBeVisible();
-    await expect(page.getByText("2 de 3 Itens")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Placar da Sessão" }),
+    ).toContainText("67%");
+    await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
     await conferirContagensPorNivel(page, { Errei: 1, Bom: 1, Fácil: 1 });
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     // De volta a Início, os Cartões estudados deixaram de ser novos
     // (FR-205, FR-206, SC-080).
@@ -601,7 +608,7 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
     await iniciarSessaoLivre(page, 1);
 
-    await expect(page.getByText("Item 1 de 1")).toBeVisible();
+    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
 
     // Nenhum botão de Avaliação antes da Revelação (FR-193).
     await expect(
@@ -615,7 +622,7 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
     await avaliar(page, "bom");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Resumo da Sessão" }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
     await conferirContagensPorNivel(page, { Bom: 1 });
 
@@ -623,8 +630,8 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
     // ainda pendente, a navegação abriria a confirmação "Sair sem registrar a
     // Sessão?" (FR-163, FR-164).
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     // A Avaliação do estudo livre alimentou o Agendamento do Cartão, que deixou
     // de ser novo hoje (FR-205, FR-206, SC-080).
@@ -702,8 +709,8 @@ test("Agendamentos, vencidos e novos são isolados por Usuário (FR-219, SC-086)
     // envio pendente, "Voltar a Início" abriria "Sair sem registrar a Sessão?"
     // (FR-163, FR-164).
     await expect(
-      paginaA.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
 
     await irParaInicio(paginaA, credencialA.nomeDeUsuario);
     await expect(
@@ -743,18 +750,18 @@ test("Atalho de teclado 3 avalia Bom após a Revelação (FR-192, FR-193, FR-218
 
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
     await iniciarSessaoLivre(page, 1);
-    await expect(page.getByText("Item 1 de 1")).toBeVisible();
+    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
 
     // Antes da Revelação, o atalho não avalia nada (FR-193, FR-218).
     await page.keyboard.press("3");
-    await expect(page.getByText("Item 1 de 1")).toBeVisible();
+    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
 
     await revelarVerso(page);
     await page.keyboard.press("3");
 
     // A Sessão conclui e o Resumo registra um "Bom" (FR-218).
     await expect(
-      page.getByRole("heading", { level: 1, name: "Resumo da Sessão" }),
+      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible();
     await conferirContagensPorNivel(page, { Bom: 1 });
   } finally {

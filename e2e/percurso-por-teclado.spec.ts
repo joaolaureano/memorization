@@ -271,7 +271,7 @@ async function percursoPorTeclado(
     page,
     page.getByRole("button", { name: "Iniciar Sessão", exact: true }),
   );
-  await expect(page.getByText("Item 1 de 1")).toBeVisible();
+  await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
 
   // Revelar verso e avaliar o único Item como "Bom" — o nível que substituiu o
   // antigo Acerto (FR-193, SC-088).
@@ -288,7 +288,7 @@ async function percursoPorTeclado(
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "Resumo da Sessão",
+      name: "Sessão concluída",
       exact: true,
     }),
   ).toBeVisible();
@@ -298,7 +298,7 @@ async function percursoPorTeclado(
   // Resumo confirma o Registro com o caminho para revê-lo em Início.
   await expect(
     page.getByRole("status", { name: "Situação do registro da Sessão" }),
-  ).toHaveText(/Sessão registrada no seu histórico\./);
+  ).toContainText(/Registrada no seu histórico/);
   await expect(linkExato(page, "Ver em Início")).toBeVisible();
 
   // Preferências, pela navegação Principal: o quarto destino da Moldura

@@ -278,7 +278,7 @@ test("Limite de 1 novo por dia restringe Início e a Revisão do dia (FR-200, SC
     await expect(page.getByText("1 Cartão novo entra hoje")).toBeVisible();
 
     await iniciarRevisaoPelaUi(page, ambiente, credencial);
-    await expect(page.getByText("Item 1 de 1")).toBeVisible();
+    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
   } finally {
     await derrubarAmbiente(ambiente);
   }

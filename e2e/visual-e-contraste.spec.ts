@@ -534,7 +534,7 @@ async function visitarAsTelas(
   // Sessão com o Verso revelado: um único Item basta para chegar ao Resumo.
   await pagina.getByLabel("Quantidade de Cartões").fill("1");
   await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
-  await expect(pagina.getByText("Item 1 de 1")).toBeVisible({
+  await expect(pagina.getByText("Falta 1 Cartão")).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
@@ -546,7 +546,7 @@ async function visitarAsTelas(
   // Resumo: "Bom" encerra a Sessão e apresenta o balanço (FR-193, SC-088).
   await pagina.getByRole("button", { name: /^Bom/ }).click();
   await expect(
-    pagina.getByRole("heading", { name: "Resumo da Sessão" }),
+    pagina.getByRole("heading", { name: "Sessão concluída" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
   await conferirTela(pagina, cenario, "Resumo da Sessão");
 
@@ -554,8 +554,8 @@ async function visitarAsTelas(
   // sair garante que o Início já conta com ela (FR-168) e que deixar o Resumo
   // não dispara "Sair sem registrar a Sessão?" (SC-076).
   await expect(
-    pagina.getByText("Sessão registrada no seu histórico."),
-  ).toBeVisible({ timeout: ESPERA_DA_TELA });
+    pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
+  ).toContainText(/Registrada no seu histórico/, { timeout: ESPERA_DA_TELA });
 
   // Segunda Sessão, agora com um acerto e um erro: é ela que sustenta o
   // Registro com os dois grupos de Itens preenchidos (FR-176, FR-178).
@@ -571,24 +571,24 @@ async function visitarAsTelas(
   );
   await pagina.getByLabel("Quantidade de Cartões").fill("2");
   await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
-  await expect(pagina.getByText("Item 1 de 2")).toBeVisible({
+  await expect(pagina.getByText("Faltam 2 Cartões")).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
   await pagina.getByRole("button", { name: /^Bom/ }).click();
-  await expect(pagina.getByText("Item 2 de 2")).toBeVisible({
+  await expect(pagina.getByText("Falta 1 Cartão")).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
   await pagina.getByRole("button", { name: /^Errei/ }).click();
   await expect(
-    pagina.getByRole("heading", { name: "Resumo da Sessão" }),
+    pagina.getByRole("heading", { name: "Sessão concluída" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
   await conferirTela(pagina, cenario, "Resumo da Sessão (acerto e erro)");
 
   await expect(
-    pagina.getByText("Sessão registrada no seu histórico."),
-  ).toBeVisible({ timeout: ESPERA_DA_TELA });
+    pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
+  ).toContainText(/Registrada no seu histórico/, { timeout: ESPERA_DA_TELA });
 
   // Início com registros: o gráfico de sete dias e as Sessões recentes saem do
   // histórico recém-alimentado (FR-164, FR-165, FR-171).
@@ -620,14 +620,14 @@ async function visitarAsTelas(
     `${cenario.rotulo}: a lista "Últimas Sessões" não trouxe um link para o Registro`,
   ).not.toBeNull();
 
-  // O Registro é alcançado pelo id do registro, e o `h1` da Tela é o nome do
-  // Baralho como ele era na conclusão (FR-177). Um id ausente — de outro
-  // Usuário, por exemplo — mostraria "Sessão não encontrada.", e não o `h1`.
-  await irParaTela(
-    pagina,
-    hrefDoRegistro ?? "#/inicio",
-    NOME_DO_BARALHO_COM_CARTOES,
-  );
+  // O Registro é alcançado pelo id do registro, e o `h1` da Tela é "Sessão
+  // concluída", com o nome do Baralho como ele era na conclusão no parágrafo
+  // acima (FR-177). Um id ausente — de outro Usuário, por exemplo — mostraria
+  // "Sessão não encontrada.", e não o `h1`.
+  await irParaTela(pagina, hrefDoRegistro ?? "#/inicio", "Sessão concluída");
+  await expect(
+    pagina.getByText(NOME_DO_BARALHO_COM_CARTOES),
+  ).toBeVisible({ timeout: ESPERA_DA_TELA });
 
   const botaoDeAcertos = pagina.getByRole("button", { name: /^Acertos \(/ });
   const botaoDeErros = pagina.getByRole("button", { name: /^Erros \(/ });

@@ -76,6 +76,18 @@ function listaDo(botao: HTMLElement): HTMLElement {
   return lista;
 }
 
+/** O painel que o botão de um Cartão controla por `aria-controls`. */
+function painelDoCartao(botao: HTMLElement): HTMLElement {
+  const id = botao.getAttribute("aria-controls");
+  const painel = id === null ? null : document.getElementById(id);
+
+  if (painel === null) {
+    throw new Error("o painel controlado pelo botão deveria estar no documento");
+  }
+
+  return painel;
+}
+
 /** Aciona o botão como um navegador: Enter dispara o clique padrão do botão. */
 function acionarPorTeclado(botao: HTMLElement): void {
   botao.focus();
@@ -89,21 +101,21 @@ describe("ResumoDaSessao", () => {
 
     expect(screen.getByText("67%")).toBeInTheDocument();
     expect(screen.getByText("de acertos")).toBeInTheDocument();
-    expect(screen.getByText("2 de 3 Itens")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3 Cartões")).toBeInTheDocument();
   });
 
   it("mostra 100% quando todos os Itens foram acertados (SC-073)", () => {
     renderizar(itensCom(1, 1));
 
     expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("1 de 1 Itens")).toBeInTheDocument();
+    expect(screen.getByText("1 de 1 Cartão")).toBeInTheDocument();
   });
 
   it("mostra 0% quando nenhum Item foi acertado (SC-073)", () => {
     renderizar(itensCom(0, 1));
 
     expect(screen.getByText("0%")).toBeInTheDocument();
-    expect(screen.getByText("0 de 1 Itens")).toBeInTheDocument();
+    expect(screen.getByText("0 de 1 Cartão")).toBeInTheDocument();
   });
 
   it("apresenta as contagens nos rótulos e nasce com os grupos recolhidos (FR-175)", () => {
@@ -163,21 +175,43 @@ describe("ResumoDaSessao", () => {
     fireEvent.click(botaoDeErros);
 
     const acertos = listaDo(botaoDeAcertos);
+    const botaoFrenteA = within(acertos).getByRole("button", {
+      name: "Frente A",
+    });
+    const botaoFrenteC = within(acertos).getByRole("button", {
+      name: "Frente C",
+    });
 
-    expect(within(acertos).getByText("Frente A")).toBeInTheDocument();
-    expect(within(acertos).getByText("Verso A")).toBeInTheDocument();
-    expect(within(acertos).getByText("Frente C")).toBeInTheDocument();
-    expect(within(acertos).getByText("Verso C")).toBeInTheDocument();
-    expect(within(acertos).queryByText("Frente B")).not.toBeInTheDocument();
-    expect(within(acertos).getAllByText("Frente")).toHaveLength(2);
-    expect(within(acertos).getAllByText("Verso")).toHaveLength(2);
+    expect(botaoFrenteA).toBeInTheDocument();
+    expect(botaoFrenteC).toBeInTheDocument();
+    expect(
+      within(acertos).queryByRole("button", { name: "Frente B" }),
+    ).not.toBeInTheDocument();
+    expect(painelDoCartao(botaoFrenteA)).toHaveAttribute("hidden");
+    expect(painelDoCartao(botaoFrenteC)).toHaveAttribute("hidden");
+
+    fireEvent.click(botaoFrenteA);
+    fireEvent.click(botaoFrenteC);
+
+    expect(painelDoCartao(botaoFrenteA)).not.toHaveAttribute("hidden");
+    expect(painelDoCartao(botaoFrenteA)).toHaveTextContent("Verso A");
+    expect(painelDoCartao(botaoFrenteC)).not.toHaveAttribute("hidden");
+    expect(painelDoCartao(botaoFrenteC)).toHaveTextContent("Verso C");
 
     const erros = listaDo(botaoDeErros);
+    const botaoFrenteB = within(erros).getByRole("button", {
+      name: "Frente B",
+    });
 
-    expect(within(erros).getByText("Frente B")).toBeInTheDocument();
-    expect(within(erros).getByText("Verso B")).toBeInTheDocument();
-    expect(within(erros).queryByText("Frente A")).not.toBeInTheDocument();
-    expect(within(erros).getAllByText("Frente")).toHaveLength(1);
+    expect(botaoFrenteB).toBeInTheDocument();
+    expect(
+      within(erros).queryByRole("button", { name: "Frente A" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(botaoFrenteB);
+
+    expect(painelDoCartao(botaoFrenteB)).not.toHaveAttribute("hidden");
+    expect(painelDoCartao(botaoFrenteB)).toHaveTextContent("Verso B");
   });
 
   it("mantém a ordem apresentada dentro de cada grupo (FR-176)", () => {
@@ -186,9 +220,9 @@ describe("ResumoDaSessao", () => {
     const botaoDeAcertos = screen.getByRole("button", { name: "Acertos (2)" });
     fireEvent.click(botaoDeAcertos);
 
-    const frentes = within(listaDo(botaoDeAcertos)).getAllByText(
-      /^Frente [AC]$/,
-    );
+    const frentes = within(listaDo(botaoDeAcertos)).getAllByRole("button", {
+      name: /^Frente [AC]$/,
+    });
 
     expect(frentes.map((elemento) => elemento.textContent)).toEqual([
       "Frente A",
@@ -270,7 +304,7 @@ describe("ResumoDaSessao", () => {
     });
     const niveis = within(lista).getAllByRole("listitem");
 
-    expect(niveis.map((nivel) => nivel.textContent)).toEqual([
+    expect(niveis.map((nivel) => nivel.textContent?.trim())).toEqual([
       "Errei 1",
       "Difícil 0",
       "Bom 2",
@@ -302,14 +336,14 @@ describe("ResumoDaSessao", () => {
       { frente: "Frente B", verso: "Verso B", resultado: "acertou" },
     ]);
 
-    expect(screen.queryByText("Errei 1")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Errei 1/)).not.toBeInTheDocument();
   });
 
   it("mantém percentual, contagens e grupos com a contagem por nível presente (FR-197)", () => {
     renderizar(ITENS_COM_AVALIACAO);
 
     expect(screen.getByText("67%")).toBeInTheDocument();
-    expect(screen.getByText("2 de 3 Itens")).toBeInTheDocument();
+    expect(screen.getByText("2 de 3 Cartões")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Acertos (2)" }),
     ).toBeInTheDocument();
@@ -323,5 +357,43 @@ describe("ResumoDaSessao", () => {
 
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.queryByText("Revisão do dia")).not.toBeInTheDocument();
+  });
+
+  it("mostra só a Frente até o Cartão ser acionado e alterna o Verso (FR-176)", () => {
+    renderizar(ITENS_DE_PROVA);
+
+    const botaoDeAcertos = screen.getByRole("button", { name: "Acertos (2)" });
+    fireEvent.click(botaoDeAcertos);
+
+    const acertos = listaDo(botaoDeAcertos);
+    const cartaoA = within(acertos).getByRole("button", { name: "Frente A" });
+    const painelA = painelDoCartao(cartaoA);
+
+    expect(cartaoA).toHaveAttribute("aria-expanded", "false");
+    expect(painelA).toHaveAttribute("hidden");
+
+    fireEvent.click(cartaoA);
+
+    expect(cartaoA).toHaveAttribute("aria-expanded", "true");
+    expect(painelA).not.toHaveAttribute("hidden");
+    expect(painelA).toHaveTextContent("Verso");
+    expect(painelA).toHaveTextContent("Verso A");
+
+    fireEvent.click(cartaoA);
+
+    expect(cartaoA).toHaveAttribute("aria-expanded", "false");
+    expect(painelA).toHaveAttribute("hidden");
+  });
+
+  it("apresenta Erros antes de Acertos na ordem do documento (FR-174)", () => {
+    renderizar(ITENS_DE_PROVA);
+
+    const botaoDeErros = screen.getByRole("button", { name: "Erros (1)" });
+    const botaoDeAcertos = screen.getByRole("button", { name: "Acertos (2)" });
+
+    expect(
+      botaoDeErros.compareDocumentPosition(botaoDeAcertos) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

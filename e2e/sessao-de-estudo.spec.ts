@@ -116,7 +116,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("50");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Item 1 de 5")).toBeVisible();
+    await expect(page.getByText("Faltam 5 Cartões")).toBeVisible();
     await expect(
       page.getByText(
         "Você pediu 50 Cartões, mas este Baralho tem 5. A Sessão terá 5 Itens.",
@@ -136,7 +136,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await dialogoDeInterrupcao
       .getByRole("button", { name: "Cancelar" })
       .click();
-    await expect(page.getByText("Item 1 de 5")).toBeVisible();
+    await expect(page.getByText("Faltam 5 Cartões")).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
     await dialogoDeInterrupcao
@@ -156,7 +156,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("3");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     // Dois acertos e um erro, para que o Resumo tenha soma coerente (SC-004).
     for (let item = 1; item <= 3; item += 1) {
@@ -183,14 +183,16 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     }
 
     await expect(
-      page.getByRole("heading", { name: "Resumo da Sessão" }),
+      page.getByRole("heading", { name: "Sessão concluída" }),
     ).toBeVisible();
     await expect(page.getByText(/6[67]%/)).toBeVisible();
-    await expect(page.getByText("de acertos")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Placar da Sessão" }),
+    ).toContainText("de acertos");
     // SC-004: o Resumo deriva tudo dos mesmos três Itens apresentados — dois
     // acertos e um erro —, e a tela os apresenta na contagem e nos botões dos
     // grupos (FR-174, FR-176).
-    await expect(page.getByText("2 de 3 Itens")).toBeVisible();
+    await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Acertos (2)" }),
     ).toBeVisible();
@@ -201,8 +203,8 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     // FR-161, FR-163: a Sessão concluída é registrada no histórico assim que
     // o Resumo aparece, e a própria tela confirma o Registro confirmado.
     await expect(
-      page.getByText("Sessão registrada no seu histórico."),
-    ).toBeVisible();
+      page.getByRole("status", { name: "Situação do registro da Sessão" }),
+    ).toContainText(/Registrada no seu histórico/);
     await expect(
       page.getByRole("link", { name: "Ver em Início" }),
     ).toBeVisible();
@@ -218,7 +220,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("3");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Item 1 de 3")).toBeVisible();
+    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
 
     await page.reload();
 
@@ -231,9 +233,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
     ).toBeVisible();
     await expect(page.getByLabel("Quantidade de Cartões")).toBeVisible();
-    await expect(page.getByText("Item 1 de 3")).toHaveCount(0);
+    await expect(page.getByText("Faltam 3 Cartões")).toHaveCount(0);
     await expect(
-      page.getByRole("heading", { name: "Resumo da Sessão" }),
+      page.getByRole("heading", { name: "Sessão concluída" }),
     ).toHaveCount(0);
   } finally {
     // Encerrar sempre, mesmo quando a prova falha no meio, e remover o
