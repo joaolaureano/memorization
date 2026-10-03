@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type { CartaoListado, ClienteDoAcervo } from "../acervo-cliente/cliente";
@@ -156,7 +156,14 @@ export function PaginaDoFormularioDeCartao({
     };
   }, [cliente, id, emEdicao]);
 
-  useEffect(() => {
+  // `useLayoutEffect`, e não `useEffect`: o foco precisa ser movido na mesma
+  // tarefa da mutação do DOM. Um `useEffect` só corre depois da pintura, e o
+  // intervalo entre a montagem do formulário e a pintura seguinte deixa o
+  // foco no `<body>` — quem observa o DOM logo após o commit (leitor de tela,
+  // teste) vê o foco perdido antes de ele chegar ao campo (ordem de foco da
+  // WCAG; nenhum foco transitório no `<body>`). `PaginaDoBaralho.tsx` usa o
+  // mesmo recurso para o foco após remoção.
+  useLayoutEffect(() => {
     if (emEdicao && !carregando && !naoEncontrado) {
       campoDeFrente.current?.focus();
     }

@@ -21,4 +21,4 @@
 
 - [X] T1210 `Aplicacao`: rotas `inicio`/`registro`; testes que esperavam Baralhos depois de Entrar passam a esperar Início
 - [X] T1211 [P] e2e: specs que esperavam Baralhos depois de Entrar; nova `e2e/estatisticas-e-historico.spec.ts` (SC-071..075); `visual-e-contraste` e `percurso-por-teclado` cobrindo Início e Registro
-- [ ] T1212 Converge: capturas, revisão e relatório ao PO
+- [X] T1212 Converge: capturas, revisão e relatório ao PO

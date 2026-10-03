@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type { BaralhoComCartoes, ClienteDoAcervo } from "../acervo-cliente/cliente";
@@ -143,7 +143,15 @@ export function PaginaDeEstudo({
     };
   }, [cliente, id]);
 
-  useEffect(() => {
+  // Movimentação de foco que reage a uma mudança de fase precisa ser um efeito
+  // de layout: `useEffect` roda depois da pintura, então por um instante o foco
+  // ficaria no `<body>` (o botão acionado foi desabilitado/removido) e quem
+  // observa o DOM logo após o commit — leitor de tela ou teste — enxergaria o
+  // foco perdido. `useLayoutEffect` roda de forma síncrona imediatamente após a
+  // mutação do DOM e antes da pintura, sem foco transitório no `<body>`,
+  // preservando a ordem de foco esperada (WCAG 2.4.3); é o mesmo padrão de
+  // `PaginaDoBaralho.tsx` para o foco após remoção.
+  useLayoutEffect(() => {
     if (alvoDeFoco.current === null) {
       return;
     }

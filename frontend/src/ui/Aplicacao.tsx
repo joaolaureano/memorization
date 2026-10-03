@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { ClienteDoAcervo, Credencial } from "../acervo-cliente/cliente";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
@@ -185,7 +185,14 @@ function CascaDaAplicacao({
     protegerAcao(aoSair);
   }, [protegerAcao, aoSair]);
 
-  useEffect(() => {
+  // Layout effect, e não effect: a troca de rota desabilita ou remove o
+  // controle que foi ativado, e mover o foco só depois da pintura deixa o foco
+  // cair em <body> por um instante — quem observa o DOM logo após o commit
+  // (leitor de tela, teste) vê o foco perdido. Rodando de forma síncrona ao
+  // commit, o foco já está no título do destino antes de qualquer pintura, sem
+  // foco transitório no <body> (WCAG 2.4.3, ordem de foco previsível). É o
+  // mesmo padrão de foco pós-remoção usado em `PaginaDoBaralho.tsx`.
+  useLayoutEffect(() => {
     // Na montagem o foco permanece onde o navegador o colocou; a partir da
     // primeira mudança de rota, ele passa ao título da tela de destino.
     if (rotaAnterior.current === rota) {

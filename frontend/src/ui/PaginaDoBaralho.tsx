@@ -162,7 +162,14 @@ export function PaginaDoBaralho({
     setFocoAposRemocao(null);
   }, [focoAposRemocao, baralho]);
 
-  useEffect(() => {
+  // FR-064, WCAG 2.4.3 (ordem de foco): mover o foco é uma reação a uma
+  // mudança de estado, então precisa ser um layout effect. `useEffect` roda
+  // depois da pintura, e nesse intervalo o foco fica transitoriamente em
+  // `<body>` — um leitor de tela, ou um teste que observa o DOM logo após o
+  // commit, enxerga o foco perdido. `useLayoutEffect` roda de forma síncrona
+  // logo após a mutação do DOM, sem foco transitório em `<body>`, como já
+  // acontece no efeito pós-remoção acima.
+  useLayoutEffect(() => {
     if (!focoAposExclusao) {
       return;
     }

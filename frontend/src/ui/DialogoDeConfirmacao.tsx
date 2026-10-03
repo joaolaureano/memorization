@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useId, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 
 /**
@@ -16,6 +16,21 @@ import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
  * Escape cancela pelo `onKeyDown`; o clique no pano de fundo também cancela.
  * O diálogo é nomeado por `aria-labelledby` (título) e descrito por
  * `aria-describedby` (consequência).
+ *
+ * O efeito é um *layout effect* (`useLayoutEffect`) porque gerencia foco em
+ * reação a uma mudança de estado: ele roda de forma síncrona logo após a
+ * mutação do DOM e antes da pintura, enquanto um efeito passivo roda depois da
+ * pintura. Com um efeito passivo, entre o commit e a execução do efeito o foco
+ * ficava momentaneamente em `<body>` (o botão antes focado havia sido
+ * desabilitado/removido) e qualquer observador do DOM logo após o commit — um
+ * leitor de tela ou um teste — via o foco perdido. O layout effect preserva a
+ * ordem de foco da WCAG, sem foco transitório no `<body>`.
+ *
+ * Há ainda um motivo de ordenação: a página que fecha o diálogo reposiciona o
+ * foco em seu próprio layout effect. Layout effects de filhos rodam antes dos
+ * do pai, então o diálogo já está fechado (e seu estado `inert` suspenso)
+ * quando a página move o foco. Com um efeito passivo, a página focava primeiro
+ * e o `close()` posterior enviava o foco para o `<body>`.
  */
 
 interface PropriedadesDoDialogoDeConfirmacao {
@@ -45,7 +60,7 @@ export function DialogoDeConfirmacao({
   const dialogo = useRef<HTMLDialogElement>(null);
   const botaoDeCancelamento = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const elemento = dialogo.current;
 
     if (elemento === null) {

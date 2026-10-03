@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { CartaoListado, ClienteDoAcervo } from "../acervo-cliente/cliente";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
@@ -42,6 +42,18 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   const [anuncio, setAnuncio] = useState<string | null>(null);
   const [sequenciaDeAnuncio, setSequenciaDeAnuncio] = useState(0);
 
+  /**
+   * Alvo do foco a aplicar depois que o diálogo de exclusão fechar (FR-159).
+   *
+   * Enquanto o modal está aberto, o conteúdo fora dele é inerte e um `focus()`
+   * síncrono seria ignorado; ao fechar, o navegador tentaria restaurar o foco
+   * no botão "Excluir" que saiu da árvore, deixando-o em `<body>`. Por isso o
+   * alvo desejado é registrado aqui e consumido só quando o diálogo já fechou.
+   */
+  const [focoAposExclusao, setFocoAposExclusao] = useState<
+    { alvo: "titulo" } | { alvo: "botao"; cartaoId: string } | null
+  >(null);
+
   const tituloDaLista = useRef<HTMLHeadingElement>(null);
   const botoesDeEdicao = useRef(new Map<string, HTMLAnchorElement>());
   const botoesDeExclusao = useRef(new Map<string, HTMLButtonElement>());
@@ -67,6 +79,29 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
       ativo = false;
     };
   }, [cliente]);
+
+  /**
+   * Devolve o foco depois que o diálogo de exclusão fecha (FR-159).
+   *
+   * Enquanto o modal está aberto o restante da página é inerte, então mover o
+   * foco nesse instante seria ignorado; ao fechar, o navegador tentaria
+   * restaurá-lo no botão "Excluir" já removido, deixando-o em `<body>`. Aplicar
+   * o alvo registrado aqui — com o diálogo já fechado — garante que o foco
+   * volte a um lugar significativo, nunca ao `<body>`.
+   */
+  useLayoutEffect(() => {
+    if (cartaoParaExcluir !== null || focoAposExclusao === null) {
+      return;
+    }
+
+    if (focoAposExclusao.alvo === "titulo") {
+      tituloDaLista.current?.focus();
+    } else {
+      botoesDeExclusao.current.get(focoAposExclusao.cartaoId)?.focus();
+    }
+
+    setFocoAposExclusao(null);
+  }, [cartaoParaExcluir, focoAposExclusao]);
 
   /**
    * Relê a lista pela Interface (FR-044, FR-153).
@@ -101,8 +136,10 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
 
     const cartaoId = cartaoParaExcluir.id;
 
+    // FR-159: com o diálogo aberto o foco não pode ser movido (conteúdo
+    // inerte); registra o alvo para o fechamento devolver o foco ao botão.
+    setFocoAposExclusao({ alvo: "botao", cartaoId });
     setCartaoParaExcluir(null);
-    botoesDeExclusao.current.get(cartaoId)?.focus();
   }
 
   async function confirmarExclusao(): Promise<void> {
@@ -121,16 +158,20 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
       // FR-044: a remoção só sai da lista depois que o servidor confirmou a
       // exclusão. A lista é relida para refletir o acervo autoritativo.
       setCartoes((atuais) => atuais.filter((item) => item.id !== cartao.id));
+      // FR-159: com o diálogo ainda aberto o foco seria ignorado; registra o
+      // alvo para o fechamento devolvê-lo ao título da lista.
+      setFocoAposExclusao({ alvo: "titulo" });
       setCartaoParaExcluir(null);
       setAnuncio("Cartão excluído. Nenhum Baralho foi excluído.");
       setSequenciaDeAnuncio((atual) => atual + 1);
-      tituloDaLista.current?.focus();
 
       await carregarCartoes();
     } else {
       setFalhaDeExclusao(resultado.mensagem);
+      // FR-159: a exclusão falhou e o Cartão permanece; devolve o foco ao seu
+      // botão "Excluir" depois do fechamento, em vez de deixá-lo em `<body>`.
+      setFocoAposExclusao({ alvo: "botao", cartaoId: cartao.id });
       setCartaoParaExcluir(null);
-      botoesDeExclusao.current.get(cartao.id)?.focus();
     }
 
     setExcluindo(false);

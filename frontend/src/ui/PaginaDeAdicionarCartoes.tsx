@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   BaralhoComCartoes,
@@ -124,7 +130,16 @@ export function PaginaDeAdicionarCartoes({
     carregar();
   }, [carregar]);
 
-  useEffect(() => {
+  /**
+   * `useLayoutEffect`, e não `useEffect` (FR-063, FR-064, SC-019): o foco tem de
+   * ser restaurado de forma síncrona logo após a mutação do DOM. Um `useEffect`
+   * corre depois da pintura e, no intervalo, o botão focado já foi removido ou
+   * desabilitado, deixando o foco no `<body>` — um foco transitório no `body`
+   * que quebra a ordem de foco da WCAG e é observável por leitores de tela e por
+   * quem inspeciona o DOM logo após o commit. É o mesmo padrão de
+   * `PaginaDoBaralho.tsx` para o foco pós-remoção.
+   */
+  useLayoutEffect(() => {
     if (focoAposVincular === null) {
       return;
     }

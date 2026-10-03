@@ -135,7 +135,7 @@ e `npm run build`. Nas fases 6 e 7 também `npm run test:e2e`, na raiz, e
 - [X] T1117 Specs Playwright existentes atualizadas para as rotas e páginas novas
 - [X] T1118 [P] `e2e/percurso-por-teclado.spec.ts` com o percurso SC-062 só por teclado, em 390 e 1440
 - [X] T1119 [P] `e2e/visual-e-contraste.spec.ts` com as larguras 360/390/768/1440, zoom de 200%, contraste dos tokens computados e alvos de 44 px
-- [ ] T1120 Converge (Arquiteto): capturas de todas as telas comparadas a `design/prototipo-visual/capturas/`, EVT final e diff para aprovação
+- [X] T1120 Converge (Arquiteto): capturas de todas as telas comparadas a `design/prototipo-visual/capturas/`, EVT final e diff para aprovação
 
 <details><summary>Metadados</summary>
 
