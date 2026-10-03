@@ -14,7 +14,7 @@ import type {
   ItemDoLoteDeRevisao,
   Previa,
 } from "../acervo-cliente/cliente";
-import { limitesDoDia, rotuloDaPrevia } from "../revisao/dia";
+import { limitesDoDia, nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../revisao/dia";
 import { SessaoDeEstudo } from "../sessao-de-estudo/sessao-de-estudo";
 import type {
   EstadoDaSessao,
@@ -231,9 +231,9 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
     alvoDeFoco.current = null;
 
     if (alvo === "frente") {
-      frenteRef.current?.focus();
+      frenteRef.current?.focus({ preventScroll: true });
     } else if (alvo === "verso") {
-      versoRef.current?.focus();
+      versoRef.current?.focus({ preventScroll: true });
     } else {
       resumoRef.current?.focus();
     }
@@ -641,10 +641,6 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
 
-      <p className="texto-secundario">
-        {textoDoQueFalta(estado.posicao, estado.total)}
-      </p>
-
       {anuncio !== null && (
         <p
           key={sequenciaDeAnuncio}
@@ -665,7 +661,7 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <p className="conteudo-do-cartao">{itemAtual.frente}</p>
+        <p className="conteudo-do-cartao" tabIndex={0}>{itemAtual.frente}</p>
 
         {!itemAtual.revelado ? (
           <>
@@ -685,10 +681,10 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
               Verso
             </h2>
-            <p className="conteudo-do-cartao">{itemAtual.verso}</p>
+            <p className="conteudo-do-cartao" tabIndex={0}>{itemAtual.verso}</p>
             <div className="botoes-de-resultado">
               {NIVEIS_DE_AVALIACAO.map((nivel) => {
-                const rotuloDePrevia =
+                const previa =
                   previaDoItem === null
                     ? null
                     : rotuloDaPrevia(new Date(), previaDoItem[nivel.avaliacao]);
@@ -698,12 +694,13 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
                     key={nivel.avaliacao}
                     className={`botao ${nivel.variante}`}
                     type="button"
+                    aria-label={nomeAcessivelDaAvaliacao(nivel.rotulo, previa)}
                     onClick={() => registrarAvaliacao(nivel.avaliacao)}
                   >
                     <span aria-hidden="true">{nivel.atalho}</span>{" "}
                     <span>
                       {nivel.rotulo}
-                      {rotuloDePrevia !== null ? ` · ${rotuloDePrevia}` : ""}
+                      {previa !== null ? ` · ${previa}` : ""}
                     </span>
                   </button>
                 );
@@ -714,16 +711,6 @@ export function PaginaDaRevisao({ cliente }: PropriedadesDaPaginaDaRevisao) {
       </article>
     </div>
   );
-}
-
-/**
- * O que ainda falta na Sessão (FR-150, SC-015): a partir da posição atual,
- * conta os Cartões ainda não respondidos, incluindo o Item apresentado.
- */
-function textoDoQueFalta(posicao: number, total: number): string {
-  const faltam = total - (posicao - 1);
-
-  return faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`;
 }
 
 /**

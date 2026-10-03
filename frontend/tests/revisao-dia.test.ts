@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { limitesDoDia, rotuloDaPrevia } from "../src/revisao/dia";
+import { limitesDoDia, nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../src/revisao/dia";
 
 /**
  * Módulo puro do dia (FR-204, FR-221).
@@ -54,33 +54,33 @@ describe("limitesDoDia", () => {
 });
 
 describe("rotuloDaPrevia", () => {
-  it("nomeia de hoje o próprio dia corrente (FR-221)", () => {
+  it("conta zero dias para o próprio dia corrente (FR-221)", () => {
     expect(rotuloDaPrevia(AGORA, new Date(2026, 9, 2, 9, 0).toISOString())).toBe(
-      "hoje",
+      "0 dias",
     );
     expect(
       rotuloDaPrevia(AGORA, new Date(2026, 9, 2, 23, 59).toISOString()),
-    ).toBe("hoje");
+    ).toBe("0 dias");
   });
 
-  it("um ISO no passado também cai no rótulo de hoje (FR-221)", () => {
+  it("um ISO no passado também conta zero dias (FR-221)", () => {
     expect(
       rotuloDaPrevia(AGORA, new Date(2026, 8, 30, 10, 0).toISOString()),
-    ).toBe("hoje");
+    ).toBe("0 dias");
   });
 
-  it("a mesma hora do dia seguinte é amanhã (FR-221)", () => {
+  it("a mesma hora do dia seguinte é '1 dia' (FR-221)", () => {
     expect(
       rotuloDaPrevia(AGORA, new Date(2026, 9, 3, 15, 0).toISOString()),
-    ).toBe("amanhã");
+    ).toBe("1 dia");
   });
 
-  it("23:59 para 00:01 do dia seguinte ainda é amanhã: a conta é por dias locais (FR-221)", () => {
+  it("23:59 para 00:01 do dia seguinte ainda é '1 dia': a conta é por dias locais (FR-221)", () => {
     const antesDaMeiaNoite = new Date(2026, 9, 2, 23, 59);
     const depoisDaMeiaNoite = new Date(2026, 9, 3, 0, 1);
 
     expect(rotuloDaPrevia(antesDaMeiaNoite, depoisDaMeiaNoite.toISOString())).toBe(
-      "amanhã",
+      "1 dia",
     );
   });
 
@@ -94,5 +94,20 @@ describe("rotuloDaPrevia", () => {
     expect(
       rotuloDaPrevia(AGORA, new Date(2026, 10, 9, 12, 0).toISOString()),
     ).toBe("38 dias");
+  });
+});
+
+describe("nomeAcessivelDaAvaliacao", () => {
+  it("sem prévia, o nome acessível é só o rótulo (FR-221, FR-218)", () => {
+    expect(nomeAcessivelDaAvaliacao("Bom", null)).toBe("Bom");
+  });
+
+  it("com prévia, o nome acessível anuncia a próxima revisão (FR-221, FR-218)", () => {
+    expect(nomeAcessivelDaAvaliacao("Bom", "1 dia")).toBe(
+      "Bom, próxima revisão em 1 dia",
+    );
+    expect(nomeAcessivelDaAvaliacao("Errei", "0 dias")).toBe(
+      "Errei, próxima revisão em 0 dias",
+    );
   });
 });

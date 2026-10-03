@@ -18,12 +18,6 @@
 /** Milissegundos de um dia, para converter a distância entre meias-noites (FR-221). */
 const MILISSEGUNDOS_DE_UM_DIA = 86_400_000;
 
-/** O rótulo de uma revisão que cai hoje ou já ficou para trás (FR-221). */
-const ROTULO_DE_HOJE = "hoje";
-
-/** O rótulo de uma revisão marcada para o dia seguinte (FR-221). */
-const ROTULO_DE_AMANHA = "amanhã";
-
 /**
  * Os limites do dia de `agora`: 00:00 local de hoje e 00:00 local de amanhã,
  * em ISO-8601 (FR-204).
@@ -47,26 +41,36 @@ export function limitesDoDia(agora: Date): {
 }
 
 /**
- * O rótulo humano de quando a revisão cai, para os quatro botões de Avaliação
- * (FR-221): "hoje", "amanhã" ou "N dias".
+ * O rótulo humano da próxima revisão, para os quatro botões de Avaliação
+ * (FR-221): sempre o número de **dias locais** — "0 dias", "1 dia" ou
+ * "N dias".
  *
- * A conta é feita em **dias locais**, e não em 24 h: duas revisões separadas por
+ * A conta é feita em dias locais, e não em 24 h: duas revisões separadas por
  * poucas horas podem estar em dias diferentes, e é o dia do calendário que a
- * pessoa reconhece no rótulo. Um instante no passado — ou ilegível — cai no
- * rótulo de hoje, em vez de derrubar a tela.
+ * pessoa reconhece no rótulo. Um instante no passado conta como zero, e um
+ * instante ilegível também — a tela nunca é derrubada por uma data ruim.
  */
 export function rotuloDaPrevia(agora: Date, iso: string): string {
   const dias = diasAte(agora, new Date(iso));
+  const d = Number.isFinite(dias) ? Math.max(0, dias) : 0;
 
-  if (!Number.isFinite(dias) || dias <= 0) {
-    return ROTULO_DE_HOJE;
+  return d === 1 ? "1 dia" : `${d} dias`;
+}
+
+/**
+ * O nome acessível de um botão de Avaliação (FR-221, FR-218). Com prévia, ela
+ * entra no nome — "Bom, próxima revisão em 1 dia" —; sem prévia, o nome é só
+ * o rótulo do nível.
+ */
+export function nomeAcessivelDaAvaliacao(
+  rotulo: string,
+  previa: string | null,
+): string {
+  if (previa === null) {
+    return rotulo;
   }
 
-  if (dias === 1) {
-    return ROTULO_DE_AMANHA;
-  }
-
-  return `${dias} dias`;
+  return `${rotulo}, próxima revisão em ${previa}`;
 }
 
 /** A meia-noite local do dia de um instante (FR-204). */

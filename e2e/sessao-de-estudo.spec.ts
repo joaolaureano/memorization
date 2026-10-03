@@ -116,7 +116,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("50");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Faltam 5 Cartões")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 5" }),
+    ).toBeVisible();
     await expect(
       page.getByText(
         "Você pediu 50 Cartões, mas este Baralho tem 5. A Sessão terá 5 Itens.",
@@ -136,7 +138,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await dialogoDeInterrupcao
       .getByRole("button", { name: "Cancelar" })
       .click();
-    await expect(page.getByText("Faltam 5 Cartões")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 5" }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
     await dialogoDeInterrupcao
@@ -156,7 +160,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("3");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 3" }),
+    ).toBeVisible();
 
     // Dois acertos e um erro, para que o Resumo tenha soma coerente (SC-004).
     for (let item = 1; item <= 3; item += 1) {
@@ -220,7 +226,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     await page.getByLabel("Quantidade de Cartões").fill("3");
     await page.getByRole("button", { name: "Iniciar Sessão" }).click();
 
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 3" }),
+    ).toBeVisible();
 
     await page.reload();
 
@@ -233,7 +241,9 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
     ).toBeVisible();
     await expect(page.getByLabel("Quantidade de Cartões")).toBeVisible();
-    await expect(page.getByText("Faltam 3 Cartões")).toHaveCount(0);
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 3" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Sessão concluída" }),
     ).toHaveCount(0);

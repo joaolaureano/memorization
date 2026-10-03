@@ -281,6 +281,12 @@ describe("PaginaDaRevisao", () => {
         screen.getByRole("button", { name: new RegExp(`^${nivel}`) }),
       ).toBeTruthy();
     }
+
+    expect(
+      screen.getByRole("button", {
+        name: /^Bom, próxima revisão em \d+ dias?$/,
+      }),
+    ).toBeTruthy();
   });
 
   it("mostra 'Revisão do dia' no cabeçalho do Resumo (FR-215)", async () => {

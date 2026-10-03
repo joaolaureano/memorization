@@ -10,7 +10,7 @@
 
 **Depende de**: `001-criar-cartao` a `008-entrar`. As garantias de persistência e operação de `009` a `011` continuam vigentes.
 
-## Objetivo e escopo
+### Objetivo e escopo
 
 Adotar no aplicativo a experiência visual e os percursos do protótipo: tema escuro com destaque azul, navegação responsiva, formulários em páginas próprias, estados compreensíveis e proteção contra descarte involuntário. Quem usa deve conseguir Entrar, organizar o próprio acervo e concluir uma Sessão de estudo com continuidade entre telas.
 
@@ -168,7 +168,7 @@ FR-044 aplica-se às operações persistentes; Resultados e Resumos de Sessão c
 - **FR-147**: Remover deste baralho MUST desfazer somente o Vínculo e MUST NOT exigir confirmação, conforme FR-066. Excluir Cartão e excluir Baralho MUST exigir confirmação com alvo e consequências explícitas; cancelar MUST preservar o acervo.
 - **FR-148**: Sair de Cadastro, criação ou edição de acervo ou configuração de estudo com alterações efetivas não salvas MUST pedir confirmação. Cancelar MUST preservar os campos; confirmar MUST descartar o preenchimento não salvo. Restaurar os valores originais MUST eliminar a confirmação. Recusa de Credencial segue FR-157.
 - **FR-149**: A configuração de estudo MUST permitir quantidade inteira positiva, recusar valores inválidos, explicar Baralho vazio e, para quantidade superior à disponível, avisar antes do primeiro Item que todos os disponíveis serão usados, conforme FR-029.
-- **FR-150**: A Sessão MUST manter Frente visível e Verso oculto até Revelar verso; MUST mostrar **somente quantos Cartões faltam** ("Faltam 3 Cartões" / "Falta 1 Cartão"), com a posição e o total disponíveis apenas para leitor de tela, no nome acessível do cartão; MUST permitir a Avaliação somente após a Revelação e avançar uma única vez por Avaliação, preservando seleção aleatória sem repetição e conteúdo capturado no início. A tela da Sessão MUST se limitar ao título, à contagem do que falta e ao cartão: os anúncios de mudança de estado ("Verso revelado." etc.) continuam em região ativa, mas visualmente ocultos (FR-158). *(Revisado em 2026-10-03 a pedido do Product Owner: a tela de estudo deve ser limpa, só com o título, os Cartões que faltam e o cartão; mais espaço entre o Verso e os botões.)*
+- **FR-150**: Durante uma Sessão em andamento, o cartão MUST manter tamanho fixo e áreas reservadas para Frente, Verso e ações; revelar, avaliar, carregar prévias e avançar MUST NOT deslocar os controles ou redimensionar o cartão. Conteúdo longo MUST permitir rolagem interna por teclado, sem expandir o cartão. Não há animação de abertura ou fechamento. A Sessão MUST manter Frente visível e Verso oculto até Revelar verso; MUST NOT mostrar contagem visível de posição, total ou Cartões restantes; a posição e o total ficam disponíveis apenas para leitor de tela, no nome acessível do cartão ("Item 2 de 3"); MUST permitir a Avaliação somente após a Revelação e avançar uma única vez por Avaliação, preservando seleção aleatória sem repetição e conteúdo capturado no início. A tela da Sessão MUST se limitar ao título e ao cartão: os anúncios de mudança de estado ("Verso revelado." etc.) continuam em região ativa, mas visualmente ocultos (FR-158). *(Revisado em 2026-10-03 a pedido do Product Owner: a tela de estudo deve ser limpa, só com o título e o cartão — a contagem "Faltam x Cartões" também saiu —; mais espaço entre o Verso e os botões.)*
 - **FR-151**: Navegar para fora de uma Sessão em andamento, interrompê-la ou Sair MUST pedir confirmação de descarte integral sem Resumo. Cancelar MUST manter o estado exato da Sessão; confirmar MUST descartá-la. Para fechar/recarregar, MUST solicitar a proteção nativa disponível, sem persistir a Sessão ou garantir impedir a saída.
 - **FR-152**: Somente ao concluir todos os Itens, o Resumo MUST informar estudados, acertos, erros e percentual de acertos arredondado ao inteiro mais próximo, calculado como acertos divididos por estudados × 100; MUST oferecer estudar novamente e voltar ao Baralho, sem persistir resultados.
 - **FR-153**: A interface MUST distinguir carregamento, vazio, erro, operação pendente e sucesso. Falha de carregamento MUST oferecer nova tentativa; nenhum aviso de operação anterior MUST ser confundido com resultado da tela atual.
@@ -179,6 +179,14 @@ FR-044 aplica-se às operações persistentes; Resultados e Resumos de Sessão c
 - **FR-158**: Todas as ações MUST ser executáveis por teclado, com foco visível e nomes acessíveis; mensagens, erros e progresso MUST ser perceptíveis por leitor de tela e MUST NOT depender apenas de cor. Navegação e avanço de Item MUST levar o foco ao novo conteúdo pertinente.
 - **FR-159**: Diálogos MUST ter título e descrição das consequências, iniciar com foco em Cancelar, conter a navegação por Tab/Shift+Tab, tratar Escape como cancelamento e devolver o foco ao acionador ao cancelar. Após confirmar, MUST levar o foco ao resultado ou a um destino estável se o acionador deixou de existir.
 - **FR-160**: A experiência de produção MUST usar o acervo real do Usuário e MUST NOT incorporar dados de exemplo, atrasos/erros artificiais, galeria de revisão, reinício da demonstração, seletor de cor ou Explorações futuras. Esses artefatos MUST permanecer preservados e identificados na área de design.
+
+### Verificação dos Requisitos Negativos
+
+| Requisito | Afirmação | Como é verificado |
+|---|---|---|
+| FR-155 | Falha não antecipa sucesso | Simular falha de gravação e verificar conteúdo preservado e ausência de sucesso. |
+| FR-156 | Recurso de outro Usuário não revela informação | Abrir o mesmo id com dois Usuários e comparar a resposta de ausência. |
+| FR-160 | Produção não contém controles de demonstração | Inspecionar os destinos e controles da aplicação real. |
 
 ### Key Entities
 
@@ -192,8 +200,6 @@ Não há novas entidades nem alteração do glossário:
 Formulário alterado, carregamento e diálogo são estados de interação, não novos conceitos do domínio ou dados persistidos.
 
 ## Success Criteria *(mandatory)*
-
-### Measurable Outcomes
 
 Numeração continua após SC-061 de `011`.
 
@@ -209,7 +215,7 @@ Numeração continua após SC-061 de `011`.
 - **SC-078**: Em 100% das larguras de aceite (360, 390, 768 e 1440 px) e com 0, 1 e 40 Cartões vinculados, as ações Estudar, Adicionar cartões existentes, Renomear e Excluir Baralho do detalhe ficam no primeiro viewport, sem rolagem, e precedem os Cartões na ordem de Tab.
 - **SC-070**: Nenhuma tela do aplicativo oferece controles ou dados de demonstração ou Explorações futuras. Os artefatos de design continuam disponíveis para revisão separados do uso real.
 
-## Inventário de telas e estados para aceite
+### Inventário de telas e estados para aceite
 
 | Área | Cobertura exigida |
 | --- | --- |
@@ -220,7 +226,7 @@ Numeração continua após SC-061 de `011`.
 | Estudo | Configuração, quantidade inválida/excedente, Baralho vazio, Frente sem Verso, Verso revelado, Resultado, avanço, interrupção e Resumo |
 | Transversais | Recurso ausente, acesso recusado, diálogo cancelado/confirmado, teclado/foco, conteúdo extenso, ampliação |
 
-## Compatibilidade, decisões e limites
+### Compatibilidade, decisões e limites
 
 | Tema | Relação com a referência e as specs anteriores |
 | --- | --- |
@@ -233,7 +239,14 @@ Numeração continua após SC-061 de `011`.
 | Persistência | O reinício dos exemplos do protótipo não é comportamento do aplicativo. Usuários e acervo persistem; Credencial e Sessão de estudo continuam transitórias. |
 | Verde, galeria e explorações | Permanecem referências de design, sem novos destinos ou preferências no aplicativo. |
 
-**Fora do escopo**: histórico persistente, estatísticas acumuladas, repetição espaçada, resumo detalhado por Cartão, retomada de Sessão, correção automática, novos métodos de acesso, recuperação de Senha, compartilhamento entre Usuários, alteração dos contratos existentes e publicação em produção.
+## Invariantes de Domínio
+
+1. A interface preserva o isolamento do acervo por Usuário (FR-156).
+2. Uma operação só é apresentada como concluída após confirmação de persistência (FR-155).
+3. Toda ação é executável por teclado e nenhum estado depende apenas de cor (FR-158).
+
+## Funcionalidades Adiadas
+ histórico persistente, estatísticas acumuladas, repetição espaçada, resumo detalhado por Cartão, retomada de Sessão, correção automática, novos métodos de acesso, recuperação de Senha, compartilhamento entre Usuários, alteração dos contratos existentes e publicação em produção.
 
 ## Assumptions
 

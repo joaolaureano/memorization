@@ -318,7 +318,7 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
     );
 
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     const itens = await responderItens(page, ["acertou", "acertou", "errou"]);
 
@@ -425,7 +425,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
 
     // Interromper uma Sessão em andamento (com confirmação) não registra.
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
 
@@ -451,7 +451,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
 
     // Recarregar no meio de outra Sessão também descarta, sem registrar.
     await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     await page.reload();
     await entrarSeNecessario(page, credencial);
@@ -459,7 +459,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     await expect(
       page.getByRole("heading", { level: 1, name: `Estudar ${NOME_DO_BARALHO}` }),
     ).toBeVisible();
-    await expect(page.getByText("Faltam 3 Cartões")).toHaveCount(0);
+    await expect(page.getByRole("article", { name: "Item 1 de 3" })).toHaveCount(0);
 
     await irParaInicio(page, credencial.nomeDeUsuario);
     await expect(

@@ -165,9 +165,10 @@ confirmar que o Resumo apresenta três estudados com a soma correta.
 - **SC-010**: Um usuário que solicita mais Cartões do que o Baralho possui inicia
   a Sessão mesmo assim e sabe, antes do primeiro Item, quantos estudará.
 - **SC-013**: O elemento focado é identificável sem depender de percepção de cor.
-- **SC-015**: O usuário sabe a qualquer momento quantos Cartões faltam, sem
-  precisar contar. *(Revisado em 2026-10-03 a pedido do Product Owner: a tela
-  mostra só o que falta; posição e total ficam para leitor de tela — FR-150.)*
+- **SC-015**: Quem usa leitor de tela sabe a qualquer momento a posição e o
+  total da Sessão, sem precisar contar. *(Revisado em 2026-10-03 a pedido do
+  Product Owner: a tela não mostra contagem alguma; posição e total ficam no
+  nome acessível do cartão — FR-150.)*
 
 ## Invariantes de Domínio
 

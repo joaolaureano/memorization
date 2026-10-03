@@ -297,8 +297,8 @@ async function revelarVerso(page: Page): Promise<void> {
 
 /**
  * Avalia o Item em estudo no nível pedido, pelo botão correspondente. O nome
- * acessível do botão começa pelo rótulo do nível — "Bom, próxima revisão
- * amanhã" na Sessão livre —, de modo que o casamento é pelo prefixo do nível.
+ * acessível do botão começa pelo rótulo do nível — "Bom, próxima revisão em
+ * 1 dia" na Sessão livre —, de modo que o casamento é pelo prefixo do nível.
  */
 async function avaliar(page: Page, avaliacao: Avaliacao): Promise<void> {
   await page
@@ -309,15 +309,15 @@ async function avaliar(page: Page, avaliacao: Avaliacao): Promise<void> {
 }
 
 /**
- * Num Cartão novo, as quatro Avaliações caem em amanhã (FR-221, SC-090). A
- * prévia é conferida pelo **texto visível** do botão ("Errei · amanhã"), que é
+ * Num Cartão novo, as quatro Avaliações caem em 1 dia (FR-221, SC-090). A
+ * prévia é conferida pelo **texto visível** do botão ("Errei · 1 dia"), que é
  * o mesmo nas duas telas de estudo; o nome acessível completo ("Errei, próxima
- * revisão amanhã") varia com a tela que o monta.
+ * revisão em 1 dia") varia com a tela que o monta.
  */
-async function conferirPreviasDeAmanha(page: Page): Promise<void> {
+async function conferirPreviasDeUmDia(page: Page): Promise<void> {
   for (const rotulo of Object.values(ROTULO_DA_AVALIACAO)) {
     await expect(
-      page.getByText(`${rotulo} · amanhã`, { exact: true }),
+      page.getByText(`${rotulo} · 1 dia`, { exact: true }),
     ).toBeVisible();
   }
 }
@@ -514,17 +514,18 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
         .first(),
     ).toBeVisible();
     await iniciarRevisaoSeHouverBotao(page);
-    await expect(page.getByText("Faltam 3 Cartões")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 3" }),
+    ).toBeVisible();
 
     const conteudos = page.locator(".cartao-de-estudo .conteudo-do-cartao");
     const avaliacoesDaSessao: Avaliacao[] = ["errei", "bom", "facil"];
 
     for (let indice = 0; indice < CARTOES.length; indice += 1) {
-      const faltam = CARTOES.length - indice;
       await expect(
-        page.getByText(
-          faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`,
-        ),
+        page.getByRole("article", {
+          name: `Item ${indice + 1} de ${CARTOES.length}`,
+        }),
       ).toBeVisible();
 
       const frente = (await conteudos.first().textContent())?.trim();
@@ -534,7 +535,7 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
       );
 
       await revelarVerso(page);
-      await conferirPreviasDeAmanha(page);
+      await conferirPreviasDeUmDia(page);
       await avaliar(page, avaliacoesDaSessao[indice]);
     }
 
@@ -608,7 +609,9 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
     await iniciarSessaoLivre(page, 1);
 
-    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 1" }),
+    ).toBeVisible();
 
     // Nenhum botão de Avaliação antes da Revelação (FR-193).
     await expect(
@@ -617,7 +620,7 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
 
     // Após a Revelação, os quatro níveis aparecem com a prévia (FR-192, FR-221).
     await revelarVerso(page);
-    await conferirPreviasDeAmanha(page);
+    await conferirPreviasDeUmDia(page);
 
     await avaliar(page, "bom");
 
@@ -750,11 +753,15 @@ test("Atalho de teclado 3 avalia Bom após a Revelação (FR-192, FR-193, FR-218
 
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
     await iniciarSessaoLivre(page, 1);
-    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 1" }),
+    ).toBeVisible();
 
     // Antes da Revelação, o atalho não avalia nada (FR-193, FR-218).
     await page.keyboard.press("3");
-    await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
+    await expect(
+      page.getByRole("article", { name: "Item 1 de 1" }),
+    ).toBeVisible();
 
     await revelarVerso(page);
     await page.keyboard.press("3");

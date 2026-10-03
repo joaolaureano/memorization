@@ -9,7 +9,7 @@ import type {
   Previa,
   ResultadoDasPrevias,
 } from "../acervo-cliente/cliente";
-import { rotuloDaPrevia } from "../revisao/dia";
+import { nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../revisao/dia";
 import { AleatoriedadeReal } from "../sessao-de-estudo/aleatoriedade";
 import type { Aleatoriedade } from "../sessao-de-estudo/aleatoriedade";
 import {
@@ -203,9 +203,9 @@ export function PaginaDeEstudo({
     alvoDeFoco.current = null;
 
     if (alvo === "frente") {
-      frenteRef.current?.focus();
+      frenteRef.current?.focus({ preventScroll: true });
     } else if (alvo === "verso") {
-      versoRef.current?.focus();
+      versoRef.current?.focus({ preventScroll: true });
     } else if (alvo === "resumo") {
       resumoRef.current?.focus();
     } else {
@@ -726,10 +726,6 @@ export function PaginaDeEstudo({
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
 
-      <p className="texto-secundario">
-        {textoDoQueFalta(estado.posicao, estado.total)}
-      </p>
-
       {anuncio !== null && (
         <p
           key={sequenciaDeAnuncio}
@@ -750,7 +746,7 @@ export function PaginaDeEstudo({
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <p className="conteudo-do-cartao">{estado.itemAtual.frente}</p>
+        <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.frente}</p>
 
         {!estado.itemAtual.revelado ? (
           <>
@@ -770,7 +766,7 @@ export function PaginaDeEstudo({
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
               Verso
             </h2>
-            <p className="conteudo-do-cartao">{estado.itemAtual.verso}</p>
+            <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
               {NIVEIS_DE_AVALIACAO.map(({ avaliacao, rotulo, atalho }) => {
                 const previa = previaDaAvaliacao(
@@ -798,16 +794,6 @@ export function PaginaDeEstudo({
       </article>
     </div>
   );
-}
-
-/**
- * O que ainda falta na Sessão (FR-150, SC-015): a partir da posição atual,
- * conta os Cartões ainda não respondidos, incluindo o Item apresentado.
- */
-function textoDoQueFalta(posicao: number, total: number): string {
-  const faltam = total - (posicao - 1);
-
-  return faltam === 1 ? "Falta 1 Cartão" : `Faltam ${faltam} Cartões`;
 }
 
 /**
@@ -886,22 +872,6 @@ function previaDaAvaliacao(
   }
 
   return rotuloDaPrevia(new Date(), iso);
-}
-
-/**
- * O nome acessível de um botão de Avaliação (FR-221). Com prévia, ela entra no
- * nome — "Bom, próxima revisão em 3 dias" —, com o "em" apenas para a contagem
- * de dias, já que "hoje" e "amanhã" dispensam a preposição.
- */
-function nomeAcessivelDaAvaliacao(rotulo: string, previa: string | null): string {
-  if (previa === null) {
-    return rotulo;
-  }
-
-  const distancia =
-    previa === "hoje" || previa === "amanhã" ? previa : `em ${previa}`;
-
-  return `${rotulo}, próxima revisão ${distancia}`;
 }
 
 /** Um campo de texto com foco engole os atalhos 1 a 4 (FR-218). */

@@ -203,7 +203,9 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("3");
 
-    expect(await screen.findByText("Faltam 3 Cartões")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Item 1 de 3" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Frente" })).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "Verso" }),
@@ -213,7 +215,7 @@ describe("PaginaDeEstudo", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("informa a qualquer momento quantos Cartões faltam (SC-015, FR-150)", async () => {
+  it("expõe posição e total só para leitor de tela, sem contagem visível (SC-015, FR-150)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoElegivel(3);
     renderizar(cliente, idDoBaralho);
 
@@ -224,12 +226,19 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("3");
 
-    expect(await screen.findByText("Faltam 3 Cartões")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Item 1 de 3" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
 
-    expect(await screen.findByText("Faltam 2 Cartões")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Item 2 de 3" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Faltam|Falta 1 Cartão/),
+    ).not.toBeInTheDocument();
   });
 
   it("mantém o anúncio visualmente oculto e não renderiza barra de progresso (FR-150)", async () => {
@@ -242,7 +251,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     const anuncio = screen.getByRole("status", {
       name: "Mudança de estado da Sessão",
@@ -263,7 +272,9 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("50");
 
-    expect(await screen.findByText("Faltam 5 Cartões")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Item 1 de 5" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Você pediu 50 Cartões, mas este Baralho tem 5. A Sessão terá 5 Itens.",
@@ -331,7 +342,7 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("2");
 
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     expect(screen.getByRole("heading", { name: "Frente" })).toBeInTheDocument();
     expect(
@@ -384,7 +395,7 @@ describe("PaginaDeEstudo", () => {
 
     iniciarCom("2");
 
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     expect(
       screen.queryByText("O Verso está oculto. Tente lembrar antes de revelar."),
@@ -421,15 +432,15 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("3");
-    await screen.findByText("Faltam 3 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 3" });
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 2 de 3" });
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 3 de 3" });
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("errei");
@@ -460,7 +471,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     escolherAvaliacao("bom");
@@ -499,7 +510,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     const itensApresentados = [
       await responderItem("bom"),
@@ -541,7 +552,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     await responderItem("bom");
 
@@ -572,7 +583,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     await responderItem("bom");
 
@@ -616,7 +627,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     await responderItem("bom");
     await screen.findByRole("alert");
@@ -665,7 +676,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByRole("heading", { name: "Verso" });
@@ -676,11 +687,11 @@ describe("PaginaDeEstudo", () => {
 
     expect(botaoBom).toHaveTextContent("Bom · 3 dias");
     expect(
-      screen.getByRole("button", { name: "Errei, próxima revisão hoje" }),
-    ).toHaveTextContent("Errei · hoje");
+      screen.getByRole("button", { name: "Errei, próxima revisão em 0 dias" }),
+    ).toHaveTextContent("Errei · 0 dias");
     expect(
-      screen.getByRole("button", { name: "Difícil, próxima revisão amanhã" }),
-    ).toHaveTextContent("Difícil · amanhã");
+      screen.getByRole("button", { name: "Difícil, próxima revisão em 1 dia" }),
+    ).toHaveTextContent("Difícil · 1 dia");
     expect(
       screen.getByRole("button", { name: "Fácil, próxima revisão em 5 dias" }),
     ).toHaveTextContent("Fácil · 5 dias");
@@ -703,7 +714,7 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("1");
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO),
@@ -732,11 +743,13 @@ describe("PaginaDeEstudo", () => {
     });
 
     iniciarCom("2");
-    await screen.findByText("Faltam 2 Cartões");
+    await screen.findByRole("article", { name: "Item 1 de 2" });
 
     // Antes da Revelação o atalho é ignorado: a Sessão não avança.
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "4" });
-    expect(screen.getByText("Faltam 2 Cartões")).toBeInTheDocument();
+    expect(
+      screen.getByRole("article", { name: "Item 1 de 2" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Revelar verso" }));
     await screen.findByRole("heading", { name: "Verso" });
@@ -744,6 +757,8 @@ describe("PaginaDeEstudo", () => {
     // 3 corresponde a Bom (FR-192, FR-218).
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "3" });
 
-    expect(await screen.findByText("Falta 1 Cartão")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("article", { name: "Item 2 de 2" }),
+    ).toBeInTheDocument();
   });
 });

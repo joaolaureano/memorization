@@ -534,7 +534,9 @@ async function visitarAsTelas(
   // Sessão com o Verso revelado: um único Item basta para chegar ao Resumo.
   await pagina.getByLabel("Quantidade de Cartões").fill("1");
   await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
-  await expect(pagina.getByText("Falta 1 Cartão")).toBeVisible({
+  await expect(
+    pagina.getByRole("article", { name: "Item 1 de 1" }),
+  ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
@@ -571,12 +573,16 @@ async function visitarAsTelas(
   );
   await pagina.getByLabel("Quantidade de Cartões").fill("2");
   await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
-  await expect(pagina.getByText("Faltam 2 Cartões")).toBeVisible({
+  await expect(
+    pagina.getByRole("article", { name: "Item 1 de 2" }),
+  ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
   await pagina.getByRole("button", { name: /^Bom/ }).click();
-  await expect(pagina.getByText("Falta 1 Cartão")).toBeVisible({
+  await expect(
+    pagina.getByRole("article", { name: "Item 2 de 2" }),
+  ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();

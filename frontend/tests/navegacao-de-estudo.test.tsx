@@ -151,7 +151,7 @@ describe("Aplicacao — rota de estudo", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Iniciar Sessão" }));
 
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     // Navegar para fora durante a Sessão dispara a confirmação de descarte.
     navegarPara("#/baralhos");
@@ -166,7 +166,9 @@ describe("Aplicacao — rota de estudo", () => {
       within(dialogo).getByRole("button", { name: "Cancelar" }),
     );
 
-    expect(screen.getByText("Falta 1 Cartão")).toBeInTheDocument();
+    expect(
+      screen.getByRole("article", { name: "Item 1 de 1" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Revelar verso" }),
     ).toBeInTheDocument();
@@ -211,7 +213,7 @@ describe("Aplicacao — rota de estudo", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Iniciar Sessão" }));
 
-    await screen.findByText("Falta 1 Cartão");
+    await screen.findByRole("article", { name: "Item 1 de 1" });
 
     fireEvent.click(screen.getByRole("button", { name: "Interromper" }));
 

@@ -271,7 +271,9 @@ async function percursoPorTeclado(
     page,
     page.getByRole("button", { name: "Iniciar Sessão", exact: true }),
   );
-  await expect(page.getByText("Falta 1 Cartão")).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Item 1 de 1" }),
+  ).toBeVisible();
 
   // Revelar verso e avaliar o único Item como "Bom" — o nível que substituiu o
   // antigo Acerto (FR-193, SC-088).
