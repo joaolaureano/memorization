@@ -206,7 +206,7 @@ describe("PaginaDoRegistro", () => {
     ).toBeNull();
   });
 
-  it("avisa quando o Registro não existe e oferece a volta ao Início", async () => {
+  it("avisa quando o Registro não existe e oferece a volta a Estudo", async () => {
     render(
       <PaginaDoRegistro
         cliente={clienteComRegistro(async () => ({
@@ -223,9 +223,9 @@ describe("PaginaDoRegistro", () => {
     ).toBeTruthy();
     expect(
       screen
-        .getByRole("link", { name: "Voltar para Início" })
+        .getByRole("link", { name: "Voltar para Estudo" })
         .getAttribute("href"),
-    ).toBe("#/inicio");
+    ).toBe("#/estudo");
   });
 
   it("preserva a página e permite tentar de novo quando a leitura falha", async () => {
@@ -251,7 +251,7 @@ describe("PaginaDoRegistro", () => {
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO),
     ).toBeTruthy();
-    expect(screen.getByText("← Voltar para Início")).toBeTruthy();
+    expect(screen.getByText("← Voltar para Estudo")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
 

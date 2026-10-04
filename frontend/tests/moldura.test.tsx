@@ -9,10 +9,12 @@ import type { Rota } from "../src/ui/navegacao";
  *
  * A marca e os destinos do acervo apontam para as rotas canônicas, e o destino
  * corrente é decidido por `destinoAtivo` — por isso a prova percorre cada
- * família de rota: o Início, o Registro de Sessão e a Revisão do dia marcam
- * Início, as de Cartões marcam Cartões, as de Baralho (inclusive a Sessão de
- * estudo, que pertence ao Baralho) marcam Baralhos, Preferências marca
- * Preferências, e Entrar e Criar conta não marcam nenhum destino.
+ * família de rota: o Início e a Revisão do dia marcam Início; o Registro de
+ * Sessão e as rotas da Agenda (rotinas, agendar, editar rotina e sessão da
+ * agenda) marcam Estudo (FR-307, FR-323), assim como a Central de Estudo; as de
+ * Cartões marcam Cartões, as de Baralho (inclusive a Sessão de estudo, que
+ * pertence ao Baralho) marcam Baralhos, Preferências marca Preferências, e
+ * Entrar e Criar conta não marcam nenhum destino.
  *
  * Sair é irmão do `<nav>`: em telas de até 600px só a navegação desce para a
  * barra inferior, e Sair precisa continuar no cabeçalho.
@@ -21,15 +23,20 @@ import type { Rota } from "../src/ui/navegacao";
 const CASOS: ReadonlyArray<{
   descricao: string;
   rota: Rota;
-  ativo: "Início" | "Baralhos" | "Cartões" | "Preferências" | null;
+  ativo: "Início" | "Estudo" | "Baralhos" | "Cartões" | "Preferências" | null;
 }> = [
   { descricao: "Início", rota: { nome: "inicio" }, ativo: "Início" },
   {
     descricao: "Registro de Sessão",
     rota: { nome: "registro", id: "s1" },
-    ativo: "Início",
+    ativo: "Estudo",
   },
   { descricao: "Revisão do dia", rota: { nome: "revisao" }, ativo: "Início" },
+  { descricao: "Central de Estudo", rota: { nome: "central-de-estudo" }, ativo: "Estudo" },
+  { descricao: "Rotinas de estudo", rota: { nome: "agenda" }, ativo: "Estudo" },
+  { descricao: "Agendar estudo", rota: { nome: "nova-rotina" }, ativo: "Estudo" },
+  { descricao: "Editar rotina", rota: { nome: "editar-rotina", id: "r1" }, ativo: "Estudo" },
+  { descricao: "Sessão da Agenda", rota: { nome: "estudo-da-agenda" }, ativo: "Estudo" },
   { descricao: "Baralhos", rota: { nome: "baralhos" }, ativo: "Baralhos" },
   { descricao: "Novo Baralho", rota: { nome: "novo-baralho" }, ativo: "Baralhos" },
   { descricao: "Detalhe do Baralho", rota: { nome: "baralho", id: "b1" }, ativo: "Baralhos" },
@@ -58,6 +65,10 @@ describe("Moldura — marca e destinos", () => {
       "href",
       "#/inicio",
     );
+    expect(screen.getByRole("link", { name: "Estudo" })).toHaveAttribute(
+      "href",
+      "#/estudo",
+    );
     expect(screen.getByRole("link", { name: "Baralhos" })).toHaveAttribute(
       "href",
       "#/baralhos",
@@ -71,13 +82,13 @@ describe("Moldura — marca e destinos", () => {
       "#/preferencias",
     );
 
-    // FR-168 e FR-212: a navegação lista Início, Baralhos, Cartões e
-    // Preferências, nessa ordem.
+    // FR-168, FR-212 e FR-307: a navegação lista Início, Estudo, Baralhos,
+    // Cartões e Preferências, nessa ordem.
     expect(
       within(screen.getByRole("navigation", { name: "Principal" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Baralhos", "Cartões", "Preferências"]);
+    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Preferências"]);
   });
 });
 
@@ -87,6 +98,7 @@ describe("Moldura — destino corrente", () => {
 
     for (const nome of [
       "Início",
+      "Estudo",
       "Baralhos",
       "Cartões",
       "Preferências",

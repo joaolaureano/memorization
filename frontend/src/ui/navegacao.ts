@@ -30,6 +30,7 @@ export const ROTA_DE_ENTRADA = "#/entrar";
  */
 export type Rota =
   | { nome: "inicio" }
+  | { nome: "central-de-estudo" }
   | { nome: "entrar" }
   | { nome: "registro"; id: string }
   | { nome: "cartoes" }
@@ -133,8 +134,15 @@ function interpretarCaminho(hash: string): Rota {
           return { nome: "preferencias" };
         }
 
-        // Gerenciar agenda (FR-237): destino de segundo nível, alcançado pelo
-        // bloco da Agenda em Início, sem novo item na navegação principal.
+        // A área Estudo (FR-307): Agenda semanal, Estatísticas e Últimas
+        // sessões, um destino de primeiro nível como o Início.
+        if (primeiro === "estudo") {
+          return { nome: "central-de-estudo" };
+        }
+
+        // As Rotinas de estudo (FR-237, FR-316): destino de segundo nível,
+        // alcançado a partir da área Estudo, sem novo item na navegação
+        // principal.
         if (primeiro === "agenda") {
           return { nome: "agenda" };
         }
@@ -227,6 +235,9 @@ export function hashDaRota(rota: Rota): string {
     case "inicio":
       return ROTA_PADRAO;
 
+    case "central-de-estudo":
+      return "#/estudo";
+
     case "entrar":
       return ROTA_DE_ENTRADA;
 
@@ -284,25 +295,30 @@ export function hashDaRota(rota: Rota): string {
 }
 
 /**
- * Qual destino da moldura a rota ativa: Início, Cartões, Baralhos,
+ * Qual destino da moldura a rota ativa: Início, Estudo, Cartões, Baralhos,
  * Preferências, ou nenhum quando não há moldura de navegação (Entrar e Criar
- * conta). O Registro de uma Sessão e a Revisão do dia pertencem ao Início, que
- * é quem os apresenta (FR-168, FR-198). Concentrar essa decisão aqui evita que
+ * conta). A Revisão do dia pertence ao Início, que é quem a apresenta
+ * (FR-168, FR-198). A área Estudo, o Registro de uma Sessão, as Rotinas de
+ * estudo e a Sessão autorizada de um Compromisso pertencem a Estudo, que é
+ * quem os apresenta (FR-307, FR-323). Concentrar essa decisão aqui evita que
  * o cabeçalho compare strings soltas para saber o que sublinhar (FR-139,
  * FR-168, FR-212).
  */
 export function destinoAtivo(
   rota: Rota,
-): "inicio" | "cartoes" | "baralhos" | "preferencias" | null {
+): "inicio" | "estudo" | "baralhos" | "cartoes" | "preferencias" | null {
   switch (rota.nome) {
     case "inicio":
-    case "registro":
     case "revisao":
+      return "inicio";
+
+    case "central-de-estudo":
+    case "registro":
     case "agenda":
     case "nova-rotina":
     case "editar-rotina":
     case "estudo-da-agenda":
-      return "inicio";
+      return "estudo";
 
     case "cartoes":
     case "novo-cartao":

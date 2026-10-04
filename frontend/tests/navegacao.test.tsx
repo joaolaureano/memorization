@@ -112,6 +112,7 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       "#/baralhos",
       "#/baralhos/b1",
       "#/baralhos/b1/estudo",
+      "#/estudo",
       "#/revisao",
       "#/preferencias",
       "#/inexistente",
@@ -213,6 +214,26 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
     expect(hashDaRota({ nome: "preferencias" })).toBe("#/preferencias");
   });
 
+  it("reconhece a área Estudo, cujo hash vai e volta (FR-307)", () => {
+    expect(interpretarRota("#/estudo", true)).toEqual({
+      nome: "central-de-estudo",
+    });
+    expect(interpretarRota("#/estudo/", true)).toEqual({
+      nome: "central-de-estudo",
+    });
+    expect(hashDaRota({ nome: "central-de-estudo" })).toBe("#/estudo");
+    expect(
+      interpretarRota(hashDaRota({ nome: "central-de-estudo" }), true),
+    ).toEqual({ nome: "central-de-estudo" });
+
+    // A Sessão de estudo de um Baralho (`#/baralhos/<id>/estudo`) continua
+    // sendo a rota `estudo`, e não a área Estudo (FR-307).
+    expect(interpretarRota("#/baralhos/x/estudo", true)).toEqual({
+      nome: "estudo",
+      id: "x",
+    });
+  });
+
   it("`novo` é palavra reservada: nunca é tratado como o id de um Baralho", () => {
     const rota = interpretarRota("#/baralhos/novo", true);
 
@@ -262,8 +283,16 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
 describe("destinoAtivo", () => {
   it("aponta o destino da moldura de cada rota publicada (FR-139, FR-168)", () => {
     expect(destinoAtivo({ nome: "inicio" })).toBe("inicio");
-    expect(destinoAtivo({ nome: "registro", id: "s1" })).toBe("inicio");
     expect(destinoAtivo({ nome: "revisao" })).toBe("inicio");
+
+    // FR-307, FR-323: a área Estudo, o Registro de uma Sessão e as Rotinas de
+    // estudo pertencem a Estudo.
+    expect(destinoAtivo({ nome: "central-de-estudo" })).toBe("estudo");
+    expect(destinoAtivo({ nome: "registro", id: "s1" })).toBe("estudo");
+    expect(destinoAtivo({ nome: "agenda" })).toBe("estudo");
+    expect(destinoAtivo({ nome: "nova-rotina" })).toBe("estudo");
+    expect(destinoAtivo({ nome: "editar-rotina", id: "7" })).toBe("estudo");
+    expect(destinoAtivo({ nome: "estudo-da-agenda" })).toBe("estudo");
 
     expect(destinoAtivo({ nome: "cartoes" })).toBe("cartoes");
     expect(destinoAtivo({ nome: "novo-cartao" })).toBe("cartoes");
@@ -320,6 +349,7 @@ describe("Aplicacao sem Credencial", () => {
       "#/baralhos",
       "#/baralhos/b1",
       "#/baralhos/b1/estudo",
+      "#/estudo",
     ]) {
       navegarPara(hash);
 
@@ -347,7 +377,7 @@ describe("Aplicacao sem Credencial", () => {
 });
 
 describe("Aplicacao depois de Entrar", () => {
-  it("oferece Início, Baralhos, Cartões, Preferências e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168, FR-212)", async () => {
+  it("oferece Início, Estudo, Baralhos, Cartões, Preferências e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168, FR-212, FR-307)", async () => {
     const servidor = clienteDeProva();
 
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
@@ -371,23 +401,28 @@ describe("Aplicacao depois de Entrar", () => {
     const linkDeBaralhos = within(navegacao).getByRole("link", {
       name: "Baralhos",
     });
+    const linkDeEstudo = within(navegacao).getByRole("link", {
+      name: "Estudo",
+    });
     const linkDePreferencias = within(navegacao).getByRole("link", {
       name: "Preferências",
     });
 
     expect(linkDeCartoes).toHaveAttribute("href", "#/cartoes");
     expect(linkDeBaralhos).toHaveAttribute("href", "#/baralhos");
+    expect(linkDeEstudo).toHaveAttribute("href", "#/estudo");
     expect(linkDePreferencias).toHaveAttribute("href", "#/preferencias");
     expect(linkDeCartoes).toHaveAttribute("aria-current", "page");
     expect(linkDeBaralhos).not.toHaveAttribute("aria-current");
+    expect(linkDeEstudo).not.toHaveAttribute("aria-current");
 
-    // FR-139, FR-168 e FR-212: a navegação lista Início, Baralhos, Cartões e
-    // Preferências, nessa ordem.
+    // FR-139, FR-168, FR-212 e FR-307: a navegação lista Início, Estudo,
+    // Baralhos, Cartões e Preferências, nessa ordem.
     expect(
       within(navegacao)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Baralhos", "Cartões", "Preferências"]);
+    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Preferências"]);
 
     // FR-139: "Sair" vive na moldura, fora da navegação "Principal".
     expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();

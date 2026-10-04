@@ -83,9 +83,9 @@ const NOME_DO_BARALHO_COM_CARTOES = "Viagem";
 const NOME_DO_BARALHO_VAZIO = "Vazio";
 
 /**
- * O Usuário de prova que nunca estuda: a tela de Início dele é o estado vazio,
- * com o gráfico zerado e a lista de Sessões recentes por preencher (FR-172,
- * SC-076).
+ * O Usuário de prova que nunca estuda: o Início dele é o estado vazio (FR-172,
+ * SC-076) e, desde a 019 (FR-307, FR-325), a área Estudo é o gráfico zerado
+ * com as últimas Sessões por preencher.
  */
 const NOME_DO_USUARIO_SEM_REGISTROS = "usuario.sem.registros";
 
@@ -610,22 +610,28 @@ async function visitarAsTelas(
     pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
   ).toContainText(/Registrada no seu histórico/, { timeout: ESPERA_DA_TELA });
 
-  // Início com registros: o gráfico de sete dias e as Sessões recentes saem do
-  // histórico recém-alimentado (FR-164, FR-165, FR-171).
+  // Início com registros: a saudação confirma o histórico recém-alimentado
+  // (FR-164, FR-165, FR-171). O gráfico de sete dias e as últimas Sessões
+  // saíram do Início e vivem na área Estudo desde a 019 (FR-307, FR-325).
   await irParaTela(
     pagina,
     "#/inicio",
     `Olá, ${ambiente.principal.nomeDeUsuario}`,
   );
+  await conferirTela(pagina, cenario, "Início (com registros)");
+
+  // 019 (FR-307, FR-325): o gráfico de sete dias e as últimas Sessões passaram
+  // a viver na área Estudo.
+  await irParaTela(pagina, "#/estudo", "Estudo");
   await expect(
-    pagina.getByRole("heading", {
+    pagina.getByRole("region", {
       name: "Itens estudados nos últimos 7 dias",
     }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
   await expect(
-    pagina.getByRole("heading", { name: "Últimas Sessões" }),
+    pagina.getByRole("heading", { name: "Últimas sessões" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
-  await conferirTela(pagina, cenario, "Início (com registros)");
+  await conferirTela(pagina, cenario, "Estudo (com registros)");
 
   // O Registro da Sessão, alcançado pela lista de recentes, com os dois grupos
   // de Itens expandidos (FR-177, FR-178, SC-076).
@@ -637,7 +643,7 @@ async function visitarAsTelas(
 
   expect(
     hrefDoRegistro,
-    `${cenario.rotulo}: a lista "Últimas Sessões" não trouxe um link para o Registro`,
+    `${cenario.rotulo}: a lista "Últimas sessões" do Estudo não trouxe um link para o Registro`,
   ).not.toBeNull();
 
   // O Registro é alcançado pelo id do registro, e o `h1` da Tela é "Sessão
@@ -675,9 +681,16 @@ async function visitarAsTelas(
     `Olá, ${ambiente.semRegistros.nomeDeUsuario}`,
   );
   await expect(
-    pagina.getByText("Você ainda não concluiu nenhuma Sessão."),
+    pagina.getByText("Últimos 7 dias: nenhum Item estudado."),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
   await conferirTela(pagina, cenario, "Início (sem registros)");
+
+  // A lista vazia de Sessões vive em Estudo desde a 019 (FR-315, FR-321).
+  await irParaTela(pagina, "#/estudo", "Estudo");
+  await expect(
+    pagina.getByText("Você ainda não concluiu nenhuma Sessão."),
+  ).toBeVisible({ timeout: ESPERA_DA_TELA });
+  await conferirTela(pagina, cenario, "Estudo (sem registros)");
 }
 
 /**
@@ -872,16 +885,18 @@ async function conferirNavegacaoPrincipal(
   await expect(navegacao).toBeVisible();
 
   if (cenario.largura === 390) {
-    // A Navegação "Principal" passou a ter quatro destinos — Início, Baralhos,
-    // Cartões e Preferências, nessa ordem — e os quatro precisam caber no
-    // rodapé sem transbordo (FR-212, SC-076, SC-088).
+    // 019 (FR-307, FR-325): a Navegação "Principal" passou a ter cinco
+    // destinos — Início, Estudo, Baralhos, Cartões e Preferências, nessa ordem
+    // — e os cinco precisam caber no rodapé sem transbordo
+    // (FR-212, SC-076, SC-088).
     const destinos = navegacao.getByRole("link");
 
-    await expect(destinos).toHaveCount(4);
+    await expect(destinos).toHaveCount(5);
     await expect(destinos.nth(0)).toHaveText("Início");
-    await expect(destinos.nth(1)).toHaveText("Baralhos");
-    await expect(destinos.nth(2)).toHaveText("Cartões");
-    await expect(destinos.nth(3)).toHaveText("Preferências");
+    await expect(destinos.nth(1)).toHaveText("Estudo");
+    await expect(destinos.nth(2)).toHaveText("Baralhos");
+    await expect(destinos.nth(3)).toHaveText("Cartões");
+    await expect(destinos.nth(4)).toHaveText("Preferências");
 
     const medidasDaNavegacao = await navegacao.evaluate((elemento) => {
       const links = Array.from(elemento.querySelectorAll("a")).map((link) => ({

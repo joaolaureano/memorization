@@ -86,8 +86,10 @@ em percentual inteiro arredondado.
 _Avoid_: score, nota, aproveitamento, desempenho
 
 **Estatísticas**:
-Números derivados do acervo e do histórico de estudo de um usuário, apresentados
-na tela Início.
+Números derivados do acervo e do Histórico de estudo de um usuário. A
+apresentação não pertence a uma única tela: Início mostra um resumo de sete
+dias e a área Estudo mostra os indicadores, o gráfico e as últimas Sessões
+(spec 019).
 _Avoid_: métricas, dashboard, KPIs, relatório
 
 ### Repetição espaçada

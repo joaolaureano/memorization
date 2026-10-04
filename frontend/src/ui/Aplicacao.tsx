@@ -19,6 +19,7 @@ import { Moldura } from "./Moldura";
 import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
 import type { Rota } from "./navegacao";
 import { PaginaDaAgenda } from "./PaginaDaAgenda";
+import { PaginaDaCentralDeEstudo } from "./PaginaDaCentralDeEstudo";
 import { PaginaDoFormularioDeRotina } from "./PaginaDoFormularioDeRotina";
 import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
 import { PaginaDaRevisao } from "./PaginaDaRevisao";
@@ -609,6 +610,17 @@ function TelaDaRota({
         <PaginaDeInicio
           cliente={cliente}
           nomeDeUsuario={nomeDeUsuario}
+          aoIniciarEstudo={aoIniciarEstudoDaAgenda}
+        />
+      );
+
+    case "central-de-estudo":
+      // FR-312: a área Estudo reúne a Agenda semanal, as Estatísticas dos
+      // últimos sete dias e as últimas Sessões; o início autorizado de um
+      // Compromisso é o mesmo que o Início já entrega à casca (FR-231).
+      return (
+        <PaginaDaCentralDeEstudo
+          cliente={cliente}
           aoIniciarEstudo={aoIniciarEstudoDaAgenda}
         />
       );

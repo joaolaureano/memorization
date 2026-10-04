@@ -20,7 +20,6 @@ import {
 } from "../agenda/datas";
 import {
   descreverQuantidade,
-  proximoCompromissoElegivel,
   resumirDia,
   rotuloDoCompromisso,
   rotuloDoEstadoDoDia,
@@ -30,10 +29,17 @@ import type { ResumoDoDia } from "../agenda/estado-do-dia";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
- * O bloco «Agenda de estudo» de Início (016, FR-227–FR-230, FR-240, FR-246):
- * o resumo de hoje, o calendário compacto da semana e os estudos do dia
- * selecionado. Fica **antes** da Revisão do dia (A-06), com estado próprio — uma
- * falha aqui não esconde o resto de Início, e o resto não esconde a Agenda.
+ * O bloco «Agenda de estudo» em duas apresentações (019):
+ *
+ * - `modo: "hoje"` — a Agenda compacta de Início (FR-311, FR-321, FR-322): a
+ *   data, o resumo de hoje e, no máximo, os três primeiros estudos de hoje, com
+ *   um único link para a Agenda semanal. Sem calendário e sem «Continuar
+ *   estudos».
+ * - `modo: "semana"` — a Agenda semanal da área Estudo (FR-313): o calendário
+ *   da semana, a navegação entre semanas e os estudos do dia selecionado.
+ *
+ * Tem estado próprio — uma falha aqui não esconde o resto da tela, e o resto
+ * não esconde a Agenda.
  *
  * A tela não decide o que vale: o servidor devolve o dia de hoje (no fuso do
  * navegador), os Compromissos e a elegibilidade; a tela só os apresenta, deriva
@@ -42,8 +48,12 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * ou falta (FR-229, FR-240): os dados anteriores só ficam visíveis com a
  * indicação de atualização ou de falha.
  *
- * Início reavalia a data ao voltar à tela, em «Atualizar agenda» e ao atravessar
- * a meia-noite com a tela ativa (FR-246); o fuso usado aparece em texto.
+ * As ações da Agenda (Agendar estudo, Gerenciar rotinas) ficam no cabeçalho das
+ * páginas, não neste bloco; repetir uma leitura só existe em «Tentar novamente»
+ * nas falhas (FR-318). Ao voltar à tela e ao atravessar a meia-noite a data é
+ * reavaliada: sem uma escolha ativa, a Agenda volta à semana e ao dia de hoje;
+ * com um dia ou uma semana escolhidos, relê a semana pedida preservando a
+ * seleção (FR-319, FR-320). O fuso usado aparece em texto.
  */
 
 /** O estado da leitura: dados anteriores permanecem enquanto atualiza ou falha. */
@@ -57,9 +67,12 @@ interface EstadoDaAgenda {
 
 export function AgendaDeEstudo({
   cliente,
+  modo,
   aoIniciarEstudo,
 }: {
   cliente: ClienteDoAcervo;
+  /** "hoje" é a Agenda compacta de Início; "semana" é a Agenda semanal de Estudo (FR-311, FR-313). */
+  modo: "hoje" | "semana";
   /** Entrega o início autorizado à casca, que abre a Sessão (FR-231). */
   aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
 }) {
@@ -72,13 +85,31 @@ export function AgendaDeEstudo({
   // A semana pedida e o dia que o Usuário escolheu; `null` segue o servidor.
   const [semanaPedida, setSemanaPedida] = useState<string | null>(null);
   const [selecionado, setSelecionado] = useState<string | null>(null);
+  // FR-319: enquanto verdadeiro, a Agenda segue o «hoje» do servidor — uma
+  // releitura automática volta à semana e ao dia de hoje. Escolher um dia ou
+  // trocar de semana passa a acompanhar a escolha da pessoa.
+  const [acompanhaHoje, setAcompanhaHoje] = useState(true);
   const [iniciando, setIniciando] = useState<string | null>(null);
   const [falhaDeInicio, setFalhaDeInicio] = useState<string | null>(null);
   const ultimaLeitura = useRef(0);
+  // Os listeners de visibilidade e de meia-noite reagem fora do render e
+  // precisam do estado mais recente; as refs espelham esse estado para que os
+  // efeitos não sejam recriados a cada escolha de dia (FR-319).
+  const acompanhaHojeRef = useRef(acompanhaHoje);
+  const semanaPedidaRef = useRef(semanaPedida);
+  const selecionadoRef = useRef(selecionado);
+
+  useEffect(() => {
+    acompanhaHojeRef.current = acompanhaHoje;
+    semanaPedidaRef.current = semanaPedida;
+    selecionadoRef.current = selecionado;
+  }, [acompanhaHoje, semanaPedida, selecionado]);
 
   /**
    * Lê a semana de `inicio` (ou a de hoje, quando `null`). Só a leitura mais
-   * recente vale: uma resposta atrasada de um pedido antigo é descartada.
+   * recente vale: uma resposta atrasada de um pedido antigo é descartada. O
+   * `diaAoChegar` é o dia que fica selecionado quando a resposta chega — `null`
+   * volta a seguir o servidor.
    */
   const carregar = useCallback(
     async (inicio: string | null, diaAoChegar: string | null = null) => {
@@ -125,16 +156,32 @@ export function AgendaDeEstudo({
     void carregar(null);
   }, [carregar]);
 
-  // FR-246: ao atravessar a meia-noite com a tela ativa e ao voltar a ela, a
-  // data é reavaliada — o servidor devolve o novo «hoje».
+  /**
+   * Relê a Agenda — a ação de «Tentar novamente» nas falhas (FR-318) e a
+   * releitura da meia-noite e da volta à tela (FR-319): sem escolha ativa,
+   * volta à semana e ao dia de hoje; com escolha, relê a semana pedida
+   * preservando o dia selecionado.
+   */
+  const atualizar = useCallback((): void => {
+    if (acompanhaHojeRef.current) {
+      void carregar(null);
+
+      return;
+    }
+
+    void carregar(semanaPedidaRef.current, selecionadoRef.current);
+  }, [carregar]);
+
+  // FR-319: a data é reavaliada com a tela ativa ao atravessar a meia-noite e ao
+  // voltar a ela; o temporizador é rearmado quando o «hoje» do servidor muda.
   useEffect(() => {
     const aoVoltar = (): void => {
       if (document.visibilityState === "visible") {
-        void carregar(null);
+        atualizar();
       }
     };
     const temporizador = window.setTimeout(
-      () => void carregar(null),
+      atualizar,
       milissegundosAteAMeiaNoite(fuso, new Date()) + 1000,
     );
 
@@ -144,7 +191,7 @@ export function AgendaDeEstudo({
       window.clearTimeout(temporizador);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
-  }, [carregar, fuso, estado.dados?.hoje]);
+  }, [atualizar, fuso, estado.dados?.hoje]);
 
   const dados = estado.dados;
 
@@ -158,15 +205,21 @@ export function AgendaDeEstudo({
     const novoInicio = somarDias(base, deslocamento);
 
     // FR-228: a semana anterior ou seguinte seleciona o mesmo dia da semana.
+    // FR-319: trocar de semana interrompe o acompanhamento de hoje.
+    setAcompanhaHoje(false);
     void carregar(novoInicio, somarDias(novoInicio, diaDaSemana(dia) - 1));
   }
 
   function irParaHoje(): void {
-    void carregar(null, null);
+    // FR-319: voltar a hoje devolve a Agenda ao acompanhamento do servidor.
+    setAcompanhaHoje(true);
+    void carregar(null);
   }
 
-  function atualizar(): void {
-    void carregar(semanaPedida, selecionado);
+  function selecionarDia(data: string): void {
+    // FR-319: uma escolha explícita interrompe o acompanhamento de hoje.
+    setAcompanhaHoje(false);
+    setSelecionado(data);
   }
 
   async function estudar(compromisso: CompromissoDeEstudo): Promise<void> {
@@ -196,20 +249,15 @@ export function AgendaDeEstudo({
   }
 
   return (
-    <section className="cartao agenda" aria-labelledby="titulo-da-agenda">
-      <div className="agenda__cabecalho">
-        <p className="sobretitulo" id="titulo-da-agenda">
-          Agenda de estudo
-        </p>
-        <div className="agenda__links">
-          <a className="botao botao--secundario" href="#/agenda/nova">
-            Agendar estudo
-          </a>
-          <a className="botao botao--secundario" href="#/agenda">
-            Gerenciar agenda
-          </a>
-        </div>
-      </div>
+    <section
+      className={
+        modo === "hoje" ? "cartao agenda agenda--hoje" : "cartao agenda"
+      }
+      aria-labelledby="titulo-da-agenda"
+    >
+      <h2 id="titulo-da-agenda">
+        {modo === "hoje" ? "Agenda de hoje" : "Agenda semanal"}
+      </h2>
 
       {dados === null && estado.carregando ? (
         <EstadoDaCarga estado="carregando" mensagem="Carregando a agenda…" />
@@ -247,30 +295,34 @@ export function AgendaDeEstudo({
             </p>
           ) : null}
 
-          <ResumoDeHoje
-            dados={dados}
-            iniciando={iniciando !== null}
-            aoEstudar={(compromisso) => void estudar(compromisso)}
-          />
+          {modo === "hoje" ? (
+            <AgendaDeHoje
+              dados={dados}
+              iniciando={iniciando}
+              falhaDeInicio={falhaDeInicio}
+              aoEstudar={(compromisso) => void estudar(compromisso)}
+            />
+          ) : (
+            <>
+              <Semana
+                dados={dados}
+                selecionado={selecionado}
+                fuso={fuso}
+                atualizando={estado.carregando}
+                aoSelecionar={selecionarDia}
+                aoIrParaSemana={irParaSemana}
+                aoIrParaHoje={irParaHoje}
+              />
 
-          <Semana
-            dados={dados}
-            selecionado={selecionado}
-            fuso={fuso}
-            atualizando={estado.carregando}
-            aoSelecionar={setSelecionado}
-            aoIrParaSemana={irParaSemana}
-            aoIrParaHoje={irParaHoje}
-            aoAtualizar={atualizar}
-          />
-
-          <EstudosDoDia
-            dados={dados}
-            selecionado={selecionado ?? dados.hoje}
-            iniciando={iniciando}
-            falhaDeInicio={falhaDeInicio}
-            aoEstudar={(compromisso) => void estudar(compromisso)}
-          />
+              <EstudosDoDia
+                dados={dados}
+                selecionado={selecionado ?? dados.hoje}
+                iniciando={iniciando}
+                falhaDeInicio={falhaDeInicio}
+                aoEstudar={(compromisso) => void estudar(compromisso)}
+              />
+            </>
+          )}
         </div>
       ) : null}
     </section>
@@ -278,68 +330,93 @@ export function AgendaDeEstudo({
 }
 
 /**
- * O resumo de **hoje** (FR-227): a data, concluídos e previstos e a ação para o
- * primeiro Compromisso pendente elegível. Continua se referindo a hoje mesmo
- * quando outro dia está selecionado.
+ * A Agenda compacta de Início (FR-311, FR-321, FR-322): a data, o resumo de hoje
+ * e, no máximo, os três primeiros estudos de hoje. Sem calendário e sem
+ * «Continuar estudos» — a Agenda completa fica em Estudo, pelo rodapé.
  */
-function ResumoDeHoje({
+function AgendaDeHoje({
   dados,
   iniciando,
+  falhaDeInicio,
   aoEstudar,
 }: {
   dados: SemanaDaAgenda;
-  iniciando: boolean;
+  iniciando: string | null;
+  falhaDeInicio: string | null;
   aoEstudar: (compromisso: CompromissoDeEstudo) => void;
 }) {
   const resumo = resumirDia(dados.hoje, dados.hoje, dados.compromissosDeHoje);
-  const proximo = proximoCompromissoElegivel(dados.compromissosDeHoje);
-  const soIndisponiveis =
-    resumo.total > resumo.concluidos &&
-    proximo === null &&
-    dados.compromissosDeHoje.every(
-      (compromisso) =>
-        compromisso.estado !== "pendente" || compromisso.indisponivel,
-    );
-
-  let titulo: string;
-  let detalhe: string | null = null;
-
-  if (resumo.total === 0) {
-    titulo = "Nenhum estudo agendado para hoje";
-  } else if (resumo.concluidos === resumo.total) {
-    titulo = "Agenda de hoje concluída";
-    detalhe = textoDaContagem(resumo);
-  } else {
-    titulo = textoDaContagem(resumo);
-    detalhe = soIndisponiveis
-      ? "Os estudos que restam estão com o Baralho indisponível. Ajuste a agenda para voltar a estudar."
-      : null;
-  }
+  // Os Compromissos de hoje na ordem recebida, sem os cancelados; só os três
+  // primeiros aparecem aqui (FR-311).
+  const deHoje = dados.compromissosDeHoje.filter(
+    (compromisso) => compromisso.estado !== "cancelado",
+  );
+  const visiveis = deHoje.slice(0, 3);
 
   return (
-    <div className="agenda__hoje" aria-labelledby="titulo-de-hoje" role="group">
-      <p className="sobretitulo">Hoje · {dataPorExtenso(dados.hoje)}</p>
-      <h2 id="titulo-de-hoje">{titulo}</h2>
-      {detalhe !== null ? <p className="texto-secundario">{detalhe}</p> : null}
-      <p className="texto-secundario">Fuso horário: {dados.fuso}</p>
+    <>
+      <p className="texto-secundario">{dataPorExtenso(dados.hoje)}</p>
 
-      {proximo !== null ? (
-        <button
-          type="button"
-          className="botao botao--primario"
-          disabled={iniciando}
-          onClick={() => aoEstudar(proximo)}
-        >
-          {iniciando ? "Iniciando…" : "Continuar estudos"}
-        </button>
+      {resumo.total === 0 ? (
+        <p>Nenhum estudo agendado para hoje</p>
+      ) : resumo.concluidos === resumo.total ? (
+        <>
+          <p>Agenda de hoje concluída</p>
+          <p className="texto-secundario">{textoDaContagem(resumo)}</p>
+        </>
+      ) : (
+        <p>{textoDaContagem(resumo)}</p>
+      )}
+
+      {falhaDeInicio !== null ? (
+        <p className="erro" role="alert">
+          {falhaDeInicio}
+        </p>
       ) : null}
 
-      {soIndisponiveis ? (
-        <a className="botao botao--secundario" href="#/agenda">
-          Ajustar agenda
+      {visiveis.length > 0 ? (
+        <ul className="lista agenda__estudos">
+          {visiveis.map((compromisso) => (
+            <li
+              key={`${compromisso.rotinaId}-${compromisso.data}`}
+              className="agenda__estudo"
+            >
+              <div className="agenda__estudo-texto">
+                <p className="titulo-do-item">{compromisso.nomeDoBaralho}</p>
+                <p className="texto-secundario">
+                  {descreverQuantidade(compromisso.quantidade)} ·{" "}
+                  {rotuloDoCompromisso(compromisso.estado)}
+                  {compromisso.indisponivel ? (
+                    <>
+                      {" · "}
+                      <strong>Baralho indisponível</strong>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+              <AcaoDoCompromisso
+                compromisso={compromisso}
+                hoje={dados.hoje}
+                iniciando={iniciando}
+                aoEstudar={aoEstudar}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {resumo.total === 0 && dados.compromissos.length === 0 ? (
+        <a className="botao botao--secundario" href="#/agenda/nova">
+          Agendar estudo
         </a>
       ) : null}
-    </div>
+
+      <p className="texto-secundario">Fuso horário: {dados.fuso}</p>
+
+      <a className="botao botao--secundario" href="#/estudo">
+        {deHoje.length > 3 ? "Ver todos em Estudo" : "Ver agenda semanal"}
+      </a>
+    </>
   );
 }
 
@@ -352,7 +429,6 @@ function Semana({
   aoSelecionar,
   aoIrParaSemana,
   aoIrParaHoje,
-  aoAtualizar,
 }: {
   dados: SemanaDaAgenda;
   selecionado: string | null;
@@ -361,7 +437,6 @@ function Semana({
   aoSelecionar: (data: string) => void;
   aoIrParaSemana: (deslocamento: number) => void;
   aoIrParaHoje: () => void;
-  aoAtualizar: () => void;
 }) {
   const dias = diasDaSemana(dados.inicio);
   const dataSelecionada =
@@ -372,10 +447,11 @@ function Semana({
         : dias[0];
 
   return (
-    <div className="agenda__semana" role="group" aria-labelledby="titulo-da-semana">
-      <h2 id="titulo-da-semana" className="agenda__titulo-da-semana">
-        Sua semana
-      </h2>
+    <div
+      className="agenda__semana"
+      role="group"
+      aria-labelledby="titulo-da-agenda"
+    >
       <p className="agenda__intervalo" aria-live="polite">
         {descreverSemana(dados.inicio)}
       </p>
@@ -404,14 +480,6 @@ function Semana({
           disabled={atualizando}
         >
           Semana seguinte
-        </button>
-        <button
-          type="button"
-          className="botao botao--secundario"
-          onClick={aoAtualizar}
-          disabled={atualizando}
-        >
-          Atualizar agenda
         </button>
       </div>
 

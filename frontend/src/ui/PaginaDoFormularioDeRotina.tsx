@@ -346,14 +346,14 @@ export function PaginaDoFormularioDeRotina({
             : ""
         }`
       : "Escolha o Baralho e ao menos um dia para ver o resumo.";
-  const voltar = editando ? "#/agenda" : "#/inicio";
+  const voltar = "#/agenda";
 
   return (
     <div className="pagina">
       <p className="voltar">
         <a href={voltar}>
           <span aria-hidden="true">←</span>{" "}
-          {editando ? "Voltar para Gerenciar agenda" : "Voltar para Início"}
+          Voltar para Rotinas de estudo
         </a>
       </p>
 

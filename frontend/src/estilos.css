@@ -8,7 +8,8 @@
  * Formulário: campo, rotulo, contador, erro, ajuda, campo-de-senha
  * Mensagens:  aviso, aviso--erro, aviso--sucesso, carregando
  * Estudo:     cartao-de-estudo, lado-do-cartao, conteudo-do-cartao,
- *             botoes-de-resultado, progresso, progresso__barra, percentual
+ *             botoes-de-resultado, progresso, progresso__barra, percentual,
+ *             resumo--tres, resumo-de-sete-dias, inicio__blocos, agenda--hoje
  * Resumo:     resumo, estatistica, estatistica__valor, estatistica__rotulo
  * Diálogos:   titulo-do-dialogo, descricao-do-dialogo, acoes-do-dialogo
  * Início:     resumo--quatro, grafico-semanal, grafico-semanal__dia,
@@ -37,7 +38,8 @@
   --on-accent: #0b1020;
   --radius: 16px;
   --space: 16px;
-  --altura-da-barra-inferior: 60px;
+  /* Os rótulos podem quebrar em duas linhas com cinco destinos. */
+  --altura-da-barra-inferior: 72px;
 }
 
 * {
@@ -861,6 +863,32 @@ progress {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* O resumo do Estudo é de três números: três colunas iguais no desktop e uma
+ * coluna no telefone (a regra estreita está no @media de 600px). */
+.resumo--tres {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Os blocos do Início correm empilhados e passam a duas colunas a partir de
+ * 1024px. O gap é o mesmo da .pilha e os .cartao filhos não trazem margem
+ * própria, por isso a grelha é a única separação entre blocos. */
+.inicio__blocos {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.inicio__blocos > .cartao {
+  margin: 0;
+}
+
+@media (min-width: 1024px) {
+  .inicio__blocos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Sete colunas iguais dentro de um cartão, da mais antiga à mais recente. */
 .grafico-semanal {
   display: grid;
@@ -911,6 +939,12 @@ progress {
 .grafico-semanal__rotulo--hoje {
   color: var(--text);
   font-weight: 700;
+}
+
+/* O total dos sete dias é texto secundário: discreto e colado ao gráfico. */
+.resumo-de-sete-dias {
+  margin: 4px 0 0;
+  color: var(--muted);
 }
 
 /* Sessão recente: a linha inteira é o link do Registro, com o percentual à
@@ -1133,9 +1167,10 @@ details summary {
     font-size: 20px;
   }
 
-  /* Reserva espaço para a barra fixa não cobrir o conteúdo. */
+  /* Reserva a altura real da barra fixa (com rótulos em duas linhas) mais a
+   * área segura do aparelho, para não cobrir o conteúdo. */
   .aplicacao {
-    padding: 28px 20px calc(40px + var(--altura-da-barra-inferior));
+    padding: 28px 20px calc(var(--altura-da-barra-inferior) + env(safe-area-inset-bottom));
   }
 
   .navegacao-principal {
@@ -1152,9 +1187,16 @@ details summary {
     padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
+  /* Os cinco destinos dividem a barra em partes iguais; o rótulo pode quebrar
+   * em duas linhas sem que o alvo desça de 44px. */
   .navegacao-principal a {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 4px;
     text-align: center;
+    white-space: normal;
+    line-height: 1.2;
+    min-height: 44px;
   }
 
   .acoes > .botao {
@@ -1172,6 +1214,11 @@ details summary {
   /* Quatro números em 2x2: cada tile mantém largura legível a 360px. */
   .resumo--quatro {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Três números viram uma coluna para o valor não encolher. */
+  .resumo--tres {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Sete colunas cabem em 360px: gap menor e trilho mais baixo. */
@@ -1219,7 +1266,7 @@ details summary {
 /* ---------------------------------------------------------------------------
  * Agenda de estudo (016)
  * Vocabulário: agenda, agenda__cabecalho, agenda__links, agenda__hoje,
- *   agenda__semana, agenda__titulo-da-semana, agenda__intervalo,
+ *   agenda__semana, agenda__intervalo,
  *   agenda__controles, agenda__dias, agenda__dia (+ --estado, --hoje,
  *   --selecionado), agenda__dia-detalhe, agenda__estudos, agenda__estudo,
  *   agenda__rotinas, agenda__rotina, agenda__escolha-de-dias,
@@ -1259,11 +1306,6 @@ details summary {
 .agenda__hoje h2 {
   margin-bottom: 8px;
   font-size: 21px;
-}
-
-.agenda__titulo-da-semana {
-  margin-bottom: 4px;
-  font-size: 19px;
 }
 
 .agenda__intervalo {
@@ -1362,6 +1404,12 @@ details summary {
 .agenda__estudos,
 .agenda__rotinas {
   margin-top: 8px;
+}
+
+/* Na Agenda de hoje os estudos do dia formam uma lista compacta: mesma
+ * apresentação do .agenda__estudos, com o gap reduzido entre os itens. */
+.agenda--hoje .agenda__estudos {
+  gap: 4px;
 }
 
 .agenda__estudo,

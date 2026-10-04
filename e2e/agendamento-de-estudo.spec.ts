@@ -21,8 +21,9 @@ import {
 } from "./servidores-locais";
 import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 
-// T1615 e T1623 — prova E2E real da Agenda de estudo (spec 016; FR-222–FR-256,
-// SC-095–SC-104).
+// T1615 e T1623 — prova E2E real da Agenda de estudo (spec 016, revista pela
+// spec 019: «Agenda de hoje» em Início e «Agenda semanal» em Estudo;
+// FR-222–FR-256, FR-311–FR-322, SC-095–SC-104).
 //
 // Nenhuma rede é interceptada e nenhum dado é fabricado: a API real (node +
 // SQLite em arquivo) e o frontend real (Vite dev) sobem como processos filhos
@@ -200,9 +201,12 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
 
     const pagina = await abrirComoUsuario(browser, ambiente, ana);
 
-    // Início: sem Rotinas, o bloco da Agenda orienta Agendar estudo.
+    // Início (019): a Agenda compacta de hoje orienta Agendar estudo.
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "Nenhum estudo agendado para hoje" }),
+      pagina.getByRole("heading", { level: 2, name: "Agenda de hoje" }),
+    ).toBeVisible();
+    await expect(
+      pagina.getByText("Nenhum estudo agendado para hoje"),
     ).toBeVisible();
 
     await pagina.getByRole("link", { name: "Agendar estudo" }).click();
@@ -234,17 +238,21 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
     await pagina.getByRole("button", { name: "Salvar agendamento" }).click();
 
     await expect(
-      pagina.getByRole("heading", { level: 1, name: "Gerenciar agenda" }),
+      pagina.getByRole("heading", { level: 1, name: "Rotinas de estudo" }),
     ).toBeVisible();
     await expect(pagina.getByText(/Rotina de Inglês criada/)).toBeVisible();
 
-    await pagina.getByRole("link", { name: "Voltar para Início" }).click();
+    await pagina.getByRole("link", { name: "Voltar para Estudo" }).click();
+    await pagina
+      .getByRole("navigation", { name: "Principal" })
+      .getByRole("link", { name: "Início" })
+      .click();
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "0 de 1 estudo concluído" }),
+      pagina.getByText("0 de 1 estudo concluído"),
     ).toBeVisible();
 
     // Estudar pelo Compromisso: a Sessão começa direto, com 2 dos 3 Cartões.
-    await pagina.getByRole("button", { name: "Continuar estudos" }).click();
+    await pagina.getByRole("button", { name: "Estudar Inglês" }).click();
     await expect(
       pagina.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
     ).toBeVisible();
@@ -264,13 +272,13 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
 
     await pagina.getByRole("link", { name: "Voltar para Início" }).click();
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "Agenda de hoje concluída" }),
+      pagina.getByText("Agenda de hoje concluída"),
     ).toBeVisible();
 
     // Reabrir a aplicação: a conclusão persiste e Ver Sessão leva ao Registro.
     await pagina.reload();
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "Agenda de hoje concluída" }),
+      pagina.getByText("Agenda de hoje concluída"),
     ).toBeVisible();
     await pagina.getByRole("link", { name: "Ver Sessão de Inglês" }).click();
     await expect(pagina).toHaveURL(/#\/sessoes\//);
@@ -322,7 +330,7 @@ test("interromper a Sessão da Agenda e recarregar não registram nada nem concl
 
     const pagina = await abrirComoUsuario(browser, ambiente, bia);
 
-    await pagina.getByRole("button", { name: "Continuar estudos" }).click();
+    await pagina.getByRole("button", { name: "Estudar Francês" }).click();
     await expect(
       pagina.getByRole("heading", { level: 1, name: "Estudar Francês" }),
     ).toBeVisible();
@@ -330,19 +338,19 @@ test("interromper a Sessão da Agenda e recarregar não registram nada nem concl
     // Recarregar abandona a Sessão e volta a Início, com o Compromisso pendente.
     await pagina.reload();
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "0 de 1 estudo concluído" }),
+      pagina.getByText("0 de 1 estudo concluído"),
     ).toBeVisible();
     await expect(pagina).toHaveURL(/#\/inicio$/);
 
     // Interromper pela interface, com a confirmação.
-    await pagina.getByRole("button", { name: "Continuar estudos" }).click();
+    await pagina.getByRole("button", { name: "Estudar Francês" }).click();
     await pagina.getByRole("button", { name: "Interromper" }).click();
     await pagina
       .getByRole("dialog")
       .getByRole("button", { name: "Interromper" })
       .click();
     await expect(
-      pagina.getByRole("heading", { level: 2, name: "0 de 1 estudo concluído" }),
+      pagina.getByText("0 de 1 estudo concluído"),
     ).toBeVisible();
 
     // Nenhum Registro foi gravado.
@@ -377,7 +385,11 @@ test("dois aparelhos do mesmo Usuário veem a mesma Agenda e o outro Usuário n�
     const segundo = await abrirComoUsuario(browser, ambiente, ana);
 
     for (const pagina of [primeiro, segundo]) {
-      await pagina.getByRole("link", { name: "Gerenciar agenda" }).click();
+      await pagina
+        .getByRole("navigation", { name: "Principal" })
+        .getByRole("link", { name: "Estudo" })
+        .click();
+      await pagina.getByRole("link", { name: "Gerenciar rotinas" }).click();
       await expect(
         pagina.getByText(
           "Inglês · segunda, terça, quarta, quinta, sexta, sábado e domingo · 20 Cartões",
@@ -387,7 +399,11 @@ test("dois aparelhos do mesmo Usuário veem a mesma Agenda e o outro Usuário n�
 
     const deBruno = await abrirComoUsuario(browser, ambiente, bruno);
 
-    await deBruno.getByRole("link", { name: "Gerenciar agenda" }).click();
+    await deBruno
+      .getByRole("navigation", { name: "Principal" })
+      .getByRole("link", { name: "Estudo" })
+      .click();
+    await deBruno.getByRole("link", { name: "Gerenciar rotinas" }).click();
     await expect(
       deBruno.getByText("Você ainda não tem Rotinas de estudo."),
     ).toBeVisible();
@@ -472,7 +488,7 @@ test("teclado: criar, pausar, retomar e excluir a Rotina inteiramente por teclad
     await pagina.getByRole("button", { name: "Salvar agendamento" }).focus();
     await pagina.keyboard.press("Enter");
     await expect(
-      pagina.getByRole("heading", { level: 1, name: "Gerenciar agenda" }),
+      pagina.getByRole("heading", { level: 1, name: "Rotinas de estudo" }),
     ).toBeVisible();
     await expect(
       pagina.getByText("Inglês · segunda e terça · Todos os Cartões", { exact: true }),
@@ -532,9 +548,17 @@ for (const largura of [360, 390, 768, 1440]) {
 
       const pagina = await abrirComoUsuario(browser, ambiente, dora, largura);
 
-      // Início: o calendário.
+      // Início (019): a Agenda compacta de hoje; o calendário fica em Estudo.
       await expect(
-        pagina.getByRole("heading", { level: 2, name: "0 de 1 estudo concluído" }),
+        pagina.getByText("0 de 1 estudo concluído"),
+      ).toBeVisible();
+
+      await pagina
+        .getByRole("navigation", { name: "Principal" })
+        .getByRole("link", { name: "Estudo" })
+        .click();
+      await expect(
+        pagina.getByRole("heading", { level: 2, name: "Agenda semanal" }),
       ).toBeVisible();
 
       const dias = pagina.locator(".agenda__dia");
@@ -580,10 +604,10 @@ for (const largura of [360, 390, 768, 1440]) {
 
       expect(await posicaoNaPagina()).toEqual(antes);
 
-      // Gerenciar agenda e formulário.
+      // Rotinas de estudo (019) e formulário.
       await pagina.goto(`${ambiente.enderecoDoFrontend}/#/agenda`);
       await expect(
-        pagina.getByRole("heading", { level: 1, name: "Gerenciar agenda" }),
+        pagina.getByRole("heading", { level: 1, name: "Rotinas de estudo" }),
       ).toBeVisible();
       await expect(pagina.getByText(/Todos|5 Cartões/).first()).toBeVisible();
       await semRolagemHorizontal(pagina);

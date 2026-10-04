@@ -4,10 +4,12 @@ import type { Rota } from "./navegacao";
 /**
  * A moldura da aplicação (FR-139): a marca, a navegação principal e Sair.
  *
- * Os destinos são Início, Baralhos, Cartões e Preferências, nessa ordem
- * (FR-168, FR-212): o Início abre a navegação por ser a rota padrão, o destino
- * de quem acabou de Entrar, e Preferências fecha a lista por ser a tela de
- * ajustes do Usuário.
+ * Os destinos são Início, Estudo, Baralhos, Cartões e Preferências, nessa
+ * ordem (FR-168, FR-212, FR-307): o Início abre a navegação por ser a rota
+ * padrão, o destino de quem acabou de Entrar; Estudo vem logo depois por
+ * reunir a Agenda semanal, as Estatísticas e as Últimas sessões, e as Rotinas
+ * de estudo ficam em tela própria, alcançada a partir dele (FR-316); e
+ * Preferências fecha a lista por ser a tela de ajustes do Usuário.
  *
  * A marca e Sair ficam no cabeçalho em qualquer largura; é a navegação que, em
  * telas de até 600px, desce para a barra inferior pela CSS (`.moldura`,
@@ -42,6 +44,12 @@ export function Moldura({
           aria-current={destino === "inicio" ? "page" : undefined}
         >
           Início
+        </a>
+        <a
+          href={hashDaRota({ nome: "central-de-estudo" })}
+          aria-current={destino === "estudo" ? "page" : undefined}
+        >
+          Estudo
         </a>
         <a
           href={hashDaRota({ nome: "baralhos" })}

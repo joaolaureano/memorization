@@ -11,9 +11,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ClienteDoAcervo } from "../src/acervo-cliente/cliente";
 import { INDISPONIVEL } from "../src/acervo-cliente/cliente";
 import type { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { fusoDoNavegador } from "../src/agenda/datas";
+import {
+  diaDaSemana,
+  fusoDoNavegador,
+  hojeNoFuso,
+  segundaFeiraDe,
+} from "../src/agenda/datas";
+import { AgendaDeEstudo } from "../src/ui/AgendaDeEstudo";
 import { Aplicacao } from "../src/ui/Aplicacao";
-import { PaginaDeInicio } from "../src/ui/PaginaDeInicio";
 import {
   CREDENCIAL_DE_PROVA,
   aguardarVerificacaoDoAcesso,
@@ -22,7 +27,7 @@ import {
 
 /**
  * T1606/T1609/T1612/T1615/T1618/T1621 — a Agenda de estudo na interface (016):
- * o bloco de Início, a Sessão autorizada, Gerenciar agenda e o formulário. O
+ * o bloco de Início, a Sessão autorizada, Rotinas de estudo e o formulário. O
  * stand-in em memória reproduz as regras observáveis do servidor; a tela só
  * apresenta o que ele devolve.
  */
@@ -143,14 +148,14 @@ async function abrir(servidor: ClienteEmMemoria, hash = "#/inicio") {
 }
 
 function rotulosDosDias(): HTMLElement[] {
-  return within(screen.getByRole("group", { name: "Sua semana" })).getAllByRole(
+  return within(screen.getByRole("group", { name: "Agenda semanal" })).getAllByRole(
     "button",
     { pressed: undefined },
   ).filter((botao) => botao.hasAttribute("aria-pressed"));
 }
 
 describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
-  it("aparece antes da Revisão do dia e orienta Agendar estudo quando não há Rotinas", async () => {
+  it("aparece depois da Revisão do dia quando não há Rotinas (019, FR-310)", async () => {
     const servidor = clienteDeProva();
 
     await abrir(servidor);
@@ -159,20 +164,12 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
       await screen.findByText("Nenhum estudo agendado para hoje"),
     ).toBeInTheDocument();
 
-    const agenda = screen.getByText("Agenda de estudo");
-    const revisao = screen.getByText("Revisão do dia");
+    const agenda = screen.getByRole("heading", { name: "Agenda de hoje" });
+    const revisao = screen.getByRole("heading", { name: "Revisão do dia" });
 
     expect(
-      agenda.compareDocumentPosition(revisao) & Node.DOCUMENT_POSITION_FOLLOWING,
+      revisao.compareDocumentPosition(agenda) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Agendar estudo" })).toHaveAttribute(
-      "href",
-      "#/agenda/nova",
-    );
-    expect(screen.getByRole("link", { name: "Gerenciar agenda" })).toHaveAttribute(
-      "href",
-      "#/agenda",
-    );
     expect(screen.getAllByText(`Fuso horário: ${FUSO}`).length).toBeGreaterThan(0);
   });
 
@@ -181,12 +178,9 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
     const ingles = await baralhoComCartoes(servidor);
 
     await rotinaTodosOsDias(servidor, ingles.id, { quantidade: 2 });
-    await abrir(servidor);
+    render(<AgendaDeEstudo cliente={servidor} modo="semana" />);
 
-    expect(await screen.findByText("0 de 1 estudo concluído")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Continuar estudos" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/0 de 1 estudo concluído/)).toBeInTheDocument();
 
     const dias = rotulosDosDias();
 
@@ -208,13 +202,13 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
     ).toBeInTheDocument();
   });
 
-  it("selecionar outro dia não altera o resumo de hoje nem os dados (FR-230)", async () => {
+  it("selecionar outro dia detalha aquele dia sem perder o de hoje (FR-230)", async () => {
     const servidor = clienteDeProva();
     const ingles = await baralhoComCartoes(servidor);
 
     await rotinaTodosOsDias(servidor, ingles.id);
-    await abrir(servidor);
-    await screen.findByText("0 de 1 estudo concluído");
+    render(<AgendaDeEstudo cliente={servidor} modo="semana" />);
+    await screen.findByText(/0 de 1 estudo concluído/);
 
     const dias = rotulosDosDias();
     const indiceDeHoje = dias.findIndex((dia) =>
@@ -227,8 +221,9 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
 
     expect(outro).toHaveAttribute("aria-pressed", "true");
     expect(dias[indiceDeHoje]).toHaveAttribute("aria-pressed", "false");
-    // O resumo de hoje continua sendo o de hoje.
-    expect(screen.getByText("0 de 1 estudo concluído", { selector: "h2" })).toBeInTheDocument();
+    // O detalhe passa a ser o do dia escolhido, com os dados de hoje intactos.
+    expect(screen.queryByRole("region", { name: /\(hoje\)/ })).toBeNull();
+    expect(dias[indiceDeHoje].getAttribute("aria-label")).toMatch(/hoje/);
   });
 
   it("navega entre semanas mantendo o dia da semana e volta com Hoje (FR-228)", async () => {
@@ -236,8 +231,8 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
     const ingles = await baralhoComCartoes(servidor);
 
     await rotinaTodosOsDias(servidor, ingles.id);
-    await abrir(servidor);
-    await screen.findByText("0 de 1 estudo concluído");
+    render(<AgendaDeEstudo cliente={servidor} modo="semana" />);
+    await screen.findByText(/0 de 1 estudo concluído/);
 
     const intervalo = () =>
       document.querySelector(".agenda__intervalo")?.textContent ?? "";
@@ -293,7 +288,7 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
     await abrir(servidor);
 
     expect(await screen.findByText("Agenda de hoje concluída")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Continuar estudos" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Estudar Inglês" })).toBeNull();
     expect(screen.getByRole("link", { name: "Ver Sessão de Inglês" })).toHaveAttribute(
       "href",
       `#/sessoes/${inicio.inicio.id}`,
@@ -317,10 +312,7 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
       `#/agenda/${rotina.id}/editar`,
     );
     // A indisponibilidade não reduz o total nem conclui o Compromisso.
-    expect(
-      screen.getByText("0 de 1 estudo concluído", { selector: "h2" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Ajustar agenda" })).toBeInTheDocument();
+    expect(screen.getByText("0 de 1 estudo concluído")).toBeInTheDocument();
   });
 });
 
@@ -353,10 +345,10 @@ describe("falha e atualização da Agenda (FR-229, FR-240, FR-251)", () => {
     return { cliente, restaurar: () => (falhando = false) };
   }
 
-  it("falha ao carregar não vira zero nem «Tudo concluído», oferece Tentar novamente e mantém o resto", async () => {
+  it("falha ao carregar não vira zero nem «Tudo concluído» e oferece Tentar novamente", async () => {
     const { cliente, restaurar } = clienteQueFalhaNaAgenda();
 
-    render(<PaginaDeInicio cliente={cliente} nomeDeUsuario="Ana" />);
+    render(<AgendaDeEstudo cliente={cliente} modo="semana" />);
 
     const alerta = await screen.findByText(
       "A Agenda não está disponível agora. Tente novamente.",
@@ -365,16 +357,14 @@ describe("falha e atualização da Agenda (FR-229, FR-240, FR-251)", () => {
     expect(alerta).toBeInTheDocument();
     expect(screen.queryByText("Nenhum estudo agendado para hoje")).toBeNull();
     expect(screen.queryByText("Agenda de hoje concluída")).toBeNull();
-    // A Revisão do dia e as Estatísticas seguem acessíveis.
-    expect(await screen.findByText("Nada para revisar hoje")).toBeInTheDocument();
 
     restaurar();
 
-    const secao = screen.getByText("Agenda de estudo").closest("section");
+    const secao = screen.getByText("Agenda semanal").closest("section");
 
     fireEvent.click(within(secao as HTMLElement).getByRole("button", { name: "Tentar novamente" }));
 
-    expect(await screen.findByText("Nenhum estudo agendado para hoje")).toBeInTheDocument();
+    expect(await screen.findByText("Sem estudos neste dia.")).toBeInTheDocument();
   });
 
   it("dados anteriores só ficam visíveis com a indicação de falha na atualização", async () => {
@@ -382,17 +372,17 @@ describe("falha e atualização da Agenda (FR-229, FR-240, FR-251)", () => {
     const ingles = await baralhoComCartoes(servidor);
 
     await rotinaTodosOsDias(servidor, ingles.id);
-    await abrir(servidor);
-    await screen.findByText("0 de 1 estudo concluído");
+    render(<AgendaDeEstudo cliente={servidor} modo="semana" />);
+    await screen.findByText(/0 de 1 estudo concluído/);
 
-    simularIndisponibilidade();
-    fireEvent.click(screen.getByRole("button", { name: "Atualizar agenda" }));
+    servidor.simularIndisponibilidade();
+    fireEvent(document, new Event("visibilitychange"));
 
     expect(
       await screen.findByText(/Não foi possível atualizar a agenda/),
     ).toBeInTheDocument();
     // O que estava na tela permanece, mas marcado como possivelmente antigo.
-    expect(screen.getByText("0 de 1 estudo concluído", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByText(/0 de 1 estudo concluído/)).toBeInTheDocument();
   });
 });
 
@@ -418,7 +408,7 @@ describe("Sessão iniciada pela Agenda (FR-231–FR-236, FR-255)", () => {
     await rotinaTodosOsDias(servidor, ingles.id, { quantidade: 2 });
     await abrir(servidor);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Continuar estudos" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Estudar Inglês" }));
 
     // Sessão direta: sem tela de quantidade, com os 2 Cartões escolhidos.
     expect(
@@ -445,7 +435,7 @@ describe("Sessão iniciada pela Agenda (FR-231–FR-236, FR-255)", () => {
 
     await rotinaTodosOsDias(servidor, ingles.id);
     await abrir(servidor);
-    fireEvent.click(await screen.findByRole("button", { name: "Continuar estudos" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Estudar Inglês" }));
     await screen.findByRole("heading", { level: 1, name: "Estudar Inglês" });
 
     fireEvent.click(screen.getByRole("button", { name: "Interromper" }));
@@ -454,8 +444,8 @@ describe("Sessão iniciada pela Agenda (FR-231–FR-236, FR-255)", () => {
 
     fireEvent.click(within(dialogo).getByRole("button", { name: "Interromper" }));
 
-    expect(await screen.findByText("0 de 1 estudo concluído", { selector: "h2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continuar estudos" })).toBeInTheDocument();
+    expect(await screen.findByText("0 de 1 estudo concluído")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Estudar Inglês" })).toBeInTheDocument();
 
     const estatisticas = await servidor.obterEstatisticas(
       new Date(Date.now() - 86_400_000).toISOString(),
@@ -482,7 +472,7 @@ describe("Sessão iniciada pela Agenda (FR-231–FR-236, FR-255)", () => {
 
     await rotinaTodosOsDias(servidor, ingles.id);
     await abrir(servidor);
-    fireEvent.click(await screen.findByRole("button", { name: "Continuar estudos" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Estudar Inglês" }));
     await screen.findByRole("heading", { level: 1, name: "Estudar Inglês" });
 
     simularIndisponibilidade();
@@ -512,13 +502,13 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
     await abrir(servidor, "#/agenda");
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Gerenciar agenda" }),
+      await screen.findByRole("heading", { level: 1, name: "Rotinas de estudo" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Inglês · segunda e quinta · 20 Cartões")).toBeInTheDocument();
     expect(screen.getByText(/Situação: Ativa/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Voltar para Início" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Voltar para Estudo" })).toHaveAttribute(
       "href",
-      "#/inicio",
+      "#/estudo",
     );
     expect(screen.getByRole("link", { name: "Agendar estudo" })).toHaveAttribute(
       "href",
@@ -660,8 +650,8 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
 
     enviar();
 
-    // Salvar leva a Gerenciar agenda, com o resumo e o aviso de salvamento.
-    expect(await screen.findByRole("heading", { level: 1, name: "Gerenciar agenda" })).toBeInTheDocument();
+    // Salvar leva a Rotinas de estudo, com o resumo e o aviso de salvamento.
+    expect(await screen.findByRole("heading", { level: 1, name: "Rotinas de estudo" })).toBeInTheDocument();
     expect(await screen.findByText(/Rotina de Inglês criada: Inglês · segunda e quinta · 20 Cartões/)).toBeInTheDocument();
     expect(window.location.hash).toBe("#/agenda");
   });
@@ -700,7 +690,7 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
 
     fireEvent.click(within(dialogo).getByRole("button", { name: "Confirmar e salvar" }));
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Gerenciar agenda" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Rotinas de estudo" })).toBeInTheDocument();
 
     const lista = await servidor.listarRotinas();
 
@@ -729,7 +719,7 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
     restaurarDisponibilidade();
     fireEvent.click(screen.getByRole("button", { name: "Salvar agendamento" }));
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Gerenciar agenda" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Rotinas de estudo" })).toBeInTheDocument();
 
     const lista = await servidor.listarRotinas();
 
@@ -803,5 +793,120 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
 
     expect(screen.getByRole("checkbox", { name: "terça-feira" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "quarta-feira" })).not.toBeChecked();
+  });
+});
+
+describe("Agenda de hoje e Agenda semanal (019, FR-311, FR-313, FR-318, FR-319)", () => {
+  it("no modo hoje mostra três estudos, o total do dia e o caminho para Estudo", async () => {
+    const servidor = clienteDeProva();
+
+    for (let i = 1; i <= 4; i += 1) {
+      const baralho = await baralhoComCartoes(servidor, `Baralho ${i}`);
+
+      await rotinaTodosOsDias(servidor, baralho.id);
+    }
+
+    // A quinta Rotina deixa de incluir hoje: o estudo de hoje dela é cancelado.
+    const quinto = await baralhoComCartoes(servidor, "Baralho 5");
+    const cancelada = await rotinaTodosOsDias(servidor, quinto.id);
+    const diaDeHoje = diaDaSemana(hojeNoFuso(FUSO, new Date()));
+
+    await servidor.salvarRotina({
+      operacaoId: "sem-hoje",
+      acao: "editar",
+      id: cancelada.id,
+      versao: cancelada.versao,
+      baralhoId: quinto.id,
+      dias: [diaDeHoje === 7 ? 1 : diaDeHoje + 1],
+      quantidade: null,
+      fuso: FUSO,
+    });
+
+    render(<AgendaDeEstudo cliente={servidor} modo="hoje" />);
+
+    expect(await screen.findByText("0 de 4 estudos concluídos")).toBeInTheDocument();
+    expect(document.querySelectorAll(".agenda__estudos li")).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Ver todos em Estudo" })).toHaveAttribute(
+      "href",
+      "#/estudo",
+    );
+    expect(screen.queryByRole("button", { name: "Atualizar agenda" })).toBeNull();
+  });
+
+  it("no modo hoje, até três estudos levam à Agenda semanal", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+
+    await rotinaTodosOsDias(servidor, ingles.id);
+    await rotinaTodosOsDias(servidor, ingles.id);
+
+    render(<AgendaDeEstudo cliente={servidor} modo="hoje" />);
+
+    expect(await screen.findByText("0 de 2 estudos concluídos")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ver agenda semanal" })).toHaveAttribute(
+      "href",
+      "#/estudo",
+    );
+  });
+
+  it("sem compromissos na semana, orienta Agendar estudo", async () => {
+    const servidor = clienteDeProva();
+
+    render(<AgendaDeEstudo cliente={servidor} modo="hoje" />);
+
+    expect(await screen.findByText("Nenhum estudo agendado para hoje")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Agendar estudo" })).toHaveAttribute(
+      "href",
+      "#/agenda/nova",
+    );
+    expect(screen.queryByRole("button", { name: "Atualizar agenda" })).toBeNull();
+  });
+
+  it("no modo semana relê preservando o dia escolhido e volta à semana de hoje", async () => {
+    const chamadas: string[] = [];
+    const base = clienteDeProva();
+    const cliente = {
+      obterAgenda: async (inicio: string, fuso: string) => {
+        chamadas.push(inicio);
+
+        return base.obterAgenda(inicio, fuso);
+      },
+    } as unknown as ClienteDoAcervo;
+
+    render(<AgendaDeEstudo cliente={cliente} modo="semana" />);
+
+    await screen.findByRole("group", { name: "Agenda semanal" });
+    expect(screen.queryByRole("button", { name: "Atualizar agenda" })).toBeNull();
+
+    const dias = rotulosDosDias();
+    const indiceDeHoje = dias.findIndex((dia) =>
+      /hoje/.test(dia.getAttribute("aria-label") ?? ""),
+    );
+    const outro = dias[indiceDeHoje + 1] ?? dias[indiceDeHoje - 1];
+
+    fireEvent.click(outro);
+    expect(outro).toHaveAttribute("aria-pressed", "true");
+
+    const antes = chamadas.length;
+
+    fireEvent(document, new Event("visibilitychange"));
+
+    await waitFor(() => expect(chamadas.length).toBeGreaterThan(antes));
+    // A escolha explícita é preservada na releitura.
+    expect(outro).toHaveAttribute("aria-pressed", "true");
+
+    const semanaDeHoje = segundaFeiraDe(hojeNoFuso(FUSO, new Date()));
+
+    fireEvent.click(screen.getByRole("button", { name: "Hoje" }));
+
+    await waitFor(() => expect(chamadas[chamadas.length - 1]).toBe(semanaDeHoje));
+
+    // Sem escolha ativa, a releitura volta a pedir a semana de hoje.
+    const depois = chamadas.length;
+
+    fireEvent(document, new Event("visibilitychange"));
+
+    await waitFor(() => expect(chamadas.length).toBeGreaterThan(depois));
+    expect(chamadas[chamadas.length - 1]).toBe(semanaDeHoje);
   });
 });

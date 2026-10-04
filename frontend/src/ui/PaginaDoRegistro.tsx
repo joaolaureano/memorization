@@ -28,7 +28,7 @@ import { ResumoDaSessao } from "./ResumoDaSessao";
  *
  * Um Registro inexistente — ou de outro Usuário, que o isolamento por
  * Credencial não devolve (FR-092) — não se apresenta como tela vazia: diz que
- * não o encontrou e oferece a volta para o Início (FR-179). A falha de
+ * não o encontrou e oferece a volta para Estudo (FR-179, FR-323). A falha de
  * transporte é outra coisa: preserva a página e permite tentar de novo.
  */
 
@@ -81,7 +81,7 @@ export function PaginaDoRegistro({
   return (
     <div className="pagina">
       <p className="voltar">
-        <a href="#/inicio">← Voltar para Início</a>
+        <a href="#/estudo">← Voltar para Estudo</a>
       </p>
 
       {registro.estado === "carregando" ? (
@@ -99,8 +99,8 @@ export function PaginaDoRegistro({
       {registro.estado === "ausente" ? (
         <div role="alert" className="aviso aviso--erro">
           <p>{MENSAGEM_DE_SESSAO_NAO_ENCONTRADA}</p>
-          <a className="botao botao--secundario" href="#/inicio">
-            Voltar para Início
+          <a className="botao botao--secundario" href="#/estudo">
+            Voltar para Estudo
           </a>
         </div>
       ) : null}

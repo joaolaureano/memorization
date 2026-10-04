@@ -26,6 +26,10 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // (FR-161 a FR-179, SC-071 a SC-075;
 // specs/013-estatisticas-e-historico/tasks.md).
 //
+// A feature 019 (FR-312 a FR-315) levou as Estatísticas do Início para a
+// página Estudo (#/estudo): o Início guarda só o resumo de sete dias, e os
+// ladrilhos, o gráfico e as últimas Sessões agora vivem em Estudo.
+//
 // Nenhuma rede é interceptada (exceto no cenário de falha de registro, que a
 // intercepta de propósito) e nenhum dado é fabricado: a API real
 // (node + SQLite em arquivo) e o frontend real (Vite dev) são iniciados como
@@ -277,16 +281,27 @@ async function verificarGruposDoResumo(
   }
 }
 
-/** O ladrilho de Estatística de Início, pelo rótulo que o descreve. */
-function tileDoInicio(page: Page, rotulo: string) {
+/** O ladrilho de Estatística de Estudo, pelo rótulo que o descreve (FR-314). */
+function tileDoEstudo(page: Page, rotulo: string) {
   return page.locator(".estatistica", { hasText: rotulo });
 }
 
-/** A seção "Últimas Sessões" de Início (FR-169). */
+/** A seção «Últimas sessões» de Estudo (FR-315). */
 function secaoUltimasSessoes(page: Page) {
   return page.locator("section", {
-    has: page.getByRole("heading", { name: "Últimas Sessões" }),
+    has: page.getByRole("heading", { name: "Últimas sessões" }),
   });
+}
+
+/** Navega para Estudo pela navegação principal e espera o título (FR-312). */
+async function irParaEstudo(page: Page): Promise<void> {
+  await page
+    .getByRole("navigation", { name: "Principal" })
+    .getByRole("link", { name: "Estudo" })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Estudo" }),
+  ).toBeVisible();
 }
 
 /** Navega para Início pela navegação principal e espera a saudação. */
@@ -338,35 +353,39 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
     ).toContainText(/Registrada no seu histórico/);
 
-    // Início reflete a Sessão concluída (FR-168 a FR-171, SC-072).
+    // Início deixou de ter ladrilhos, gráfico e lista: guarda só o resumo de
+    // sete dias (FR-312, FR-314, FR-315).
     await irParaInicio(page, credencial.nomeDeUsuario);
 
+    await expect(page.locator("p.resumo-de-sete-dias")).toHaveText(
+      "Últimos 7 dias: 3 Itens estudados · 67% de acerto",
+    );
+    await expect(page.locator(".estatistica")).toHaveCount(0);
+    await expect(page.locator(".grafico-semanal")).toHaveCount(0);
+    await expect(secaoUltimasSessoes(page)).toHaveCount(0);
+    // As Estatísticas da feature 019 vivem em Estudo (FR-312 a FR-315).
+    await irParaEstudo(page);
+
     await expect(
-      tileDoInicio(page, "Cartões").locator(".estatistica__valor"),
+      tileDoEstudo(page, "Itens estudados").locator(".estatistica__valor"),
     ).toHaveText("3");
     await expect(
-      tileDoInicio(page, "Baralhos").locator(".estatistica__valor"),
+      tileDoEstudo(page, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("1");
     await expect(
-      tileDoInicio(page, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
-    ).toHaveText("1");
-    await expect(
-      tileDoInicio(page, "Taxa de acerto (7 dias)").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(page, "Taxa de acerto").locator(".estatistica__valor"),
     ).toHaveText("67%");
 
-    // O gráfico de 7 dias tem o valor de Hoje em texto (FR-171).
+    // O gráfico de 7 dias tem o valor de Hoje em texto (FR-314).
     await expect(
       page
+        .locator('section[aria-label="Itens estudados nos últimos 7 dias"]')
         .locator(".grafico-semanal__dia")
         .last()
         .locator(".grafico-semanal__valor"),
     ).toHaveText("3");
 
-    // A Sessão recente aparece com o nome e o percentual (FR-169).
+    // A Sessão recente aparece com o nome e o percentual (FR-315).
     const secaoUltimas = secaoUltimasSessoes(page);
     const linkDaSessao = secaoUltimas.getByRole("link", {
       name: NOME_DO_BARALHO,
@@ -416,11 +435,9 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
     ).toContainText(/Registrada no seu histórico/);
 
-    await irParaInicio(page, credencial.nomeDeUsuario);
+    await irParaEstudo(page);
     await expect(
-      tileDoInicio(page, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(page, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("1");
 
     // Interromper uma Sessão em andamento (com confirmação) não registra.
@@ -442,11 +459,9 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
 
-    await irParaInicio(page, credencial.nomeDeUsuario);
+    await irParaEstudo(page);
     await expect(
-      tileDoInicio(page, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(page, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("1");
 
     // Recarregar no meio de outra Sessão também descarta, sem registrar.
@@ -461,11 +476,9 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     ).toBeVisible();
     await expect(page.getByRole("article", { name: "Item 1 de 3" })).toHaveCount(0);
 
-    await irParaInicio(page, credencial.nomeDeUsuario);
+    await irParaEstudo(page);
     await expect(
-      tileDoInicio(page, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(page, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("1");
   } finally {
     await derrubarAmbiente(ambiente);
@@ -496,8 +509,8 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
     ).toContainText(/Registrada no seu histórico/);
 
-    // Guarda o endereço do Registro a partir de Início.
-    await irParaInicio(page, credencial.nomeDeUsuario);
+    // Guarda o endereço do Registro a partir de Estudo (FR-315).
+    await irParaEstudo(page);
 
     const linkDaSessao = secaoUltimasSessoes(page).getByRole("link", {
       name: NOME_DO_BARALHO,
@@ -603,7 +616,8 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
       paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
     ).toContainText(/Registrada no seu histórico/);
 
-    await irParaInicio(paginaA, credencialA.nomeDeUsuario);
+    // As últimas Sessões vivem em Estudo desde a 019 (FR-315).
+    await irParaEstudo(paginaA);
 
     const linkDaSessao = secaoUltimasSessoes(paginaA).getByRole("link", {
       name: NOME_DO_BARALHO,
@@ -629,15 +643,22 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
         name: `Olá, ${credencialB.nomeDeUsuario}`,
       }),
     ).toBeVisible();
+    // Sem acervo, o Início mostra o resumo vazio e o caminho do primeiro
+    // Cartão (FR-312, FR-314).
     await expect(
-      tileDoInicio(paginaB, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
+      paginaB.locator("p.resumo-de-sete-dias"),
+    ).toHaveText("Últimos 7 dias: nenhum Item estudado.");
+    await expect(
+      paginaB.getByRole("link", { name: "Criar o primeiro Cartão" }),
+    ).toBeVisible();
+    // As Estatísticas da feature 019 vivem em Estudo (FR-314, FR-315).
+    await irParaEstudo(paginaB);
+
+    await expect(
+      tileDoEstudo(paginaB, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("0");
     await expect(
-      tileDoInicio(paginaB, "Taxa de acerto (7 dias)").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(paginaB, "Taxa de acerto").locator(".estatistica__valor"),
     ).toHaveText("—");
     await expect(
       paginaB.getByText("Você ainda não concluiu nenhuma Sessão."),
@@ -716,11 +737,9 @@ test("Falha ao registrar oferece nova tentativa e não duplica o Registro (FR-16
     ).toContainText(/Registrada no seu histórico/);
 
     // Exatamente uma Sessão no Histórico — nada foi duplicado (SC-071).
-    await irParaInicio(page, credencial.nomeDeUsuario);
+    await irParaEstudo(page);
     await expect(
-      tileDoInicio(page, "Sessões nos últimos 7 dias").locator(
-        ".estatistica__valor",
-      ),
+      tileDoEstudo(page, "Sessões concluídas").locator(".estatistica__valor"),
     ).toHaveText("1");
     await expect(
       secaoUltimasSessoes(page).getByRole("link", { name: NOME_DO_BARALHO }),

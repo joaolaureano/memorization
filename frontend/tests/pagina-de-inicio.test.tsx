@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type {
   ClienteDoAcervo,
+  CompromissoDeEstudo,
   Estatisticas,
   RegistroResumido,
   ResumoDaRevisao,
@@ -22,13 +23,14 @@ import {
 import { PaginaDeInicio } from "../src/ui/PaginaDeInicio";
 
 /**
- * Provas da tela de Início (FR-164, FR-165, FR-168..FR-173).
+ * Provas da tela de Início, agora compacta (FR-308..FR-311, FR-318, FR-320,
+ * FR-321).
  *
- * A tela só consome uma operação do `ClienteDoAcervo`, e é isso que estas
- * provas exercitam: o duplo responde `obterEstatisticas` e nada mais. Montar o
- * Adapter de memória inteiro traria para a prova as regras de janela e de
- * idempotência, que são de outra feature — aqui interessa o que a tela faz com
- * os números que recebeu.
+ * A tela consome três operações do `ClienteDoAcervo` — as Estatísticas, o
+ * resumo da Revisão do dia e a Agenda —, e é isso que estas provas exercitam: o
+ * duplo responde só o que a tela pede. Montar o Adapter de memória inteiro
+ * traria para a prova as regras de janela, de idempotência e de agenda, que são
+ * de outras features — aqui interessa o que a tela faz com o que recebeu.
  */
 
 afterEach(() => {
@@ -36,7 +38,7 @@ afterEach(() => {
 });
 
 /**
- * O `ClienteDoAcervo` de prova, restrito à leitura que a tela exercita. As
+ * O `ClienteDoAcervo` de prova, restrito às leituras que a tela exercita. As
  * demais operações não são montadas porque a tela não as chama; a asserção é
  * estrutural e não esconde o que a prova cobre.
  */
@@ -46,10 +48,9 @@ function clienteComEstatisticas(
     ok: true,
     resumo: { vencidos: 0, novosHoje: 0, total: 0 },
   }),
-): ClienteDoAcervo {
-  // A Agenda (016) vive no mesmo Início, mas tem estado próprio: estas provas
-  // a mantêm vazia e sem falha para exercitar só o que é do Início.
-  const obterAgenda: ClienteDoAcervo["obterAgenda"] = async (inicio, fuso) => ({
+  // A Agenda (016) vive ao lado da Revisão, mas tem estado próprio: por padrão
+  // fica vazia e sem falha, para não interferir no que cada prova exercita.
+  obterAgenda: ClienteDoAcervo["obterAgenda"] = async (inicio, fuso) => ({
     ok: true,
     agenda: {
       inicio,
@@ -58,8 +59,8 @@ function clienteComEstatisticas(
       compromissos: [],
       compromissosDeHoje: [],
     },
-  });
-
+  }),
+): ClienteDoAcervo {
   return {
     obterEstatisticas,
     obterResumoDaRevisao,
@@ -89,17 +90,19 @@ function registroDeProva(
   };
 }
 
-/** O valor do tile cujo rótulo é informado (FR-164). */
-function valorDaEstatistica(rotulo: string): string {
-  const tile = screen.getByText(rotulo).closest(".estatistica");
+/** A data local de hoje em `YYYY-MM-DD`, como a Agenda a pede (FR-311). */
+function dataLocalDeHoje(): string {
+  const agora = new Date();
+  const mes = String(agora.getMonth() + 1).padStart(2, "0");
+  const dia = String(agora.getDate()).padStart(2, "0");
 
-  return tile?.querySelector(".estatistica__valor")?.textContent ?? "";
+  return `${agora.getFullYear()}-${mes}-${dia}`;
 }
 
 /**
  * Os clientes de prova devolvem sempre as mesmas Estatísticas e o mesmo resumo
- * da Revisão do dia. O resumo padrão é o de "nada para revisar", de modo que
- * os testes das Estatísticas não precisem conhecê-lo.
+ * da Revisão do dia. O resumo padrão é o de "nada para revisar", de modo que os
+ * testes das Estatísticas não precisem conhecê-lo.
  */
 function renderDaPagina(
   estatisticas: Estatisticas,
@@ -117,215 +120,133 @@ function renderDaPagina(
 }
 
 describe("PaginaDeInicio", () => {
-  it("cumprimenta quem estuda e mostra os números do acervo", async () => {
+  it("cumprimenta quem estuda com o nome e a data de hoje (FR-308, SC-125)", async () => {
     renderDaPagina({
-      cartoes: 16,
-      baralhos: 3,
-      registrosDaJanela: [
-        registroDeProva("sessao-1", { estudados: 3, acertos: 2, erros: 1 }),
-        registroDeProva("sessao-2", { estudados: 2, acertos: 0, erros: 2 }),
-      ],
+      cartoes: 4,
+      baralhos: 1,
+      registrosDaJanela: [],
       recentes: [],
     });
 
     expect(await screen.findByText("Olá, joao")).toBeTruthy();
     expect(screen.getByText("Seu estudo")).toBeTruthy();
-    expect(valorDaEstatistica("Cartões")).toBe("16");
-    expect(valorDaEstatistica("Baralhos")).toBe("3");
-    expect(valorDaEstatistica("Sessões nos últimos 7 dias")).toBe("2");
-    // 2 acertos em 5 Itens estudados: a taxa é do período, não de uma Sessão.
-    expect(valorDaEstatistica("Taxa de acerto (7 dias)")).toBe("40%");
+
+    const dataDeHoje = new Date().toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+    expect(screen.getByText(dataDeHoje)).toBeTruthy();
   });
 
-  it("mostra travessão e explica a ausência da taxa sem Itens", async () => {
+  it("resume os últimos sete dias numa linha (FR-308, FR-314)", async () => {
+    // Oito Sessões de 15 Itens cada: 120 Itens estudados no período, com 101
+    // acertos — 84% na conta do período, não de uma Sessão.
+    const acertos = [15, 15, 15, 15, 15, 15, 11, 0];
+    const registrosDaJanela = acertos.map((total, indice) =>
+      registroDeProva(`sessao-${indice}`, {
+        estudados: 15,
+        acertos: total,
+        erros: 15 - total,
+      }),
+    );
+
     renderDaPagina({
-      cartoes: 5,
-      baralhos: 1,
-      registrosDaJanela: [],
+      cartoes: 20,
+      baralhos: 3,
+      registrosDaJanela,
       recentes: [],
     });
 
     expect(
-      await screen.findByText("Sem Itens estudados nos últimos 7 dias"),
+      await screen.findByText(
+        "Últimos 7 dias: 120 Itens estudados · 84% de acerto",
+      ),
     ).toBeTruthy();
-    expect(valorDaEstatistica("Taxa de acerto (7 dias)")).toBe("—");
   });
 
-  it("desenha os sete dias e repete os números numa lista acessível", async () => {
+  it("não inventa uma taxa quando ninguém estudou (FR-321)", async () => {
     renderDaPagina({
       cartoes: 4,
       baralhos: 1,
-      registrosDaJanela: [
-        registroDeProva("sessao-1", { estudados: 3, acertos: 3, erros: 0 }),
-      ],
-      recentes: [],
-    });
-
-    const grafico = await screen.findByRole("region", {
-      name: "Itens estudados nos últimos 7 dias",
-    });
-
-    // Sete colunas, a mais antiga primeiro; o gráfico é decorativo e a lista
-    // oculta é o que resta a um leitor de tela (FR-171).
-    expect(within(grafico).getAllByRole("listitem")).toHaveLength(7);
-    expect(within(grafico).getByText("Hoje")).toBeTruthy();
-    expect(within(grafico).getByText("3")).toBeTruthy();
-    expect(within(grafico).getByText("Hoje: 3 Itens")).toBeTruthy();
-  });
-
-  it("liga cada Sessão recente ao seu Registro, com data e percentual", async () => {
-    renderDaPagina({
-      cartoes: 10,
-      baralhos: 2,
-      registrosDaJanela: [],
-      recentes: [
-        registroDeProva(
-          "sessao-1",
-          { estudados: 3, acertos: 2, erros: 1 },
-          { nomeDoBaralho: "Inglês" },
-        ),
-        registroDeProva(
-          "sessao-2",
-          { estudados: 4, acertos: 4, erros: 0 },
-          { nomeDoBaralho: "Algoritmos" },
-        ),
-      ],
-    });
-
-    const ingles = await screen.findByRole("link", { name: "Inglês" });
-    expect(ingles.getAttribute("href")).toBe("#/sessoes/sessao-1");
-    expect(
-      screen.getByRole("link", { name: "Algoritmos" }).getAttribute("href"),
-    ).toBe("#/sessoes/sessao-2");
-    expect(screen.getByText("67%")).toBeTruthy();
-    expect(screen.getByText("100%")).toBeTruthy();
-  });
-
-  it("convida a criar o primeiro Cartão quando o acervo está vazio", async () => {
-    renderDaPagina({
-      cartoes: 0,
-      baralhos: 0,
       registrosDaJanela: [],
       recentes: [],
     });
 
     expect(
-      await screen.findByText("Você ainda não concluiu nenhuma Sessão."),
+      await screen.findByText("Últimos 7 dias: nenhum Item estudado."),
     ).toBeTruthy();
-    expect(
-      screen
-        .getByRole("link", { name: "Criar o primeiro Cartão" })
-        .getAttribute("href"),
-    ).toBe("#/cartoes/novo");
+    expect(screen.queryByText("0%")).toBeNull();
   });
 
-  it("convida a ir para os Baralhos quando já há Cartões", async () => {
+  it("deixa o gráfico, as Sessões e os indicadores de acervo para a área Estudo (FR-309, SC-125)", async () => {
+    renderDaPagina(
+      {
+        cartoes: 12,
+        baralhos: 2,
+        registrosDaJanela: [],
+        recentes: [
+          registroDeProva("sessao-1", { estudados: 3, acertos: 2, erros: 1 }),
+        ],
+      },
+      { vencidos: 1, novosHoje: 1, total: 2 },
+    );
+
+    // Espera as duas leituras assentarem antes de negar o que não deve existir.
+    expect(await screen.findByText("1 Cartão para revisar hoje")).toBeTruthy();
+
+    expect(screen.queryByText("Cartões")).toBeNull();
+    expect(screen.queryByText("Baralhos")).toBeNull();
+    expect(document.querySelector(".grafico-semanal")).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "Últimas Sessões" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Semana anterior" }),
+    ).toBeNull();
+  });
+
+  it("põe a Revisão do dia antes da Agenda de hoje (FR-310, FR-311)", async () => {
     renderDaPagina({
-      cartoes: 5,
+      cartoes: 4,
       baralhos: 1,
       registrosDaJanela: [],
       recentes: [],
     });
 
-    expect(
-      await screen.findByText("Você ainda não concluiu nenhuma Sessão."),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: "Ir para Baralhos" }).getAttribute("href"),
-    ).toBe("#/baralhos");
-  });
-
-  it("mantém a página e permite tentar de novo quando a leitura falha", async () => {
-    let tentativas = 0;
-
-    render(
-      <PaginaDeInicio
-        cliente={clienteComEstatisticas(async () => {
-          tentativas += 1;
-
-          return tentativas === 1
-            ? {
-                ok: false,
-                erro: INDISPONIVEL,
-                mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
-              }
-            : {
-                ok: true,
-                estatisticas: {
-                  cartoes: 1,
-                  baralhos: 1,
-                  registrosDaJanela: [],
-                  recentes: [],
-                },
-              };
-        })}
-        nomeDeUsuario="joao"
-      />,
-    );
-
-    expect(
-      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO),
-    ).toBeTruthy();
-    // A falha não esconde o cabeçalho nem a navegação (FR-173).
-    expect(screen.getByText("Olá, joao")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
-
-    await waitFor(() => {
-      expect(valorDaEstatistica("Cartões")).toBe("1");
+    const revisao = await screen.findByRole("heading", {
+      name: "Revisão do dia",
     });
-    expect(tentativas).toBe(2);
+    const agenda = screen.getByRole("heading", { name: "Agenda de hoje" });
+
+    expect(
+      revisao.compareDocumentPosition(agenda) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it("mostra quantos vencem e quantos novos entram, com o link para a Revisão do dia (FR-198, FR-199)", async () => {
+  it("leva a Revisar quando há o que revisar, inclusive só novos (FR-310)", async () => {
     renderDaPagina(
       { cartoes: 8, baralhos: 2, registrosDaJanela: [], recentes: [] },
-      { vencidos: 3, novosHoje: 5, total: 8 },
-    );
-
-    expect(await screen.findByText("Revisão do dia")).toBeTruthy();
-    expect(screen.getByText("3 Cartões para revisar hoje")).toBeTruthy();
-    expect(screen.getByText("5 Cartões novos entram hoje")).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: "Revisar" }).getAttribute("href"),
-    ).toBe("#/revisao");
-  });
-
-  it("usa o singular para um Cartão vencido e um novo (FR-198, FR-199)", async () => {
-    renderDaPagina(
-      { cartoes: 2, baralhos: 1, registrosDaJanela: [], recentes: [] },
-      { vencidos: 1, novosHoje: 1, total: 2 },
-    );
-
-    expect(await screen.findByText("1 Cartão para revisar hoje")).toBeTruthy();
-    expect(screen.getByText("1 Cartão novo entra hoje")).toBeTruthy();
-  });
-
-  it("avisa que nenhum Cartão venceu quando só há novos, mantendo Revisar ativo (FR-198, FR-199)", async () => {
-    renderDaPagina(
-      { cartoes: 4, baralhos: 1, registrosDaJanela: [], recentes: [] },
       { vencidos: 0, novosHoje: 4, total: 4 },
     );
 
     expect(await screen.findByText("Nenhum Cartão vencido hoje")).toBeTruthy();
-    expect(screen.getByText("4 Cartões novos entram hoje")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "Revisar" }).getAttribute("href"),
     ).toBe("#/revisao");
   });
 
-  it("mostra 'Nada para revisar hoje' e desabilita Revisar com a explicação associada (FR-202)", async () => {
-    renderDaPagina({
-      cartoes: 5,
-      baralhos: 1,
-      registrosDaJanela: [],
-      recentes: [],
-    });
+  it("desabilita Revisar com a explicação associada quando nada venceu (FR-310)", async () => {
+    renderDaPagina(
+      { cartoes: 5, baralhos: 1, registrosDaJanela: [], recentes: [] },
+      { vencidos: 0, novosHoje: 0, total: 0 },
+    );
 
     expect(await screen.findByText("Nada para revisar hoje")).toBeTruthy();
     // Sem nada para revisar, "Revisar" deixa de ser um link...
     expect(screen.queryByRole("link", { name: "Revisar" })).toBeNull();
-    // ...e vira um botão desabilitado, com a explicação associada (FR-202).
+    // ...e vira um botão desabilitado, com a explicação associada (FR-324).
     const revisar = screen.getByRole("button", { name: "Revisar" });
     expect((revisar as HTMLButtonElement).disabled).toBe(true);
     expect(revisar.getAttribute("aria-describedby")).toBe(
@@ -333,9 +254,60 @@ describe("PaginaDeInicio", () => {
     );
   });
 
-  it("não deixa a falha da Revisão esconder as Estatísticas, e permite tentar de novo (FR-217)", async () => {
+  it("mantém a Revisão e a Agenda quando as Estatísticas falham, e oferece Tentar novamente (FR-320)", async () => {
     let tentativas = 0;
 
+    render(
+      <PaginaDeInicio
+        cliente={clienteComEstatisticas(
+          async () => {
+            tentativas += 1;
+
+            return tentativas === 1
+              ? {
+                  ok: false,
+                  erro: INDISPONIVEL,
+                  mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO,
+                }
+              : {
+                  ok: true,
+                  estatisticas: {
+                    cartoes: 1,
+                    baralhos: 1,
+                    registrosDaJanela: [],
+                    recentes: [],
+                  },
+                };
+          },
+          async () => ({
+            ok: true,
+            resumo: { vencidos: 1, novosHoje: 0, total: 1 },
+          }),
+        )}
+        nomeDeUsuario="joao"
+      />,
+    );
+
+    expect(
+      await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO),
+    ).toBeTruthy();
+    // A falha de um bloco não esconde o que é de outro.
+    expect(await screen.findByText("1 Cartão para revisar hoje")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Agenda de hoje" }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Últimos 7 dias: nenhum Item estudado."),
+      ).toBeTruthy();
+    });
+    expect(tentativas).toBe(2);
+  });
+
+  it("não deixa a falha da Revisão esconder o resumo (FR-320)", async () => {
     render(
       <PaginaDeInicio
         cliente={clienteComEstatisticas(
@@ -344,39 +316,107 @@ describe("PaginaDeInicio", () => {
             estatisticas: {
               cartoes: 7,
               baralhos: 2,
-              registrosDaJanela: [],
+              registrosDaJanela: [
+                registroDeProva("sessao-1", {
+                  estudados: 4,
+                  acertos: 4,
+                  erros: 0,
+                }),
+              ],
               recentes: [],
             },
           }),
-          async () => {
-            tentativas += 1;
-
-            return tentativas === 1
-              ? {
-                  ok: false,
-                  erro: INDISPONIVEL,
-                  mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
-                }
-              : { ok: true, resumo: { vencidos: 2, novosHoje: 0, total: 2 } };
-          },
+          async () => ({
+            ok: false,
+            erro: INDISPONIVEL,
+            mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO,
+          }),
         )}
         nomeDeUsuario="joao"
       />,
     );
 
-    // A falha do bloco de revisão aparece, mas os números seguem à vista.
     expect(
       await screen.findByText(MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO),
     ).toBeTruthy();
-    await waitFor(() => {
-      expect(valorDaEstatistica("Cartões")).toBe("7");
+    expect(
+      screen.getByText("Últimos 7 dias: 4 Itens estudados · 100% de acerto"),
+    ).toBeTruthy();
+  });
+
+  it("convida a criar o primeiro Cartão quando o acervo está vazio (FR-321)", async () => {
+    renderDaPagina({
+      cartoes: 0,
+      baralhos: 0,
+      registrosDaJanela: [],
+      recentes: [],
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(
+      await screen.findByText("Últimos 7 dias: nenhum Item estudado."),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Criar o primeiro Cartão" })
+        .getAttribute("href"),
+    ).toBe("#/cartoes/novo");
+  });
 
-    await waitFor(() => {
-      expect(screen.getByText("2 Cartões para revisar hoje")).toBeTruthy();
-    });
-    expect(tentativas).toBe(2);
+  it("mostra até três estudos de hoje e leva à Agenda completa em Estudo (FR-311, FR-322)", async () => {
+    const hoje = dataLocalDeHoje();
+    const compromissos = [1, 2, 3, 4].map(
+      (numero): CompromissoDeEstudo => ({
+        rotinaId: `rotina-${numero}`,
+        baralhoId: `baralho-${numero}`,
+        data: hoje,
+        nomeDoBaralho: `Baralho ${numero}`,
+        quantidade: 10,
+        estado: "pendente",
+        indisponivel: false,
+        registroId: null,
+      }),
+    );
+
+    const { container } = render(
+      <PaginaDeInicio
+        cliente={clienteComEstatisticas(
+          async () => ({
+            ok: true,
+            estatisticas: {
+              cartoes: 4,
+              baralhos: 1,
+              registrosDaJanela: [],
+              recentes: [],
+            },
+          }),
+          undefined,
+          async (inicio, fuso) => ({
+            ok: true,
+            agenda: {
+              inicio,
+              hoje,
+              fuso,
+              compromissos,
+              compromissosDeHoje: compromissos,
+            },
+          }),
+        )}
+        nomeDeUsuario="joao"
+      />,
+    );
+
+    expect(await screen.findByText("0 de 4 estudos concluídos")).toBeTruthy();
+
+    const estudos = container.querySelector(".agenda__estudos");
+    expect(estudos).not.toBeNull();
+    expect(
+      within(estudos as HTMLElement).getAllByRole("listitem"),
+    ).toHaveLength(3);
+
+    expect(
+      screen
+        .getByRole("link", { name: "Ver todos em Estudo" })
+        .getAttribute("href"),
+    ).toBe("#/estudo");
   });
 });

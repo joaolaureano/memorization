@@ -13,9 +13,10 @@ import { receberAvisoDaAgenda } from "./aviso-da-agenda";
 import { useProtecaoDeSaida } from "./protecao-de-saida";
 
 /**
- * Gerenciar agenda (016, FR-237–FR-239, FR-242, FR-249, FR-251): as Rotinas
- * ativas e pausadas, na ordem de criação, com Baralho, dias, quantidade,
- * situação e as ações Editar, Pausar/Retomar e Excluir.
+ * Rotinas de estudo (016, FR-237–FR-239, FR-242, FR-249, FR-251), alcançadas
+ * a partir da área de Estudo (019, FR-316, FR-323): as Rotinas ativas e
+ * pausadas, na ordem de criação, com Baralho, dias, quantidade, situação e as
+ * ações Editar, Pausar/Retomar e Excluir.
  *
  * Pausar e Excluir pedem confirmação das consequências antes de qualquer
  * gravação (FR-239); o diálogo começa em Cancelar, aceita Escape e devolve o foco
@@ -107,6 +108,26 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // Ao voltar para esta aba, a lista é relida para mostrar o que mudou em outro
+  // lugar (FR-318). Nem a operação em curso nem a confirmação aberta são
+  // interrompidas: nesses casos a leitura fica para depois.
+  useEffect(() => {
+    function aoMudarVisibilidade(): void {
+      if (
+        document.visibilityState === "visible" &&
+        operando === null &&
+        confirmacao === null
+      ) {
+        void carregar();
+      }
+    }
+
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+
+    return () =>
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+  }, [carregar, operando, confirmacao]);
 
   // O aviso deixado pelo formulário é lido uma única vez. Só sobrescreve quando
   // há aviso: o efeito pode rodar duas vezes em desenvolvimento.
@@ -222,28 +243,20 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
   return (
     <div className="pagina">
       <p className="voltar">
-        <a href="#/inicio">
-          <span aria-hidden="true">←</span> Voltar para Início
+        <a href="#/estudo">
+          <span aria-hidden="true">←</span> Voltar para Estudo
         </a>
       </p>
 
       <div className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Agenda de estudo</p>
-          <h1>Gerenciar agenda</h1>
+          <p className="sobretitulo">Estudo</p>
+          <h1>Rotinas de estudo</h1>
         </div>
         <div className="acoes">
           <a className="botao botao--primario" href="#/agenda/nova">
             Agendar estudo
           </a>
-          <button
-            type="button"
-            className="botao botao--secundario"
-            disabled={carregando || operando !== null}
-            onClick={() => void carregar()}
-          >
-            Atualizar agenda
-          </button>
         </div>
       </div>
 
