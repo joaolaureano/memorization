@@ -1,9 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import {
+  clienteDeProva,
+  comProtecaoDeSaida,
+  observarOperacao,
+} from "./apoio-de-prova";
 import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
 
 /**
@@ -94,11 +98,14 @@ describe("edição de Cartão", () => {
     fireEvent.change(campoDeVersoEmEdicao(), {
       target: { value: "Correr" },
     });
+    // A navegação é efeito da própria edição: observar a operação faz a espera
+    // depender do fato (a chamada terminou), não de um prazo de relógio.
+    const salvou = observarOperacao(cliente, "editarCartao");
+
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
-    await waitFor(() => {
-      expect(window.location.hash).toBe("#/cartoes");
-    });
+    await salvou();
+    expect(window.location.hash).toBe("#/cartoes");
 
     // A alteração vale no próprio Cartão e, por isso, em todos os Baralhos
     // a que ele está vinculado — nenhum Vínculo é recriado ou alterado.

@@ -8,8 +8,10 @@ import {
   type CodigoDeErroDeCartao,
 } from "../acervo-cliente/validacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
-import { irParaRota } from "./navegacao";
-import { useDescartarProtecao, useProtecaoDeSaida } from "./protecao-de-saida";
+import {
+  useNavegarSemProtecao,
+  useProtecaoDeSaida,
+} from "./protecao-de-saida";
 
 /**
  * Página do formulário de Cartão — criação e edição (T1113;
@@ -97,7 +99,7 @@ export function PaginaDoFormularioDeCartao({
   const estaSujo =
     frente !== referencia.frente || verso !== referencia.verso;
 
-  const descartarProtecao = useDescartarProtecao();
+  const navegarSemProtecao = useNavegarSemProtecao();
 
   // Há uma única proteção vigente e a pendência tem precedência: enquanto o
   // salvamento corre, sair é bloqueado e o motivo é anunciado (FR-154); fora
@@ -180,8 +182,7 @@ export function PaginaDoFormularioDeCartao({
 
     if (resultado.ok) {
       setReferencia({ frente, verso });
-      descartarProtecao();
-      irParaRota("#/cartoes");
+      navegarSemProtecao("#/cartoes");
       return;
     }
 

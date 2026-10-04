@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import { expect } from "vitest";
 
 import { createElement } from "react";
@@ -107,4 +107,71 @@ export async function aguardarVerificacaoDoAcesso(): Promise<void> {
   await waitFor(() => {
     expect(screen.queryByText("Verificando o acesso…")).not.toBeInTheDocument();
   });
+}
+
+/**
+ * Observa uma operação assíncrona de um objeto (por exemplo, `editarCartao` do
+ * cliente) e devolve uma função que espera, sem prazo de relógio, a próxima
+ * chamada terminar e o React aplicar o que ela provocou.
+ *
+ * Uma prova que espera o efeito de uma operação por `waitFor` depende do
+ * relógio: o prazo folgado pode vencer justamente na primeira execução, a mais
+ * fria, e o resultado passa a variar com a máquina. Aqui a espera é pelo
+ * **fato** — a chamada aconteceu e terminou —, e os dois `act` garantem que o
+ * React aplicou a mudança de estado e os efeitos que ela disparou (por
+ * exemplo, a navegação que troca de rota) antes das asserções.
+ *
+ * Cada `esperar()` consome as chamadas na ordem em que aconteceram; se ainda
+ * não houver nenhuma, espera a próxima sem prazo. O objeto é alterado: a
+ * propriedade observada passa a ser esta função.
+ */
+export function observarOperacao<T extends object, K extends keyof T>(
+  alvo: T,
+  nome: K,
+): () => Promise<void> {
+  const original: unknown = alvo[nome];
+
+  if (typeof original !== "function") {
+    throw new Error(
+      `a propriedade "${String(nome)}" deveria ser uma função para ser observada`,
+    );
+  }
+
+  const metodo = original as (...argumentos: unknown[]) => unknown;
+  const chamadas: Promise<unknown>[] = [];
+  const aguardandoChamada: (() => void)[] = [];
+
+  function observada(...argumentos: unknown[]): unknown {
+    // A chamada é feita no próprio `alvo` e devolvida como veio: quem a fez
+    // continua recebendo a promessa original.
+    const promessa = metodo.apply(alvo, argumentos);
+
+    chamadas.push(Promise.resolve(promessa));
+    aguardandoChamada.shift()?.();
+
+    return promessa;
+  }
+
+  (alvo as unknown as Record<K, unknown>)[nome] = observada;
+
+  return async function esperar(): Promise<void> {
+    while (chamadas.length === 0) {
+      await new Promise<void>((resolver) => {
+        aguardandoChamada.push(resolver);
+      });
+    }
+
+    const chamada = chamadas.shift();
+
+    if (chamada === undefined) {
+      return;
+    }
+
+    await act(async () => {
+      await chamada.catch(() => undefined);
+    });
+    // Um `act` a mais: os efeitos disparados **depois** da operação (a
+    // navegação que o `then` da página pede, por exemplo) também assentam.
+    await act(async () => {});
+  };
 }

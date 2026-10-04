@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -252,6 +252,10 @@ describe("expiração durante o uso e renovação por atividade", () => {
     render(<Aplicacao criarCliente={contagem.criarCliente} />);
     await screen.findByRole("navigation", { name: "Principal" });
 
+    // Esvazia efeitos passivos pendentes (instalação dos listeners e do
+    // instante-base) antes de qualquer teste avançar o tempo congelado.
+    await act(async () => {});
+
     return contagem.renovacoes;
   }
 
@@ -276,12 +280,15 @@ describe("expiração durante o uso e renovação por atividade", () => {
       fireEvent.keyDown(document.body, { key: "a" });
       fireEvent.click(document.body);
       fireEvent.touchStart(document.body);
-      await waitFor(() => expect(renovacoes.total).toBe(1));
+      expect(renovacoes.total).toBe(1);
 
       // Outros 60 s depois, o toque renova de novo.
       instante.atual += 60_000;
       fireEvent.touchStart(document.body);
-      await waitFor(() => expect(renovacoes.total).toBe(2));
+      expect(renovacoes.total).toBe(2);
+
+      // Deixa as renovações pendentes assentarem antes de restaurar Date.now.
+      await act(async () => {});
     } finally {
       Date.now = dateNow;
     }

@@ -88,6 +88,7 @@ interface ContextoDaProtecaoDeSaida {
   protegerAcao: (acao: () => void) => void;
   descartarProtecao: () => void;
   descartarProtecaoSeIgual: (protecao: Protecao | null) => void;
+  navegarSemProtecao: (hash: string) => void;
 }
 
 const ContextoDaProtecaoDeSaida =
@@ -110,6 +111,10 @@ export function ProvedorDeProtecaoDeSaida({
   const [hashExibido, setHashExibido] = useState(() => window.location.hash);
   const hashAceito = useRef(window.location.hash);
   const protecaoAtiva = useRef<Protecao | null>(null);
+  // Destino de uma navegação já autorizada por `navegarSemProtecao`. Enquanto
+  // não for `null`, a proteção não pode ser reescrita por um render
+  // intermediário: o `hashchange` autorizado ainda está a caminho.
+  const navegacaoLiberada = useRef<string | null>(null);
 
   const [confirmacao, setConfirmacao] = useState<ConfirmacaoPendente | null>(
     null,
@@ -140,6 +145,13 @@ export function ProvedorDeProtecaoDeSaida({
    */
   const definirProtecao = useCallback(
     (protecao: Protecao | null): Protecao | null => {
+      // Com uma navegação liberada a caminho, o render de uma página que está
+      // saindo (por exemplo, com `salvando === true`) não pode reescrever a
+      // proteção: o `hashchange` autorizado já vem e precisa ser aceito.
+      if (navegacaoLiberada.current !== null) {
+        return null;
+      }
+
       if (!mesmaProtecao(protecaoAtiva.current, protecao)) {
         protecaoAtiva.current = protecao;
       }
@@ -162,6 +174,26 @@ export function ProvedorDeProtecaoDeSaida({
     if (protecaoAtiva.current === protecao) {
       protecaoAtiva.current = null;
     }
+  }, []);
+
+  /**
+   * Libera a navegação para `hash` de forma determinística (FR-157, FR-251):
+   * derruba a proteção vigente, marca o destino como autorizado e só então
+   * muda a URL. Enquanto a marca estiver de pé, `definirProtecao` não grava
+   * nada — um render intermediário entre o pedido e o `hashchange` (o de uma
+   * página que ainda tem `salvando === true`, por exemplo) não pode reescrever
+   * a proteção nem fazer o ouvinte restaurar a URL anterior.
+   */
+  const navegarSemProtecao = useCallback((hash: string) => {
+    protecaoAtiva.current = null;
+
+    // Se o hash exibido já é o pedido, nenhum `hashchange` virá: nada a liberar.
+    if (window.location.hash === hash) {
+      return;
+    }
+
+    navegacaoLiberada.current = hash;
+    window.location.hash = hash;
   }, []);
 
   const anunciarPendencia = useCallback((motivo: string) => {
@@ -213,6 +245,25 @@ export function ProvedorDeProtecaoDeSaida({
     const aoMudarHash = (): void => {
       const hashPedido = window.location.hash;
 
+      // A navegação autorizada por `navegarSemProtecao` chega como o
+      // `hashchange` que ela mesma provocou. É aceita sem consultar a proteção
+      // (que pode ter sido reescrita por um render intermediário) e encerra a
+      // liberação.
+      if (
+        navegacaoLiberada.current !== null &&
+        hashPedido === navegacaoLiberada.current
+      ) {
+        navegacaoLiberada.current = null;
+        aceitarHash(hashPedido);
+        return;
+      }
+
+      // Um destino diferente chegou com uma liberação de pé: a navegação
+      // autorizada não se concretizou e a política normal volta a valer.
+      if (navegacaoLiberada.current !== null) {
+        navegacaoLiberada.current = null;
+      }
+
       // O mesmo hash aceito pode chegar de volta quando a URL é restaurada; se
       // já é o aceito, não há navegação nova a tratar.
       if (hashPedido === hashAceito.current) {
@@ -253,6 +304,7 @@ export function ProvedorDeProtecaoDeSaida({
     protegerAcao,
     descartarProtecao,
     descartarProtecaoSeIgual,
+    navegarSemProtecao,
   };
 
   return (
@@ -331,6 +383,20 @@ export function useAcaoProtegida(): (acao: () => void) => void {
  */
 export function useDescartarProtecao(): () => void {
   return usarContexto().descartarProtecao;
+}
+
+/**
+ * Libera a navegação para `hash` sem passar pela proteção (FR-157, FR-251):
+ * é o que uma página usa no caminho de sucesso, depois de deixar o trabalho
+ * pronto e antes de mudar de tela. Diferente de `useDescartarProtecao`, que só
+ * limpa a proteção, a liberação aqui é determinística — um render intermediário
+ * entre o pedido e o `hashchange` (o de uma página que ainda tem
+ * `salvando === true`, por exemplo) não pode reescrever a proteção nem fazer o
+ * ouvinte restaurar a URL anterior. Use `useDescartarProtecao` quando não
+ * houver navegação a fazer.
+ */
+export function useNavegarSemProtecao(): (hash: string) => void {
+  return usarContexto().navegarSemProtecao;
 }
 
 function usarContexto(): ContextoDaProtecaoDeSaida {

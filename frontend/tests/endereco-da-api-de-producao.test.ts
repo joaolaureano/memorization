@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -20,8 +27,10 @@ import { describe, expect, it } from "vitest";
  */
 
 const RAIZ_DO_FRONTEND = process.cwd();
-const DIRETORIO_DO_PACOTE = join(RAIZ_DO_FRONTEND, "dist");
-const DIRETORIO_DOS_ASSETS = join(DIRETORIO_DO_PACOTE, "assets");
+// O pacote de cada construção vai para um diretório temporário próprio desta
+// execução, e não para o `dist/` compartilhado: outra construção (um vitest em
+// paralelo, o `npm run build` do `verificar:ci`) sobrescreveria ou apagaria o
+// `dist/` no meio da prova. Os scripts reais de `npm` continuam executados.
 
 /** O endereço local padrão da API, o de quem roda a aplicação na máquina. */
 const ENDERECO_LOCAL_PADRAO = "http://127.0.0.1:3001";
@@ -42,12 +51,44 @@ function ambienteSemEnderecoInformado(): Record<string, string | undefined> {
   return ambiente;
 }
 
-/** Executa um script de `npm` e devolve o código de saída e a saída capturada. */
+/**
+ * Os argumentos que entregam o `--outDir` ao `vite build` pelo `npm`:
+ *   - `npm run <script> -- <args>` entrega `<args>` ao script;
+ *   - em `build` (`tsc --noEmit && vite build`), os argumentos são acrescentados
+ *     ao fim do script e, portanto, ao `vite build`;
+ *   - em `build:aws` (`VITE_ENDERECO_DA_API=/api npm run build`), o `--` extra é
+ *     repassado ao `npm run build` aninhado, que então acrescenta o `--outDir` ao
+ *     seu `vite build`.
+ * O `--emptyOutDir` autoriza o vite a publicar — e limpar — fora da raiz do
+ * projeto, sem aviso.
+ */
+function argumentosDoDiretorioTemporario(
+  script: string,
+  diretorio: string,
+): string[] {
+  const argumentos = ["--outDir", diretorio, "--emptyOutDir"];
+
+  return script === "build:aws" ? ["--", ...argumentos] : argumentos;
+}
+
+/**
+ * Executa um script de `npm` publicando o pacote em um diretório temporário
+ * **próprio desta execução** — nunca no `dist/` compartilhado — e devolve o
+ * código de saída, a saída capturada e o diretório onde o pacote foi publicado.
+ */
 function construirPeloScript(
   script: string,
   ambiente: Record<string, string | undefined>,
-): { status: number | null; saida: string } {
-  const resultado = spawnSync("npm", ["run", script], {
+): { status: number | null; saida: string; diretorio: string } {
+  const diretorio = mkdtempSync(join(tmpdir(), "memorization-build-"));
+  const argumentos = [
+    "run",
+    script,
+    "--",
+    ...argumentosDoDiretorioTemporario(script, diretorio),
+  ];
+
+  const resultado = spawnSync("npm", argumentos, {
     cwd: RAIZ_DO_FRONTEND,
     env: ambiente,
     encoding: "utf8",
@@ -57,21 +98,24 @@ function construirPeloScript(
   return {
     status: resultado.status,
     saida: `${resultado.stdout}${resultado.stderr}`,
+    diretorio,
   };
 }
 
 /** Todo o JavaScript publicado pelo Vite, concatenado: o pacote é o artefato. */
-function javascriptDoPacote(): string {
-  expect(existsSync(DIRETORIO_DOS_ASSETS)).toBe(true);
+function javascriptDoPacote(diretorioDoPacote: string): string {
+  const diretorioDosAssets = join(diretorioDoPacote, "assets");
 
-  const arquivos = readdirSync(DIRETORIO_DOS_ASSETS).filter((nome) =>
+  expect(existsSync(diretorioDosAssets)).toBe(true);
+
+  const arquivos = readdirSync(diretorioDosAssets).filter((nome) =>
     nome.endsWith(".js"),
   );
 
   expect(arquivos.length).toBeGreaterThan(0);
 
   return arquivos
-    .map((nome) => readFileSync(join(DIRETORIO_DOS_ASSETS, nome), "utf8"))
+    .map((nome) => readFileSync(join(diretorioDosAssets, nome), "utf8"))
     .join("\n");
 }
 
@@ -89,14 +133,19 @@ describe("o endereço da API do SPA", () => {
       ambienteSemEnderecoInformado(),
     );
 
-    expect(resultado.status).toBe(0);
+    try {
+      expect(resultado.status, resultado.saida).toBe(0);
 
-    const javascript = javascriptDoPacote();
+      const javascript = javascriptDoPacote(resultado.diretorio);
 
-    expect(javascript).toContain("/api");
+      expect(javascript).toContain("/api");
 
-    /** Nenhum resto do endereço local: o navegador publicado chama o CloudFront. */
-    expect(javascript).not.toContain("127.0.0.1");
+      /** Nenhum resto do endereço local: o navegador publicado chama o CloudFront. */
+      expect(javascript).not.toContain("127.0.0.1");
+    } finally {
+      // O pacote é temporário e desta execução: ninguém mais o lê.
+      rmSync(resultado.diretorio, { recursive: true, force: true });
+    }
   }, 300_000);
 
   it("sem a variável, a construção continua apontando o endereço local padrão (FR-129)", () => {
@@ -105,7 +154,14 @@ describe("o endereço da API do SPA", () => {
       ambienteSemEnderecoInformado(),
     );
 
-    expect(resultado.status).toBe(0);
-    expect(javascriptDoPacote()).toContain(ENDERECO_LOCAL_PADRAO);
+    try {
+      expect(resultado.status, resultado.saida).toBe(0);
+      expect(javascriptDoPacote(resultado.diretorio)).toContain(
+        ENDERECO_LOCAL_PADRAO,
+      );
+    } finally {
+      // O pacote é temporário e desta execução: ninguém mais o lê.
+      rmSync(resultado.diretorio, { recursive: true, force: true });
+    }
   }, 300_000);
 });

@@ -13,7 +13,10 @@ import type {
 } from "../acervo-cliente/cliente";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
-import { useDescartarProtecao, useProtecaoDeSaida } from "./protecao-de-saida";
+import {
+  useNavegarSemProtecao,
+  useProtecaoDeSaida,
+} from "./protecao-de-saida";
 
 /**
  * Tela de detalhe de um Baralho
@@ -99,7 +102,7 @@ export function PaginaDoBaralho({
   const botaoDeExcluir = useRef<HTMLButtonElement>(null);
   const requisicao = useRef(0);
 
-  const descartarProtecao = useDescartarProtecao();
+  const navegarSemProtecao = useNavegarSemProtecao();
 
   // FR-154: enquanto uma operação está em andamento, sair da tela é bloqueado
   // com o motivo anunciado, e não com um diálogo.
@@ -260,11 +263,10 @@ export function PaginaDoBaralho({
     if (resultado.ok) {
       // FR-044: só depois de o servidor confirmar a exclusão a tela navega
       // para a lista de Baralhos — onde o Baralho não aparecerá mais. A
-      // proteção de pendência é descartada antes, porque esta navegação
-      // sempre vence (FR-154).
+      // navegação liberada vence a proteção de pendência desta operação
+      // (FR-154).
       setExclusaoPedida(false);
-      descartarProtecao();
-      window.location.hash = "#/baralhos";
+      navegarSemProtecao("#/baralhos");
       return;
     }
 

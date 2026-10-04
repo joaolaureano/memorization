@@ -10,9 +10,11 @@ import { descreverDias, fusoDoNavegador, nomeDoDia } from "../agenda/datas";
 import { descreverQuantidade } from "../agenda/estado-do-dia";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { deixarAvisoDaAgenda } from "./aviso-da-agenda";
-import { irParaRota } from "./navegacao";
 import { resumoDaRotina } from "./PaginaDaAgenda";
-import { useDescartarProtecao, useProtecaoDeSaida } from "./protecao-de-saida";
+import {
+  useNavegarSemProtecao,
+  useProtecaoDeSaida,
+} from "./protecao-de-saida";
 import type { Protecao } from "./protecao-de-saida";
 
 /**
@@ -111,7 +113,7 @@ export function PaginaDoFormularioDeRotina({
   const primeiroDia = useRef<HTMLInputElement>(null);
   const campoDeQuantidade = useRef<HTMLInputElement>(null);
   const operacao = useRef<{ chave: string; operacaoId: string } | null>(null);
-  const descartarProtecao = useDescartarProtecao();
+  const navegarSemProtecao = useNavegarSemProtecao();
 
   useEffect(() => {
     let ativo = true;
@@ -277,14 +279,13 @@ export function PaginaDoFormularioDeRotina({
     });
 
     if (resultado.ok) {
-      // A navegação de sucesso não pode ser barrada pela proteção que a própria
-      // operação criou (FR-251).
-      descartarProtecao();
       operacao.current = null;
       deixarAvisoDaAgenda(
         `Rotina de ${resultado.rotina.nomeDoBaralho} ${editando ? "alterada" : "criada"}: ${resumoDaRotina(resultado.rotina)}.`,
       );
-      irParaRota("#/agenda");
+      // A navegação de sucesso não pode ser barrada pela proteção que a própria
+      // operação criou (FR-251).
+      navegarSemProtecao("#/agenda");
       return;
     }
 

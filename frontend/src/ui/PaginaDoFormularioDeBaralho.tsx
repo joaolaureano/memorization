@@ -9,9 +9,9 @@ import {
   LIMITE_DE_CARACTERES_DE_BARALHO,
   ehCodigoDeErroDeBaralho,
 } from "../acervo-cliente/validacao";
-import { ROTA_PADRAO, hashDaRota, irParaRota } from "./navegacao";
+import { ROTA_PADRAO, hashDaRota } from "./navegacao";
 import {
-  useDescartarProtecao,
+  useNavegarSemProtecao,
   useProtecaoDeSaida,
 } from "./protecao-de-saida";
 import type { Protecao } from "./protecao-de-saida";
@@ -133,7 +133,7 @@ export function PaginaDoFormularioDeBaralho({
 
   useProtecaoDeSaida(protecao);
 
-  const descartarProtecao = useDescartarProtecao();
+  const navegarSemProtecao = useNavegarSemProtecao();
 
   async function salvar(evento: FormEvent<HTMLFormElement>): Promise<void> {
     evento.preventDefault();
@@ -146,12 +146,10 @@ export function PaginaDoFormularioDeBaralho({
         : await cliente.renomearBaralho(id, nome);
 
     if (resultado.ok) {
+      const idDoBaralho = id === undefined ? resultado.baralho.id : id;
       // FR-144: a navegação de sucesso não pode ser barrada pela proteção de
       // saída que a própria operação criou (o salvamento em andamento).
-      descartarProtecao();
-
-      const idDoBaralho = id === undefined ? resultado.baralho.id : id;
-      irParaRota(hashDaRota({ nome: "baralho", id: idDoBaralho }));
+      navegarSemProtecao(hashDaRota({ nome: "baralho", id: idDoBaralho }));
       return;
     }
 

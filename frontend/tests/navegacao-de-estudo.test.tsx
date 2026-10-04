@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { Aplicacao } from "../src/ui/Aplicacao";
 import { interpretarRota } from "../src/ui/navegacao";
-import { CREDENCIAL_DE_PROVA, clienteDeProva,
+import { CREDENCIAL_DE_PROVA, clienteDeProva, observarOperacao,
   aguardarVerificacaoDoAcesso,
 } from "./apoio-de-prova";
 
@@ -304,26 +304,58 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
 
   it("apresenta a Revisão do dia em #/revisao e marca Início como corrente (FR-198, §7)", async () => {
     const cliente = clienteDeProva();
+    let esperarCarga: (() => Promise<void>) | undefined;
 
     navegarPara("#/revisao");
     render(
       <Aplicacao
-        criarCliente={(credencial) => cliente.comoUsuario(credencial)}
+        criarCliente={(credencial) => {
+          const clienteDaSessao = cliente.comoUsuario(credencial);
+
+          // `criarCliente` também é chamado sem Credencial; só o cliente que
+          // carrega a Revisão interessa, e fica o **último** observado.
+          if (typeof clienteDaSessao.obterLoteDeRevisao === "function") {
+            esperarCarga = observarOperacao(
+              clienteDaSessao,
+              "obterLoteDeRevisao",
+            );
+          }
+
+          return clienteDaSessao;
+        }}
       />,
     );
     await aguardarVerificacaoDoAcesso();
 
     entrar();
 
-    // O primeiro render da suíte é frio (carga dos módulos, JIT): o prazo é
-    // folgado para a prova não depender da máquina.
+    // Sem prazo de relógio: cada `act` deixa o React aplicar o que está
+    // pendente — inclusive criar o cliente com Credencial e rodar o efeito que
+    // chama `obterLoteDeRevisao` —, e o laço termina quando a observação está
+    // armada.
+    for (let tentativa = 0; tentativa < 50; tentativa += 1) {
+      await act(async () => {});
+
+      if (esperarCarga !== undefined) {
+        break;
+      }
+    }
+
+    if (esperarCarga === undefined) {
+      throw new Error(
+        "a casca não criou o cliente da Revisão com `obterLoteDeRevisao`",
+      );
+    }
+
+    await esperarCarga();
+
+    // A carga terminou: o <h1> encontrado já é o do estado final, e o texto do
+    // estado de carregamento não está mais no documento — nenhuma troca de nó
+    // acontece entre esta asserção e a seguinte (FR-202).
     expect(
-      await screen.findByRole(
-        "heading",
-        { level: 1, name: "Revisão do dia" },
-        { timeout: 5000 },
-      ),
+      screen.getByRole("heading", { level: 1, name: "Revisão do dia" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Carregando a revisão…")).toBeNull();
     // A Revisão do dia pertence ao Início (`destinoAtivo`, §7).
     expect(screen.getByRole("link", { name: "Início" })).toHaveAttribute(
       "aria-current",
