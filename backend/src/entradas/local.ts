@@ -4,6 +4,7 @@ import {
   type ArmazenamentoSqliteAberto,
 } from "../armazenamento/sqlite/armazenamento.ts";
 import { iniciarServidor } from "../http/servidor.ts";
+import { relogioDeTeste } from "./relogio-de-teste.ts";
 import { criarIdentidade } from "../identidade/identidade.ts";
 import {
   segredoConfigurado,
@@ -95,13 +96,14 @@ if (segredo !== null) {
 
   if (aberto !== null) {
     const identidade = criarIdentidade(aberto.usuarios, segredo);
+    const agora = relogioDeTeste(process.env);
 
     console.log(LINHA_DE_INICIO);
 
     await iniciarServidor(
       process.env,
       identidade,
-      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId),
+      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId, { agora }),
       aberto.acessos,
     );
   }

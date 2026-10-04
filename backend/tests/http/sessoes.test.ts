@@ -35,14 +35,24 @@ import {
 
 const UMA_HORA_EM_MILISSEGUNDOS = 60 * 60 * 1000;
 
-/** Um instante ISO-8601 deslocado do agora, para a janela de `desde`. */
-function instanteDeAgora(deslocamentoEmMilissegundos: number): string {
-  return new Date(Date.now() + deslocamentoEmMilissegundos).toISOString();
+/**
+ * O relógio do cenário: manual e parado, de modo que nenhuma gravação depende
+ * do tempo real. Cada teste decide quando o tempo passa, com `avancar`.
+ */
+let agoraEmMilissegundos = 0;
+
+function agora(): Date {
+  return new Date(agoraEmMilissegundos);
 }
 
-/** Uma pausa real, para separar `concluidaEm` de gravações seguidas. */
-function pausa(milissegundos: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milissegundos));
+/** Faz passar o tempo do cenário, para separar `concluidaEm` de gravações seguidas. */
+function avancar(milissegundos: number): void {
+  agoraEmMilissegundos += milissegundos;
+}
+
+/** Um instante ISO-8601 deslocado do agora, para a janela de `desde`. */
+function instanteDeAgora(deslocamentoEmMilissegundos: number): string {
+  return new Date(agoraEmMilissegundos + deslocamentoEmMilissegundos).toISOString();
 }
 
 interface ItemDoRegistroEsperado {
@@ -98,12 +108,18 @@ let servidor: FastifyInstance;
 let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
-  contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
-    registrarRotasDeCartoes(servidor, acervoDe);
-    registrarRotasDeBaralhos(servidor, acervoDe);
-    registrarRotasDeSessoes(servidor, acervoDe);
-    registrarRotasDeRevisao(servidor, acervoDe);
-  });
+  agoraEmMilissegundos = Date.UTC(2026, 2, 11, 15, 0, 0);
+  contrato = await montarServidorDeContrato(
+    ({ servidor, acervoDe }) => {
+      registrarRotasDeCartoes(servidor, acervoDe);
+      registrarRotasDeBaralhos(servidor, acervoDe);
+      registrarRotasDeSessoes(servidor, acervoDe);
+      registrarRotasDeRevisao(servidor, acervoDe);
+    },
+    {},
+    {},
+    { agora },
+  );
   servidor = contrato.servidor;
 });
 
@@ -204,7 +220,7 @@ async function lerPrevia(cartaoId: string): Promise<Record<string, string>> {
 
 /** O intervalo, em dias, entre agora e o instante ISO informado (SC-085). */
 function diasAte(iso: string): number {
-  return (Date.parse(iso) - Date.now()) / (24 * UMA_HORA_EM_MILISSEGUNDOS);
+  return (Date.parse(iso) - agoraEmMilissegundos) / (24 * UMA_HORA_EM_MILISSEGUNDOS);
 }
 
 /** A leitura de Estatísticas com a janela padrão dos cenários. */
@@ -303,7 +319,7 @@ describe("POST /sessoes — idempotência pelo id (FR-163)", () => {
     const primeira = await postarSessao(corpo);
     expect(primeira.statusCode).toBe(201);
 
-    await pausa(5);
+    avancar(5_000);
 
     const reenvio = await postarSessao(corpo);
     expect(reenvio.statusCode).toBe(200);
@@ -313,12 +329,24 @@ describe("POST /sessoes — idempotência pelo id (FR-163)", () => {
     expect(estatisticas.json().recentes).toHaveLength(1);
   });
 
+  it("o reenvio no mesmo instante da criação também responde 200, porque quem diz é o Acervo e não o relógio (FR-163)", async () => {
+    const corpo = registroCru();
+
+    const primeira = await postarSessao(corpo);
+    expect(primeira.statusCode).toBe(201);
+
+    // O relógio do cenário está parado: criação e reenvio têm o mesmo instante.
+    const reenvio = await postarSessao(corpo);
+    expect(reenvio.statusCode).toBe(200);
+    expect(reenvio.json()).toEqual(primeira.json());
+  });
+
   it("guarda o conteúdo da primeira gravação e ignora o reenvio com outro conteúdo", async () => {
     const corpo = registroCru();
     const primeira = await postarSessao(corpo);
     expect(primeira.statusCode).toBe(201);
 
-    await pausa(5);
+    avancar(5_000);
 
     const reenvio = await postarSessao(
       registroCru({
@@ -563,7 +591,7 @@ describe("GET /estatisticas — leitura conforme o contrato", () => {
     for (let indice = 0; indice < 6; indice += 1) {
       const criado = await registrarSessao();
       ids.push(criado.id);
-      await pausa(2);
+      avancar(2_000);
     }
 
     const resposta = await lerEstatisticas();
@@ -804,7 +832,7 @@ describe("POST /sessoes — reenvio não reaplica a Avaliação (SC-085, FR-210)
     const antes = await lerPrevia(cartaoId);
     expect(diasAte(antes.bom)).toBeCloseTo(6, 0);
 
-    await pausa(5);
+    avancar(5_000);
 
     expect((await postarSessao(corpo)).statusCode).toBe(200);
 

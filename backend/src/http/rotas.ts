@@ -573,12 +573,6 @@ export function registrarRotasDeSessoes(
       return resposta.status(400).send(DADOS_DO_REGISTRO_INVALIDOS);
     }
 
-    /**
-     * O relógio marca o início antes da chamada: quem manda na data é a
-     * primeira inserção, e o `Acervo` só devolve uma data anterior a este
-     * instante quando o registro já existia (FR-163).
-     */
-    const inicioDaRequisicao = Date.now();
     const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
     const resultado = await acervo.registrarSessao(corpo.data);
 
@@ -594,10 +588,11 @@ export function registrarRotasDeSessoes(
       return resposta.status(INDISPONIVEL).send(INDISPONIVEL_DO_ARMAZENAMENTO);
     }
 
-    const jaExistia =
-      Date.parse(resultado.registro.concluidaEm) < inicioDaRequisicao;
-
-    return resposta.status(jaExistia ? 200 : 201).send(resultado.registro);
+    // O reenvio do mesmo `id` responde 200 com o Registro guardado; a criação,
+    // 201 (FR-163). Quem diz qual dos dois foi é o `Acervo`, sem olhar o relógio.
+    return resposta
+      .status(resultado.criada ? 201 : 200)
+      .send(resultado.registro);
   });
 
   servidor.get("/estatisticas", async (requisicao, resposta) => {

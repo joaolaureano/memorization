@@ -314,7 +314,16 @@ export interface DadosDeRegistro {
  *   pessoa pode registrar de novo com o mesmo conteúdo (FR-164).
  */
 export type ResultadoDeRegistroDeSessao =
-  | { ok: true; registro: RegistroDeSessao }
+  | {
+      ok: true;
+      registro: RegistroDeSessao;
+      /**
+       * `true` quando este envio criou o Registro; `false` no reenvio do mesmo
+       * `id`, que devolve o já guardado. É a Porta quem diz (`novo`), e não a
+       * comparação de datas, que dependeria do relógio.
+       */
+      criada: boolean;
+    }
   | { ok: false; erro: "dados_invalidos" | "conflito" | "indisponivel" };
 
 /**
@@ -1116,11 +1125,13 @@ export function criarAcervo(
    */
   opcoes: {
     algoritmos?: ReadonlyMap<string, AlgoritmoDeRepeticao>;
-    /** Relógio injetável para os testes da Agenda; padrão `() => new Date()`. */
+    /** Relógio injetável para os testes; padrão `() => new Date()`. Vale para a Agenda, as Estatísticas, o registro de Sessões e a Revisão do dia. */
     agora?: () => Date;
   } = {},
 ): Acervo {
   const algoritmos = opcoes.algoritmos ?? ALGORITMOS;
+  /** O instante de agora: toda decisão que depende de «hoje» passa por aqui. */
+  const relogio = opcoes.agora ?? (() => new Date());
 
   /**
    * O Module `Agenda` (FR-248, FR-250) recebe a mesma Porta e o mesmo dono do
@@ -1274,7 +1285,11 @@ export function criarAcervo(
         : { ok: false, ...HISTORICO_INDISPONIVEL };
     }
 
-    return { ok: true, registro: gravado.valor.registro };
+    return {
+      ok: true,
+      registro: gravado.valor.registro,
+      criada: gravado.valor.novo,
+    };
   }
 
   return {
@@ -1505,7 +1520,7 @@ export function criarAcervo(
     },
 
     async registrarSessao(dados) {
-      const agora = new Date();
+      const agora = relogio();
 
       if (dados.inicioAgendaId !== undefined) {
         return registrarSessaoDaAgenda(dados, agora);
@@ -1562,11 +1577,15 @@ export function criarAcervo(
           : { ok: false, ...HISTORICO_INDISPONIVEL };
       }
 
-      return { ok: true, registro: gravado.valor.registro };
+      return {
+        ok: true,
+        registro: gravado.valor.registro,
+        criada: gravado.valor.novo,
+      };
     },
 
     async obterEstatisticas(desde) {
-      const janela = interpretarJanela(desde, new Date());
+      const janela = interpretarJanela(desde, relogio());
 
       if (janela === null) {
         return { ok: false, ...DADOS_INVALIDOS };
@@ -1693,7 +1712,7 @@ export function criarAcervo(
       const porCartao = new Map(
         agendamentos.map((agendamento) => [agendamento.cartaoId, agendamento]),
       );
-      const agora = new Date();
+      const agora = relogio();
 
       return {
         ok: true,
@@ -1732,7 +1751,7 @@ export function criarAcervo(
       const porCartao = new Map(
         agendamentos.map((agendamento) => [agendamento.cartaoId, agendamento]),
       );
-      const agora = new Date();
+      const agora = relogio();
 
       /**
        * Identificador que não é Cartão do Usuário é **omitido**, e não

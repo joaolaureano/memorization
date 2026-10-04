@@ -67,19 +67,21 @@ export interface ServidorDeContrato {
  * As opções de borda — o segredo de origem e a política de outra origem — são
  * repassadas à construção, de modo que um arquivo de teste exercite a **mesma**
  * criação de servidor da aplicação, com ou sem elas. Sem opção alguma, o
- * servidor é o de hoje.
+ * servidor é o de hoje. Um relógio manual pode ser injetado no `Acervo` para que
+ * os cenários avancem o tempo por conta própria, sem pausas reais.
  */
 export async function montarServidorDeContrato(
   registrarRotas: (rotas: RotasDeContrato) => void,
   opcoesDoServidor: OpcoesDoServidor = {},
   opcoesDosAcessos: OpcoesDosAcessos = {},
+  opcoesDoAcervo: { agora?: () => Date } = {},
 ): Promise<ServidorDeContrato> {
   const aberto = await abrirArmazenamentoSqlite(":memory:");
   const identidade = criarIdentidade(aberto.usuarios, segredoGerado());
   const acessos = criarAcessos(aberto.acessos, opcoesDosAcessos);
   const servidor = criarServidor(identidade, { acessos, ...opcoesDoServidor });
   const acervoDe: AcervoDeUsuario = (usuarioId) =>
-    criarAcervo(aberto.armazenamento, usuarioId);
+    criarAcervo(aberto.armazenamento, usuarioId, opcoesDoAcervo);
 
   registrarRotas({ servidor, identidade, acervoDe, acessos });
 

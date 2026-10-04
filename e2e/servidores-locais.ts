@@ -639,7 +639,7 @@ export async function entrarPelaUi(
     await page.getByLabel("Continuar conectado neste navegador").uncheck();
   }
 
-  await Promise.all([
+  const [resposta] = await Promise.all([
     page.waitForResponse(
       (candidata) =>
         candidata.url().endsWith("/entrar") &&
@@ -648,7 +648,30 @@ export async function entrarPelaUi(
     page.getByRole("button", { name: "Entrar" }).click(),
   ]);
 
-  await page.getByRole("navigation", { name: "Principal" }).waitFor();
+  // Uma Entrada que não deu certo não pode virar uma espera de minutos pela
+  // navegação: o teste falha na hora, dizendo o que o servidor respondeu e o
+  // que a tela mostra.
+  if (!resposta.ok()) {
+    throw new Error(
+      `Entrar respondeu ${resposta.status()}: ${await resposta.text()}`,
+    );
+  }
+
+  try {
+    await page
+      .getByRole("navigation", { name: "Principal" })
+      .waitFor({ timeout: 30_000 });
+  } catch (erro) {
+    const alertas = await page.getByRole("alert").allInnerTexts();
+    const titulo = await page.getByRole("heading", { level: 1 }).allInnerTexts();
+
+    throw new Error(
+      `Entrar respondeu ${resposta.status()}, mas a navegação principal não ` +
+        `apareceu em 30 s. Título: ${JSON.stringify(titulo)}; alertas: ` +
+        `${JSON.stringify(alertas)}; endereço: ${page.url()}.`,
+      { cause: erro },
+    );
+  }
 }
 
 /**
