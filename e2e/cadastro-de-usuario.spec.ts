@@ -8,6 +8,7 @@ import {
   aguardarProntidao,
   cadastrarUsuarioPelaApi,
   criarPastaTemporaria,
+  descarregarPagina,
   encerrarProcesso,
   iniciarApi,
   iniciarFrontend,
@@ -139,6 +140,9 @@ test("Cadastro pela UI persiste após reiniciar API e frontend, sem cookie nem d
     expect(armazenamentoDoNavegador.sessao).toEqual([]);
     expect(await context.cookies()).toEqual([]);
 
+    // Sem documento do app aberto, o reinício não provoca recarga automática do cliente do Vite.
+    await descarregarPagina(page);
+
     // Encerrar os dois processos...
     await encerrarProcesso(frontend);
     frontend = null;
@@ -160,11 +164,11 @@ test("Cadastro pela UI persiste após reiniciar API e frontend, sem cookie nem d
       (resposta) => resposta.ok,
     );
 
-    // Reabrir a UI: a recarga explícita descarta o documento anterior — e, com
-    // ele, a reconexão pendente do cliente do Vite com o servidor que acabou
-    // de voltar. Sem ela, a recarga automática do cliente do Vite poderia
-    // acontecer no meio de um Cadastro e apagar o que foi digitado.
-    await page.reload();
+    // Reabrir a UI: a página ficou em `about:blank`, e o `goto` carrega um
+    // documento novo do app de forma explícita, sem cliente do Vite antigo
+    // que pudesse recarregar a página no meio de um Cadastro e apagar o que
+    // foi digitado.
+    await page.goto(`${enderecoDoFrontend}/#/criar-conta`);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Criar conta" }),

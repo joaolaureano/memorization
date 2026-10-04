@@ -351,6 +351,16 @@ export async function encerrarProcesso(
 }
 
 /**
+ * Leva a página para `about:blank` antes de um reinício do frontend: o
+ * documento do app — e o cliente do Vite que o recarregaria sozinho quando o
+ * servidor volta — deixa de existir, e o `goto` seguinte carrega um documento
+ * novo de forma explícita, sem corrida.
+ */
+export async function descarregarPagina(page: Page): Promise<void> {
+  await page.goto("about:blank");
+}
+
+/**
  * Lê um Baralho direto da API com os Cartões vinculados — a conferência de
  * persistência exata de Vínculos (os mesmos ids, a mesma elegibilidade e os
  * mesmos Cartões), além da conferência pela UI.

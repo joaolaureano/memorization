@@ -9,6 +9,7 @@ import {
   aguardarProntidao,
   criarPastaTemporaria,
   criarUsuarioDeProva,
+  descarregarPagina,
   encerrarProcesso,
   entrarSeNecessario,
   iniciarApi,
@@ -196,6 +197,9 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     expect(baralhoVinculado.elegivel).toBe(true);
     expect(baralhoVinculado.cartoes).toHaveLength(1);
     expect(baralhoVinculado.cartoes[0].frente).toBe(CARTAO.frente);
+
+    // Sem documento do app aberto, o reinício não provoca recarga automática do cliente do Vite.
+    await descarregarPagina(page);
 
     // Encerrar os dois processos...
     await encerrarProcesso(frontend);

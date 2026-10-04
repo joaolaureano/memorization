@@ -7,6 +7,7 @@ import {
   aguardarProntidao,
   criarPastaTemporaria,
   criarUsuarioDeProva,
+  descarregarPagina,
   encerrarProcesso,
   entrarSeNecessario,
   iniciarApi,
@@ -124,6 +125,9 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     const criados = await listarCartoesPelaApi(enderecoDaApi);
 
     expect(criados).toHaveLength(2);
+
+    // Sem documento do app aberto, o reinício não provoca recarga automática do cliente do Vite.
+    await descarregarPagina(page);
 
     // Encerrar os dois processos...
     await encerrarProcesso(frontend);

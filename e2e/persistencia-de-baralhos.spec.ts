@@ -9,6 +9,7 @@ import {
   aguardarProntidao,
   criarPastaTemporaria,
   criarUsuarioDeProva,
+  descarregarPagina,
   encerrarProcesso,
   entrarSeNecessario,
   iniciarApi,
@@ -121,6 +122,9 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
     const criados = await listarBaralhosPelaApi(enderecoDaApi);
 
     expect(criados).toHaveLength(2);
+
+    // Sem documento do app aberto, o reinício não provoca recarga automática do cliente do Vite.
+    await descarregarPagina(page);
 
     // Encerrar os dois processos...
     await encerrarProcesso(frontend);
