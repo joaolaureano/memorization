@@ -74,7 +74,6 @@ decisões abaixo mostram onde cada uma tem efeito no código.
   Arquiteto, porque os workers não estavam disponíveis. O diff precisa de revisão
   humana.
 - `graphify update .` não foi executado (a ferramenta não está instalada aqui).
-- `SESSION.md` continua sendo um arquivo local não rastreado e fora do commit.
 - Publicação: o trabalho vai apenas para a branch `implementacao-016-018`, como
   a sessão determina; não há merge em `main` nem PR.
 

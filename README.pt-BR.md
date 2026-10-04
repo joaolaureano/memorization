@@ -2,49 +2,87 @@
 
 **[Read this in English / Leia em inglês](README.md)**
 
-Trabalho da cadeira **AGL11091 - Tendências em Engenharia de Software**.
+O Memorization é uma aplicação web de estudo com cartões de memorização. A
+pessoa cria **Cartões** (Frente e Verso), agrupa-os em **Baralhos**, estuda em
+**Sessões de estudo** e revisa com **repetição espaçada**, para que cada Cartão
+volte pouco antes de ser esquecido. Cada **Usuário** tem o próprio acervo,
+privado.
 
-O objetivo principal é **estudar e aplicar Spec-Driven Development (SDD)** com o
-[GitHub Spec Kit](https://github.com/github/spec-kit). O produto construído para
-exercitar a metodologia é uma aplicação web de estudo por flashcards. A pessoa
-cria **Cartões** (Frente e Verso), agrupa-os em **Baralhos** e os pratica em
-**Sessões de estudo**, revelando o Verso e declarando se acertou ou errou. Cada
-**Usuário** tem o seu próprio acervo.
+Foi construído para a disciplina **AGL11091 - Tendências em Engenharia de
+Software**, com Spec-Driven Development pelo
+[GitHub Spec Kit](https://github.com/github/spec-kit): toda feature nasceu de
+uma especificação em [`specs/`](specs/).
 
-Cada funcionalidade nasceu de uma especificação e percorreu o fluxo do Spec Kit:
-*specify → clarify → plan → tasks → analyze → implement → converge*. O código
-só foi escrito depois de a spec, o plano e as tarefas estarem aprovados, e todo
-requisito vigente é citado por pelo menos um teste que o verifica.
+- **Aplicação**: <https://d2mp2j3zeufjr0.cloudfront.net>
+- **Apresentação**: <https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>
 
-A apresentação do trabalho está em
-**<https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>**.
+## O que dá para fazer
+
+| Área | O que o produto oferece | Spec |
+|---|---|---|
+| Conta | Criar conta com nome e Senha, Entrar e Sair. Cada Usuário vê só o próprio acervo | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
+| Continuar conectado | Um Acesso temporário mantém a pessoa conectada enquanto usa o app e expira após um período sem atividade | [018](specs/018-acesso-temporario/) |
+| Gerenciar a conta | Renomear o Usuário, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/) |
+| Cartões | Criar, listar, editar e excluir Cartões, com limites de tamanho | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
+| Baralhos | Criar, renomear e excluir Baralhos, e vincular um Cartão a vários Baralhos | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
+| Estudar um Baralho | Cartões em ordem aleatória, revelar o Verso, avaliar a resposta e ver um Resumo ao final | [004](specs/004-sessao-de-estudo/) |
+| Repetição espaçada | SM-2 com Avaliação em quatro níveis; a Revisão do dia reúne os Cartões vencidos e um número limitado de novos; o algoritmo e o limite diário são Preferências | [015](specs/015-repeticao-espacada/) |
+| Agenda de estudo | Rotinas semanais por Baralho (por exemplo, «Inglês toda segunda»), os Compromissos de hoje e um calendário da semana com o que foi feito | [016](specs/016-agendamento-de-estudo/) |
+| Início e Estudo | O Início mostra saudação, resumo de 7 dias, a Revisão do dia e a Agenda de hoje; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/) |
+| Estatísticas e histórico | Itens estudados, Sessões concluídas e Taxa de acerto nos últimos 7 dias, gráfico por dia e o Registro de cada Sessão, com acertos e erros | [013](specs/013-estatisticas-e-historico/) |
+| Interface | Interface navegável no celular e no desktop (360 a 1440 px, zoom de 200%), utilizável por teclado e leitor de tela | [012](specs/012-interface-visual-navegavel/) |
+
+As demais specs cobrem a plataforma: Porta de persistência com SQLite e
+PostgreSQL ([009](specs/009-porta-de-persistencia/),
+[010](specs/010-postgresql-na-nuvem/)), hospedagem na AWS
+([011](specs/011-hospedagem-aws/)) e integração e entrega contínuas
+([014](specs/014-ci-cd/)). [`CONTEXT.md`](CONTEXT.md) é o glossário do domínio.
+
+## Como executar localmente
+
+```bash
+export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # mantenha o mesmo para o mesmo banco
+cd backend && npm install && npm run dev               # API em 127.0.0.1:3001 com SQLite
+cd frontend && npm install && npm run dev              # abra o endereço impresso pelo Vite
+```
+
+### Apresentação local (um comando)
+
+Na raiz do repositório, `npm run demo` instala o que faltar, cria o segredo do
+servidor, empacota e inicia a API (SQLite) e o frontend, espera os dois
+responderem e imprime o endereço a abrir: **<http://127.0.0.1:5173>**. Os dados
+ficam em `backend/memorizacao.sqlite`, então o acervo de uma apresentação passa
+para a seguinte, e `Ctrl+C` encerra a API e o frontend juntos.
+
+### Variáveis de ambiente opcionais
+
+| Variável | Padrão | Finalidade |
+| --- | --- | --- |
+| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | A origem exata à qual a API concede CORS (com credenciais), para o cookie do Acesso temporário. |
+| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Validade deslizante do Acesso temporário, em segundos (inteiro positivo). É configuração do ambiente, nunca escolha do Usuário. |
+| `ORIGENS_LOCAIS_DE_TESTE` | não definida | `sim` libera no CORS qualquer porta de loopback. **Só para os testes ponta a ponta**, em que o frontend sobe depois da API. |
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Linguagem | TypeScript de ponta a ponta, sobre Node.js 24+ |
+| Linguagem | TypeScript de ponta a ponta, em Node.js 24+ |
 | Backend | Fastify, com validação de entrada por Zod |
 | Frontend | React com Vite (SPA com navegação por hash) |
-| Persistência | Port de armazenamento com dois Adapters: SQLite (`node:sqlite`) na execução local e PostgreSQL (`pg`) na nuvem |
-| Segurança | Senha com sal por Usuário, HMAC-SHA256 com segredo do servidor e scrypt; Credencial enviada em toda requisição, sem sessão nem cookie |
-| Testes | Vitest e Testing Library; E2E com Playwright em navegador real, contra API e banco reais |
+| Persistência | Porta de armazenamento com dois Adapters: SQLite (`node:sqlite`) ao executar localmente e PostgreSQL (`pg`) na nuvem |
+| Segurança | Senha com sal por Usuário, HMAC-SHA256 com segredo do servidor e scrypt; Acesso temporário em cookie `HttpOnly` e `SameSite=Strict` com validade deslizante |
+| Testes | Vitest e Testing Library; E2E com Playwright em navegador real, contra a API e o banco reais |
 | Infraestrutura | AWS provisionada com OpenTofu; banco PostgreSQL no Neon |
-| Desenvolvimento com IA | [Claude Code](https://claude.com/claude-code) como Arquiteto e orquestrador: conduz o Spec Kit, decide a arquitetura, revisa e integra. O código é escrito por **workers DeepSeek flash**, cada um em worktree isolado |
-| Prompts | [`prompts.md`](prompts.md) reúne todos os prompts usados pelo Product Owner para conduzir o projeto |
+| Desenvolvimento | [Claude Code](https://claude.com/claude-code) como Arquiteto, conduzindo o Spec Kit e revisando cada mudança; código da aplicação escrito por workers DeepSeek flash |
 
-Scripts principais do backend:
+Principais scripts do backend:
 
 | Script | Uso |
 |---|---|
 | `npm run dev` | Desenvolvimento local com SQLite |
-| `npm run build:local` / `start:local` | Pacote e execução local com SQLite |
+| `npm run build:local` / `start:local` | Pacote e execução locais com SQLite |
 | `npm run build:cloud` / `migrate:cloud` / `start:cloud` | Pacote, migração e execução com PostgreSQL (`DB_URL`) |
 | `npm run build:lambda` | Pacote da função AWS Lambda (`dist-lambda.zip`) |
-
-## Entrega na AWS
-
-A aplicação publicada está em **<https://d2mp2j3zeufjr0.cloudfront.net>**.
 
 ## Arquitetura
 
@@ -53,187 +91,42 @@ flowchart LR
     U[Navegador] -->|HTTPS| CF[Amazon CloudFront]
     CF -->|/ e assets| S3[(Amazon S3<br/>SPA React)]
     CF -->|/api/* e /health<br/>+ segredo de origem| L[AWS Lambda<br/>API Fastify]
-    L -->|lê segredos no início a frio| SSM[AWS SSM<br/>Parameter Store]
+    L -->|lê segredos no cold start| SSM[AWS SSM<br/>Parameter Store]
     L -->|TLS verificado| DB[(Neon<br/>PostgreSQL)]
     L -.->|logs| CW[Amazon CloudWatch]
 ```
 
-- **CloudFront** é a porta única. Serve o SPA a partir do S3 e encaminha
-  `/api/*` à Lambda, removendo o prefixo `/api` na borda. Também injeta um
+- **CloudFront** é a única entrada. Serve a SPA a partir do S3 e encaminha
+  `/api/*` para a Lambda, retirando o prefixo `/api` na borda. Também injeta um
   segredo de origem, sem o qual a Lambda responde 403.
-- **Lambda** executa a mesma API do modo local, sem escutar porta alguma.
+- **Lambda** executa a mesma API do modo local, sem escutar porta nenhuma.
 - **SSM** guarda os três segredos: a URL do banco, o segredo de origem e o
   segredo das Senhas.
-- **Neon** hospeda o PostgreSQL. As migrações rodam por comando separado, antes
-  do deploy.
+- **Neon** hospeda o PostgreSQL. As migrações rodam por um comando separado,
+  antes da entrega.
 
-O passo a passo da publicação está em
+O passo a passo da entrega está em
 [`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
 e em [`backend/terraform/README.md`](backend/terraform/README.md).
 
-## Fluxo de trabalho com o Spec Kit
-
-Toda feature percorreu as mesmas sete etapas, sempre nesta ordem:
-
-| Etapa | O que produz |
-|---|---|
-| `specify` | O quê e por quê: histórias de usuário, requisitos e critérios de sucesso |
-| `clarify` | Até cinco perguntas ao Product Owner, cada uma com uma recomendação; as respostas viram requisitos |
-| `plan` | Como: decisões técnicas, contratos e conferência com a constituição |
-| `tasks` | Tarefas pequenas, cada uma com o seu teste e ligada aos requisitos que cumpre |
-| `analyze` | Lacunas, duplicidades e conflitos encontrados antes de qualquer código |
-| `implement` | Código escrito pelos workers, revisado e integrado pelo Arquiteto |
-| `converge` | Confirmação de que todo requisito é citado por um teste |
-
-Os papéis ficaram assim:
-- **Product Owner**: responde o clarify e decide cada escolha.
-- **Claude Code, o Arquiteto**: conduz o Spec Kit, revisa cada diff e integra.
-- **Workers DeepSeek flash**: escrevem o código, cada um no seu próprio worktree.
-
-## Estrutura padrão de uma spec
-
-Cada funcionalidade tem o seu diretório em `specs/NNN-nome/`, gerado e mantido
-pelos comandos do Spec Kit. Todos seguem a mesma estrutura:
-
-| Arquivo | Papel |
-|---|---|
-| `spec.md` | **O quê e por quê**: histórias de usuário, cenários de aceitação, requisitos funcionais (`FR-xxx`), critérios de sucesso (`SC-xxx`) e esclarecimentos do Product Owner. Não trata de tecnologia |
-| `checklists/requirements.md` | Checklist de qualidade da spec: completude, testabilidade e ausência de detalhes de implementação |
-| `plan.md` | **Como**: decisões técnicas, Modules e Interfaces, conferência contra a constituição, riscos e estrutura de pastas |
-| `research.md` | Cada decisão técnica relevante, com justificativa e alternativas descartadas |
-| `data-model.md` | Entidades, campos, restrições e migrações |
-| `contracts/` | Contratos observáveis: rotas HTTP, Interfaces de Module, scripts |
-| `quickstart.md` | Roteiro de validação ponta a ponta, com comandos e resultados esperados |
-| `tasks.md` | Tarefas pequenas e ordenadas, com dependências, testes e matriz de rastreabilidade entre requisitos e tarefas |
-
-Além delas, a constituição (abaixo) reúne os princípios que valem para todas as
-specs, e [`CONTEXT.md`](CONTEXT.md) é o glossário do domínio.
-
-## Como ler as siglas das specs
-
-As siglas seguem os templates do Spec Kit. Todos os exemplos abaixo são reais e
-vêm da spec [`007-criar-usuario`](specs/007-criar-usuario/).
-
-| Sigla | O que representa | Exemplo |
-|---|---|---|
-| `NNN-nome` | Pasta de uma feature, numerada na ordem em que nasceu | `specs/007-criar-usuario` |
-| `FR-XXX` | Requisito funcional: o que o sistema deve fazer. Os testes citam, no próprio nome, o FR que comprovam | FR-071: cadastrar com nome e Senha repetida |
-| `SC-XXX` | Critério de sucesso, mensurável | SC-020: cadastro feito só com o teclado |
-| `TXXX` | Tarefa do `tasks.md`, com o seu teste | T601: criar a tabela de usuários sem perder dados |
-| `I` a `XI` | Princípio da constituição | XI: todo código é escrito por workers |
-
-FR e SC seguem uma só numeração no projeto inteiro. Por isso a 007 começa no
-FR-070: as specs anteriores ficaram com os números menores.
-
 ## Constituição
 
-A [constituição](.specify/memory/constitution.md) (em
-[`.specify/memory/`](.specify/memory/)) é a lei acima das specs. O `plan` de
-cada feature a confere princípio a princípio, e o `analyze` trata uma violação
-como bloqueio.
+A [constituição](.specify/memory/constitution.md) reúne os princípios que valem
+para todas as features.
 
 | Princípio | Em resumo |
 |---|---|
-| I. Spec-Driven Development (não negociável) | Nada é implementado antes de spec, clarify, plan, tasks e analyze aprovados. Onde código e spec divergem, a spec vence |
-| II. Auditabilidade Append-Only | Toda sessão fica registrada no `SESSION.md`, sem reescrever eventos anteriores e sem segredos |
-| III. Domínio Antes de Tecnologia | O `CONTEXT.md` é o glossário e manda na linguagem. O código usa os mesmos termos |
-| IV. Módulos Profundos | Interfaces pequenas escondendo muita implementação. Uma Seam só existe quando há pelo menos dois Adapters reais |
-| V. A Interface é a Superfície de Teste | Os testes passam pela mesma Interface que quem a chama e verificam resultados observáveis, nunca estado interno |
-| VI. Verificação Sobre Afirmação | Nenhuma afirmação de worker é aceita sem o Arquiteto inspecionar o diff e rodar os testes |
-| VII. Escopo Mínimo Honesto | Implementa-se só o que a spec pede. Premissas não validadas ficam explícitas |
-| VIII. Segredos Fora do Repositório (não negociável) | Nenhum segredo entra em arquivo versionado, sob nenhuma justificativa |
-| IX. Rastreabilidade Requisito–Teste | Todo requisito tem um teste que o exercita, e todo teste tem um requisito que o justifica |
-| X. Portões de Qualidade | Uma inconsistência crítica no `analyze` ou um checklist reprovado bloqueia o `implement` |
-| XI. Delegação Obrigatória de Código (não negociável) | Todo código de aplicação é escrito por workers DeepSeek. O Arquiteto especifica, revisa e integra |
-
-## Specs criadas
-
-| Spec | Do que trata |
-|---|---|
-| [`specs/001-criar-cartao/`](specs/001-criar-cartao/) | Criar e listar Cartões, com limites de tamanho, persistência, acessibilidade e uso em telefone. Estabelece a base do projeto |
-| [`specs/002-criar-baralho/`](specs/002-criar-baralho/) | Criar e listar Baralhos. Introduz as migrações versionadas do esquema |
-| [`specs/003-vincular-cartao-baralho/`](specs/003-vincular-cartao-baralho/) | Vincular Cartões a Baralhos (um Cartão pode estar em vários). Um Baralho é elegível para estudo quando tem pelo menos um Cartão |
-| [`specs/004-sessao-de-estudo/`](specs/004-sessao-de-estudo/) | Sessão de estudo com ordem aleatória, sem repetição, Revelação do Verso, Resultado e Resumo. Nada é persistido |
-| [`specs/005-editar-cartao-e-baralho/`](specs/005-editar-cartao-e-baralho/) | Editar Cartão e renomear Baralho, preservando os Vínculos |
-| [`specs/006-excluir-cartao-e-baralho/`](specs/006-excluir-cartao-e-baralho/) | Excluir Cartão ou Baralho com confirmação. Os Vínculos saem em cascata e a outra entidade é preservada |
-| [`specs/007-criar-usuario/`](specs/007-criar-usuario/) | Cadastro de Usuário. A Senha é guardada com sal, HMAC com segredo do servidor e scrypt, de forma que um vazamento não a revele |
-| [`specs/008-entrar/`](specs/008-entrar/) | Entrar e Sair. A Credencial fica só na memória da página e segue em toda requisição, e cada Usuário vê apenas o próprio acervo |
-| [`specs/009-porta-de-persistencia/`](specs/009-porta-de-persistencia/) | Port and Adapter para a persistência, com o Adapter SQLite e a escolha do banco por parâmetro na construção |
-| [`specs/010-postgresql-na-nuvem/`](specs/010-postgresql-na-nuvem/) | Adapter PostgreSQL por URL, com TLS verificado, comando de migração e scripts de nuvem |
-| [`specs/011-hospedagem-aws/`](specs/011-hospedagem-aws/) | Hospedagem na AWS: função Lambda, segredos no SSM, segredo de origem, pacote da função e publicação |
-
-Ao todo, as 11 specs somam 195 requisitos (134 FR e 61 SC). Todos os vigentes
-são citados por testes, que somam 954: 596 no backend, 340 no frontend e 18 E2E.
-
-### Exemplo: uma feature do começo ao fim
-
-A spec [`007-criar-usuario`](specs/007-criar-usuario/) passou por todas as
-etapas sem atalho:
-
-| Etapa | O que aconteceu |
-|---|---|
-| `specify` | Uma pessoa cria a própria conta, e a Senha nunca fica guardada de forma legível |
-| `clarify` | O PO decidiu: nome com 3 a 50 caracteres, Senha com 8 a 128, e o nome repetido é avisado claramente |
-| `plan` | Um módulo de Identidade; Senha guardada com sal, segredo do servidor e hash lento; nova tabela de usuários |
-| `tasks` | 14 tarefas: primeiro o servidor, depois a tela de cadastro |
-| `analyze` | Achou duas tarefas que só funcionam juntas; o PO aprovou juntá-las num mesmo commit |
-| `implement` | Um worker escreveu o código; o Arquiteto revisou, testou e integrou |
-| `converge` | Todo requisito da spec tem um teste que o comprova |
-
-## Desenvolvimento com IA: dores, o que funcionou e lições
-
-**As dores, na visão do Product Owner:**
-- **Uma spec gigante**: o MVP inteiro nasceu numa spec só, e o projeto só andou depois de fatiá-la.
-- **Metade do tempo na spec**: cerca de metade do tempo foi gasta refinando e ajustando a spec, com várias idas e vindas, antes do código.
-- **Ordem não linear**: a IA voltava a requisitos sem avisar, em vez de seguir uma spec de cada vez.
-- **Escopo além do pedido**: acessibilidade, iOS, Android, desktop e milissegundos de requisição.
-- **Dois idiomas misturados**: artefatos em português e respostas alternando português e inglês.
-
-**O que funcionou:**
-- **Specs pequenas destravaram**: depois de fatiar, cada feature andou do começo ao fim.
-- **O tempo na spec se pagou**: clarify e analyze pegaram problemas antes do código, e a implementação teve pouco retrabalho.
-- **Tudo fica rastreável**: todo requisito tem teste, e cada passo ficou registrado com o seu commit.
-- **Boas escolhas técnicas**: a IA propôs TypeScript e algo próximo de Port and Adapter; o PO só fixou DDD e AWS.
-- **A curva caiu rápido**: depois dos primeiros prompts, cada spec nova levou bem menos tempo.
-- **Custo baixo**: Claude Code como Arquiteto e workers DeepSeek flash a menos de US$ 0,02 por delegação.
-
-**Lições:**
-- Fatie cedo: uma spec por feature.
-- Perguntar no clarify sai mais barato que refazer.
-- A IA precisa de limites de escopo explícitos.
-- O registro das sessões e os commits tornam o processo verificável.
-
-## SESSION.md
-
-[`SESSION.md`](https://github.com/joaolaureano/memorization/blob/v1.0.0/SESSION.md) é o **registro auditável** da versão 1 e existe apenas na tag `v1.0.0`; ele não é mantido na `main`. Cada interação
-relevante vira um evento numerado, com data e hora, ator, comando do Spec Kit
-usado, decisão tomada, verificações executadas e commit correspondente. Os
-eventos anteriores não são reescritos, e nenhum segredo é registrado. É ali que
-fica o histórico das decisões do Product Owner e do Arquiteto.
-
-## Como executar localmente
-
-```bash
-export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # mantenha o mesmo para a mesma base
-cd backend && npm install && npm run dev               # API em 127.0.0.1:3001 com SQLite
-cd frontend && npm install && npm run dev              # abrir o endereço impresso pelo Vite
-```
-
-### Apresentação local (um comando)
-
-Na raiz do repositório, `npm run demo` instala as dependências que faltarem, cria
-o segredo do servidor, empacota e sobe a API (SQLite) e o frontend, espera os
-dois responderem e imprime o endereço a abrir: **<http://127.0.0.1:5173>**. Os
-dados ficam em `backend/memorizacao.sqlite`, então o acervo de uma apresentação
-continua na seguinte, e `Ctrl+C` encerra API e frontend juntos.
-
-### Variáveis de ambiente opcionais
-
-| Variável | Padrão | Finalidade |
-| --- | --- | --- |
-| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | A origem exata a que a API concede CORS (com credenciais), para o cookie do Acesso temporário. |
-| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Validade deslizante do Acesso temporário, em segundos (inteiro positivo). É configuração de ambiente, nunca escolha da pessoa. |
-| `ORIGENS_LOCAIS_DE_TESTE` | não definida | `sim` deixa passar qualquer porta do loopback no CORS. **Só para os testes de ponta a ponta**, em que o frontend sobe depois da API. |
+| I. Spec-Driven Development (inegociável) | Nada é implementado antes de spec, clarify, plan, tasks e analyze aprovados. Onde código e spec divergem, vale a spec |
+| II. Auditabilidade append-only | As decisões ficam no `research.md` de cada feature, nos artefatos do Spec Kit e nas mensagens de commit, sem reescrever a história e sem segredos |
+| III. Domínio antes da tecnologia | `CONTEXT.md` é o glossário e governa a linguagem. O código usa os mesmos termos |
+| IV. Módulos profundos | Interfaces pequenas escondendo muita implementação. Um Seam só existe quando há ao menos dois Adapters reais |
+| V. A Interface é a superfície de teste | Os testes passam pela mesma Interface de quem a usa e verificam resultados observáveis, nunca estado interno |
+| VI. Verificação acima de afirmação | Nenhuma afirmação de worker é aceita sem o Arquiteto inspecionar o diff e rodar os testes |
+| VII. Escopo mínimo e honesto | Só se implementa o que a spec pede. Premissas não validadas ficam explícitas |
+| VIII. Segredos fora do repositório (inegociável) | Nenhum segredo entra em arquivo versionado, sob nenhuma justificativa |
+| IX. Rastreabilidade requisito–teste | Todo requisito tem um teste que o exercita, e todo teste tem um requisito que o justifica |
+| X. Portões de qualidade | Uma inconsistência crítica no `analyze` ou um checklist reprovado bloqueia o `implement` |
+| XI. Delegação obrigatória de código (inegociável) | Todo código de aplicação é escrito por workers DeepSeek. O Arquiteto especifica, revisa e integra |
 
 ## Verificação
 
@@ -241,5 +134,6 @@ continua na seguinte, e `Ctrl+C` encerra API e frontend juntos.
 cd backend  && npm test && npm run typecheck && npm run build:local && npm run lint
 cd frontend && npm test && npm run build && npm run lint
 npm run test:e2e                                   # na raiz, em navegador real
+npm run verificar:ci                               # na raiz: o portão completo antes de todo push
 tofu -chdir=backend/terraform validate
 ```
