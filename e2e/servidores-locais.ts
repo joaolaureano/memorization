@@ -4,13 +4,12 @@ import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 
 // T014 — suporte de execução para a prova E2E real de persistência
 // (FR-040, SC-003; specs/001-criar-cartao/tasks.md).
@@ -150,27 +149,50 @@ function encerrado(processo: ChildProcess): boolean {
 }
 
 /**
- * Devolve uma porta livre do loopback, escolhida pelo sistema operacional.
- * A sondagem fecha o socket antes de devolver, então existe uma janela
- * mínima de corrida; o teste a reduz iniciando a API antes de sondar a porta
- * do frontend — a porta já ocupada nunca é devolvida de novo.
+ * A faixa de portas de cada worker do Playwright: `FAIXA_POR_WORKER` portas a
+ * partir de `PRIMEIRA_PORTA`, abaixo do intervalo efêmero do sistema. Faixas
+ * disjuntas tornam impossível dois workers receberem a mesma porta — o que a
+ * escolha pelo sistema operacional (abrir a porta 0, fechar e devolver) não
+ * garantia, porque a porta fechada pode ser entregue a quem sondar em seguida.
  */
-export async function portaLivre(): Promise<number> {
-  return await new Promise((resolver, recusar) => {
+const PRIMEIRA_PORTA = 20_000;
+const FAIXA_POR_WORKER = 200;
+let proximaDaFaixa = 0;
+
+/** Tenta ouvir `porta` no loopback e a solta; `false` se já estiver em uso. */
+async function portaEstaLivre(porta: number): Promise<boolean> {
+  return await new Promise((resolver) => {
     const sondagem = createServer();
 
-    sondagem.once("error", recusar);
-    sondagem.listen(0, "127.0.0.1", () => {
-      const endereco = sondagem.address();
-
-      if (endereco === null || typeof endereco === "string") {
-        recusar(new Error("não foi possível determinar a porta livre"));
-        return;
-      }
-
-      sondagem.close(() => resolver((endereco as AddressInfo).port));
+    sondagem.once("error", () => resolver(false));
+    sondagem.listen(porta, "127.0.0.1", () => {
+      sondagem.close(() => resolver(true));
     });
   });
+}
+
+/**
+ * Devolve uma porta livre do loopback, dentro da faixa deste worker. Cada
+ * chamada segue para a porta seguinte da faixa, que é sondada antes de ser
+ * devolvida; uma porta ocupada por outro processo é simplesmente pulada.
+ */
+export async function portaLivre(): Promise<number> {
+  const worker = Number(process.env.TEST_PARALLEL_INDEX ?? 0);
+  const inicioDaFaixa = PRIMEIRA_PORTA + worker * FAIXA_POR_WORKER;
+
+  for (let tentativa = 0; tentativa < FAIXA_POR_WORKER; tentativa += 1) {
+    const porta = inicioDaFaixa + (proximaDaFaixa % FAIXA_POR_WORKER);
+
+    proximaDaFaixa += 1;
+
+    if (await portaEstaLivre(porta)) {
+      return porta;
+    }
+  }
+
+  throw new Error(
+    `nenhuma porta livre na faixa ${inicioDaFaixa}–${inicioDaFaixa + FAIXA_POR_WORKER - 1}`,
+  );
 }
 
 /**
@@ -246,6 +268,31 @@ export async function aguardarApiPronta(
  * vida inteiro. É o único lugar que importa o Adapter do armazenamento local;
  * a linha de início que ela imprime informa o armazenamento em uso.
  */
+/**
+ * O dia e o fuso das provas que dependem de «hoje» (Agenda, Revisão do dia).
+ * O instante cai numa quarta-feira, ao meio-dia no fuso de teste, longe de
+ * qualquer virada de dia ou de semana: a prova não varia com o dia em que roda,
+ * nem se cruza a meia-noite, e o fuso não é o da máquina.
+ */
+export const FUSO_DE_TESTE = "America/Sao_Paulo";
+export const INSTANTE_DE_TESTE = "2026-03-11T15:00:00.000Z";
+
+/** O ambiente que faz a API local partir de `INSTANTE_DE_TESTE` (só de teste). */
+export const AMBIENTE_COM_RELOGIO_FIXO: NodeJS.ProcessEnv = {
+  AGORA_DE_TESTE: INSTANTE_DE_TESTE,
+};
+
+/**
+ * Faz o relógio do navegador partir de `INSTANTE_DE_TESTE`, como o da API: o
+ * tempo segue andando, mas o dia, a semana e o fuso de «hoje» são os mesmos nos
+ * dois lados. Vale para todas as páginas do contexto.
+ */
+export async function fixarRelogioDoContexto(
+  contexto: BrowserContext,
+): Promise<void> {
+  await contexto.clock.install({ time: new Date(INSTANTE_DE_TESTE) });
+}
+
 export function iniciarApi(
   caminhoDoBanco: string,
   porta: number,

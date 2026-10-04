@@ -2,6 +2,10 @@ import { join } from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
 
+// O fuso das provas é o mesmo no Node (que calcula limites de dia), na API e no
+// navegador, e não o da máquina que roda (FUSO_DE_TESTE em servidores-locais.ts).
+process.env.TZ = 'America/Sao_Paulo';
+
 // Harness e2e (T003): prova que um navegador real abre uma página local real
 // servida de e2e/fixtures. T013 acrescenta um segundo servidor — o frontend
 // React real em Vite dev — para exercitar a tela de Cartões em navegador real.
@@ -23,6 +27,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: BASE_URL,
+    timezoneId: 'America/Sao_Paulo',
     trace: 'on-first-retry',
   },
   projects: [

@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   INDISPONIVEL,
@@ -245,6 +245,20 @@ describe("expiração durante o uso e renovação por atividade", () => {
     };
   }
 
+  /**
+   * Para o relógio num instante conhecido, no lugar do que anda sozinho (o
+   * padrão de toda prova, em `vitest.setup.ts`). A restauração é do próprio
+   * `afterEach` global, e não de um `try/finally` em cada teste.
+   */
+  function congelarRelogio(): void {
+    vi.useFakeTimers({ toFake: ["Date"], now: 1_700_000_000_000 });
+  }
+
+  /** Faz passar o tempo do relógio congelado. */
+  function passar(milissegundos: number): void {
+    vi.setSystemTime(Date.now() + milissegundos);
+  }
+
   async function abrirComAcesso(servidor: ClienteEmMemoria) {
     await servidor.entrar({ ...CREDENCIAL_DE_PROVA, continuarConectado: true });
     const contagem = contandoRenovacoes(servidor);
@@ -260,38 +274,31 @@ describe("expiração durante o uso e renovação por atividade", () => {
   }
 
   it("teclado, clique e toque renovam o Acesso, no máximo uma vez a cada 60 s (FR-291, SC-124)", async () => {
-    const instante = { atual: 1_700_000_000_000 };
-    const dateNow = Date.now;
+    congelarRelogio();
 
-    Date.now = () => instante.atual;
+    const servidor = clienteDeProva();
+    const renovacoes = await abrirComAcesso(servidor);
 
-    try {
-      const servidor = clienteDeProva();
-      const renovacoes = await abrirComAcesso(servidor);
+    // Dentro dos primeiros 60 s, nenhuma interação renova.
+    passar(30_000);
+    fireEvent.keyDown(document.body, { key: "a" });
+    fireEvent.click(document.body);
+    expect(renovacoes.total).toBe(0);
 
-      // Dentro dos primeiros 60 s, nenhuma interação renova.
-      instante.atual += 30_000;
-      fireEvent.keyDown(document.body, { key: "a" });
-      fireEvent.click(document.body);
-      expect(renovacoes.total).toBe(0);
+    // A partir de 60 s, a primeira interação renova — e as seguintes, não.
+    passar(31_000);
+    fireEvent.keyDown(document.body, { key: "a" });
+    fireEvent.click(document.body);
+    fireEvent.touchStart(document.body);
+    expect(renovacoes.total).toBe(1);
 
-      // A partir de 60 s, a primeira interação renova — e as seguintes, não.
-      instante.atual += 31_000;
-      fireEvent.keyDown(document.body, { key: "a" });
-      fireEvent.click(document.body);
-      fireEvent.touchStart(document.body);
-      expect(renovacoes.total).toBe(1);
+    // Outros 60 s depois, o toque renova de novo.
+    passar(60_000);
+    fireEvent.touchStart(document.body);
+    expect(renovacoes.total).toBe(2);
 
-      // Outros 60 s depois, o toque renova de novo.
-      instante.atual += 60_000;
-      fireEvent.touchStart(document.body);
-      expect(renovacoes.total).toBe(2);
-
-      // Deixa as renovações pendentes assentarem antes de restaurar Date.now.
-      await act(async () => {});
-    } finally {
-      Date.now = dateNow;
-    }
+    // Deixa as renovações pendentes assentarem.
+    await act(async () => {});
   });
 
   it("sem nenhuma interação, nunca renova (FR-294)", async () => {
@@ -357,53 +364,40 @@ describe("expiração durante o uso e renovação por atividade", () => {
   });
 
   it("a renovação recusada por expiração também leva a Entrar com a mensagem (FR-294)", async () => {
-    const instante = { atual: 1_700_000_000_000 };
-    const dateNow = Date.now;
+    congelarRelogio();
 
-    Date.now = () => instante.atual;
+    const servidor = clienteDeProva();
 
-    try {
-      const servidor = clienteDeProva();
+    await abrirComAcesso(servidor);
+    servidor.avancarRelogio(301_000);
 
-      await abrirComAcesso(servidor);
-      servidor.avancarRelogio(301_000);
+    passar(301_000);
+    fireEvent.keyDown(document.body, { key: "a" });
 
-      instante.atual += 301_000;
-      fireEvent.keyDown(document.body, { key: "a" });
-
-      expect(
-        await screen.findByRole("alert", { name: "Credencial recusada" }),
-      ).toHaveTextContent("Seu acesso expirou. Entre novamente.");
-    } finally {
-      Date.now = dateNow;
-    }
+    expect(
+      await screen.findByRole("alert", { name: "Credencial recusada" }),
+    ).toHaveTextContent("Seu acesso expirou. Entre novamente.");
   });
 
   it("a falha do armazenamento na renovação não derruba o Acesso (FR-301)", async () => {
+    congelarRelogio();
+
     const servidor = clienteDeProva();
-    const instante = { atual: 1_700_000_000_000 };
-    const dateNow = Date.now;
+    const renovacoes = await abrirComAcesso(servidor);
 
-    Date.now = () => instante.atual;
+    servidor.simularIndisponibilidade();
 
-    try {
-      const renovacoes = await abrirComAcesso(servidor);
-      servidor.simularIndisponibilidade();
+    passar(61_000);
+    fireEvent.click(document.body);
+    // A renovação é pedida de forma síncrona; `act` deixa a falha dela
+    // assentar antes de conferir que o Acesso segue valendo.
+    await waitFor(() => expect(renovacoes.total).toBe(1));
+    await act(async () => {});
 
-      instante.atual += 61_000;
-      fireEvent.click(document.body);
-      // A renovação é pedida de forma síncrona; `act` deixa a falha dela
-      // assentar antes de conferir que o Acesso segue valendo.
-      await waitFor(() => expect(renovacoes.total).toBe(1));
-      await act(async () => {});
-
-      expect(
-        screen.getByRole("navigation", { name: "Principal" }),
-      ).toBeInTheDocument();
-      expect(servidor.temAcessoNoNavegador()).toBe(true);
-    } finally {
-      Date.now = dateNow;
-    }
+    expect(
+      screen.getByRole("navigation", { name: "Principal" }),
+    ).toBeInTheDocument();
+    expect(servidor.temAcessoNoNavegador()).toBe(true);
   });
 
   it("INDISPONIVEL é distinto de expiração no cliente simulado", async () => {

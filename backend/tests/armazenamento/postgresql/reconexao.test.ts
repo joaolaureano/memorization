@@ -1,3 +1,4 @@
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { MAXIMO_DE_CONEXOES } from "../../../src/armazenamento/postgresql/conexao.ts";
@@ -76,6 +77,25 @@ describe("conexão ociosa encerrada pelo provedor", () => {
         vi.spyOn(console, "debug"),
       ];
 
+      /**
+       * O evento de erro da conexão ociosa é entregue ao conjunto. Em vez de
+       * esperar um tempo, o teste observa a emissão do próprio evento.
+       */
+      const emitir = Pool.prototype.emit;
+      let errosEntregues = 0;
+
+      vi.spyOn(Pool.prototype, "emit").mockImplementation(function (
+        this: Pool,
+        evento: string | symbol,
+        ...argumentos: unknown[]
+      ) {
+        if (evento === "error") {
+          errosEntregues += 1;
+        }
+
+        return emitir.call(this, evento, ...argumentos);
+      });
+
       /** É assim que o provedor de nuvem encerra conexões ociosas. */
       const encerradas = await (
         await servidorDeTeste()
@@ -83,8 +103,7 @@ describe("conexão ociosa encerrada pelo provedor", () => {
 
       expect(encerradas).toBeGreaterThan(0);
 
-      /** O evento de erro da conexão ociosa é entregue ao conjunto. */
-      await new Promise((resolver) => setTimeout(resolver, 300));
+      await vi.waitFor(() => expect(errosEntregues).toBeGreaterThan(0));
 
       /** A próxima operação conclui: outra conexão foi aberta sozinha. */
       expect(await base.armazenamento.listarCartoes(dono)).toEqual([

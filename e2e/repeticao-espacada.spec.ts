@@ -19,6 +19,9 @@ import {
   portaLivre,
   removerPastaTemporaria,
   vincularCartaoPelaApi,
+  AMBIENTE_COM_RELOGIO_FIXO,
+  INSTANTE_DE_TESTE,
+  fixarRelogioDoContexto,
 } from "./servidores-locais";
 import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 
@@ -38,9 +41,14 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // criação e o Resumo conta por nível; (2) o estudo livre por Baralho também
 // alimenta o Agendamento; (3) os números são isolados por Usuário; (4) o
 // atalho de teclado avalia o nível; (5) o bloco de revisão de Início aparece
-// em até 1 s com uma base grande (SC-087).
+// com leituras agregadas e em número fixo numa base grande (SC-087).
 
 test.setTimeout(240_000);
+
+// O dia de «hoje» é o mesmo na API e no navegador, e não o da máquina que roda.
+test.beforeEach(async ({ context }) => {
+  await fixarRelogioDoContexto(context);
+});
 
 const NOME_DO_BARALHO = "Inglês";
 /** Um Baralho canônico: três Cartões, para uma Revisão do dia de três Itens. */
@@ -86,7 +94,11 @@ async function subirAmbiente(): Promise<Ambiente> {
   try {
     const portaDaApi = await portaLivre();
 
-    api = iniciarApi(join(pasta, "repeticao.sqlite"), portaDaApi);
+    api = iniciarApi(
+      join(pasta, "repeticao.sqlite"),
+      portaDaApi,
+      AMBIENTE_COM_RELOGIO_FIXO,
+    );
 
     const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
 
@@ -191,7 +203,7 @@ async function obterResumoDaRevisaoPelaApi(
   enderecoDaApi: string,
   credencial: CredencialDeProva,
 ): Promise<ResumoDaRevisao> {
-  const { inicioDoDia, fimDoDia } = limitesDoDiaLocal(new Date());
+  const { inicioDoDia, fimDoDia } = limitesDoDiaLocal(new Date(INSTANTE_DE_TESTE));
 
   const resposta = await fetch(
     `${enderecoDaApi}/revisao?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
@@ -270,23 +282,6 @@ async function abrirEstudoDoBaralho(
 async function iniciarSessaoLivre(page: Page, quantidade: number): Promise<void> {
   await page.getByLabel("Quantidade de Cartões").fill(String(quantidade));
   await page.getByRole("button", { name: "Iniciar Sessão" }).click();
-}
-
-/**
- * A Revisão do dia pode apresentar o lote já em andamento ou precedido do
- * botão de início; quando o botão aparece, é ele que começa a Sessão (FR-202).
- */
-async function iniciarRevisaoSeHouverBotao(page: Page): Promise<void> {
-  const botao = page.getByRole("button", { name: "Iniciar Sessão" });
-
-  const apareceu = await botao
-    .waitFor({ state: "visible", timeout: 1_500 })
-    .then(() => true)
-    .catch(() => false);
-
-  if (apareceu) {
-    await botao.click();
-  }
 }
 
 /** Revela o Verso do Item em estudo (FR-192, FR-193). */
@@ -509,7 +504,6 @@ test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo 
         .getByText("Revisão do dia", { exact: false })
         .first(),
     ).toBeVisible();
-    await iniciarRevisaoSeHouverBotao(page);
     await expect(
       page.getByRole("article", { name: "Item 1 de 3" }),
     ).toBeVisible();
@@ -657,6 +651,9 @@ test("Agendamentos, vencidos e novos são isolados por Usuário (FR-219, SC-086)
   const contextoA = await browser.newContext();
   const contextoB = await browser.newContext();
 
+  await fixarRelogioDoContexto(contextoA);
+  await fixarRelogioDoContexto(contextoB);
+
   try {
     const paginaA = await contextoA.newPage();
     const paginaB = await contextoB.newPage();
@@ -697,7 +694,11 @@ test("Agendamentos, vencidos e novos são isolados por Usuário (FR-219, SC-086)
     // A conclui a Revisão do dia inteira. Com três Cartões novos, "Revisar" é
     // um link para a Revisão (FR-202).
     await controleDeRevisar(paginaA).click();
-    await iniciarRevisaoSeHouverBotao(paginaA);
+    // A Revisão do dia começa sozinha, sem botão de início: o primeiro Item é
+    // a condição a esperar, e não um tempo.
+    await expect(
+      paginaA.getByRole("article", { name: "Item 1 de 3" }),
+    ).toBeVisible();
 
     for (let indice = 0; indice < CARTOES.length; indice += 1) {
       await revelarVerso(paginaA);

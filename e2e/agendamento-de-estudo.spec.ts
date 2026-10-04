@@ -18,6 +18,10 @@ import {
   portaLivre,
   removerPastaTemporaria,
   vincularCartaoPelaApi,
+  AMBIENTE_COM_RELOGIO_FIXO,
+  FUSO_DE_TESTE,
+  INSTANTE_DE_TESTE,
+  fixarRelogioDoContexto,
 } from "./servidores-locais";
 import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 
@@ -46,6 +50,7 @@ async function subirAmbiente(prefixo: string): Promise<Ambiente> {
   const api: ProcessoIniciado = iniciarApi(
     join(pasta, "agenda.sqlite"),
     portaDaApi,
+    AMBIENTE_COM_RELOGIO_FIXO,
   );
   let frontend: ProcessoIniciado | null = null;
 
@@ -110,8 +115,8 @@ async function prepararBaralho(
   return baralho.id;
 }
 
-/** O fuso do navegador do teste, como a API o recebe. */
-const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone;
+/** O fuso do teste, como a API o recebe. */
+const FUSO = FUSO_DE_TESTE;
 
 /** Programa, pela API real, uma Rotina dos sete dias. */
 async function programarRotina(
@@ -150,6 +155,7 @@ async function abrirComoUsuario(
   const contexto = await browser.newContext({
     viewport: { width: largura, height: 900 },
   });
+  await fixarRelogioDoContexto(contexto);
   const pagina = await contexto.newPage();
 
   await pagina.goto(ambiente.enderecoDoFrontend);
@@ -312,6 +318,37 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
   }
 });
 
+test("sentinela: a API e o navegador partem do mesmo «hoje» fixo, num fuso que não é o da máquina", async ({
+  browser,
+}) => {
+  const ambiente = await subirAmbiente("agenda-relogio-");
+
+  try {
+    const ana = await criarUsuarioDeProva(ambiente.enderecoDaApi, "ana.silva");
+    const pagina = await abrirComoUsuario(browser, ambiente, ana);
+
+    const doNavegador = await pagina.evaluate(
+      (fuso) => ({
+        hoje: new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date()),
+        fusoDoNavegador: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+      FUSO,
+    );
+    const semana = await fetch(
+      `${ambiente.enderecoDaApi}/agenda?inicio=2026-03-09&fuso=${encodeURIComponent(FUSO)}`,
+      { headers: cabecalhoDeCredencial(ana) },
+    );
+
+    expect(doNavegador).toEqual({
+      hoje: "2026-03-11",
+      fusoDoNavegador: FUSO_DE_TESTE,
+    });
+    expect(((await semana.json()) as { hoje: string }).hoje).toBe("2026-03-11");
+  } finally {
+    await ambiente.encerrar();
+  }
+});
+
 /** A segunda-feira da semana de hoje, calculada no navegador real. */
 async function segundaDeHoje(pagina: Page): Promise<string> {
   return await pagina.evaluate((fuso) => {
@@ -366,7 +403,7 @@ test("interromper a Sessão da Agenda e recarregar não registram nada nem concl
     // Nenhum Registro foi gravado.
     const estatisticas = await fetch(
       `${ambiente.enderecoDaApi}/estatisticas?desde=${encodeURIComponent(
-        new Date(Date.now() - 86_400_000).toISOString(),
+        new Date(Date.parse(INSTANTE_DE_TESTE) - 86_400_000).toISOString(),
       )}`,
       { headers: cabecalhoDeCredencial(bia) },
     );

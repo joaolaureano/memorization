@@ -15,38 +15,55 @@ import {
 import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
- * T1526 — Desempenho da leitura de Início vista pelo `Acervo` (SC-087): com um
+ * T1526 — Escala da leitura de Início vista pelo `Acervo` (SC-087): com um
  * acervo de 2.000 Cartões e 500 Sessões concluídas, `obterResumoDaRevisao` e
- * `obterEstatisticas` **juntos** precisam responder em menos de um segundo.
+ * `obterEstatisticas` **juntos** leem o armazenamento um número **fixo** de
+ * vezes, que não cresce com o acervo.
+ *
+ * Esse é o jeito de o orçamento de 1 s valer sem relógio: tempo medido varia
+ * com a máquina e a carga, e o número de operações no armazenamento, não. Uma
+ * leitura por Cartão ou por Sessão (o N+1 que estouraria o orçamento) mudaria a
+ * lista de chamadas abaixo, e o teste falha na hora, em qualquer máquina.
  *
  * O semeio atravessa a Interface do `Acervo` sobre o Adapter do armazenamento
  * local em memória, como os demais testes: os Agendamentos nascem do próprio
- * `registrarSessao`, e nenhum teste inspeciona tabela. O orçamento mede só a
- * leitura, e não a preparação — por isso o tempo limite do teste cobre o semeio
- * inteiro.
+ * `registrarSessao`, e nenhum teste inspeciona tabela. O instante de «agora» é
+ * injetado e fixo, e as janelas saem dele — nada aqui lê o relógio real.
  */
 
 const QUANTIDADE_DE_CARTOES = 2_000;
 const QUANTIDADE_DE_REGISTROS = 500;
 const ITENS_POR_REGISTRO = 20;
 
-/** Orçamento das duas leituras juntas, em milissegundos (SC-087). */
-const ORCAMENTO_EM_MILISSEGUNDOS = 1_000;
-
 /** Tempo limite do teste, para acomodar o semeio sem folga apertada. */
 const TEMPO_LIMITE_EM_MILISSEGUNDOS = 120_000;
+
+/** As leituras do armazenamento que as duas operações fazem, sempre as mesmas. */
+const CHAMADAS_ESPERADAS = [
+  "listarAgendamentos",
+  "listarBaralhos",
+  "listarCartoes", // o resumo da revisão
+  "listarCartoes", // o tamanho do acervo nas Estatísticas
+  "listarRegistrosDesde",
+  "listarRegistrosRecentes",
+  "obterPreferencias",
+];
 
 /** Os quatro níveis de Avaliação, para variar os Itens dos registros. */
 const AVALIACOES: readonly Avaliacao[] = ["errei", "dificil", "bom", "facil"];
 
-/** O dia do estudo, como a tela o envia (D3). */
+/** O «agora» do cenário: fixo, de modo que as janelas abaixo nunca expiram. */
+const AGORA = new Date("2026-03-11T15:00:00.000Z");
+const agora = () => AGORA;
+
+/** O dia do estudo, como a tela o envia (D3), em torno de `AGORA`. */
 const JANELA_DO_DIA = [
-  "2026-10-01T00:00:00.000Z",
-  "2026-10-02T00:00:00.000Z",
+  "2026-03-11T03:00:00.000Z",
+  "2026-03-12T03:00:00.000Z",
 ] as const;
 
 /** Instante `desde` das Estatísticas, dentro da janela máxima (FR-169). */
-const DESDE_DAS_ESTATISTICAS = "2026-10-01T00:00:00.000Z";
+const DESDE_DAS_ESTATISTICAS = "2026-03-10T15:00:00.000Z";
 
 let aberto: ArmazenamentoSqliteAberto;
 let usuarioId: string;
@@ -120,23 +137,43 @@ async function semearRegistros(
   }
 }
 
-describe("desempenho da leitura de Início (SC-087)", () => {
+describe("escala da leitura de Início (SC-087)", () => {
   it(
-    "responde resumo da revisão e estatísticas em menos de um segundo com 2.000 Cartões e 500 Sessões (SC-087)",
+    "resumo da revisão e estatísticas leem o armazenamento um número fixo de vezes, com 2.000 Cartões e 500 Sessões (SC-087)",
     async () => {
-      const acervo = criarAcervo(aberto.armazenamento, usuarioId);
+      const acervo = criarAcervo(aberto.armazenamento, usuarioId, { agora });
 
       const cartoes = await semearCartoes(acervo);
       await semearRegistros(acervo, cartoes);
 
-      const inicio = performance.now();
+      // Só as duas leituras passam pelo contador, e não o semeio.
+      const chamadas: string[] = [];
+      const armazenamentoContado = new Proxy(aberto.armazenamento, {
+        get(alvo, propriedade, receptor) {
+          const valor = Reflect.get(alvo, propriedade, receptor) as unknown;
+
+          if (typeof valor !== "function") {
+            return valor;
+          }
+
+          return (...argumentos: unknown[]) => {
+            chamadas.push(String(propriedade));
+
+            return (valor as (...a: unknown[]) => unknown).apply(
+              alvo,
+              argumentos,
+            );
+          };
+        },
+      });
+      const acervoDeLeitura = criarAcervo(armazenamentoContado, usuarioId, {
+        agora,
+      });
 
       const [resumo, estatisticas] = await Promise.all([
-        acervo.obterResumoDaRevisao(...JANELA_DO_DIA),
-        acervo.obterEstatisticas(DESDE_DAS_ESTATISTICAS),
+        acervoDeLeitura.obterResumoDaRevisao(...JANELA_DO_DIA),
+        acervoDeLeitura.obterEstatisticas(DESDE_DAS_ESTATISTICAS),
       ]);
-
-      const decorrido = performance.now() - inicio;
 
       expect(resumo.ok).toBe(true);
       expect(estatisticas.ok).toBe(true);
@@ -145,7 +182,9 @@ describe("desempenho da leitura de Início (SC-087)", () => {
         expect(estatisticas.estatisticas.cartoes).toBe(QUANTIDADE_DE_CARTOES);
       }
 
-      expect(decorrido).toBeLessThan(ORCAMENTO_EM_MILISSEGUNDOS);
+      // O conjunto de leituras é o mesmo com 2 ou com 2.000 Cartões: cada uma
+      // é uma consulta agregada, e nenhuma é feita por Cartão ou por Sessão.
+      expect(chamadas.sort()).toEqual(CHAMADAS_ESPERADAS);
     },
     TEMPO_LIMITE_EM_MILISSEGUNDOS,
   );
