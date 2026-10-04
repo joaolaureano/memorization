@@ -40,11 +40,27 @@ async function abrirPreferencias(servidor = clienteDeProva()) {
   render(
     <Aplicacao criarCliente={(credencial) => servidor.comoUsuario(credencial)} />,
   );
-    await aguardarVerificacaoDoAcesso();
+  await aguardarVerificacaoDoAcesso();
   entrarPelaTela();
 
   await screen.findByRole("heading", { level: 1, name: "Preferências" });
   await screen.findByRole("heading", { level: 2, name: "Minha conta" });
+
+  // Os títulos acima renderizam antes de `obterPreferencias()` e `obterConta()`
+  // terminarem — o h1 e o h2 aparecem enquanto «Carregando…» ainda está na
+  // tela. Só os controles abaixo provam que cada carga chegou ao estado final;
+  // sem esta espera, uma requisição inicial ainda em voo com a Credencial
+  // antiga poderia voltar recusada depois que o teste a invalida (renomear,
+  // trocar a Senha, excluir) e encerrar a sessão conforme a ordem das tarefas.
+  await waitFor(() => {
+    expect(screen.queryByText("Carregando Preferências…")).toBeNull();
+    expect(screen.queryByText("Carregando a conta…")).toBeNull();
+  });
+  // Estado final de cada seção: o campo/controle da carga concluída.
+  expect(screen.getByRole("button", { name: "Salvar" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Trocar Senha" }),
+  ).toBeInTheDocument();
 
   return servidor;
 }

@@ -86,6 +86,16 @@ describe("recusa por Credencial", () => {
       await screen.findByRole("heading", { level: 1, name: "Cartões" }),
     ).toBeInTheDocument();
 
+    // Espera a tela de Cartões assentar no **estado final** — o vazio, pois
+    // esta prova não cria Cartão. O título (h1) aparece mesmo durante a carga
+    // (`carregando`), então sem esta espera a `listarCartoes()` inicial ainda
+    // poderia estar em voo quando a Credencial for invalidada abaixo, e a
+    // recusa dela chegaria ao guarda antes da operação que a prova exercita.
+    // Assentada a tela, a única operação recusada é a que a prova dispara.
+    await screen.findByText(
+      "Ainda não há Cartões. Crie o primeiro para começar.",
+    );
+
     // O Usuário deixa de existir: a próxima operação de acervo — a listagem da
     // tela de Baralhos — é recusada.
     servidor.esquecerUsuario(CREDENCIAL_DE_PROVA.nomeDeUsuario);
@@ -167,6 +177,16 @@ describe("recusa por Credencial", () => {
       ).toBeInTheDocument(),
     );
 
+    // Espera a tela de Cartões assentar no **estado final** — o vazio, pois
+    // esta prova não cria Cartão. O título (h1) aparece mesmo durante a carga
+    // (`carregando`), então sem esta espera a `listarCartoes()` inicial ainda
+    // poderia estar em voo quando a Credencial for invalidada adiante, e a
+    // recusa dela chegaria ao guarda antes do "Salvar". Assentada a tela, a
+    // única operação recusada é o envio da criação.
+    await screen.findByText(
+      "Ainda não há Cartões. Crie o primeiro para começar.",
+    );
+
     // FR-141: a criação de Cartão vive em tela própria; é para lá que a
     // pessoa vai antes de digitar.
     abrirCriacaoDeCartao();
@@ -220,6 +240,16 @@ describe("recusa por Credencial", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Cartões" }),
     ).toBeInTheDocument();
+
+    // Espera a tela de Cartões assentar no **estado final** — o vazio, pois
+    // esta prova não cria Cartão. O título (h1) aparece mesmo durante a carga
+    // (`carregando`), então sem esta espera a `listarCartoes()` inicial ainda
+    // poderia estar em voo quando a Credencial for invalidada abaixo, e a
+    // recusa dela chegaria ao guarda antes da operação que a prova exercita.
+    // Assentada a tela, a única operação recusada é a que a prova dispara.
+    await screen.findByText(
+      "Ainda não há Cartões. Crie o primeiro para começar.",
+    );
 
     // FR-141: a criação de Cartão tem tela própria. O formulário com
     // alterações não salvas registra a proteção de descarte (FR-148, FR-151):
