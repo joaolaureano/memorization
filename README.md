@@ -24,13 +24,13 @@ every feature started from a specification in [`specs/`](specs/).
 |---|---|---|
 | Account | Sign up with a name and Password, sign in and sign out. Each User sees only their own collection | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
 | Stay signed in | A temporary Access keeps the person signed in while they use the app and expires after a period of inactivity | [018](specs/018-acesso-temporario/) |
-| Manage the account | Rename the User, change the Password and permanently delete the account with all its data | [017](specs/017-gerenciar-conta-usuario/) |
+| Profile | View the username, configure study preferences, change the Password and permanently delete the account with all its data | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
 | Cards | Create, list, edit and delete Cards, with size limits | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Decks | Create, rename and delete Decks, and link a Card to several Decks | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Study a Deck | Cards in random order, reveal the Back, rate the answer and see a Summary at the end | [004](specs/004-sessao-de-estudo/) |
 | Spaced repetition | SM-2 with a four-level rating; the daily Review gathers due Cards and a limited number of new ones; the algorithm and the daily limit are Preferences | [015](specs/015-repeticao-espacada/) |
 | Study schedule | Weekly Routines per Deck (for example, "English every Monday"), today's commitments and a week calendar showing what was done | [016](specs/016-agendamento-de-estudo/) |
-| Home and Study | Home shows a greeting, a 7-day summary, the daily Review and today's schedule; the Study area holds the week, statistics and recent Sessions | [019](specs/019-inicio-e-estudo/) |
+| Home and Study | Home shows a greeting, the daily Review and today's schedule in one column; the Study area holds the week, statistics and recent Sessions | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Statistics and history | Items studied, Sessions completed and hit rate over the last 7 days, a daily chart and the record of each Session, with what was right and wrong | [013](specs/013-estatisticas-e-historico/) |
 | Interface | Navigable interface for phone and desktop (360 to 1440 px, 200% zoom), usable by keyboard and screen reader | [012](specs/012-interface-visual-navegavel/) |
 
@@ -38,7 +38,7 @@ The remaining specs cover the platform: persistence Port with SQLite and
 PostgreSQL ([009](specs/009-porta-de-persistencia/),
 [010](specs/010-postgresql-na-nuvem/)), AWS hosting
 ([011](specs/011-hospedagem-aws/)) and continuous integration and delivery
-([014](specs/014-ci-cd/)). [`CONTEXT.md`](CONTEXT.md) is the domain glossary.
+([014](specs/014-ci-cd/)).
 
 ## Running locally
 
@@ -120,7 +120,7 @@ apply to every feature.
 |---|---|
 | I. Spec-Driven Development (non-negotiable) | Nothing is implemented before spec, clarify, plan, tasks and analyze are approved. Where code and spec diverge, the spec wins |
 | II. Append-Only Auditability | Decisions are recorded in each feature's `research.md`, in the Spec Kit artifacts and in the commit messages, without rewriting history and without secrets |
-| III. Domain Before Technology | `CONTEXT.md` is the glossary and governs the language. The code uses the same terms |
+| III. Domain Before Technology | Each spec's «Key Entities» section defines the domain terms and governs the language. The code uses the same terms |
 | IV. Deep Modules | Small Interfaces hiding a lot of implementation. A Seam only exists when there are at least two real Adapters |
 | V. The Interface Is the Test Surface | Tests go through the same Interface as its callers and check observable results, never internal state |
 | VI. Verification Over Assertion | No worker claim is accepted without the Architect inspecting the diff and running the tests |

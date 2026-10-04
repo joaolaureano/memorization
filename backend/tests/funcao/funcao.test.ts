@@ -906,7 +906,9 @@ describe("a paridade das rotas de conta (017)", () => {
    * monta somente o que `registrarRotasDaAplicacao` registra, e uma rota fora
    * dela responderia `404 Route ... not found` na AWS (lição da regressão
    * `9251ae0`). O `bruto` de cada resposta é conferido para que o `404` do
-   * roteador não passe por acidente.
+   * roteador não passe por acidente — no caso da rota antiga de renomear (020),
+   * o `404` é justamente o desfecho exigido, e a paridade com a execução local
+   * é provada por `conta.test.ts`.
    */
   it("roteia GET/PUT/DELETE de /conta na função da nuvem, e nunca com 404 de rota", async () => {
     const nomeDeUsuario = `conta.${randomBytes(3).toString("hex")}`;
@@ -932,22 +934,10 @@ describe("a paridade das rotas de conta (017)", () => {
     });
     expect(leitura.bruto).not.toMatch(/Route .* not found/);
 
-    const novoNome = `${nomeDeUsuario}.novo`;
-    const renomeado = await pedir(funcao, "PUT", "/conta/nome-de-usuario", {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-      corpo: { senhaAtual: senha, novoNomeDeUsuario: novoNome },
-    });
-
-    expect(renomeado.status).toBe(200);
-    expect(renomeado.corpo).toEqual({ nomeDeUsuario: novoNome });
-    expect(renomeado.bruto).not.toMatch(/Route .* not found/);
-
-    const credencialNova = credencialDe(novoNome, senha);
     const novaSenha = randomBytes(12).toString("base64url");
     const trocada = await pedir(funcao, "PUT", "/conta/senha", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial: credencialNova,
+      credencial,
       corpo: {
         senhaAtual: senha,
         novaSenha,
@@ -960,7 +950,7 @@ describe("a paridade das rotas de conta (017)", () => {
 
     const errada = await pedir(funcao, "DELETE", "/conta", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial: credencialDe(novoNome, novaSenha),
+      credencial: credencialDe(nomeDeUsuario, novaSenha),
       corpo: { senhaAtual: senha },
     });
 
@@ -969,7 +959,7 @@ describe("a paridade das rotas de conta (017)", () => {
 
     const excluida = await pedir(funcao, "DELETE", "/conta", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial: credencialDe(novoNome, novaSenha),
+      credencial: credencialDe(nomeDeUsuario, novaSenha),
       corpo: { senhaAtual: novaSenha },
     });
 
@@ -979,7 +969,6 @@ describe("a paridade das rotas de conta (017)", () => {
     /** Sem Credencial, cada rota existe e recusa pela Credencial: `401`, nunca `404`. */
     for (const [metodo, caminho] of [
       ["GET", "/conta"],
-      ["PUT", "/conta/nome-de-usuario"],
       ["PUT", "/conta/senha"],
       ["DELETE", "/conta"],
     ] as const) {
@@ -991,6 +980,37 @@ describe("a paridade das rotas de conta (017)", () => {
       expect(semCredencial.status, `${metodo} ${caminho}`).toBe(401);
       expect(semCredencial.bruto).not.toMatch(/Route .* not found/);
     }
+  }, 60_000);
+
+  it("a rota antiga PUT /conta/nome-de-usuario responde 404 na nuvem, e nada muda (020; FR-336, FR-337)", async () => {
+    const nomeDeUsuario = `conta.${randomBytes(3).toString("hex")}`;
+    const senha = randomBytes(12).toString("base64url");
+
+    const cadastro = await pedir(funcao, "POST", "/usuarios", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      corpo: { nomeDeUsuario, senha },
+    });
+
+    expect(cadastro.status).toBe(201);
+
+    const renomeado = await pedir(funcao, "PUT", "/conta/nome-de-usuario", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial: credencialDe(nomeDeUsuario, senha),
+      corpo: { senhaAtual: senha, novoNomeDeUsuario: `${nomeDeUsuario}.novo` },
+    });
+
+    expect(renomeado.status).toBe(404);
+    expect(renomeado.bruto).toMatch(/Route .* not found/);
+
+    /** Nada mudou: a Credencial original continua valendo, com o Nome original. */
+    const conta = await pedir(funcao, "GET", "/conta", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial: credencialDe(nomeDeUsuario, senha),
+    });
+
+    expect(conta.status).toBe(200);
+    expect(conta.corpo).toMatchObject({ nomeDeUsuario });
+    expect(conta.bruto).not.toMatch(/Route .* not found/);
   }, 60_000);
 });
 

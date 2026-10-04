@@ -6,7 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClienteDoAcervo } from "../src/acervo-cliente/cliente";
 import { INDISPONIVEL } from "../src/acervo-cliente/cliente";
@@ -170,7 +170,8 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
     expect(
       revisao.compareDocumentPosition(agenda) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getAllByText(`Fuso horário: ${FUSO}`).length).toBeGreaterThan(0);
+    // O fuso é usado nas leituras, mas não aparece na tela (FR-334).
+    expect(screen.queryByText(/Fuso horário/)).toBeNull();
   });
 
   it("mostra hoje, o calendário de sete dias e os estudos do dia selecionado", async () => {
@@ -364,7 +365,9 @@ describe("falha e atualização da Agenda (FR-229, FR-240, FR-251)", () => {
 
     fireEvent.click(within(secao as HTMLElement).getByRole("button", { name: "Tentar novamente" }));
 
-    expect(await screen.findByText("Sem estudos neste dia.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Nenhum estudo agendado para este dia."),
+    ).toBeInTheDocument();
   });
 
   it("dados anteriores só ficam visíveis com a indicação de falha na atualização", async () => {
@@ -534,12 +537,56 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
     );
 
     expect(await screen.findByText("Rotina de Inglês pausada.")).toBeInTheDocument();
-    expect(await screen.findByText(/Situação: Pausada/)).toBeInTheDocument();
+    // O anúncio só aparece com a lista já relida: no mesmo instante, e sem
+    // esperar, os botões e a situação mostram a versão nova da Rotina.
+    expect(screen.getByText(/Situação: Pausada/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Retomar rotina de Inglês" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Retomar rotina de Inglês" }));
 
     expect(await screen.findByText("Rotina de Inglês retomada.")).toBeInTheDocument();
-    expect(await screen.findByText(/Situação: Ativa/)).toBeInTheDocument();
+    expect(screen.getByText(/Situação: Ativa/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pausar rotina de Inglês" }),
+    ).toBeInTheDocument();
+  });
+
+  it("o anúncio da ação só aparece depois que a lista foi relida, para que agir em seguida não gere conflito", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+
+    await rotinaTodosOsDias(servidor, ingles.id, { dias: [1, 4], quantidade: 20 });
+    await abrir(servidor, "#/agenda");
+    await screen.findByText("Inglês · segunda e quinta · 20 Cartões");
+
+    // A releitura que vem depois de salvar fica retida até o teste liberá-la:
+    // nenhum tempo decide a ordem, só esta condição.
+    const cliente = clientesDaCasca[clientesDaCasca.length - 1] as ClienteEmMemoria;
+    const original = cliente.listarRotinas.bind(cliente);
+    let liberar: () => void = () => {};
+    const leitura = vi.spyOn(cliente, "listarRotinas").mockImplementationOnce(
+      () =>
+        new Promise((resolver) => {
+          liberar = () => resolver(original());
+        }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Pausar rotina de Inglês" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Pausar Rotina" }),
+    );
+    await waitFor(() => expect(leitura).toHaveBeenCalledTimes(1));
+
+    // A Rotina já foi pausada no servidor, mas a lista ainda é a antiga: dizer
+    // «pausada» agora convidaria a agir sobre uma versão que já não vale.
+    expect(screen.queryByText("Rotina de Inglês pausada.")).not.toBeInTheDocument();
+
+    liberar();
+
+    expect(await screen.findByText("Rotina de Inglês pausada.")).toBeInTheDocument();
+    expect(screen.getByText(/Situação: Pausada/)).toBeInTheDocument();
   });
 
   it("excluir pede confirmação, tira a Rotina da lista e preserva o acervo", async () => {
@@ -849,16 +896,14 @@ describe("Agenda de hoje e Agenda semanal (019, FR-311, FR-313, FR-318, FR-319)"
     );
   });
 
-  it("sem compromissos na semana, orienta Agendar estudo", async () => {
+  it("sem compromissos na semana, não oferece Agendar estudo no modo hoje (FR-332)", async () => {
     const servidor = clienteDeProva();
 
     render(<AgendaDeEstudo cliente={servidor} modo="hoje" />);
 
     expect(await screen.findByText("Nenhum estudo agendado para hoje")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Agendar estudo" })).toHaveAttribute(
-      "href",
-      "#/agenda/nova",
-    );
+    // O modo hoje omite a data e o atalho de agendamento (FR-332).
+    expect(screen.queryByRole("link", { name: "Agendar estudo" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Atualizar agenda" })).toBeNull();
   });
 
@@ -908,5 +953,58 @@ describe("Agenda de hoje e Agenda semanal (019, FR-311, FR-313, FR-318, FR-319)"
 
     await waitFor(() => expect(chamadas.length).toBeGreaterThan(depois));
     expect(chamadas[chamadas.length - 1]).toBe(semanaDeHoje);
+  });
+
+  it("no modo semana, um dia com Compromissos mantém a situação e a contagem (FR-333)", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+
+    await rotinaTodosOsDias(servidor, ingles.id);
+    render(<AgendaDeEstudo cliente={servidor} modo="semana" />);
+    await screen.findByRole("group", { name: "Agenda semanal" });
+
+    const hoje = rotulosDosDias().find((dia) =>
+      /hoje/.test(dia.getAttribute("aria-label") ?? ""),
+    );
+
+    expect(hoje).toBeDefined();
+
+    fireEvent.click(hoje as HTMLElement);
+
+    const detalhe = document.querySelector(".agenda__dia-detalhe") as HTMLElement;
+
+    expect(
+      within(detalhe).getByText(/Pendente · 0 de 1 estudo concluído/),
+    ).toBeInTheDocument();
+    expect(within(detalhe).getByText("Inglês")).toBeInTheDocument();
+  });
+
+  it("não apresenta o fuso em texto, mas o envia em obterAgenda (FR-334)", async () => {
+    const fusos: string[] = [];
+    const base = clienteDeProva();
+    const cliente = {
+      obterAgenda: async (inicio: string, fuso: string) => {
+        fusos.push(fuso);
+
+        return base.obterAgenda(inicio, fuso);
+      },
+    } as unknown as ClienteDoAcervo;
+
+    const { unmount } = render(
+      <AgendaDeEstudo cliente={cliente} modo="semana" />,
+    );
+
+    await screen.findByRole("group", { name: "Agenda semanal" });
+    expect(screen.queryByText(/Fuso horário/)).toBeNull();
+    expect(fusos[0]).toBe(FUSO);
+
+    unmount();
+
+    render(<AgendaDeEstudo cliente={cliente} modo="hoje" />);
+
+    expect(
+      await screen.findByText("Nenhum estudo agendado para hoje"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Fuso horário/)).toBeNull();
   });
 });

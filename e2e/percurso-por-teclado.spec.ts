@@ -305,9 +305,9 @@ async function percursoPorTeclado(
 
   // Preferências, pela navegação Principal: o quarto destino da Moldura
   // (FR-212, SC-088). A travessia continua sendo só de teclado.
-  await acionarPorTab(page, linkExato(page, "Preferências"));
+  await acionarPorTab(page, linkExato(page, "Perfil"));
   await expect(
-    page.getByRole("heading", { level: 1, name: "Preferências", exact: true }),
+    page.getByRole("heading", { level: 1, name: "Perfil", exact: true }),
   ).toBeVisible();
   await conferirSemTransbordo(page);
 
@@ -335,7 +335,7 @@ async function percursoPorTeclado(
   } else {
     // Nada para revisar (FR-202): "Revisar" fica indisponível e fora da ordem
     // de foco — um <button disabled> que o Tab não alcança —, e o bloco "Nada
-    // para revisar hoje" explica o porquê. A tela da Revisão do dia é aberta
+    // para revisar." explica o porquê. A tela da Revisão do dia é aberta
     // pela rota, para a conferência de transbordo (FR-159, SC-088).
     if ((await botaoRevisar.count()) > 0) {
       await expect(botaoRevisar).toBeDisabled();
@@ -343,7 +343,7 @@ async function percursoPorTeclado(
       await expect(page.getByText("Revisar", { exact: true })).toBeVisible();
     }
 
-    await expect(page.getByText("Nada para revisar hoje")).toBeVisible();
+    await expect(page.getByText("Nada para revisar.")).toBeVisible();
     await page.goto(`${enderecoDoFrontend}/#/revisao`);
   }
   await expect(

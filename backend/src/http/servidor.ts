@@ -100,8 +100,9 @@ export const CAMINHO_DAS_PREFERENCIAS = "/preferencias";
 
 /**
  * Caminho das rotas de conta do Usuário (contrato da `017`): `GET` e `DELETE`
- * em `/conta`, mais as ações em `/conta/nome-de-usuario` e `/conta/senha`, com o
- * mesmo CORS.
+ * em `/conta`, mais a troca de Senha em `/conta/senha`, com o mesmo CORS. A
+ * alteração do Nome de usuário (`PUT /conta/nome-de-usuario`) saiu do contrato
+ * (020): o pré-voo dela **não** é registrado.
  */
 export const CAMINHO_DA_CONTA = "/conta";
 
@@ -362,7 +363,6 @@ export function criarServidor(
       CAMINHO_DAS_ROTINAS,
       CAMINHO_DOS_INICIOS,
       CAMINHO_DA_CONTA,
-      "/conta/nome-de-usuario",
       "/conta/senha",
       CAMINHO_DO_ACESSO,
       CAMINHO_DA_RENOVACAO_DO_ACESSO,
@@ -391,7 +391,7 @@ export function criarServidor(
         caminho === CAMINHO_DA_AGENDA ||
         caminho.startsWith("/agenda/") ||
         caminho === CAMINHO_DA_CONTA ||
-        caminho.startsWith("/conta/") ||
+        caminho === "/conta/senha" ||
         caminho === CAMINHO_DO_ACESSO ||
         caminho === CAMINHO_DA_RENOVACAO_DO_ACESSO ||
         caminho === CAMINHO_DE_SAIR

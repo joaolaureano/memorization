@@ -357,9 +357,7 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
     // sete dias (FR-312, FR-314, FR-315).
     await irParaInicio(page, credencial.nomeDeUsuario);
 
-    await expect(page.locator("p.resumo-de-sete-dias")).toHaveText(
-      "Últimos 7 dias: 3 Itens estudados · 67% de acerto",
-    );
+    await expect(page.locator("p.resumo-de-sete-dias")).toHaveCount(0);
     await expect(page.locator(".estatistica")).toHaveCount(0);
     await expect(page.locator(".grafico-semanal")).toHaveCount(0);
     await expect(secaoUltimasSessoes(page)).toHaveCount(0);
@@ -645,9 +643,7 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
     ).toBeVisible();
     // Sem acervo, o Início mostra o resumo vazio e o caminho do primeiro
     // Cartão (FR-312, FR-314).
-    await expect(
-      paginaB.locator("p.resumo-de-sete-dias"),
-    ).toHaveText("Últimos 7 dias: nenhum Item estudado.");
+    await expect(paginaB.locator("p.resumo-de-sete-dias")).toHaveCount(0);
     await expect(
       paginaB.getByRole("link", { name: "Criar o primeiro Cartão" }),
     ).toBeVisible();

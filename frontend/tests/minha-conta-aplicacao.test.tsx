@@ -11,7 +11,7 @@ import {
 
 /**
  * T1714 — a casca da aplicação com «Minha conta» (017; FR-263, FR-264, FR-270,
- * FR-276, SC-105, SC-106, SC-111): renomear e trocar a Senha **substituem** a
+ * FR-276, SC-105, SC-106, SC-111): trocar a Senha **substitui** a
  * Credencial em memória sem nova Entrada; excluir a descarta e leva a Entrar
  * com «Conta excluída»; a navegação principal não ganha destino novo.
  */
@@ -43,17 +43,17 @@ async function abrirPreferencias(servidor = clienteDeProva()) {
   await aguardarVerificacaoDoAcesso();
   entrarPelaTela();
 
-  await screen.findByRole("heading", { level: 1, name: "Preferências" });
+  await screen.findByRole("heading", { level: 1, name: "Perfil" });
   await screen.findByRole("heading", { level: 2, name: "Minha conta" });
 
   // Os títulos acima renderizam antes de `obterPreferencias()` e `obterConta()`
   // terminarem — o h1 e o h2 aparecem enquanto «Carregando…» ainda está na
   // tela. Só os controles abaixo provam que cada carga chegou ao estado final;
   // sem esta espera, uma requisição inicial ainda em voo com a Credencial
-  // antiga poderia voltar recusada depois que o teste a invalida (renomear,
-  // trocar a Senha, excluir) e encerrar a sessão conforme a ordem das tarefas.
+  // antiga poderia voltar recusada depois que o teste a invalida (trocar a
+  // Senha, excluir) e encerrar a sessão conforme a ordem das tarefas.
   await waitFor(() => {
-    expect(screen.queryByText("Carregando Preferências…")).toBeNull();
+    expect(screen.queryByText("Carregando Perfil…")).toBeNull();
     expect(screen.queryByText("Carregando a conta…")).toBeNull();
   });
   // Estado final de cada seção: o campo/controle da carga concluída.
@@ -77,45 +77,16 @@ describe("Minha conta na casca", () => {
     );
   });
 
-  it("renomear mantém a pessoa na tela com a Credencial nova e invalida a antiga (FR-263, FR-264, SC-106)", async () => {
-    const servidor = await abrirPreferencias();
+  it("mostra o Nome de usuário somente leitura, sem ação de renomear (FR-336)", async () => {
+    await abrirPreferencias();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-    digitar("Novo Nome de usuário", "usuario.novo");
-    digitar("Senha atual", CREDENCIAL_DE_PROVA.senha);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    expect(await screen.findByText("Nome de usuário alterado.")).toBeInTheDocument();
-    // Nenhuma nova Entrada: a tela continua sendo Preferências.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Preferências" }),
+      screen.getByText(CREDENCIAL_DE_PROVA.nomeDeUsuario, { selector: "strong" }),
     ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByText("usuario.novo")).toBeInTheDocument(),
-    );
-
-    // A Credencial antiga é recusada em outra página; a nova, aceita (FR-264).
     expect(
-      await servidor.comoUsuario(CREDENCIAL_DE_PROVA).obterConta(),
-    ).toMatchObject({ ok: false, erro: NAO_AUTENTICADO });
-    expect(
-      await servidor
-        .comoUsuario({
-          nomeDeUsuario: "usuario.novo",
-          senha: CREDENCIAL_DE_PROVA.senha,
-        })
-        .obterConta(),
-    ).toMatchObject({ ok: true });
-
-    // E a sessão aberta segue operando com a Credencial substituída.
-    fireEvent.click(screen.getByRole("link", { name: "Cartões" }));
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Alterar Nome de usuário/ }),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Novo Nome de usuário/)).toBeNull();
   });
 
   it("trocar a Senha mantém a pessoa na tela com a Credencial nova (FR-270)", async () => {

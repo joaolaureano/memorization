@@ -24,10 +24,12 @@ para ser removido depois. Todo valor sensível vira [REDACTED].
 
 ### III. Domínio Antes de Tecnologia
 
-CONTEXT.md é exclusivamente um glossário e é a autoridade sobre a linguagem do
-domínio. Não contém arquitetura, banco de dados, framework, protocolo ou tarefa.
-Termos vagos, conflitantes ou sobrecarregados são desafiados e resolvidos antes
-de entrarem em spec. A linguagem do código espelha a do glossário.
+A linguagem do domínio é definida na seção «Key Entities» de cada spec, que é
+a autoridade sobre os termos que a feature usa; uma spec nova que reutiliza um
+termo mantém o significado dado pela spec que o introduziu. Essa seção não
+contém arquitetura, banco de dados, framework, protocolo ou tarefa. Termos
+vagos, conflitantes ou sobrecarregados são desafiados e resolvidos antes de
+entrarem em spec. A linguagem do código espelha a das specs.
 
 ### IV. Módulos Profundos
 
@@ -187,7 +189,7 @@ explícita do Product Owner, registro no commit da emenda e nota de versão abai
 Complexidade deve ser justificada contra o Princípio VII. Divergência entre um
 artefato do Spec Kit e esta constituição é resolvida a favor da constituição.
 
-**Version**: 3.1.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-10-03
+**Version**: 3.2.0 | **Ratified**: 2026-09-20 | **Last Amended**: 2026-10-04
 
 **Nota da versão 3.0.0 (2026-10-03)**: emenda aprovada pelo Product Owner. O
 Princípio II mantém a auditabilidade append-only, mas o registro deixa de ser o
@@ -199,3 +201,9 @@ commits e governança) foram ajustadas da mesma forma.
 **Nota da versão 3.1.0 (2026-10-03)**: emenda aprovada pelo Product Owner. O
 fluxo de integração de IA passa a exigir `npm run verificar:ci` antes de todo
 push, com hook versionado como defesa adicional.
+
+**Nota da versão 3.2.0 (2026-10-04)**: emenda aprovada pelo Product Owner. O
+glossário `CONTEXT.md` foi removido do repositório; o Princípio III passa a
+atribuir a autoridade sobre a linguagem do domínio à seção «Key Entities» de
+cada spec. As specs anteriores que citam o `CONTEXT.md` permanecem como
+histórico, sem reescrita.

@@ -106,10 +106,9 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS =
  * A Credencial desta feature (FR-089): Nome de usuário e Senha, e nada além.
  *
  * Ela existe apenas na memória da página aberta e acompanha cada operação. Não
- * é token, sessão nem cookie — os `_Avoid_` de `CONTEXT.md` —, e por isso não
- * há campo, cabeçalho de resposta ou armazenamento capaz de guardá-la entre
- * operações: o `ClienteHttp` a recebe na construção e a apresenta de novo em
- * cada chamada.
+ * é token, sessão nem cookie, e por isso não há campo, cabeçalho de resposta ou
+ * armazenamento capaz de guardá-la entre operações: o `ClienteHttp` a recebe na
+ * construção e a apresenta de novo em cada chamada.
  */
 export interface Credencial {
   nomeDeUsuario: string;
@@ -901,12 +900,6 @@ export type ResultadoDeObterConta =
       mensagem: string;
     };
 
-/** O que `alterarNomeDeUsuario` envia (FR-259): a Senha atual e o novo nome. */
-export interface DadosDeNovoNomeDeUsuario {
-  senhaAtual: string;
-  novoNomeDeUsuario: string;
-}
-
 /** O que `trocarSenha` envia (FR-266): a Senha atual, a nova e a Confirmação. */
 export interface DadosDeTrocaDeSenha {
   senhaAtual: string;
@@ -926,9 +919,7 @@ export interface DadosDeExclusaoDeConta {
  */
 export type CodigoDeErroDeConta =
   | "dados_invalidos"
-  | "mesmo_nome"
   | "mesma_senha"
-  | "nome_indisponivel"
   | "senha_atual_incorreta";
 
 /** Campo do formulário a que uma recusa de validação se refere. */
@@ -945,11 +936,6 @@ export interface RecusaDeConta {
   mensagem: string;
   campo?: CampoDeConta;
 }
-
-/** Resultado de `alterarNomeDeUsuario`: traz o nome gravado (FR-263). */
-export type ResultadoDeAlteracaoDeNomeDeUsuario =
-  | { ok: true; nomeDeUsuario: string }
-  | RecusaDeConta;
 
 /** Resultado de `trocarSenha` e de `excluirConta`. */
 export type ResultadoDeAcaoDeConta = { ok: true } | RecusaDeConta;
@@ -1235,15 +1221,6 @@ export interface ClienteDoAcervo {
    * anuncia (FR-272).
    */
   obterConta(): Promise<ResultadoDeObterConta>;
-
-  /**
-   * Altera o Nome de usuário (FR-259..FR-265). Exige a Senha atual; as regras
-   * do novo nome são as do Cadastro. `mesmo_nome`, `nome_indisponivel` e
-   * `senha_atual_incorreta` são recusas de domínio.
-   */
-  alterarNomeDeUsuario(
-    dados: DadosDeNovoNomeDeUsuario,
-  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario>;
 
   /**
    * Troca a Senha (FR-266..FR-271). Exige a Senha atual; a nova segue o

@@ -455,9 +455,10 @@ textarea {
   resize: vertical;
 }
 
+/* 020, FR-328: a caixa de marcar comum mede 19 px. */
 input[type="checkbox"] {
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
   accent-color: var(--accent);
   flex-shrink: 0;
 }
@@ -470,13 +471,8 @@ label:has(input[type="checkbox"]) {
   padding: 10px 0;
 }
 
-/* 018: a opção «Continuar conectado neste navegador» é um alvo de toque de
- * 44x44 px (SC-063): o próprio <input> tem essa caixa, e não só o rótulo. */
-.campo--opcao input[type="checkbox"] {
-  width: 44px;
-  height: 44px;
-}
-
+/* 020, FR-328: a caixa grande mede 37 px; o alvo de toque de 44x44 px vem do
+ * rótulo clicável (`label:has(input[type="checkbox"])`), e não só do input. */
 .campo--opcao label {
   gap: 8px;
 }
@@ -510,8 +506,11 @@ textarea[aria-invalid="true"] {
   min-width: 0;
 }
 
+/* 020, FR-329: Mostrar/Ocultar tem largura fixa de 7 rem em todo campo de
+ * Senha — alternar não desloca o campo nem muda a largura do botão. */
 .campo-de-senha button {
-  flex: 0 0 auto;
+  flex: 0 0 7rem;
+  width: 7rem;
   white-space: nowrap;
 }
 
@@ -869,8 +868,8 @@ progress {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-/* Os blocos do Início correm empilhados e passam a duas colunas a partir de
- * 1024px. O gap é o mesmo da .pilha e os .cartao filhos não trazem margem
+/* 020, FR-330: o Início corre em uma coluna só em toda largura — cabeçalho e
+ * blocos. O gap é o mesmo da .pilha e os .cartao filhos não trazem margem
  * própria, por isso a grelha é a única separação entre blocos. */
 .inicio__blocos {
   display: grid;
@@ -883,10 +882,23 @@ progress {
   margin: 0;
 }
 
-@media (min-width: 1024px) {
-  .inicio__blocos {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* O cabeçalho do Início também é uma coluna: a saudação e o convite do acervo
+ * vazio ficam empilhados, sem a linha de .cabecalho-da-pagina (FR-330). */
+.inicio__cabecalho {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.inicio__cabecalho p {
+  margin: 0;
+}
+
+/* 020, FR-335: no Perfil, Configuração e Minha conta ficam separados por 32 px. */
+.perfil > .cartao + .cartao {
+  margin-top: 32px;
 }
 
 /* Sete colunas iguais dentro de um cartão, da mais antiga à mais recente. */
@@ -1392,11 +1404,6 @@ details summary {
   text-underline-offset: 4px;
 }
 
-.agenda__fuso {
-  margin: 0;
-  font-size: 14px;
-}
-
 .agenda__dia-detalhe h3 {
   margin-bottom: 4px;
 }
@@ -1468,16 +1475,25 @@ fieldset.campo--grupo {
   overflow-wrap: anywhere;
 }
 
-/* Caixas de marcar e botões de opção do formulário são alvos de 44 x 44 px; o
- * seletor `input:not([type="checkbox"])` não pode esticar os de opção (FR-253). */
+/* 020, FR-328: no formulário de Rotina, a caixa de marcar grande mede 37 px e o
+ * botão de opção mantém 44 x 44 px; o seletor
+ * `input:not([type="checkbox"])` não pode esticá-los (FR-253). */
 .campo--opcao input[type="checkbox"],
+.campo--opcao input[type="radio"] {
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.campo--opcao input[type="checkbox"] {
+  width: 37px;
+  height: 37px;
+}
+
 .campo--opcao input[type="radio"] {
   width: 44px;
   height: 44px;
   min-height: 44px;
-  padding: 0;
-  flex-shrink: 0;
-  accent-color: var(--accent);
 }
 
 label.campo--opcao {

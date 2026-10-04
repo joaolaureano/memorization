@@ -195,12 +195,15 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
 
     if (resultado.ok) {
       operacoes.current.delete(chave);
-      setAviso(`Rotina de ${rotina.nomeDoBaralho} ${ANUNCIO_DA_ACAO[acao]}.`);
       foco.current =
         acao === "excluir"
           ? { tipo: "lista" }
           : { tipo: "rotina", id: rotina.id };
+      // O anúncio só vem depois da releitura: até lá os botões ainda carregam a
+      // versão antiga da Rotina, e quem agisse ao ver «retomada» tocaria numa
+      // Rotina já alterada e receberia um conflito.
       await carregar();
+      setAviso(`Rotina de ${rotina.nomeDoBaralho} ${ANUNCIO_DA_ACAO[acao]}.`);
       return;
     }
 

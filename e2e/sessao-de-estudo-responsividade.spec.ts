@@ -179,17 +179,27 @@ for (const largura of [360, 1440]) {
     expect(await medir()).toEqual(inicial);
     const frente = page.locator('.conteudo-do-cartao').first();
     await frente.focus();
+    // Espera a rolagem terminar (o End anima) pelo evento `scrollend`, sem
+    // amostrar o tempo: só então o próximo Item prova que a posição é reposta,
+    // sem competir com uma animação ainda em curso sob carga.
+    // O ouvinte é registrado e confirmado antes da tecla; só então o End é
+    // enviado, para que o evento não possa chegar antes do ouvinte.
+    await frente.evaluate((el) => {
+      (el as HTMLElement & { __fimDaRolagem?: Promise<number> }).__fimDaRolagem =
+        new Promise<number>((resolver) => {
+          el.addEventListener('scrollend', () => resolver(el.scrollTop), {
+            once: true,
+          });
+        });
+    });
     await page.keyboard.press('End');
-    // Espera a rolagem terminar (o End anima): só então o próximo Item prova que a
-    // posição é reposta, sem competir com uma animação ainda em curso sob carga.
-    await expect
-      .poll(async () => {
-        const antes = await frente.evaluate(el => el.scrollTop);
-        await page.waitForTimeout(150);
-        const depois = await frente.evaluate(el => el.scrollTop);
-        return antes > 0 && antes === depois;
-      })
-      .toBe(true);
+    expect(
+      await frente.evaluate(
+        (el) =>
+          (el as HTMLElement & { __fimDaRolagem?: Promise<number> })
+            .__fimDaRolagem,
+      ),
+    ).toBeGreaterThan(0);
     await page.getByRole('button', { name: 'Revelar verso' }).click();
     expect(await medir()).toEqual(inicial);
     expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(acoes);

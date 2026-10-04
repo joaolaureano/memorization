@@ -530,8 +530,8 @@ async function visitarAsTelas(
   );
 
   // Preferências (FR-200, FR-212): algoritmo e limite de novos por dia.
-  await irParaTela(pagina, "#/preferencias", "Preferências");
-  await conferirTela(pagina, cenario, "Preferências");
+  await irParaTela(pagina, "#/preferencias", "Perfil");
+  await conferirTela(pagina, cenario, "Perfil");
 
   // Revisão do dia (FR-198, FR-202): a tela lançada de Início.
   await irParaTela(pagina, "#/revisao", "Revisão do dia");
@@ -680,9 +680,8 @@ async function visitarAsTelas(
     "#/inicio",
     `Olá, ${ambiente.semRegistros.nomeDeUsuario}`,
   );
-  await expect(
-    pagina.getByText("Últimos 7 dias: nenhum Item estudado."),
-  ).toBeVisible({ timeout: ESPERA_DA_TELA });
+  // FR-330: o Início não traz mais o resumo de sete dias.
+  await expect(pagina.getByText("Últimos 7 dias")).toHaveCount(0);
   await conferirTela(pagina, cenario, "Início (sem registros)");
 
   // A lista vazia de Sessões vive em Estudo desde a 019 (FR-315, FR-321).
@@ -803,6 +802,22 @@ async function conferirTela(
           continue;
         }
 
+        // FR-328: a caixa de marcar mede 19 ou 37 px; o alvo de toque de
+        // 44 x 44 px é o rótulo clicável que a envolve.
+        const rotulo =
+          elemento instanceof HTMLInputElement &&
+          (elemento.type === "checkbox" || elemento.type === "radio")
+            ? elemento.closest("label")
+            : null;
+        const alvo = rotulo?.getBoundingClientRect() ?? caixa;
+
+        if (
+          alvo.width >= argumentos.alvoMinimo &&
+          alvo.height >= argumentos.alvoMinimo
+        ) {
+          continue;
+        }
+
         if (
           caixa.width >= argumentos.alvoMinimo &&
           caixa.height >= argumentos.alvoMinimo
@@ -896,7 +911,7 @@ async function conferirNavegacaoPrincipal(
     await expect(destinos.nth(1)).toHaveText("Estudo");
     await expect(destinos.nth(2)).toHaveText("Baralhos");
     await expect(destinos.nth(3)).toHaveText("Cartões");
-    await expect(destinos.nth(4)).toHaveText("Preferências");
+    await expect(destinos.nth(4)).toHaveText("Perfil");
 
     const medidasDaNavegacao = await navegacao.evaluate((elemento) => {
       const links = Array.from(elemento.querySelectorAll("a")).map((link) => ({

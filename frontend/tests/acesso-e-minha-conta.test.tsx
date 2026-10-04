@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { NAO_AUTENTICADO } from "../src/acervo-cliente/cliente";
@@ -8,7 +8,7 @@ import { CREDENCIAL_DE_PROVA, clienteDeProva } from "./apoio-de-prova";
 
 /**
  * T1815 — as alterações da conta (017) com Acesso temporário (018; FR-296,
- * SC-120): trocar a Senha ou alterar o Nome de usuário encerra **todos** os
+ * SC-120): trocar a Senha encerra **todos** os
  * Acessos, e o navegador da alteração segue operando com um Acesso novo, sem
  * Entrar de novo; o outro navegador é recusado na próxima operação. Excluir a
  * conta encerra todos e não emite nenhum.
@@ -76,32 +76,6 @@ describe("alterações da conta com Acesso temporário", () => {
       ok: false,
       erro: NAO_AUTENTICADO,
     });
-  });
-
-  it("alterar o Nome de usuário: o navegador da alteração mostra o nome novo e o outro é recusado (FR-296)", async () => {
-    const { servidor, outro } = await doisNavegadores();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-    digitar("Novo Nome de usuário", "usuario.novo");
-    digitar("Senha atual", CREDENCIAL_DE_PROVA.senha);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    expect(
-      await screen.findByText("Nome de usuário alterado."),
-    ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.getByText("usuario.novo")).toBeInTheDocument(),
-    );
-    expect(servidor.temAcessoNoNavegador()).toBe(true);
-    expect(await servidor.obterAcesso()).toMatchObject({
-      ok: true,
-      nomeDeUsuario: "usuario.novo",
-    });
-    expect(await outro.obterAcesso()).toMatchObject({ ok: false });
   });
 
   it("o outro navegador, recusado, volta a Entrar com a mensagem explicativa (FR-091 revisado, FR-296)", async () => {

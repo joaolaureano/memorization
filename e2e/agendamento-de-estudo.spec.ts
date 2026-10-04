@@ -176,14 +176,23 @@ async function alvosDe44(pagina: Page, raiz: Locator): Promise<void> {
   const total = await controles.count();
 
   for (let indice = 0; indice < total; indice += 1) {
-    const caixa = await controles.nth(indice).boundingBox();
+    // FR-328: a caixa de marcar é menor; o alvo de 44 px é o rótulo clicável.
+    const caixa = await controles.nth(indice).evaluate((elemento) => {
+      const alvo =
+        elemento instanceof HTMLInputElement &&
+        (elemento.type === "checkbox" || elemento.type === "radio")
+          ? (elemento.closest("label") ?? elemento)
+          : elemento;
+      const { width, height } = alvo.getBoundingClientRect();
+
+      return { width, height };
+    });
     const nome = await controles
       .nth(indice)
       .evaluate((elemento) => elemento.outerHTML.slice(0, 120));
 
-    expect(caixa, nome).not.toBeNull();
-    expect(caixa?.height ?? 0, `altura de ${nome}`).toBeGreaterThanOrEqual(43.5);
-    expect(caixa?.width ?? 0, `largura de ${nome}`).toBeGreaterThanOrEqual(43.5);
+    expect(caixa.height, `altura de ${nome}`).toBeGreaterThanOrEqual(43.5);
+    expect(caixa.width, `largura de ${nome}`).toBeGreaterThanOrEqual(43.5);
   }
 
   void pagina;
@@ -209,6 +218,7 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
       pagina.getByText("Nenhum estudo agendado para hoje"),
     ).toBeVisible();
 
+    await pagina.getByRole("link", { name: "Ver agenda semanal" }).click();
     await pagina.getByRole("link", { name: "Agendar estudo" }).click();
     await expect(
       pagina.getByRole("heading", { level: 1, name: "Agendar estudo" }),
@@ -506,8 +516,16 @@ test("teclado: criar, pausar, retomar e excluir a Rotina inteiramente por teclad
     await expect(pagina.getByRole("dialog")).toBeHidden();
     await expect(pausar).toBeFocused();
 
+    // Cada tecla só é enviada depois de o foco ter chegado ao destino da
+    // anterior: sem isso, o Tab sairia antes de o foco entrar no diálogo.
     await pagina.keyboard.press("Enter");
+    await expect(
+      pagina.getByRole("dialog").getByRole("button", { name: "Cancelar" }),
+    ).toBeFocused();
     await pagina.keyboard.press("Tab");
+    await expect(
+      pagina.getByRole("dialog").getByRole("button", { name: "Pausar Rotina" }),
+    ).toBeFocused();
     await pagina.keyboard.press("Enter");
     await expect(pagina.getByText("Rotina de Inglês pausada.")).toBeVisible();
     await expect(pagina.getByText(/Situação: Pausada/)).toBeVisible();
@@ -523,7 +541,13 @@ test("teclado: criar, pausar, retomar e excluir a Rotina inteiramente por teclad
 
     await excluir.focus();
     await pagina.keyboard.press("Enter");
+    await expect(
+      pagina.getByRole("dialog").getByRole("button", { name: "Cancelar" }),
+    ).toBeFocused();
     await pagina.keyboard.press("Tab");
+    await expect(
+      pagina.getByRole("dialog").getByRole("button", { name: "Excluir Rotina" }),
+    ).toBeFocused();
     await pagina.keyboard.press("Enter");
     await expect(
       pagina.getByText("Você ainda não tem Rotinas de estudo."),

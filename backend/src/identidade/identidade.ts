@@ -172,7 +172,7 @@ export interface Identidade extends GestaoDeConta {
  * Entrou — decorado pelo hook da Credencial — e a Senha atual como confirmação
  * da ação: a Credencial do cabeçalho prova quem chama; a Senha atual no corpo
  * prova que a pessoa, e não uma página esquecida aberta, quer a mudança
- * (FR-259, FR-266, FR-273).
+ * (FR-266, FR-273).
  */
 export type { ContagensDaConta } from "../armazenamento/porta.ts";
 
@@ -184,23 +184,17 @@ export interface DadosDaConta {
 
 /**
  * Códigos de recusa da gestão da conta. `senha_atual_incorreta` é único para as
- * três ações (FR-279); `dados_invalidos` carrega a regra violada na mensagem e,
+ * duas ações (FR-279); `dados_invalidos` carrega a regra violada na mensagem e,
  * em `campo`, o campo a corrigir.
  */
 export type CodigoDeErroDeConta =
   | "dados_invalidos"
-  | "mesmo_nome"
   | "mesma_senha"
-  | "nome_indisponivel"
   | "senha_atual_incorreta"
   | "indisponivel";
 
 /** Campo do formulário a que a recusa de validação se refere. */
-export type CampoDeConta =
-  | "nomeDeUsuario"
-  | "senhaAtual"
-  | "novaSenha"
-  | "confirmacaoDaSenha";
+export type CampoDeConta = "senhaAtual" | "novaSenha" | "confirmacaoDaSenha";
 
 /** A recusa da gestão da conta: código estável e mensagem em português. */
 export interface RecusaDeConta {
@@ -214,16 +208,7 @@ export type ResultadoDeObterConta =
   | { ok: true; conta: DadosDaConta }
   | { ok: false; erro: "indisponivel"; mensagem: string };
 
-export type ResultadoDeAlteracaoDeNome =
-  | { ok: true; nomeDeUsuario: string }
-  | RecusaDeConta;
-
 export type ResultadoDeConta = { ok: true } | RecusaDeConta;
-
-export interface DadosDeAlteracaoDeNome {
-  senhaAtual: string;
-  novoNomeDeUsuario: string;
-}
 
 export interface DadosDeTrocaDeSenha {
   senhaAtual: string;
@@ -236,17 +221,12 @@ export interface DadosDeExclusaoDeConta {
 }
 
 /**
- * A recusa única da Senha atual (FR-279): a mesma frase para renomear, trocar a
- * Senha e excluir, sem revelar a Senha, qualquer derivado ou outro Usuário.
+ * A recusa única da Senha atual (FR-279): a mesma frase para trocar a Senha e
+ * excluir a conta, sem revelar a Senha, qualquer derivado ou outro Usuário.
  */
 export const SENHA_ATUAL_INCORRETA = {
   erro: "senha_atual_incorreta",
   mensagem: "A Senha atual está incorreta.",
-} as const;
-
-const MESMO_NOME = {
-  erro: "mesmo_nome",
-  mensagem: "O novo nome de usuário é igual ao atual.",
 } as const;
 
 const MESMA_SENHA = {
@@ -254,31 +234,15 @@ const MESMA_SENHA = {
   mensagem: "A nova Senha é igual à atual.",
 } as const;
 
-const NOME_INDISPONIVEL = {
-  erro: "nome_indisponivel",
-  mensagem: "Este nome de usuário já existe. Escolha outro.",
-} as const;
-
 /**
- * Extensão da Interface do `Identidade` com a gestão da conta: quatro verbos
- * que escondem validação, normalização, derivação da Senha, tradução da
- * unicidade e a falha do armazenamento (017, D1). Nenhum retorno carrega Senha,
- * `sal`, `hash` ou `parametros` (FR-258, FR-078).
+ * Extensão da Interface do `Identidade` com a gestão da conta: três verbos
+ * que escondem validação, derivação da Senha e a falha do armazenamento (017,
+ * D1). Nenhum retorno carrega Senha, `sal`, `hash` ou `parametros` (FR-258,
+ * FR-078).
  */
 export interface GestaoDeConta {
   /** Devolve o Nome de usuário atual e as contagens do Usuário (FR-258). */
   obterConta(usuarioId: string): Promise<ResultadoDeObterConta>;
-
-  /**
-   * Altera o Nome de usuário. As regras são as do Cadastro: espaços ao redor
-   * descartados, 3 a 50 caracteres do alfabeto permitido (FR-260); igual ao
-   * atual é `mesmo_nome` (FR-261); em uso por outro Usuário, mesmo diferindo só
-   * em maiúsculas, é `nome_indisponivel` (FR-262).
-   */
-  alterarNomeDeUsuario(
-    usuarioId: string,
-    dados: DadosDeAlteracaoDeNome,
-  ): Promise<ResultadoDeAlteracaoDeNome>;
 
   /**
    * Troca a Senha: a nova segue o Cadastro (FR-267), difere da atual
@@ -419,43 +383,6 @@ export function criarIdentidade(
           contagens: contagens.valor,
         },
       };
-    },
-
-    async alterarNomeDeUsuario(usuarioId, dados) {
-      const novoNome = dados.novoNomeDeUsuario.trim();
-      const invalido = validarNomeDeUsuario(novoNome);
-
-      if (invalido !== null) {
-        return {
-          ok: false,
-          erro: "dados_invalidos",
-          mensagem: invalido.mensagem,
-          campo: "nomeDeUsuario",
-        };
-      }
-
-      const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
-
-      if (!conferida.ok) {
-        return conferida.recusa;
-      }
-
-      if (conferida.usuario.nomeDeUsuario === novoNome) {
-        return { ok: false, ...MESMO_NOME };
-      }
-
-      const gravado = await armazenamento.atualizarNomeDeUsuario(
-        usuarioId,
-        novoNome,
-      );
-
-      if (!gravado.ok) {
-        return gravado.erro === "nome_em_uso"
-          ? { ok: false, ...NOME_INDISPONIVEL }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
-      }
-
-      return { ok: true, nomeDeUsuario: gravado.valor.nomeDeUsuario };
     },
 
     async trocarSenha(usuarioId, dados) {

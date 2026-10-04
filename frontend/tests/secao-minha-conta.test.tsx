@@ -2,10 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
-import {
-  INDISPONIVEL,
-  MENSAGEM_DE_SENHA_ATUAL_INCORRETA,
-} from "../src/acervo-cliente/cliente";
+import { MENSAGEM_DE_SENHA_ATUAL_INCORRETA } from "../src/acervo-cliente/cliente";
 import type { ClienteDoAcervo, Credencial } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { PaginaDePreferencias } from "../src/ui/PaginaDePreferencias";
@@ -13,9 +10,10 @@ import { SecaoMinhaConta } from "../src/ui/SecaoMinhaConta";
 import { ProvedorDeProtecaoDeSaida } from "../src/ui/protecao-de-saida";
 
 /**
- * T1712, T1713, T1715, T1716 — a seção «Minha conta» e os seus três
- * componentes (017; FR-257..FR-279, FR-285), sobre o stand-in em memória, que
- * aplica as regras da API com as mesmas mensagens.
+ * T1712, T1713, T1715, T1716, T2006 — a seção «Minha conta» e os seus
+ * componentes de Trocar Senha e Excluir conta (017; FR-257..FR-279, FR-285),
+ * sobre o stand-in em memória, que aplica as regras da API com as mesmas
+ * mensagens. O Nome de usuário é somente leitura (FR-336).
  */
 
 const ANA: Credencial = { nomeDeUsuario: "ana.silva", senha: "senha-da-ana-1" };
@@ -65,16 +63,25 @@ async function abrir(acao: string): Promise<void> {
 }
 
 describe("SecaoMinhaConta (FR-257, FR-258)", () => {
-  it("mostra o Nome de usuário e as três ações, sem nenhuma Senha", async () => {
+  it("mostra o Nome de usuário somente leitura e as ações restantes (FR-336)", async () => {
     renderizar();
 
     expect(await screen.findByText("ana.silva")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 2, name: "Minha conta" }),
     ).toBeInTheDocument();
-    for (const nome of ["Alterar Nome de usuário", "Trocar Senha", "Excluir conta"]) {
+    for (const nome of ["Trocar Senha", "Excluir conta"]) {
       expect(screen.getByRole("button", { name: nome })).toBeInTheDocument();
     }
+
+    // FR-336: nenhum botão, link ou formulário permite alterar o Nome de
+    // usuário — ele é só exibido.
+    expect(screen.queryByRole("button", { name: /Alterar Nome/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Alterar Nome/ })).toBeNull();
+    expect(
+      screen.queryByRole("form", { name: /Alterar Nome/ }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Novo Nome de usuário")).toBeNull();
     expect(document.body.textContent).not.toContain(ANA.senha);
     expect(document.querySelectorAll("input")).toHaveLength(0);
   });
@@ -118,89 +125,6 @@ describe("SecaoMinhaConta (FR-257, FR-258)", () => {
 
     expect(await screen.findByLabelText("Cartões novos por dia")).toBeInTheDocument();
     expect(screen.queryByText("Minha conta")).not.toBeInTheDocument();
-  });
-});
-
-describe("Alterar Nome de usuário (FR-259..FR-265)", () => {
-  it("altera o nome, entrega a nova Credencial e devolve o foco ao botão", async () => {
-    renderizar();
-    await abrir("Alterar Nome de usuário");
-
-    digitar("Novo Nome de usuário", "  ana.nova ");
-    digitar("Senha atual", ANA.senha);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    await waitFor(() =>
-      expect(aoSubstituirCredencial).toHaveBeenCalledWith({
-        nomeDeUsuario: "ana.nova",
-        senha: ANA.senha,
-      }),
-    );
-    expect(await screen.findByText("Nome de usuário alterado.")).toBeInTheDocument();
-    expect(screen.getByText("ana.nova")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-      ).toHaveFocus(),
-    );
-  });
-
-  it.each([
-    ["mesmo nome", "ana.silva", /igual ao atual/],
-    ["nome de outro Usuário", "BRUNO.SOUZA", /já existe/],
-    ["nome curto demais", "ab", /pelo menos 3/],
-  ])("recusa %s com a mensagem da API e o foco no campo do nome", async (_, nome, mensagem) => {
-    renderizar();
-    await abrir("Alterar Nome de usuário");
-
-    digitar("Novo Nome de usuário", nome);
-    digitar("Senha atual", ANA.senha);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    expect(
-      await screen.findByRole("alert", {
-        name: "Falha ao alterar o Nome de usuário",
-      }),
-    ).toHaveTextContent(mensagem);
-    expect(screen.getByLabelText("Novo Nome de usuário", { selector: "input" })).toHaveFocus();
-    expect(aoSubstituirCredencial).not.toHaveBeenCalled();
-  });
-
-  it("Senha atual incorreta mostra a mensagem única, apaga só a Senha e mantém o nome", async () => {
-    renderizar();
-    await abrir("Alterar Nome de usuário");
-
-    digitar("Novo Nome de usuário", "ana.nova");
-    digitar("Senha atual", "errada-123");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    expect(
-      await screen.findByText(MENSAGEM_DE_SENHA_ATUAL_INCORRETA),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Senha atual", { selector: "input" })).toHaveValue("");
-    expect(screen.getByLabelText("Senha atual", { selector: "input" })).toHaveFocus();
-    expect(screen.getByLabelText("Novo Nome de usuário", { selector: "input" })).toHaveValue(
-      "ana.nova",
-    );
-  });
-
-  it("Cancelar fecha o formulário e devolve o foco", async () => {
-    renderizar();
-    await abrir("Alterar Nome de usuário");
-
-    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-      ).toHaveFocus(),
-    );
   });
 });
 
@@ -388,42 +312,5 @@ describe("Excluir conta (FR-272..FR-279)", () => {
     const dialogo = await abrirDialogo();
 
     expect(dialogo).not.toHaveTextContent(/Agenda/);
-  });
-});
-
-describe("falha de transporte sem aplicar a ação (FR-044, FR-045)", () => {
-  it("indisponibilidade mantém o digitado e informa que nada foi alterado", async () => {
-    const proxy = new Proxy(cliente, {
-      get(alvo, propriedade, receptor) {
-        if (propriedade === "alterarNomeDeUsuario") {
-          return async () => ({
-            ok: false,
-            erro: INDISPONIVEL,
-            mensagem: "fora do ar",
-          });
-        }
-
-        const valor = Reflect.get(alvo, propriedade, receptor) as unknown;
-
-        return typeof valor === "function"
-          ? (valor as (...argumentos: unknown[]) => unknown).bind(alvo)
-          : valor;
-      },
-    }) as ClienteDoAcervo;
-
-    renderizar(proxy);
-    await abrir("Alterar Nome de usuário");
-
-    digitar("Novo Nome de usuário", "ana.nova");
-    digitar("Senha atual", ANA.senha);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-    );
-
-    expect(await screen.findByText(/Nada foi alterado/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Novo Nome de usuário", { selector: "input" })).toHaveValue(
-      "ana.nova",
-    );
-    expect(aoSubstituirCredencial).not.toHaveBeenCalled();
   });
 });

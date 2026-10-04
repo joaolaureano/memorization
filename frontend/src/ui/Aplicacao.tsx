@@ -12,6 +12,7 @@ import type {
   ClienteDoAcervo,
   Credencial,
   InicioDeCompromisso,
+  ResultadoDeObterAcesso,
 } from "../acervo-cliente/cliente";
 import { decidirRenovacao } from "../acesso/atividade";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
@@ -119,6 +120,15 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
     "verificando" | "concluida" | "falhou"
   >("verificando");
   const [numeroDaTentativa, setNumeroDaTentativa] = useState(0);
+  // A verificação em voo de cada tentativa. O `StrictMode` executa o efeito
+  // duas vezes; sem compartilhar a requisição, a primeira resposta
+  // `acesso_expirado` limpa o Cookie e a segunda chegaria como `sem_acesso`,
+  // sem a mensagem de expiração (FR-294).
+  const verificacaoEmVoo = useRef<{
+    tentativa: number;
+    criarCliente: PropriedadesDaAplicacao["criarCliente"];
+    resultado: Promise<ResultadoDeObterAcesso>;
+  } | null>(null);
 
   const temCredencial = sessao !== null;
   const credencial = sessao?.credencial ?? null;
@@ -140,26 +150,39 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
 
     setVerificacao("verificando");
 
-    void criarCliente(null, { usaAcesso: true })
-      .obterAcesso()
-      .then((resultado) => {
-        if (!ativo) {
-          return;
+    let emVoo = verificacaoEmVoo.current;
+
+    if (
+      emVoo === null ||
+      emVoo.tentativa !== numeroDaTentativa ||
+      emVoo.criarCliente !== criarCliente
+    ) {
+      emVoo = {
+        tentativa: numeroDaTentativa,
+        criarCliente,
+        resultado: criarCliente(null, { usaAcesso: true }).obterAcesso(),
+      };
+      verificacaoEmVoo.current = emVoo;
+    }
+
+    void emVoo.resultado.then((resultado) => {
+      if (!ativo) {
+        return;
+      }
+
+      if (resultado.ok) {
+        setSessao({ nomeDeUsuario: resultado.nomeDeUsuario, credencial: null });
+        setVerificacao("concluida");
+      } else if (resultado.erro === "indisponivel") {
+        setVerificacao("falhou");
+      } else {
+        if (resultado.erro === "acesso_expirado") {
+          setAvisoDaEntrada({ tipo: "falha", texto: resultado.mensagem });
         }
 
-        if (resultado.ok) {
-          setSessao({ nomeDeUsuario: resultado.nomeDeUsuario, credencial: null });
-          setVerificacao("concluida");
-        } else if (resultado.erro === "indisponivel") {
-          setVerificacao("falhou");
-        } else {
-          if (resultado.erro === "acesso_expirado") {
-            setAvisoDaEntrada({ tipo: "falha", texto: resultado.mensagem });
-          }
-
-          setVerificacao("concluida");
-        }
-      });
+        setVerificacao("concluida");
+      }
+    });
 
     return () => {
       ativo = false;

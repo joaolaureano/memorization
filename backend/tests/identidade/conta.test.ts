@@ -18,8 +18,10 @@ import {
 
 /**
  * T1708 — a gestão da conta pela Interface do `Identidade` (FR-257..FR-279):
- * `obterConta`, `alterarNomeDeUsuario`, `trocarSenha` e `excluirConta`, sobre o
- * Adapter local em memória. Senhas e segredo são gerados a cada execução.
+ * `obterConta`, `trocarSenha` e `excluirConta`, sobre o Adapter local em
+ * memória. Senhas e segredo são gerados a cada execução. A alteração do Nome
+ * de usuário saiu da Interface (020): a validação e a unicidade do Nome
+ * continuam sendo as do Cadastro, provadas em `cadastro.test.ts`.
  */
 
 let aberto: ArmazenamentoSqliteAberto;
@@ -55,112 +57,6 @@ describe("obterConta (FR-257, FR-258)", () => {
     });
     expect(JSON.stringify(resultado)).not.toContain(ana.senha);
     expect(JSON.stringify(resultado)).not.toMatch(/sal|hash|parametros/);
-  });
-});
-
-describe("alterarNomeDeUsuario (FR-259..FR-265)", () => {
-  it("altera o nome, descarta espaços ao redor e libera o anterior", async () => {
-    const resultado = await identidade.alterarNomeDeUsuario(ana.id, {
-      senhaAtual: ana.senha,
-      novoNomeDeUsuario: "  ana.nova  ",
-    });
-
-    expect(resultado).toEqual({ ok: true, nomeDeUsuario: "ana.nova" });
-
-    expect(
-      await identidade.autenticar({
-        nomeDeUsuario: "ana.nova",
-        senha: ana.senha,
-      }),
-    ).toMatchObject({ ok: true });
-    expect(
-      await identidade.autenticar({
-        nomeDeUsuario: "ana.silva",
-        senha: ana.senha,
-      }),
-    ).toMatchObject({ ok: false, erro: "credencial_invalida" });
-
-    /** O nome liberado já pode ser cadastrado por outra pessoa. */
-    expect(
-      await identidade.cadastrar({
-        nomeDeUsuario: "ana.silva",
-        senha: senhaGerada(),
-      }),
-    ).toMatchObject({ ok: true });
-  });
-
-  it.each([
-    ["curto demais", "ab"],
-    ["longo demais", "a".repeat(51)],
-    ["com caractere inválido", "ana silva"],
-    ["com acento", "aná"],
-  ])("recusa nome %s como dados_invalidos no campo do nome", async (_, nome) => {
-    const resultado = await identidade.alterarNomeDeUsuario(ana.id, {
-      senhaAtual: ana.senha,
-      novoNomeDeUsuario: nome,
-    });
-
-    expect(resultado).toMatchObject({
-      ok: false,
-      erro: "dados_invalidos",
-      campo: "nomeDeUsuario",
-    });
-  });
-
-  it("aceita os limites de 3 e 50 caracteres", async () => {
-    expect(
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: ana.senha,
-        novoNomeDeUsuario: "abc",
-      }),
-    ).toEqual({ ok: true, nomeDeUsuario: "abc" });
-    expect(
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: ana.senha,
-        novoNomeDeUsuario: "a".repeat(50),
-      }),
-    ).toEqual({ ok: true, nomeDeUsuario: "a".repeat(50) });
-  });
-
-  it("recusa o nome igual ao atual como mesmo_nome (FR-261)", async () => {
-    expect(
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: ana.senha,
-        novoNomeDeUsuario: " ana.silva ",
-      }),
-    ).toMatchObject({ ok: false, erro: "mesmo_nome" });
-  });
-
-  it("recusa nome de outro Usuário, mesmo diferindo só em maiúsculas (FR-262, SC-112)", async () => {
-    expect(
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: ana.senha,
-        novoNomeDeUsuario: "BRUNO.souza",
-      }),
-    ).toMatchObject({ ok: false, erro: "nome_indisponivel" });
-
-    expect(
-      await identidade.autenticar({
-        nomeDeUsuario: "ana.silva",
-        senha: ana.senha,
-      }),
-    ).toMatchObject({ ok: true });
-  });
-
-  it("recusa a Senha atual incorreta sem alterar nada (FR-279)", async () => {
-    expect(
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: senhaGerada(),
-        novoNomeDeUsuario: "ana.nova",
-      }),
-    ).toMatchObject({ ok: false, erro: "senha_atual_incorreta" });
-
-    expect(
-      await identidade.autenticar({
-        nomeDeUsuario: "ana.silva",
-        senha: ana.senha,
-      }),
-    ).toMatchObject({ ok: true });
   });
 });
 
@@ -331,15 +227,11 @@ describe("excluirConta (FR-272..FR-278)", () => {
 });
 
 describe("mensagem única de Senha atual incorreta (FR-279, SC-107)", () => {
-  it("é a mesma nas três ações e não revela Senha nem derivado", async () => {
+  it("é a mesma nas duas ações e não revela Senha nem derivado", async () => {
     const errada = senhaGerada();
     const nova = senhaGerada();
 
     const recusas = [
-      await identidade.alterarNomeDeUsuario(ana.id, {
-        senhaAtual: errada,
-        novoNomeDeUsuario: "ana.nova",
-      }),
       await identidade.trocarSenha(ana.id, {
         senhaAtual: errada,
         novaSenha: nova,

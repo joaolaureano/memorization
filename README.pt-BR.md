@@ -22,13 +22,13 @@ uma especificação em [`specs/`](specs/).
 |---|---|---|
 | Conta | Criar conta com nome e Senha, Entrar e Sair. Cada Usuário vê só o próprio acervo | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
 | Continuar conectado | Um Acesso temporário mantém a pessoa conectada enquanto usa o app e expira após um período sem atividade | [018](specs/018-acesso-temporario/) |
-| Gerenciar a conta | Renomear o Usuário, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/) |
+| Perfil | Consultar Nome de usuário, configurar o estudo, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
 | Cartões | Criar, listar, editar e excluir Cartões, com limites de tamanho | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Baralhos | Criar, renomear e excluir Baralhos, e vincular um Cartão a vários Baralhos | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Estudar um Baralho | Cartões em ordem aleatória, revelar o Verso, avaliar a resposta e ver um Resumo ao final | [004](specs/004-sessao-de-estudo/) |
 | Repetição espaçada | SM-2 com Avaliação em quatro níveis; a Revisão do dia reúne os Cartões vencidos e um número limitado de novos; o algoritmo e o limite diário são Preferências | [015](specs/015-repeticao-espacada/) |
 | Agenda de estudo | Rotinas semanais por Baralho (por exemplo, «Inglês toda segunda»), os Compromissos de hoje e um calendário da semana com o que foi feito | [016](specs/016-agendamento-de-estudo/) |
-| Início e Estudo | O Início mostra saudação, resumo de 7 dias, a Revisão do dia e a Agenda de hoje; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/) |
+| Início e Estudo | O Início mostra saudação, Revisão do dia e Agenda de hoje em uma coluna; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Estatísticas e histórico | Itens estudados, Sessões concluídas e Taxa de acerto nos últimos 7 dias, gráfico por dia e o Registro de cada Sessão, com acertos e erros | [013](specs/013-estatisticas-e-historico/) |
 | Interface | Interface navegável no celular e no desktop (360 a 1440 px, zoom de 200%), utilizável por teclado e leitor de tela | [012](specs/012-interface-visual-navegavel/) |
 
@@ -36,7 +36,7 @@ As demais specs cobrem a plataforma: Porta de persistência com SQLite e
 PostgreSQL ([009](specs/009-porta-de-persistencia/),
 [010](specs/010-postgresql-na-nuvem/)), hospedagem na AWS
 ([011](specs/011-hospedagem-aws/)) e integração e entrega contínuas
-([014](specs/014-ci-cd/)). [`CONTEXT.md`](CONTEXT.md) é o glossário do domínio.
+([014](specs/014-ci-cd/)).
 
 ## Como executar localmente
 
@@ -118,7 +118,7 @@ para todas as features.
 |---|---|
 | I. Spec-Driven Development (inegociável) | Nada é implementado antes de spec, clarify, plan, tasks e analyze aprovados. Onde código e spec divergem, vale a spec |
 | II. Auditabilidade append-only | As decisões ficam no `research.md` de cada feature, nos artefatos do Spec Kit e nas mensagens de commit, sem reescrever a história e sem segredos |
-| III. Domínio antes da tecnologia | `CONTEXT.md` é o glossário e governa a linguagem. O código usa os mesmos termos |
+| III. Domínio antes da tecnologia | A seção «Key Entities» de cada spec define os termos do domínio e governa a linguagem. O código usa os mesmos termos |
 | IV. Módulos profundos | Interfaces pequenas escondendo muita implementação. Um Seam só existe quando há ao menos dois Adapters reais |
 | V. A Interface é a superfície de teste | Os testes passam pela mesma Interface de quem a usa e verificam resultados observáveis, nunca estado interno |
 | VI. Verificação acima de afirmação | Nenhuma afirmação de worker é aceita sem o Arquiteto inspecionar o diff e rodar os testes |

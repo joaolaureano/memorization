@@ -76,6 +76,42 @@ describe("CampoDeSenha", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("alterna o texto entre Mostrar e Ocultar mantendo o mesmo elemento no DOM (FR-142, FR-329)", () => {
+    render(
+      <CampoDeSenha
+        id="senha"
+        rotulo="Senha"
+        valor="segredo"
+        aoMudar={() => {}}
+        autoComplete="current-password"
+      />,
+    );
+
+    const mostrar = screen.getByRole("button", { name: "Mostrar Senha" });
+
+    expect(mostrar).toHaveTextContent("Mostrar");
+
+    fireEvent.click(mostrar);
+
+    // É o mesmo nó do DOM que passa a Ocultar: a alternância só troca o rótulo
+    // visível, nada é remontado e o foco não se perde.
+    const ocultar = screen.getByRole("button", { name: "Ocultar Senha" });
+
+    expect(ocultar).toBe(mostrar);
+    expect(ocultar).toHaveTextContent("Ocultar");
+
+    fireEvent.click(ocultar);
+
+    // FR-329: a largura é fixada pelo CSS; nenhum estilo em linha a define.
+    const voltouAMostrar = screen.getByRole("button", {
+      name: "Mostrar Senha",
+    });
+
+    expect(voltouAMostrar).toBe(mostrar);
+    expect(voltouAMostrar).toHaveTextContent("Mostrar");
+    expect(voltouAMostrar).not.toHaveAttribute("style");
+  });
+
   it("mantém o nome acessível completo mesmo com o texto visível curto", () => {
     render(
       <CampoDeSenha

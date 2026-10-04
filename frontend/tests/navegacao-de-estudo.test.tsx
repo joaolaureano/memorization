@@ -363,7 +363,7 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
     );
   });
 
-  it("apresenta as Preferências em #/preferencias e marca Preferências como corrente (FR-212, §7)", async () => {
+  it("apresenta o Perfil em #/preferencias e marca Perfil como corrente (FR-212, §7)", async () => {
     const cliente = clienteDeProva();
 
     navegarPara("#/preferencias");
@@ -379,11 +379,11 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
     expect(
       await screen.findByRole("heading", {
         level: 1,
-        name: "Preferências",
+        name: "Perfil",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Preferências" }),
+      screen.getByRole("link", { name: "Perfil" }),
     ).toHaveAttribute("aria-current", "page");
   });
 

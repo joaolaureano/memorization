@@ -450,16 +450,7 @@ export interface DerivacaoGuardada {
   parametros: string;
 }
 
-/**
- * Códigos de falha tipada da alteração do Nome de usuário: `nome_em_uso` é a
- * unicidade sem distinção de caixa do esquema, reconhecida pelo Adapter; o
- * `Identidade` a traduz em `nome_indisponivel` (FR-262, SC-112).
- */
-export type DesfechoDeAlteracaoDeNome =
-  | { ok: true; valor: Usuario }
-  | { ok: false; erro: "nome_em_uso" | "nao_encontrado" | "indisponivel" };
-
-/** Desfecho das demais operações de conta sobre o Usuário. */
+/** Desfecho das operações de conta sobre o Usuário. */
 export type DesfechoDeOperacaoDeConta<T> =
   | { ok: true; valor: T }
   | { ok: false; erro: "nao_encontrado" | "indisponivel" };
@@ -500,16 +491,6 @@ export interface ArmazenamentoDeUsuarios {
    * gestão da conta usa para conferir a Senha atual de quem já Entrou (017).
    */
   obterUsuarioPorId(id: string): Promise<DesfechoDeLeituraDeUsuario>;
-
-  /**
-   * Grava o novo Nome de usuário, já normalizado e validado pelo Module. O
-   * Nome em uso por outro Usuário — sem distinguir maiúsculas de minúsculas — é
-   * `nome_em_uso` (FR-262). Devolve o Usuário com o novo nome.
-   */
-  atualizarNomeDeUsuario(
-    id: string,
-    nome: string,
-  ): Promise<DesfechoDeAlteracaoDeNome>;
 
   /**
    * Substitui `sal`, `hash` e `parametros` do Usuário pela nova derivação. A

@@ -5,7 +5,7 @@ import { Moldura } from "../src/ui/Moldura";
 import type { Rota } from "../src/ui/navegacao";
 
 /**
- * Moldura (FR-139, FR-168, FR-212).
+ * Moldura (FR-139, FR-168, FR-212, FR-335).
  *
  * A marca e os destinos do acervo apontam para as rotas canônicas, e o destino
  * corrente é decidido por `destinoAtivo` — por isso a prova percorre cada
@@ -13,8 +13,8 @@ import type { Rota } from "../src/ui/navegacao";
  * Sessão e as rotas da Agenda (rotinas, agendar, editar rotina e sessão da
  * agenda) marcam Estudo (FR-307, FR-323), assim como a Central de Estudo; as de
  * Cartões marcam Cartões, as de Baralho (inclusive a Sessão de estudo, que
- * pertence ao Baralho) marcam Baralhos, Preferências marca Preferências, e
- * Entrar e Criar conta não marcam nenhum destino.
+ * pertence ao Baralho) marcam Baralhos, Perfil marca Perfil, e Entrar e Criar
+ * conta não marcam nenhum destino.
  *
  * Sair é irmão do `<nav>`: em telas de até 600px só a navegação desce para a
  * barra inferior, e Sair precisa continuar no cabeçalho.
@@ -23,7 +23,7 @@ import type { Rota } from "../src/ui/navegacao";
 const CASOS: ReadonlyArray<{
   descricao: string;
   rota: Rota;
-  ativo: "Início" | "Estudo" | "Baralhos" | "Cartões" | "Preferências" | null;
+  ativo: "Início" | "Estudo" | "Baralhos" | "Cartões" | "Perfil" | null;
 }> = [
   { descricao: "Início", rota: { nome: "inicio" }, ativo: "Início" },
   {
@@ -46,7 +46,7 @@ const CASOS: ReadonlyArray<{
   { descricao: "Cartões", rota: { nome: "cartoes" }, ativo: "Cartões" },
   { descricao: "Novo Cartão", rota: { nome: "novo-cartao" }, ativo: "Cartões" },
   { descricao: "Editar Cartão", rota: { nome: "editar-cartao", id: "c1" }, ativo: "Cartões" },
-  { descricao: "Preferências", rota: { nome: "preferencias" }, ativo: "Preferências" },
+  { descricao: "Perfil", rota: { nome: "preferencias" }, ativo: "Perfil" },
   { descricao: "Entrar", rota: { nome: "entrar" }, ativo: null },
   { descricao: "Criar conta", rota: { nome: "cadastro" }, ativo: null },
 ];
@@ -77,18 +77,18 @@ describe("Moldura — marca e destinos", () => {
       "href",
       "#/cartoes",
     );
-    expect(screen.getByRole("link", { name: "Preferências" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Perfil" })).toHaveAttribute(
       "href",
       "#/preferencias",
     );
 
-    // FR-168, FR-212 e FR-307: a navegação lista Início, Estudo, Baralhos,
-    // Cartões e Preferências, nessa ordem.
+    // FR-168, FR-212, FR-307 e FR-335: a navegação lista Início, Estudo,
+    // Baralhos, Cartões e Perfil, nessa ordem.
     expect(
       within(screen.getByRole("navigation", { name: "Principal" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Preferências"]);
+    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Perfil"]);
   });
 });
 
@@ -101,7 +101,7 @@ describe("Moldura — destino corrente", () => {
       "Estudo",
       "Baralhos",
       "Cartões",
-      "Preferências",
+      "Perfil",
     ] as const) {
       const link = screen.getByRole("link", { name: nome });
 

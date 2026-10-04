@@ -377,7 +377,7 @@ describe("Aplicacao sem Credencial", () => {
 });
 
 describe("Aplicacao depois de Entrar", () => {
-  it("oferece Início, Estudo, Baralhos, Cartões, Preferências e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168, FR-212, FR-307)", async () => {
+  it("oferece Início, Estudo, Baralhos, Cartões, Perfil e Sair em toda tela alcançável, sem Criar conta na navegação (FR-094, FR-098, FR-168, FR-212, FR-307)", async () => {
     const servidor = clienteDeProva();
 
     await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
@@ -405,7 +405,7 @@ describe("Aplicacao depois de Entrar", () => {
       name: "Estudo",
     });
     const linkDePreferencias = within(navegacao).getByRole("link", {
-      name: "Preferências",
+      name: "Perfil",
     });
 
     expect(linkDeCartoes).toHaveAttribute("href", "#/cartoes");
@@ -417,12 +417,12 @@ describe("Aplicacao depois de Entrar", () => {
     expect(linkDeEstudo).not.toHaveAttribute("aria-current");
 
     // FR-139, FR-168, FR-212 e FR-307: a navegação lista Início, Estudo,
-    // Baralhos, Cartões e Preferências, nessa ordem.
+    // Baralhos, Cartões e Perfil, nessa ordem.
     expect(
       within(navegacao)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Preferências"]);
+    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Perfil"]);
 
     // FR-139: "Sair" vive na moldura, fora da navegação "Principal".
     expect(screen.getByRole("button", { name: "Sair" })).toBeEnabled();
@@ -503,7 +503,6 @@ describe("Aplicacao depois de Entrar", () => {
     expect(conclusao).toHaveAttribute("aria-live", "polite");
     expect(conclusao).toHaveAttribute("aria-atomic", "true");
     expect(conclusao).toHaveTextContent(/você saiu/i);
-    expect(conclusao).toHaveTextContent(/credencial/i);
 
     expect(screen.queryByRole("navigation")).toBeNull();
     expect(screen.queryByRole("button", { name: "Sair" })).toBeNull();

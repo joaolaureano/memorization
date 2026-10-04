@@ -125,6 +125,12 @@ describe("PaginaDeEntrada — campos, acesso e Credencial", () => {
     const campoDoNome = screen.getByLabelText("Nome de usuário");
     const campoDaSenha = screen.getByLabelText("Senha");
 
+    // FR-327: a saudação da tela é «Bem-vindo», sem "de volta".
+    const sobretitulo = screen.getByText("Bem-vindo");
+
+    expect(sobretitulo).toHaveClass("sobretitulo");
+    expect(screen.queryByText("Bem-vindo de volta")).toBeNull();
+
     expect(campoDoNome).toHaveAttribute("autocomplete", "username");
     // O campo de Senha é um campo de Senha para o navegador e para o leitor de
     // tela, e nunca é preenchido automaticamente com a Senha do Cadastro.
@@ -575,17 +581,32 @@ describe("PaginaDeEntrada — Continuar conectado neste navegador (018)", () => 
     return { aoEntrar, cliente };
   }
 
-  it("a opção vem marcada por padrão, com nome acessível e explicação (FR-292, FR-302)", () => {
+  it("a opção vem marcada por padrão, com nome acessível e sem explicação associada (FR-292, FR-302, FR-328)", () => {
     renderizarEntrada();
 
     const caixa = screen.getByLabelText("Continuar conectado neste navegador");
 
     expect(caixa).toBeChecked();
     expect(caixa).toHaveAttribute("type", "checkbox");
-    expect(caixa).toHaveAccessibleDescription(/volta direto ao Início/);
+    expect(caixa).not.toHaveAttribute("aria-describedby");
+    expect(caixa).not.toHaveAccessibleDescription(/./);
   });
 
-  it("alterna por clique e a explicação acompanha o estado, sem depender de cor (FR-292, FR-303)", () => {
+  it("não carrega parágrafo de ajuda nem descrição acessível (FR-328)", () => {
+    renderizarEntrada();
+
+    const caixa = screen.getByLabelText("Continuar conectado neste navegador");
+
+    // FR-328: a opção se basta; o parágrafo de ajuda foi removido junto com o
+    // `aria-describedby` que o apontava.
+    expect(caixa).not.toHaveAttribute("aria-describedby");
+    expect(caixa).not.toHaveAccessibleDescription(/./);
+    expect(document.getElementById("ajuda-continuar-conectado")).toBeNull();
+    expect(screen.queryByText(/volta direto ao Início/)).toBeNull();
+    expect(screen.queryByText(/será preciso Entrar de novo/)).toBeNull();
+  });
+
+  it("alterna por clique e prescinde de cor, sem explicação que acompanhe o estado (FR-292, FR-303, FR-328)", () => {
     renderizarEntrada();
 
     const caixa = screen.getByLabelText("Continuar conectado neste navegador");
@@ -593,7 +614,7 @@ describe("PaginaDeEntrada — Continuar conectado neste navegador (018)", () => 
     fireEvent.click(caixa);
 
     expect(caixa).not.toBeChecked();
-    expect(caixa).toHaveAccessibleDescription(/será preciso Entrar de novo/);
+    expect(caixa).not.toHaveAccessibleDescription(/./);
 
     fireEvent.click(caixa);
 

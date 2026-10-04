@@ -14,7 +14,6 @@ import type {
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
-  DesfechoDeAlteracaoDeNome,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -116,9 +115,6 @@ const NOME_DE_USUARIO_EXISTENTE = {
   ok: false,
   erro: "nome_de_usuario_existente",
 } as const;
-
-/** Desfecho do Nome de usuário em uso por outro Usuário, na alteração. */
-const NOME_EM_USO = { ok: false, erro: "nome_em_uso" } as const;
 
 /** Desfecho de falha do armazenamento na Porta de Usuários. */
 const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
@@ -441,10 +437,6 @@ const OBTER_USUARIO_POR_ID = `
 SELECT id, nome_de_usuario, sal, hash, parametros
   FROM usuario
  WHERE id = $1;
-`;
-
-const ATUALIZAR_NOME_DO_USUARIO = `
-UPDATE usuario SET nome_de_usuario = $1 WHERE id = $2;
 `;
 
 const ATUALIZAR_SENHA_DO_USUARIO = `
@@ -2238,41 +2230,6 @@ export async function abrirArmazenamentoPostgresql(
     async obterUsuarioPorId(id) {
       return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
         async () => {
-          const { rows } = await piscina.query<LinhaDeUsuario>(
-            OBTER_USUARIO_POR_ID,
-            [id],
-          );
-
-          return rows[0] === undefined
-            ? USUARIO_NAO_ENCONTRADO
-            : { ok: true, valor: usuarioDaLinha(rows[0]) };
-        },
-        USUARIO_INDISPONIVEL,
-      );
-    },
-
-    async atualizarNomeDeUsuario(id, nome) {
-      return comDesfechoDeUsuario<DesfechoDeAlteracaoDeNome>(
-        async () => {
-          try {
-            const resultado = await piscina.query(ATUALIZAR_NOME_DO_USUARIO, [
-              nome,
-              id,
-            ]);
-
-            if (resultado.rowCount === 0) {
-              return USUARIO_NAO_ENCONTRADO;
-            }
-          } catch (erro) {
-            if (
-              ehViolacao(erro, VIOLACAO_DE_UNICIDADE, INDICE_DE_NOME_DE_USUARIO)
-            ) {
-              return NOME_EM_USO;
-            }
-
-            throw erro;
-          }
-
           const { rows } = await piscina.query<LinhaDeUsuario>(
             OBTER_USUARIO_POR_ID,
             [id],

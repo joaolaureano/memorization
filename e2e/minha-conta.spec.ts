@@ -81,7 +81,7 @@ async function subirAmbiente(prefixo: string): Promise<Ambiente> {
   }
 }
 
-/** Abre uma página nova em contexto próprio, já em Preferências e logada. */
+/** Abre uma página nova em contexto próprio, já no Perfil e logada. */
 async function abrirPreferencias(
   browser: Browser,
   ambiente: Ambiente,
@@ -94,7 +94,7 @@ async function abrirPreferencias(
   await entrarPelaUi(pagina, credencial);
   await pagina
     .getByRole("navigation", { name: "Principal" })
-    .getByRole("link", { name: "Preferências" })
+    .getByRole("link", { name: "Perfil" })
     .click();
   await expect(
     pagina.getByRole("heading", { level: 2, name: "Minha conta" }),
@@ -115,65 +115,29 @@ async function statusDaConta(
   return resposta.status;
 }
 
-test("renomear mantém a pessoa na tela, recusa a Credencial antiga no segundo contexto e libera o nome (SC-106, SC-112, FR-263, FR-264)", async ({ browser }) => {
+test("o Nome de usuário é somente leitura e a rota de renomear não existe (FR-335, FR-336)", async ({ browser }) => {
   const ambiente = await subirAmbiente("conta-nome-");
 
   try {
     const ana = await criarUsuarioDeProva(ambiente.enderecoDaApi, "ana.silva");
+    const pagina = await abrirPreferencias(browser, ambiente, ana);
 
-    const primeira = await abrirPreferencias(browser, ambiente, ana);
-    const segunda = await abrirPreferencias(browser, ambiente, ana);
-
-    await primeira
-      .getByRole("button", { name: "Alterar Nome de usuário" })
-      .click();
-    await primeira.getByLabel("Novo Nome de usuário").fill("ana.nova");
-    await primeira.getByLabel("Senha atual", { exact: true }).fill(ana.senha);
-    await primeira
-      .getByRole("button", { name: "Alterar Nome de usuário" })
-      .click();
-
-    // Sem nova Entrada: a pessoa segue em Preferências, com o nome novo.
-    await expect(primeira.getByText("Nome de usuário alterado.")).toBeVisible();
-    await expect(primeira.getByText("ana.nova", { exact: true })).toBeVisible();
+    await expect(pagina.getByText("ana.silva", { exact: true })).toBeVisible();
     await expect(
-      primeira.getByRole("heading", { level: 1, name: "Preferências" }),
-    ).toBeVisible();
+      pagina.getByRole("button", { name: "Alterar Nome de usuário" }),
+    ).toHaveCount(0);
 
-    // A sessão aberta segue operando com a Credencial substituída.
-    await primeira
-      .getByRole("navigation", { name: "Principal" })
-      .getByRole("link", { name: "Cartões" })
-      .click();
-    await expect(
-      primeira.getByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeVisible();
+    const resposta = await fetch(`${ambiente.enderecoDaApi}/conta/nome-de-usuario`, {
+      method: "PUT",
+      headers: {
+        ...cabecalhoDeCredencial(ana),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ senhaAtual: ana.senha, novoNomeDeUsuario: "ana.nova" }),
+    });
 
-    // A Credencial antiga é recusada na próxima operação do segundo contexto.
-    await segunda
-      .getByRole("navigation", { name: "Principal" })
-      .getByRole("link", { name: "Cartões" })
-      .click();
-    await expect(
-      segunda.getByRole("heading", { level: 1, name: "Entrar" }),
-    ).toBeVisible();
-    await expect(segunda.getByRole("alert", { name: "Credencial recusada" })).toBeVisible();
-
-    expect(await statusDaConta(ambiente.enderecoDaApi, ana)).toBe(401);
-    expect(
-      await statusDaConta(ambiente.enderecoDaApi, {
-        nomeDeUsuario: "ana.nova",
-        senha: ana.senha,
-      }),
-    ).toBe(200);
-
-    // O nome antigo ficou livre para outro Cadastro.
-    const outra = await criarUsuarioDeProva(
-      ambiente.enderecoDaApi,
-      "ana.silva",
-    );
-
-    expect(await statusDaConta(ambiente.enderecoDaApi, outra)).toBe(200);
+    expect(resposta.status).toBe(404);
+    expect(await statusDaConta(ambiente.enderecoDaApi, ana)).toBe(200);
   } finally {
     await ambiente.encerrar();
   }
@@ -199,7 +163,7 @@ test("trocar a Senha mantém a pessoa na tela e o segundo contexto volta a Entra
 
     await expect(primeira.getByText("Senha trocada.")).toBeVisible();
     await expect(
-      primeira.getByRole("heading", { level: 1, name: "Preferências" }),
+      primeira.getByRole("heading", { level: 1, name: "Perfil" }),
     ).toBeVisible();
 
     await segunda
@@ -311,39 +275,34 @@ test("percorre «Minha conta» só por teclado, com foco visível e sem rolagem 
 
     const pagina = await abrirPreferencias(browser, ambiente, ana);
 
-    // Teclado: do botão «Alterar Nome de usuário» ao envio, sem mouse.
-    const alterar = pagina.getByRole("button", {
-      name: "Alterar Nome de usuário",
-    });
+    // Teclado: do botão «Trocar Senha» ao envio, sem mouse.
+    const trocar = pagina.getByRole("button", { name: "Trocar Senha" });
+    const novaSenha = gerarSenhaDeProva();
 
-    await alterar.focus();
+    await trocar.focus();
     await pagina.keyboard.press("Enter");
 
-    const campoDoNome = pagina.getByLabel("Novo Nome de usuário");
-
-    await campoDoNome.focus();
-    await pagina.keyboard.type("ana.teclado");
-    await pagina.keyboard.press("Tab");
+    await pagina.getByLabel("Senha atual", { exact: true }).focus();
     await pagina.keyboard.type(ana.senha);
+    await pagina.getByLabel("Nova Senha", { exact: true }).focus();
+    await pagina.keyboard.type(novaSenha);
+    await pagina.getByLabel("Confirmação da Senha", { exact: true }).focus();
+    await pagina.keyboard.type(novaSenha);
     await pagina.keyboard.press("Enter");
 
-    await expect(pagina.getByText("Nome de usuário alterado.")).toBeVisible();
+    await expect(pagina.getByText("Senha trocada.")).toBeVisible();
     // O foco volta ao botão que abriu a ação (FR-285).
-    await expect(
-      pagina.getByRole("button", { name: "Alterar Nome de usuário" }),
-    ).toBeFocused();
+    await expect(trocar).toBeFocused();
 
     // O foco é identificável sem depender de cor: há contorno visível.
-    const contorno = await pagina
-      .getByRole("button", { name: "Alterar Nome de usuário" })
-      .evaluate((elemento) => {
-        const estilo = getComputedStyle(elemento);
+    const contorno = await trocar.evaluate((elemento) => {
+      const estilo = getComputedStyle(elemento);
 
-        return {
-          estilo: estilo.outlineStyle,
-          largura: Number.parseFloat(estilo.outlineWidth),
-        };
-      });
+      return {
+        estilo: estilo.outlineStyle,
+        largura: Number.parseFloat(estilo.outlineWidth),
+      };
+    });
 
     expect(contorno.estilo).not.toBe("none");
     expect(contorno.largura).toBeGreaterThan(0);

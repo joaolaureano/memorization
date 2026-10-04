@@ -51,9 +51,23 @@ function criarClienteFalso(): ClienteFalso {
     }),
   );
 
+  const obterConta = vi.fn(async () => ({
+    ok: true as const,
+    dados: {
+      nomeDeUsuario: "ana.silva",
+      contagens: {
+        cartoes: 0,
+        baralhos: 0,
+        registrosDeSessao: 0,
+        agenda: null,
+      },
+    },
+  }));
+
   const cliente = {
     obterPreferencias,
     salvarPreferencias,
+    obterConta,
   } as unknown as ClienteDoAcervo;
 
   return { cliente, obterPreferencias, salvarPreferencias };
@@ -76,18 +90,24 @@ afterEach(() => {
 });
 
 describe("PaginaDePreferencias", () => {
-  it("carrega as Preferências existentes e mostra os padrões (FR-212, FR-200)", async () => {
+  it("mostra o Perfil e carrega a Configuração existente (FR-335, FR-212, FR-200)", async () => {
     const { cliente, obterPreferencias } = criarClienteFalso();
 
     renderizar(cliente);
 
-    expect(screen.getByText("Carregando Preferências…")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Perfil" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Carregando Perfil…")).toBeInTheDocument();
 
     const algoritmo = await screen.findByLabelText(
       "Algoritmo de repetição espaçada",
     );
     expect(algoritmo).toHaveValue("sm2");
     expect(screen.getByRole("option", { name: "SM-2" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Configuração" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Cartões novos por dia")).toHaveValue(20);
     expect(obterPreferencias).toHaveBeenCalledTimes(1);
   });
@@ -156,7 +176,7 @@ describe("PaginaDePreferencias", () => {
     expect(salvarPreferencias).not.toHaveBeenCalled();
   });
 
-  it("salva as Preferências e confirma o sucesso (FR-212)", async () => {
+  it("salva a Configuração e confirma o sucesso (FR-212, FR-335)", async () => {
     const { cliente, salvarPreferencias } = criarClienteFalso();
 
     renderizar(cliente);
@@ -165,7 +185,7 @@ describe("PaginaDePreferencias", () => {
     fireEvent.change(campo, { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
-    expect(await screen.findByText("Preferências salvas.")).toBeInTheDocument();
+    expect(await screen.findByText("Configuração salva.")).toBeInTheDocument();
     expect(salvarPreferencias).toHaveBeenCalledWith({
       algoritmo: "sm2",
       limiteDeNovosPorDia: 5,
@@ -193,7 +213,7 @@ describe("PaginaDePreferencias", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
-    expect(await screen.findByText("Preferências salvas.")).toBeInTheDocument();
+    expect(await screen.findByText("Configuração salva.")).toBeInTheDocument();
   });
 
   it("pede confirmação ao sair com alterações não salvas (FR-148)", async () => {
@@ -210,5 +230,33 @@ describe("PaginaDePreferencias", () => {
     expect(
       await screen.findByText("Descartar as alterações?"),
     ).toBeInTheDocument();
+  });
+
+  it("renderiza o Perfil com dois cartões irmãos, Configuração e Minha conta (FR-335)", async () => {
+    const { cliente } = criarClienteFalso();
+
+    render(
+      <ProvedorDeProtecaoDeSaida temCredencial>
+        <PaginaDePreferencias
+          cliente={cliente}
+          aoSubstituirCredencial={vi.fn()}
+          aoExcluirConta={vi.fn()}
+          aoIrParaEntrar={vi.fn()}
+        />
+      </ProvedorDeProtecaoDeSaida>,
+    );
+
+    await screen.findByLabelText("Cartões novos por dia");
+    await screen.findByText("ana.silva");
+
+    const raiz = document.querySelector(".pagina.perfil");
+
+    expect(raiz).not.toBeNull();
+
+    const cartoes = Array.from(raiz?.children ?? []).filter((filho) =>
+      filho.classList.contains("cartao"),
+    );
+
+    expect(cartoes).toHaveLength(2);
   });
 });

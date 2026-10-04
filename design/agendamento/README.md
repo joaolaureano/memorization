@@ -61,7 +61,7 @@ visual desta primeira rodada concentra-se no calendário e na criação.
 
 “Agenda” é o rótulo visual de Agenda de estudo. Agendar estudo cria uma
 Rotina de estudo semanal por Baralho, que origina Compromissos de estudo por
-data. “Agendamento do cartão” mantém o significado de `CONTEXT.md`: a próxima
+data. “Agendamento do cartão” mantém o significado da spec 015: a próxima
 revisão calculada pela repetição espaçada.
 
 ## Continuação pelo Spec Kit

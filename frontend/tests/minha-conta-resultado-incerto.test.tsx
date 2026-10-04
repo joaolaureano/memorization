@@ -17,7 +17,7 @@ import { ProvedorDeProtecaoDeSaida } from "../src/ui/protecao-de-saida";
  */
 
 const ANA: Credencial = { nomeDeUsuario: "ana.silva", senha: "senha-da-ana-1" };
-const MUTACOES = ["alterarNomeDeUsuario", "trocarSenha", "excluirConta"];
+const MUTACOES = ["trocarSenha", "excluirConta"];
 
 let base: ClienteEmMemoria;
 let aoSubstituirCredencial: Mock<(nova: Credencial) => void>;
@@ -105,15 +105,6 @@ async function abrir(acao: string): Promise<void> {
   fireEvent.click(await screen.findByRole("button", { name: acao }));
 }
 
-async function enviarNome(): Promise<void> {
-  await abrir("Alterar Nome de usuário");
-  digitar("Novo Nome de usuário", "ana.nova");
-  digitar("Senha atual", ANA.senha);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Alterar Nome de usuário" }),
-  );
-}
-
 async function enviarSenha(): Promise<void> {
   await abrir("Trocar Senha");
   digitar("Senha atual", ANA.senha);
@@ -136,19 +127,6 @@ async function enviarExclusao(): Promise<HTMLElement> {
 }
 
 describe("resposta perdida com a ação aplicada (FR-281)", () => {
-  it("renomear: confirma pela Credencial nova e conclui como aplicada", async () => {
-    renderizar(comRespostaPerdida({ aplicar: true }));
-    await enviarNome();
-
-    await waitFor(() =>
-      expect(aoSubstituirCredencial).toHaveBeenCalledWith({
-        nomeDeUsuario: "ana.nova",
-        senha: ANA.senha,
-      }),
-    );
-    expect(screen.queryByText(/Nada foi alterado/)).not.toBeInTheDocument();
-  });
-
   it("trocar a Senha: confirma pela Credencial nova", async () => {
     renderizar(comRespostaPerdida({ aplicar: true }));
     await enviarSenha();
@@ -170,14 +148,14 @@ describe("resposta perdida com a ação aplicada (FR-281)", () => {
 });
 
 describe("resposta perdida com a ação não aplicada (FR-281, FR-283)", () => {
-  it("renomear: a Credencial antiga vale, a tela informa que nada mudou e mantém o digitado", async () => {
+  it("trocar a Senha: a Credencial antiga vale, a tela informa que nada mudou e mantém o digitado", async () => {
     renderizar(comRespostaPerdida({ aplicar: false }));
-    await enviarNome();
+    await enviarSenha();
 
     expect(await screen.findByText(/Nada foi alterado/)).toBeInTheDocument();
     expect(aoSubstituirCredencial).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Novo Nome de usuário", { selector: "input" })).toHaveValue(
-      "ana.nova",
+    expect(screen.getByLabelText("Nova Senha", { selector: "input" })).toHaveValue(
+      "outra-senha-9",
     );
     expect(await base.obterConta()).toMatchObject({
       ok: true,
@@ -205,7 +183,7 @@ describe("resultado desconhecido (FR-282)", () => {
     renderizar(
       comRespostaPerdida({ aplicar: true, entrarFalha: () => true }),
     );
-    await enviarNome();
+    await enviarSenha();
 
     const alerta = await screen.findByRole("alert", {
       name: "Resultado desconhecido",
@@ -226,21 +204,21 @@ describe("resultado desconhecido (FR-282)", () => {
     renderizar(
       comRespostaPerdida({ aplicar: true, entrarFalha: () => falhando }),
     );
-    await enviarNome();
+    await enviarSenha();
 
     await screen.findByRole("alert", { name: "Resultado desconhecido" });
-    expect(chamadasDeMutacao).toEqual(["alterarNomeDeUsuario"]);
+    expect(chamadasDeMutacao).toEqual(["trocarSenha"]);
 
     falhando = false;
     fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
 
     await waitFor(() =>
       expect(aoSubstituirCredencial).toHaveBeenCalledWith({
-        nomeDeUsuario: "ana.nova",
-        senha: ANA.senha,
+        nomeDeUsuario: "ana.silva",
+        senha: "outra-senha-9",
       }),
     );
-    expect(chamadasDeMutacao).toEqual(["alterarNomeDeUsuario"]);
+    expect(chamadasDeMutacao).toEqual(["trocarSenha"]);
   });
 
   it("excluir com resultado desconhecido oferece as mesmas duas saídas", async () => {
@@ -266,15 +244,17 @@ describe("duas páginas em paralelo (FR-284)", () => {
   it("a primeira alteração confirmada vence e a outra é recusada na próxima operação", async () => {
     const outraPagina = base.comoUsuario(ANA);
 
-    await base.alterarNomeDeUsuario({
+    await base.trocarSenha({
       senhaAtual: ANA.senha,
-      novoNomeDeUsuario: "ana.primeira",
+      novaSenha: "outra-senha-1",
+      confirmacaoDaSenha: "outra-senha-1",
     });
 
     expect(
-      await outraPagina.alterarNomeDeUsuario({
+      await outraPagina.trocarSenha({
         senhaAtual: ANA.senha,
-        novoNomeDeUsuario: "ana.segunda",
+        novaSenha: "outra-senha-2",
+        confirmacaoDaSenha: "outra-senha-2",
       }),
     ).toMatchObject({ ok: false, erro: "nao_autenticado" });
   });

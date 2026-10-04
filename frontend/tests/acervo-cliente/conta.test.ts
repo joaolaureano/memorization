@@ -116,68 +116,6 @@ describe("ClienteHttp — obterConta", () => {
   });
 });
 
-describe("ClienteHttp — alterarNomeDeUsuario", () => {
-  const dados = { senhaAtual: "x", novoNomeDeUsuario: "ana.nova" };
-
-  it("200 devolve o nome gravado e envia o corpo do contrato", async () => {
-    const { cliente, chamadas } = clienteHttpQueResponde(200, {
-      nomeDeUsuario: "ana.nova",
-    });
-
-    expect(await cliente.alterarNomeDeUsuario(dados)).toEqual({
-      ok: true,
-      nomeDeUsuario: "ana.nova",
-    });
-    expect(chamadas[0]?.url).toBe("http://127.0.0.1:3001/conta/nome-de-usuario");
-    expect(chamadas[0]?.init?.method).toBe("PUT");
-    expect(JSON.parse(String(chamadas[0]?.init?.body))).toEqual(dados);
-  });
-
-  it.each([
-    [400, "dados_invalidos", "nomeDeUsuario"],
-    [400, "mesmo_nome", undefined],
-    [403, "senha_atual_incorreta", undefined],
-    [409, "nome_indisponivel", undefined],
-  ])("%s %s é recusa de domínio", async (status, erro, campo) => {
-    const { cliente } = clienteHttpQueResponde(status, {
-      erro,
-      mensagem: "texto",
-      ...(campo === undefined ? {} : { campo }),
-    });
-
-    expect(await cliente.alterarNomeDeUsuario(dados)).toEqual({
-      ok: false,
-      erro,
-      mensagem: "texto",
-      ...(campo === undefined ? {} : { campo }),
-    });
-  });
-
-  it("401 é nao_autenticado, distinto do 403", async () => {
-    const { cliente } = clienteHttpQueResponde(401, {
-      erro: "credencial_invalida",
-      mensagem: "x",
-    });
-
-    expect(await cliente.alterarNomeDeUsuario(dados)).toMatchObject({
-      ok: false,
-      erro: NAO_AUTENTICADO,
-    });
-  });
-
-  it("código fora do contrato para o status é indisponivel", async () => {
-    const { cliente } = clienteHttpQueResponde(403, {
-      erro: "nome_indisponivel",
-      mensagem: "x",
-    });
-
-    expect(await cliente.alterarNomeDeUsuario(dados)).toMatchObject({
-      ok: false,
-      erro: INDISPONIVEL,
-    });
-  });
-});
-
 describe("ClienteHttp — trocarSenha e excluirConta", () => {
   const troca = { senhaAtual: "a", novaSenha: "b", confirmacaoDaSenha: "b" };
 
@@ -256,52 +194,11 @@ describe("ClienteEmMemoria — conta", () => {
     });
   });
 
-  it("alterarNomeDeUsuario aplica as regras e invalida a Credencial antiga", async () => {
-    const { ana, base } = criar();
+  it("não expõe alterarNomeDeUsuario: a operação foi removida (FR-336)", () => {
+    const { ana } = criar();
+    const cliente: ClienteDoAcervo = ana;
 
-    expect(
-      await ana.alterarNomeDeUsuario({
-        senhaAtual: "errada",
-        novoNomeDeUsuario: "ana.nova",
-      }),
-    ).toMatchObject({ ok: false, erro: "senha_atual_incorreta" });
-    expect(
-      await ana.alterarNomeDeUsuario({
-        senhaAtual: CREDENCIAL.senha,
-        novoNomeDeUsuario: "a",
-      }),
-    ).toMatchObject({ ok: false, erro: "dados_invalidos", campo: "nomeDeUsuario" });
-    expect(
-      await ana.alterarNomeDeUsuario({
-        senhaAtual: CREDENCIAL.senha,
-        novoNomeDeUsuario: "ana.silva",
-      }),
-    ).toMatchObject({ ok: false, erro: "mesmo_nome" });
-    expect(
-      await ana.alterarNomeDeUsuario({
-        senhaAtual: CREDENCIAL.senha,
-        novoNomeDeUsuario: "BRUNO.SOUZA",
-      }),
-    ).toMatchObject({ ok: false, erro: "nome_indisponivel" });
-
-    expect(
-      await ana.alterarNomeDeUsuario({
-        senhaAtual: CREDENCIAL.senha,
-        novoNomeDeUsuario: " ana.nova ",
-      }),
-    ).toEqual({ ok: true, nomeDeUsuario: "ana.nova" });
-
-    // A Credencial antiga deixa de valer; a nova passa a valer.
-    expect(await base.obterConta()).toMatchObject({
-      ok: false,
-      erro: NAO_AUTENTICADO,
-    });
-    expect(
-      await base.comoUsuario({
-        nomeDeUsuario: "ana.nova",
-        senha: CREDENCIAL.senha,
-      }).obterConta(),
-    ).toMatchObject({ ok: true });
+    expect("alterarNomeDeUsuario" in cliente).toBe(false);
   });
 
   it("trocarSenha valida, recusa a mesma Senha e troca", async () => {
@@ -351,6 +248,18 @@ describe("ClienteEmMemoria — conta", () => {
     expect(await base.obterConta()).toMatchObject({
       ok: false,
       erro: NAO_AUTENTICADO,
+    });
+
+    // O Nome de usuário não muda com a troca de Senha: entrar com o mesmo nome
+    // e a Senha nova funciona (FR-337).
+    expect(
+      await base.entrar({
+        nomeDeUsuario: CREDENCIAL.nomeDeUsuario,
+        senha: nova,
+      }),
+    ).toMatchObject({
+      ok: true,
+      usuario: { nomeDeUsuario: CREDENCIAL.nomeDeUsuario },
     });
   });
 
@@ -409,7 +318,6 @@ describe("ClienteEmMemoria — conta", () => {
 describe("guarda de Credencial — conta", () => {
   function clienteComResultado(resultado: unknown): ClienteDoAcervo {
     return {
-      alterarNomeDeUsuario: async () => resultado,
       trocarSenha: async () => resultado,
       excluirConta: async () => resultado,
       obterConta: async () => resultado,
@@ -427,10 +335,6 @@ describe("guarda de Credencial — conta", () => {
       recusar,
     );
 
-    await guardado.alterarNomeDeUsuario({
-      senhaAtual: "a",
-      novoNomeDeUsuario: "b",
-    });
     await guardado.trocarSenha({
       senhaAtual: "a",
       novaSenha: "b",

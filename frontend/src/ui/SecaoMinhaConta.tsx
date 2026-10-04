@@ -6,28 +6,28 @@ import type {
   DadosDaConta,
 } from "../acervo-cliente/cliente";
 import { DialogoDeExclusaoDeConta } from "./DialogoDeExclusaoDeConta";
-import { FormularioDeNomeDeUsuario } from "./FormularioDeNomeDeUsuario";
 import { FormularioDeTrocaDeSenha } from "./FormularioDeTrocaDeSenha";
 
 /**
- * Seção «Minha conta» (017; FR-257, FR-258), renderizada dentro das
- * Preferências — a navegação principal não ganha destino novo.
+ * Seção «Minha conta» (017; FR-257, FR-258), renderizada dentro do Perfil —
+ * a navegação principal não ganha destino novo.
  *
- * Mostra o Nome de usuário atual e as três ações: «Alterar Nome de usuário»,
- * «Trocar Senha» e «Excluir conta». **Nenhum campo exibe a Senha**, e nenhum
- * caminho oferece recuperá-la. Cada ação abre o seu formulário ou diálogo, um
- * de cada vez, e devolve o foco ao botão que a abriu ao fechar (FR-285).
+ * O Nome de usuário é somente leitura (FR-336): a tela o exibe, sem botão,
+ * campo ou formulário para alterá-lo. As ações restantes são «Trocar Senha» e
+ * «Excluir conta». **Nenhum campo exibe a Senha**, e nenhum caminho oferece
+ * recuperá-la. Cada ação abre o seu formulário ou diálogo, um de cada vez, e
+ * devolve o foco ao botão que a abriu ao fechar (FR-285).
  *
  * O servidor é a fonte do que aparece: o Nome de usuário e as contagens vêm de
  * `obterConta`, e a falha de carregamento oferece «Tentar novamente» sem
  * impedir o restante da tela de Preferências (FR-044, FR-045).
  */
 
-type Acao = "nome" | "senha" | "excluir";
+type Acao = "senha" | "excluir";
 
 interface PropriedadesDaSecaoMinhaConta {
   cliente: ClienteDoAcervo;
-  /** Substitui a Credencial em memória após renomear ou trocar a Senha (FR-263, FR-270). */
+  /** Substitui a Credencial em memória após trocar a Senha (FR-270). */
   aoSubstituirCredencial: (nova: Credencial) => void;
   /** Descarta a Credencial e vai a Entrar com «Conta excluída» (FR-276). */
   aoExcluirConta: () => void;
@@ -49,7 +49,6 @@ export function SecaoMinhaConta({
   const [acao, setAcao] = useState<Acao | null>(null);
   const [confirmacao, setConfirmacao] = useState<string | null>(null);
 
-  const botaoDoNome = useRef<HTMLButtonElement>(null);
   const botaoDaSenha = useRef<HTMLButtonElement>(null);
   const botaoDeExcluir = useRef<HTMLButtonElement>(null);
   const aberturaAnterior = useRef<Acao | null>(null);
@@ -82,7 +81,6 @@ export function SecaoMinhaConta({
   useEffect(() => {
     if (acao === null && aberturaAnterior.current !== null) {
       const botao = {
-        nome: botaoDoNome,
         senha: botaoDaSenha,
         excluir: botaoDeExcluir,
       }[aberturaAnterior.current];
@@ -139,17 +137,6 @@ export function SecaoMinhaConta({
           {acao === null && (
             <div className="acoes">
               <button
-                ref={botaoDoNome}
-                className="botao botao--secundario"
-                type="button"
-                onClick={() => {
-                  setConfirmacao(null);
-                  setAcao("nome");
-                }}
-              >
-                Alterar Nome de usuário
-              </button>
-              <button
                 ref={botaoDaSenha}
                 className="botao botao--secundario"
                 type="button"
@@ -172,21 +159,6 @@ export function SecaoMinhaConta({
                 Excluir conta
               </button>
             </div>
-          )}
-
-          {acao === "nome" && (
-            <FormularioDeNomeDeUsuario
-              cliente={cliente}
-              nomeAtual={dados.nomeDeUsuario}
-              aoConcluir={(nova) => {
-                setDados({ ...dados, nomeDeUsuario: nova.nomeDeUsuario });
-                setConfirmacao("Nome de usuário alterado.");
-                fechar();
-                aoSubstituirCredencial(nova);
-              }}
-              aoCancelar={fechar}
-              aoIrParaEntrar={aoIrParaEntrar}
-            />
           )}
 
           {acao === "senha" && (

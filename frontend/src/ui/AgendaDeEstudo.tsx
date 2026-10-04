@@ -31,9 +31,9 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
 /**
  * O bloco «Agenda de estudo» em duas apresentações (019):
  *
- * - `modo: "hoje"` — a Agenda compacta de Início (FR-311, FR-321, FR-322): a
- *   data, o resumo de hoje e, no máximo, os três primeiros estudos de hoje, com
- *   um único link para a Agenda semanal. Sem calendário e sem «Continuar
+ * - `modo: "hoje"` — a Agenda compacta de Início (FR-311, FR-321, FR-322): o
+ *   resumo de hoje e, no máximo, os três primeiros estudos de hoje, com um
+ *   único link para a Agenda semanal (FR-332). Sem calendário e sem «Continuar
  *   estudos».
  * - `modo: "semana"` — a Agenda semanal da área Estudo (FR-313): o calendário
  *   da semana, a navegação entre semanas e os estudos do dia selecionado.
@@ -53,7 +53,8 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * nas falhas (FR-318). Ao voltar à tela e ao atravessar a meia-noite a data é
  * reavaliada: sem uma escolha ativa, a Agenda volta à semana e ao dia de hoje;
  * com um dia ou uma semana escolhidos, relê a semana pedida preservando a
- * seleção (FR-319, FR-320). O fuso usado aparece em texto.
+ * seleção (FR-319, FR-320). O fuso do navegador segue nas leituras e nas
+ * chamadas ao servidor, mas não aparece na tela (FR-334).
  */
 
 /** O estado da leitura: dados anteriores permanecem enquanto atualiza ou falha. */
@@ -307,7 +308,6 @@ export function AgendaDeEstudo({
               <Semana
                 dados={dados}
                 selecionado={selecionado}
-                fuso={fuso}
                 atualizando={estado.carregando}
                 aoSelecionar={selecionarDia}
                 aoIrParaSemana={irParaSemana}
@@ -330,9 +330,10 @@ export function AgendaDeEstudo({
 }
 
 /**
- * A Agenda compacta de Início (FR-311, FR-321, FR-322): a data, o resumo de hoje
- * e, no máximo, os três primeiros estudos de hoje. Sem calendário e sem
- * «Continuar estudos» — a Agenda completa fica em Estudo, pelo rodapé.
+ * A Agenda compacta de Início (FR-311, FR-321, FR-322): o resumo de hoje e, no
+ * máximo, os três primeiros estudos de hoje. Não traz a data nem «Agendar
+ * estudo» (FR-332), nem o fuso em texto (FR-334) — essas ações ficam na Agenda
+ * completa, em Estudo, pelo rodapé. Sem calendário e sem «Continuar estudos».
  */
 function AgendaDeHoje({
   dados,
@@ -355,8 +356,6 @@ function AgendaDeHoje({
 
   return (
     <>
-      <p className="texto-secundario">{dataPorExtenso(dados.hoje)}</p>
-
       {resumo.total === 0 ? (
         <p>Nenhum estudo agendado para hoje</p>
       ) : resumo.concluidos === resumo.total ? (
@@ -405,14 +404,6 @@ function AgendaDeHoje({
         </ul>
       ) : null}
 
-      {resumo.total === 0 && dados.compromissos.length === 0 ? (
-        <a className="botao botao--secundario" href="#/agenda/nova">
-          Agendar estudo
-        </a>
-      ) : null}
-
-      <p className="texto-secundario">Fuso horário: {dados.fuso}</p>
-
       <a className="botao botao--secundario" href="#/estudo">
         {deHoje.length > 3 ? "Ver todos em Estudo" : "Ver agenda semanal"}
       </a>
@@ -424,7 +415,6 @@ function AgendaDeHoje({
 function Semana({
   dados,
   selecionado,
-  fuso,
   atualizando,
   aoSelecionar,
   aoIrParaSemana,
@@ -432,7 +422,6 @@ function Semana({
 }: {
   dados: SemanaDaAgenda;
   selecionado: string | null;
-  fuso: string;
   atualizando: boolean;
   aoSelecionar: (data: string) => void;
   aoIrParaSemana: (deslocamento: number) => void;
@@ -526,7 +515,6 @@ function Semana({
           );
         })}
       </ul>
-      <p className="texto-secundario agenda__fuso">Fuso horário: {fuso}</p>
     </div>
   );
 }
@@ -551,7 +539,9 @@ function abreviacaoDoDia(dia: number): string {
 /**
  * Os estudos do dia selecionado (FR-230, FR-231): só os Compromissos daquele
  * dia, na ordem de criação das Rotinas, cada um com Baralho, quantidade,
- * situação e a ação que se aplica.
+ * situação e a ação que se aplica. Um dia sem Compromissos mostra apenas
+ * «Nenhum estudo agendado para este dia.», sem a linha de situação e contagem
+ * (FR-333).
  */
 function EstudosDoDia({
   dados,
@@ -580,10 +570,6 @@ function EstudosDoDia({
         {dataPorExtenso(selecionado)}
         {selecionado === dados.hoje ? " (hoje)" : ""}
       </h3>
-      <p className="texto-secundario" aria-live="polite">
-        {rotuloDoEstadoDoDia(dia.estado)} · {textoDaContagem(dia)}
-      </p>
-
       {falhaDeInicio !== null ? (
         <p className="erro" role="alert">
           {falhaDeInicio}
@@ -591,9 +577,15 @@ function EstudosDoDia({
       ) : null}
 
       {dia.compromissos.length === 0 ? (
-        <p className="texto-secundario">Sem estudos neste dia.</p>
+        <p className="texto-secundario">
+          Nenhum estudo agendado para este dia.
+        </p>
       ) : (
-        <ul className="lista agenda__estudos">
+        <>
+          <p className="texto-secundario" aria-live="polite">
+            {rotuloDoEstadoDoDia(dia.estado)} · {textoDaContagem(dia)}
+          </p>
+          <ul className="lista agenda__estudos">
           {dia.compromissos.map((compromisso) => (
             <li
               key={`${compromisso.rotinaId}-${compromisso.data}`}
@@ -621,7 +613,8 @@ function EstudosDoDia({
               />
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
     </section>
   );

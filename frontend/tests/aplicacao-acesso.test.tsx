@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -298,7 +298,9 @@ describe("expiração durante o uso e renovação por atividade", () => {
     const servidor = clienteDeProva();
     const renovacoes = await abrirComAcesso(servidor);
 
-    await new Promise((resolver) => setTimeout(resolver, 50));
+    // Sem interação não há o que esperar: só deixa assentar o que já estava em
+    // curso na montagem, sem medir tempo.
+    await act(async () => {});
 
     expect(renovacoes.total).toBe(0);
   });
@@ -385,12 +387,15 @@ describe("expiração durante o uso e renovação por atividade", () => {
     Date.now = () => instante.atual;
 
     try {
-      await abrirComAcesso(servidor);
+      const renovacoes = await abrirComAcesso(servidor);
       servidor.simularIndisponibilidade();
 
       instante.atual += 61_000;
       fireEvent.click(document.body);
-      await new Promise((resolver) => setTimeout(resolver, 20));
+      // A renovação é pedida de forma síncrona; `act` deixa a falha dela
+      // assentar antes de conferir que o Acesso segue valendo.
+      await waitFor(() => expect(renovacoes.total).toBe(1));
+      await act(async () => {});
 
       expect(
         screen.getByRole("navigation", { name: "Principal" }),

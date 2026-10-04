@@ -14,7 +14,12 @@ import {
 import type { Protecao } from "./protecao-de-saida";
 
 /**
- * Tela de Preferências (T1520; specs/015-repeticao-espacada/tasks.md).
+ * Tela de Perfil (T1520; specs/015-repeticao-espacada/tasks.md; FR-335).
+ *
+ * A rota continua sendo `#/preferencias`; o que a tela mostra é o Perfil: a
+ * Configuração (o Algoritmo de repetição espaçada e o limite diário de Cartões
+ * novos) e, logo abaixo, «Minha conta». Os dois são cartões irmãos dentro de
+ * `.perfil`, separados pela CSS.
  *
  * O Usuário escolhe o Algoritmo de repetição espaçada e o limite diário de
  * Cartões novos, com salvar explícito (FR-212, FR-200). A tela carrega as
@@ -51,16 +56,16 @@ const LIMITE_MAXIMO_DE_NOVOS_POR_DIA = 999;
 const MENSAGEM_DE_LIMITE_INVALIDO =
   "Informe um número inteiro entre 0 e 999.";
 
-/** Confirmação de sucesso anunciada na região viva (FR-153, FR-212). */
-const MENSAGEM_DE_SUCESSO = "Preferências salvas.";
+/** Confirmação de sucesso anunciada na região viva (FR-153, FR-212, FR-335). */
+const MENSAGEM_DE_SUCESSO = "Configuração salva.";
 
 interface PropriedadesDePreferencias {
   cliente: ClienteDoAcervo;
   /**
    * A seção «Minha conta» (017, FR-257) vive nesta tela e só aparece quando a
-   * casca informa o que fazer com a Credencial: substituí-la depois de renomear
-   * ou trocar a Senha, descartá-la depois de excluir a conta e ir a Entrar
-   * quando um resultado é desconhecido.
+   * casca informa o que fazer com a Credencial: substituí-la depois de trocar a
+   * Senha, descartá-la depois de excluir a conta e ir a Entrar quando um
+   * resultado é desconhecido.
    */
   aoSubstituirCredencial?: (nova: Credencial) => void;
   aoExcluirConta?: () => void;
@@ -129,12 +134,16 @@ export function PaginaDePreferencias({
   // motivo anunciado); só depois de estabilizar a operação a proteção volta a
   // ser a de descarte das alterações não salvas.
   const protecao: Protecao | null = salvando
-    ? { tipo: "pendencia", motivo: "Aguarde: as Preferências estão sendo salvas." }
+    ? {
+        tipo: "pendencia",
+        motivo: "Aguarde: a Configuração está sendo salva.",
+      }
     : sujo
       ? {
           tipo: "descarte",
           titulo: "Descartar as alterações?",
-          descricao: "As Preferências não salvas serão perdidas.",
+          descricao:
+            "As alterações não salvas da Configuração serão perdidas.",
           rotuloDeConfirmacao: "Descartar",
         }
       : null;
@@ -189,17 +198,17 @@ export function PaginaDePreferencias({
   }
 
   return (
-    <div className="pagina">
-      <h1>Preferências</h1>
+    <div className="pagina perfil">
+      <h1>Perfil</h1>
 
       {carregando ? (
-        <p className="carregando">Carregando Preferências…</p>
+        <p className="carregando">Carregando Perfil…</p>
       ) : falhaDeCarregamento !== null ? (
         <section className="cartao">
           <p
             className="erro"
             role="alert"
-            aria-label="Falha ao carregar as Preferências"
+            aria-label="Falha ao carregar a Configuração"
           >
             {falhaDeCarregamento}
           </p>
@@ -214,7 +223,8 @@ export function PaginaDePreferencias({
           </div>
         </section>
       ) : preferencias !== null ? (
-        <section className="cartao">
+        <section className="cartao" aria-labelledby="titulo-configuracao">
+          <h2 id="titulo-configuracao">Configuração</h2>
           <form
             className="formulario"
             noValidate
@@ -268,7 +278,7 @@ export function PaginaDePreferencias({
               <p
                 className="erro"
                 role="alert"
-                aria-label="Falha ao salvar as Preferências"
+                aria-label="Falha ao salvar a Configuração"
               >
                 {falha}
               </p>

@@ -23,11 +23,9 @@ import type {
   DadosDaConta,
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
-  DadosDeNovoNomeDeUsuario,
   DadosDeTrocaDeSenha,
   RecusaDeConta,
   ResultadoDeAcaoDeConta,
-  ResultadoDeAlteracaoDeNomeDeUsuario,
   ResultadoDeObterAcesso,
   ResultadoDeObterConta,
   ResultadoDeRenovarAcesso,
@@ -1207,52 +1205,6 @@ export class ClienteHttp implements ClienteDoAcervo {
       }
 
       return this.falhaDeIndisponibilidadeDaConta();
-    } catch {
-      return this.falhaDeIndisponibilidadeDaConta();
-    }
-  }
-
-  /**
-   * Altera o Nome de usuário (FR-259..FR-265). `200` traz o nome gravado; as
-   * recusas do contrato são `400` (`dados_invalidos`, `mesmo_nome`), `403`
-   * (`senha_atual_incorreta`) e `409` (`nome_indisponivel`). O `401` é a
-   * Credencial recusada — outra coisa, e distinta do `403` (FR-279).
-   */
-  async alterarNomeDeUsuario(
-    dados: DadosDeNovoNomeDeUsuario,
-  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario> {
-    try {
-      const resposta = await this.pedir(`${this.endereco}/conta/nome-de-usuario`, {
-        method: "PUT",
-        headers: { "content-type": "application/json", ...this.cabecalho() },
-        body: JSON.stringify({
-          senhaAtual: dados.senhaAtual,
-          novoNomeDeUsuario: dados.novoNomeDeUsuario,
-        }),
-      });
-
-      if (resposta.status === 200) {
-        const corpo: unknown = await resposta.json();
-
-        if (
-          typeof corpo === "object" &&
-          corpo !== null &&
-          typeof (corpo as Record<string, unknown>).nomeDeUsuario === "string"
-        ) {
-          return {
-            ok: true,
-            nomeDeUsuario: (corpo as { nomeDeUsuario: string }).nomeDeUsuario,
-          };
-        }
-
-        return this.falhaDeIndisponibilidadeDaConta();
-      }
-
-      return await this.traduzirRecusaDeConta(resposta, {
-        400: ["dados_invalidos", "mesmo_nome"],
-        403: ["senha_atual_incorreta"],
-        409: ["nome_indisponivel"],
-      });
     } catch {
       return this.falhaDeIndisponibilidadeDaConta();
     }

@@ -9,37 +9,39 @@ import { MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO } from "../acervo-cliente/clie
 import { limitesDoDia } from "../revisao/dia";
 import { AgendaDeEstudo } from "./AgendaDeEstudo";
 import { EstadoDaCarga } from "./EstadoDaCarga";
-import {
-  ResumoDeSeteDias,
-  useEstatisticasDoEstudo,
-} from "./EstatisticasDoEstudo";
 
 /**
- * A tela de Início, agora compacta (FR-308..FR-311, FR-318, FR-320, FR-321).
+ * A tela de Início da feature 020: o dia de hoje, e só ele (FR-330, FR-331).
  *
- * O Início deixou de ser o painel do estudo inteiro e passou a ser o seu
- * resumo: o cumprimento com a data de hoje, a linha dos últimos sete dias, a
- * Revisão do dia e a Agenda de hoje. O gráfico da semana, o calendário e as
- * últimas Sessões foram para a área Estudo (`#/estudo`), onde cabem (FR-309,
- * FR-313).
+ * O Início deixou de ser o painel do estudo inteiro. Ele é, agora, o
+ * cumprimento, a Revisão do dia e a Agenda de hoje, numa coluna única — o que
+ * se faz hoje. O resumo dos últimos sete dias, o gráfico da semana, o
+ * calendário e as últimas Sessões foram para a área Estudo (`#/estudo`), onde
+ * cabem, e com eles saiu a leitura das Estatísticas: Início não lê Registros
+ * nem Estatísticas (FR-330).
  *
- * A linha dos sete dias vem do módulo `EstatisticasDoEstudo` — o mesmo que
- * serve a área Estudo —, para que as duas telas contem a mesma história a partir
- * da mesma leitura. Não há aqui nenhuma janela nem nenhum `agora`: o hook cuida
- * do ciclo de vida da leitura e devolve o resumo pronto (FR-308, FR-321).
+ * A única leitura do cabeçalho é `listarCartoes`, e ela não alimenta número
+ * nenhum: serve para saber se o acervo está vazio. Vazio — e só vazio —, o
+ * cabeçalho convida a criar o primeiro Cartão. A falha dessa leitura não é um
+ * acervo vazio: não convida e não anuncia nada, porque quem não conseguiu ler
+ * o acervo não sabe se há Cartões (FR-330).
  *
- * O que a tela acrescenta é a Revisão do dia (FR-310, FR-318): um resumo lido
- * por conta própria, com estado independente das Estatísticas. A falha de um não
- * esconde o outro, e cada bloco oferece o seu «Tentar novamente». A leitura se
- * refaz quando a aba volta a ficar visível e um segundo depois da meia-noite
- * local, sem que a pessoa precise recarregar a tela (FR-320).
+ * A Revisão do dia (FR-331) conta pelo total elegível — os vencidos mais os
+ * novos que ainda cabem no dia —, que é o número de Cartões que a Revisão
+ * efetivamente abre. Sem nada elegível, o resumo diz «Nada para revisar.» e o
+ * «Revisar» deixa de ser link: vira um botão desabilitado que se anuncia
+ * indisponível pela explicação associada por `aria-describedby`, e não só pela
+ * cor. O bloco não reparte o total entre vencidos e novos: quem quer esse
+ * detalhe está em `#/revisao`.
  *
- * O acervo vazio não ganha números: no lugar dos totais aparece o convite a
- * criar o primeiro Cartão (FR-321). A Agenda de hoje (016) fica logo depois da
- * Revisão, na ordem em que o estudo do dia acontece (FR-310, FR-311).
+ * O resumo da Revisão é lido por conta própria, com estado independente da
+ * Agenda. A falha de um não esconde o outro, e cada bloco oferece o seu
+ * «Tentar novamente». A leitura se refaz quando a aba volta a ficar visível e
+ * um segundo depois da meia-noite local, sem que a pessoa precise recarregar a
+ * tela (FR-320).
  */
 
-/** O estado da leitura do resumo da Revisão do dia (FR-310). */
+/** O estado da leitura do resumo da Revisão do dia (FR-331). */
 interface EstadoDaRevisao {
   /** O último resumo lido com sucesso, ou `null` antes da primeira leitura. */
   dados: ResumoDaRevisao | null;
@@ -59,16 +61,21 @@ export function PaginaDeInicio({
   /** Abre a Sessão de um Compromisso da Agenda (016, FR-231). */
   aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
 }) {
-  const { estado, tentarNovamente } = useEstatisticasDoEstudo(cliente);
   const [revisao, setRevisao] = useState<EstadoDaRevisao>({
     dados: null,
     carregando: true,
     falha: null,
   });
 
+  // `true` só depois de uma leitura do acervo que deu certo e não achou Cartão
+  // nenhum: nem a falha nem a leitura em curso convidam a criar o primeiro
+  // Cartão (FR-330).
+  const [acervoVazio, setAcervoVazio] = useState(false);
+
   // Cada leitura leva um número, e só a última pode mexer no estado: é o que
   // descarta a resposta de uma leitura antiga que chegue depois da mais nova.
   const leituraDaRevisao = useRef(0);
+  const leituraDoAcervo = useRef(0);
 
   // Depois da desmontagem não há mais estado para atualizar.
   const montado = useRef(true);
@@ -80,6 +87,40 @@ export function PaginaDeInicio({
       montado.current = false;
     };
   }, []);
+
+  const carregarAcervo = useCallback(async () => {
+    leituraDoAcervo.current += 1;
+    const numeroDestaLeitura = leituraDoAcervo.current;
+
+    let resultado: Awaited<ReturnType<ClienteDoAcervo["listarCartoes"]>>;
+
+    try {
+      resultado = await cliente.listarCartoes();
+    } catch {
+      // O cliente pode lançar em vez de devolver uma falha; para quem lê, o
+      // efeito é o mesmo — e nunca um convite enganoso.
+      if (numeroDestaLeitura !== leituraDoAcervo.current || !montado.current) {
+        return;
+      }
+
+      setAcervoVazio(false);
+
+      return;
+    }
+
+    if (numeroDestaLeitura !== leituraDoAcervo.current || !montado.current) {
+      return;
+    }
+
+    // A falha não é um acervo vazio: sem leitura de sucesso, o cabeçalho não
+    // convida a nada (FR-330).
+    setAcervoVazio(resultado.ok && resultado.cartoes.length === 0);
+  }, [cliente]);
+
+  // A leitura começa junto com a montagem.
+  useEffect(() => {
+    void carregarAcervo();
+  }, [carregarAcervo]);
 
   const carregarRevisao = useCallback(async () => {
     leituraDaRevisao.current += 1;
@@ -178,63 +219,24 @@ export function PaginaDeInicio({
     void carregarRevisao();
   }, [carregarRevisao]);
 
-  const estatisticas = estado.dados?.estatisticas ?? null;
-
   return (
     <div className="pagina">
-      <div className="cabecalho-da-pagina">
-        <p className="sobretitulo">Seu estudo</p>
+      {/* O cabeçalho é o cumprimento e, quando o acervo está vazio, o convite
+          a criar o primeiro Cartão — nada além disso (FR-330). */}
+      <div className="inicio__cabecalho">
         <h1>Olá, {nomeDeUsuario}</h1>
-        <p className="texto-secundario">{dataDeHoje()}</p>
 
-        {estado.dados === null && estado.carregando ? (
-          <p className="carregando" role="status">
-            Carregando o seu estudo…
+        {acervoVazio ? (
+          <p>
+            <a className="botao botao--primario" href="#/cartoes/novo">
+              Criar o primeiro Cartão
+            </a>
           </p>
-        ) : null}
-
-        {estado.dados === null &&
-        !estado.carregando &&
-        estado.falha !== null ? (
-          <EstadoDaCarga
-            estado="falha"
-            mensagem={estado.falha}
-            aoTentarNovamente={tentarNovamente}
-          />
-        ) : null}
-
-        {estatisticas !== null ? (
-          <>
-            <ResumoDeSeteDias estatisticas={estatisticas} />
-
-            {estado.falha !== null ? (
-              <>
-                <p className="aviso aviso--erro" role="alert">
-                  Não foi possível atualizar o resumo. {estado.falha}
-                </p>
-                <button
-                  type="button"
-                  className="botao botao--secundario"
-                  onClick={tentarNovamente}
-                >
-                  Tentar novamente
-                </button>
-              </>
-            ) : null}
-
-            {estatisticas.cartoes === 0 ? (
-              <p>
-                <a className="botao botao--primario" href="#/cartoes/novo">
-                  Criar o primeiro Cartão
-                </a>
-              </p>
-            ) : null}
-          </>
         ) : null}
       </div>
 
-      {/* A Revisão do dia vem antes da Agenda de hoje (FR-310, FR-311), cada
-          bloco com estado e contagens próprios. */}
+      {/* A Revisão do dia vem antes da Agenda de hoje (FR-330, FR-331), numa
+          coluna única, cada bloco com estado e contagens próprios. */}
       <div className="inicio__blocos">
         <BlocoDaRevisaoDoDia
           revisao={revisao}
@@ -252,12 +254,12 @@ export function PaginaDeInicio({
 }
 
 /**
- * O bloco "Revisão do dia" de Início (FR-310, FR-320).
+ * O bloco "Revisão do dia" de Início (FR-320, FR-331).
  *
- * Tem estado próprio, independente das Estatísticas: a falha de um não impede o
- * outro de aparecer, e cada um oferece o seu "Tentar novamente" (FR-320). O
- * resumo lido diz quantos Cartões vencem hoje e quantos novos ainda cabem no
- * limite do dia.
+ * Tem estado próprio, independente da Agenda: a falha de um não impede o outro
+ * de aparecer, e cada um oferece o seu "Tentar novamente" (FR-320). O resumo
+ * lido diz quantos Cartões a Revisão abre hoje — os vencidos e os novos que
+ * ainda caibam no limite do dia.
  */
 function BlocoDaRevisaoDoDia({
   revisao,
@@ -302,12 +304,13 @@ function BlocoDaRevisaoDoDia({
 }
 
 /**
- * O resumo já carregado: quantos vencem hoje, quantos novos entram e o caminho
- * para revisar (FR-310).
+ * O resumo já carregado: quantos Cartões a Revisão abre hoje e o caminho para
+ * revisar (FR-331).
  *
- * Quando não há nada para revisar, o botão deixa de ser um link e passa a
- * anunciar-se indisponível, com a explicação associada por `aria-describedby`
- * — a indisponibilidade não fica só na cor (FR-310, FR-324).
+ * O número é o **total elegível**, e não os vencidos: é o que a Revisão
+ * efetivamente apresenta. Quando esse total é zero, o botão deixa de ser um
+ * link e passa a anunciar-se indisponível, com a explicação associada por
+ * `aria-describedby` — a indisponibilidade não fica só na cor (FR-324).
  */
 function ResumoDoDia({ resumo }: { resumo: ResumoDaRevisao }) {
   const nadaParaRevisar = resumo.total === 0;
@@ -315,14 +318,14 @@ function ResumoDoDia({ resumo }: { resumo: ResumoDaRevisao }) {
   return (
     <div className="pilha">
       <div>
-        <h3 className="titulo-do-item">{tituloDaRevisao(resumo)}</h3>
-        {nadaParaRevisar ? (
-          <p className="texto-secundario" id="explicacao-da-revisao">
-            Não há Cartões vencidos nem Cartões novos disponíveis hoje.
-          </p>
-        ) : (
-          <p className="texto-secundario">{textoDeNovos(resumo.novosHoje)}</p>
-        )}
+        {/* Sem nada para revisar, é o próprio título que explica a
+            indisponibilidade do botão logo abaixo (FR-331). */}
+        <h3
+          className="titulo-do-item"
+          id={nadaParaRevisar ? "explicacao-da-revisao" : undefined}
+        >
+          {tituloDaRevisao(resumo)}
+        </h3>
       </div>
 
       {nadaParaRevisar ? (
@@ -343,34 +346,17 @@ function ResumoDoDia({ resumo }: { resumo: ResumoDaRevisao }) {
   );
 }
 
-/** O título do bloco, derivado dos vencidos (FR-310). */
+/** O título do bloco, derivado do total elegível (FR-331). */
 function tituloDaRevisao(resumo: ResumoDaRevisao): string {
   if (resumo.total === 0) {
-    return "Nada para revisar hoje";
+    return "Nada para revisar.";
   }
 
-  if (resumo.vencidos === 0) {
-    return "Nenhum Cartão vencido hoje";
+  if (resumo.total === 1) {
+    return "1 Cartão para revisar";
   }
 
-  if (resumo.vencidos === 1) {
-    return "1 Cartão para revisar hoje";
-  }
-
-  return `${resumo.vencidos} Cartões para revisar hoje`;
-}
-
-/** O texto dos Cartões novos de hoje, no singular e no plural (FR-310). */
-function textoDeNovos(novos: number): string {
-  if (novos === 0) {
-    return "Nenhum Cartão novo entra hoje";
-  }
-
-  if (novos === 1) {
-    return "1 Cartão novo entra hoje";
-  }
-
-  return `${novos} Cartões novos entram hoje`;
+  return `${resumo.total} Cartões para revisar`;
 }
 
 /** O estado depois de uma leitura que falhou: a falha aparece, os dados ficam. */
@@ -379,13 +365,4 @@ function estadoDeFalhaDaRevisao(
   mensagem: string,
 ): EstadoDaRevisao {
   return { ...anterior, carregando: false, falha: mensagem };
-}
-
-/** A data local de hoje por extenso, no formato de pt-BR (FR-308). */
-function dataDeHoje(): string {
-  return new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
 }

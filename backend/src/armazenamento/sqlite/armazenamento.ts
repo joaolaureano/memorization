@@ -13,7 +13,6 @@ import type {
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
-  DesfechoDeAlteracaoDeNome,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -110,9 +109,6 @@ const NOME_DE_USUARIO_EXISTENTE = {
   ok: false,
   erro: "nome_de_usuario_existente",
 } as const;
-
-/** Desfecho do Nome de usuário em uso por outro Usuário, na alteração. */
-const NOME_EM_USO = { ok: false, erro: "nome_em_uso" } as const;
 
 /** Desfecho de falha do armazenamento na Porta de Usuários. */
 const USUARIO_INDISPONIVEL = { ok: false, erro: "indisponivel" } as const;
@@ -695,9 +691,6 @@ export async function abrirArmazenamentoSqlite(
     `SELECT id, nome_de_usuario, sal, hash, parametros
        FROM usuario
       WHERE id = ?`,
-  );
-  const atualizarNomeDoUsuario = banco.prepare(
-    "UPDATE usuario SET nome_de_usuario = ? WHERE id = ?",
   );
   const atualizarSenhaDoUsuario = banco.prepare(
     "UPDATE usuario SET sal = ?, hash = ?, parametros = ? WHERE id = ?",
@@ -1748,31 +1741,6 @@ export async function abrirArmazenamentoSqlite(
     async obterUsuarioPorId(id) {
       return comDesfechoDeUsuario<DesfechoDeLeituraDeUsuario>(
         () => {
-          const linha = obterUsuarioPorId.get(id);
-
-          return linha === undefined
-            ? USUARIO_NAO_ENCONTRADO
-            : { ok: true, valor: usuarioDaLinha(linha) };
-        },
-        USUARIO_INDISPONIVEL,
-      );
-    },
-
-    async atualizarNomeDeUsuario(id, nome) {
-      return comDesfechoDeUsuario<DesfechoDeAlteracaoDeNome>(
-        () => {
-          try {
-            if (Number(atualizarNomeDoUsuario.run(nome, id).changes) === 0) {
-              return USUARIO_NAO_ENCONTRADO;
-            }
-          } catch (erro) {
-            if (ehNomeDeUsuarioExistente(erro)) {
-              return NOME_EM_USO;
-            }
-
-            throw erro;
-          }
-
           const linha = obterUsuarioPorId.get(id);
 
           return linha === undefined

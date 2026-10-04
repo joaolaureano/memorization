@@ -569,39 +569,6 @@ describe("integração com a conta (017, §5; FR-296, SC-120)", () => {
     expect(doNovo.statusCode).toBe(200);
   });
 
-  it("alterar o Nome de usuário por Acesso encerra todos e emite um novo", async () => {
-    const { a, b } = await navegadores();
-    const resposta = await contrato.servidor.inject({
-      method: "PUT",
-      url: "/conta/nome-de-usuario",
-      headers: cookieDe(a),
-      payload: {
-        senhaAtual: contrato.credencial.senha,
-        novoNomeDeUsuario: "ana.nova",
-      },
-    });
-
-    expect(resposta.statusCode).toBe(200);
-
-    const novo = valorEntregue(resposta);
-    const doNovo = await contrato.servidor.inject({
-      method: "GET",
-      url: "/acesso",
-      headers: cookieDe(novo ?? ""),
-    });
-
-    expect(doNovo.json()).toEqual({ nomeDeUsuario: "ana.nova" });
-    expect(
-      (
-        await contrato.servidor.inject({
-          method: "GET",
-          url: "/acesso",
-          headers: cookieDe(b),
-        })
-      ).statusCode,
-    ).toBe(401);
-  });
-
   it("a alteração feita por Credencial Basic encerra os Acessos e não emite cookie", async () => {
     const { a } = await navegadores();
     const nova = senhaGerada();

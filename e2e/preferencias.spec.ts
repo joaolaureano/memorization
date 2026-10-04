@@ -151,7 +151,7 @@ async function abrirPreferencias(
   await entrarSeNecessario(page, credencial);
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Preferências" }),
+    page.getByRole("heading", { level: 1, name: "Perfil" }),
   ).toBeVisible();
 }
 
@@ -159,11 +159,11 @@ async function abrirPreferencias(
 async function irParaPreferenciasPelaNavegacao(page: Page): Promise<void> {
   await page
     .getByRole("navigation", { name: "Principal" })
-    .getByRole("link", { name: "Preferências" })
+    .getByRole("link", { name: "Perfil" })
     .click();
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Preferências" }),
+    page.getByRole("heading", { level: 1, name: "Perfil" }),
   ).toBeVisible();
 }
 
@@ -275,7 +275,7 @@ test("Limite de 1 novo por dia restringe Início e a Revisão do dia (FR-200, SC
     // Com 3 Cartões novos e o limite 1, Início anuncia exatamente 1 Cartão novo
     // e a Revisão do dia é uma Sessão de 1 Item (FR-199, FR-201).
     await irParaInicio(page, credencial.nomeDeUsuario);
-    await expect(page.getByText("1 Cartão novo entra hoje")).toBeVisible();
+    await expect(page.getByText("1 Cartão para revisar")).toBeVisible();
 
     await iniciarRevisaoPelaUi(page, ambiente, credencial);
     await expect(
@@ -309,7 +309,7 @@ test("Limite 0 esvazia a Revisão do dia (FR-200, SC-081)", async ({ page, brows
     // Há Cartões novos, mas o limite 0 não introduz nenhum: Início declara que
     // não há o que revisar hoje (FR-199, FR-200).
     await irParaInicio(page, credencial.nomeDeUsuario);
-    await expect(page.getByText("Nada para revisar hoje")).toBeVisible();
+    await expect(page.getByText("Nada para revisar.")).toBeVisible();
   } finally {
     await derrubarAmbiente(ambiente);
   }

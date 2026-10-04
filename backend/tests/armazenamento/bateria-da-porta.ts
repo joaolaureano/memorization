@@ -2510,58 +2510,6 @@ export function bateriaDaPorta(
         });
       });
 
-      it("altera o Nome de usuário e libera o anterior (FR-262, SC-112)", async () => {
-        const alterado = await aberto.usuarios.atualizarNomeDeUsuario(
-          DONO_UM,
-          "ana.nova",
-        );
-
-        expect(alterado.ok && alterado.valor.nomeDeUsuario).toBe("ana.nova");
-
-        const antigo =
-          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ana.silva");
-        const novo =
-          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ANA.NOVA");
-
-        expect(antigo).toEqual({ ok: false, erro: "nao_encontrado" });
-        expect(novo.ok && novo.valor.id).toBe(DONO_UM);
-
-        /** O nome liberado pode ser usado por outro Usuário. */
-        expect(
-          (
-            await aberto.usuarios.atualizarNomeDeUsuario(
-              DONO_DOIS,
-              "ana.silva",
-            )
-          ).ok,
-        ).toBe(true);
-      });
-
-      it("recusa Nome em uso por outro Usuário, mesmo diferindo só em maiúsculas (FR-262, SC-112)", async () => {
-        expect(
-          await aberto.usuarios.atualizarNomeDeUsuario(DONO_UM, "BRUNO.SOUZA"),
-        ).toEqual({ ok: false, erro: "nome_em_uso" });
-
-        const intacto = await aberto.usuarios.obterUsuarioPorId(DONO_UM);
-
-        expect(intacto.ok && intacto.valor.nomeDeUsuario).toBe("ana.silva");
-      });
-
-      it("permite ao próprio Usuário mudar só a caixa do Nome", async () => {
-        const alterado = await aberto.usuarios.atualizarNomeDeUsuario(
-          DONO_UM,
-          "ANA.SILVA",
-        );
-
-        expect(alterado.ok && alterado.valor.nomeDeUsuario).toBe("ANA.SILVA");
-      });
-
-      it("recusa alterar o Nome de Usuário inexistente como nao_encontrado", async () => {
-        expect(
-          await aberto.usuarios.atualizarNomeDeUsuario("ninguem", "qualquer"),
-        ).toEqual({ ok: false, erro: "nao_encontrado" });
-      });
-
       it("substitui sal, hash e parametros pela nova derivação (FR-267)", async () => {
         const sal = Uint8Array.from({ length: 16 }, (_, i) => 100 + i);
         const hash = Uint8Array.from({ length: 64 }, (_, i) => 200 - i);

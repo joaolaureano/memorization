@@ -6,7 +6,6 @@ import type {
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
   DadosDeInicioDeCompromisso,
-  DadosDeNovoNomeDeUsuario,
   DadosDeTrocaDeSenha,
   DadosDeRegistro,
   DadosDeRotina,
@@ -136,9 +135,6 @@ export function comGuardaDeCredencial(
       vigiar(await cliente.iniciarCompromisso(dados)),
 
     obterConta: async () => vigiar(await cliente.obterConta()),
-
-    alterarNomeDeUsuario: async (dados: DadosDeNovoNomeDeUsuario) =>
-      vigiar(await cliente.alterarNomeDeUsuario(dados)),
 
     trocarSenha: async (dados: DadosDeTrocaDeSenha) =>
       vigiar(await cliente.trocarSenha(dados)),

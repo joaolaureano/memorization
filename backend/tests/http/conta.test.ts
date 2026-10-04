@@ -14,8 +14,12 @@ import {
 
 /**
  * T1709 — o contrato HTTP das rotas de conta (017, §3): `GET /conta`,
- * `PUT /conta/nome-de-usuario`, `PUT /conta/senha` e `DELETE /conta`, com os
- * status literais do contrato e o isolamento entre dois Usuários (FR-287).
+ * `PUT /conta/senha` e `DELETE /conta`, com os status literais do contrato e o
+ * isolamento entre dois Usuários (FR-287).
+ *
+ * 020 (FR-336, FR-337): `PUT /conta/nome-de-usuario` saiu do contrato — a rota
+ * **não é registrada**, uma requisição autenticada recebe `404` de rota, e o
+ * pré-voo `OPTIONS` dela também não é registrado.
  */
 
 let contrato: ServidorDeContrato;
@@ -74,8 +78,8 @@ describe("GET /conta (§3.1)", () => {
   });
 });
 
-describe("PUT /conta/nome-de-usuario (§3.2)", () => {
-  it("altera o nome e responde 200 com o novo nome", async () => {
+describe("PUT /conta/nome-de-usuario removido (020; FR-336, FR-337)", () => {
+  it("responde 404 a uma requisição autenticada, sem aplicar mudança alguma", async () => {
     const resposta = await como(contrato.credencial, {
       method: "PUT",
       url: "/conta/nome-de-usuario",
@@ -85,78 +89,48 @@ describe("PUT /conta/nome-de-usuario (§3.2)", () => {
       },
     });
 
-    expect(resposta.statusCode).toBe(200);
-    expect(resposta.json()).toEqual({ nomeDeUsuario: "ana.nova" });
+    expect(resposta.statusCode).toBe(404);
 
-    /** A Credencial antiga é recusada; a nova é aceita (FR-264). */
-    const antiga = await como(contrato.credencial, {
+    /** Nada mudou: a Credencial original continua valendo, com o mesmo Nome. */
+    const conta = await como(contrato.credencial, {
       method: "GET",
       url: "/conta",
     });
-    const nova = await contrato.servidor.inject({
+
+    expect(conta.statusCode).toBe(200);
+    expect(conta.json()).toMatchObject({ nomeDeUsuario: "ana.silva" });
+
+    const autenticacao = await contrato.servidor.inject({
       method: "GET",
       url: "/conta",
       headers: cabecalhoDeCredencial("ana.nova", contrato.credencial.senha),
     });
 
-    expect(antiga.statusCode).toBe(401);
-    expect(nova.statusCode).toBe(200);
+    expect(autenticacao.statusCode).toBe(401);
   });
 
-  it("responde 400 para dados_invalidos e mesmo_nome, e 400 para corpo sem forma", async () => {
-    const invalido = await como(contrato.credencial, {
-      method: "PUT",
+  it("não registra o pré-voo OPTIONS da rota antiga", async () => {
+    const resposta = await contrato.servidor.inject({
+      method: "OPTIONS",
       url: "/conta/nome-de-usuario",
-      payload: { senhaAtual: contrato.credencial.senha, novoNomeDeUsuario: "a" },
-    });
-    const mesmo = await como(contrato.credencial, {
-      method: "PUT",
-      url: "/conta/nome-de-usuario",
-      payload: {
-        senhaAtual: contrato.credencial.senha,
-        novoNomeDeUsuario: "ana.silva",
-      },
-    });
-    const semForma = await como(contrato.credencial, {
-      method: "PUT",
-      url: "/conta/nome-de-usuario",
-      payload: { novoNomeDeUsuario: "ana.nova" },
-    });
-
-    expect(invalido.statusCode).toBe(400);
-    expect(invalido.json()).toMatchObject({
-      erro: "dados_invalidos",
-      campo: "nomeDeUsuario",
-    });
-    expect(mesmo.statusCode).toBe(400);
-    expect(mesmo.json()).toMatchObject({ erro: "mesmo_nome" });
-    expect(semForma.statusCode).toBe(400);
-    expect(semForma.json()).toMatchObject({ erro: "dados_invalidos" });
-  });
-
-  it("responde 403 para a Senha atual incorreta, e não 401", async () => {
-    const resposta = await como(contrato.credencial, {
-      method: "PUT",
-      url: "/conta/nome-de-usuario",
-      payload: { senhaAtual: senhaGerada(), novoNomeDeUsuario: "ana.nova" },
-    });
-
-    expect(resposta.statusCode).toBe(403);
-    expect(resposta.json()).toMatchObject({ erro: "senha_atual_incorreta" });
-  });
-
-  it("responde 409 para nome indisponível, mesmo diferindo só em maiúsculas", async () => {
-    const resposta = await como(contrato.credencial, {
-      method: "PUT",
-      url: "/conta/nome-de-usuario",
-      payload: {
-        senhaAtual: contrato.credencial.senha,
-        novoNomeDeUsuario: "BRUNO.SOUZA",
+      headers: {
+        origin: "http://127.0.0.1:5173",
+        "access-control-request-method": "PUT",
+        "access-control-request-headers": "content-type, authorization",
       },
     });
 
-    expect(resposta.statusCode).toBe(409);
-    expect(resposta.json()).toMatchObject({ erro: "nome_indisponivel" });
+    expect(resposta.statusCode).toBe(404);
+    expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
+
+    /** O pré-voo das rotas de conta que ficaram continua registrado. */
+    const daSenha = await contrato.servidor.inject({
+      method: "OPTIONS",
+      url: "/conta/senha",
+      headers: { origin: "http://127.0.0.1:5173" },
+    });
+
+    expect(daSenha.statusCode).toBe(204);
   });
 });
 
@@ -313,21 +287,30 @@ describe("DELETE /conta (§3.4)", () => {
 
 describe("isolamento (FR-287)", () => {
   it("opera só sobre o Usuário da Credencial apresentada", async () => {
+    const novaSenha = senhaGerada();
+
     await como(bruno, {
       method: "PUT",
-      url: "/conta/nome-de-usuario",
+      url: "/conta/senha",
       payload: {
         senhaAtual: bruno.senha,
-        novoNomeDeUsuario: "bruno.novo",
+        novaSenha: novaSenha,
+        confirmacaoDaSenha: novaSenha,
       },
     });
 
+    /** A conta de ana segue intacta, e a Credencial de bruno antiga caiu. */
     const ana = await como(contrato.credencial, {
+      method: "GET",
+      url: "/conta",
+    });
+    const brunoAntigo = await como(bruno, {
       method: "GET",
       url: "/conta",
     });
 
     expect(ana.json()).toMatchObject({ nomeDeUsuario: "ana.silva" });
+    expect(brunoAntigo.statusCode).toBe(401);
   });
 
   it("não aceita a Senha atual de outro Usuário", async () => {

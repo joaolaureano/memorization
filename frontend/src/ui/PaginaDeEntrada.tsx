@@ -56,11 +56,10 @@ export const MENSAGEM_DE_CONTA_EXCLUIDA =
   "Conta excluída. Todos os dados do Usuário foram removidos.";
 
 /**
- * A conclusão de Sair, anunciada na tela "Entrar" (FR-096). O texto nomeia a
- * ação e o seu efeito, sem sinônimos de `_Avoid_` de `CONTEXT.md`.
+ * A conclusão de Sair, anunciada na tela "Entrar" como status acessível
+ * (FR-096; 020, FR-327): o texto exato é «Você saiu com sucesso.».
  */
-export const MENSAGEM_DE_SAIDA =
-  "Você saiu. A Credencial foi descartada; informe o Nome de usuário e a Senha para Entrar novamente.";
+export const MENSAGEM_DE_SAIDA = "Você saiu com sucesso.";
 
 /**
  * O que a tela entrega a quem passará a manter o acesso (018): quem entrou e se
@@ -137,7 +136,7 @@ export function PaginaDeEntrada({
   return (
     <section className="acesso">
       <div className="cartao">
-        <p className="sobretitulo">Bem-vindo de volta</p>
+        <p className="sobretitulo">Bem-vindo</p>
         <h1>Entrar</h1>
 
         {aviso !== null &&
@@ -213,7 +212,8 @@ export function PaginaDeEntrada({
 
           {/* FR-292, FR-302, FR-303: a opção é uma caixa de seleção nativa —
               alcançável por Tab, alternada por Espaço, com o foco visível por
-              contorno e não só por cor —, marcada por padrão. */}
+              contorno e não só por cor —, marcada por padrão e sem parágrafo de ajuda
+              nem `aria-describedby` (FR-328). */}
           <div className="campo campo--opcao">
             <label className="opcao" htmlFor="campo-continuar-conectado">
               <input
@@ -221,15 +221,9 @@ export function PaginaDeEntrada({
                 type="checkbox"
                 checked={continuarConectado}
                 onChange={(evento) => setContinuarConectado(evento.target.checked)}
-                aria-describedby="ajuda-continuar-conectado"
               />
               <span>Continuar conectado neste navegador</span>
             </label>
-            <p id="ajuda-continuar-conectado" className="ajuda">
-              {continuarConectado
-                ? "Você volta direto ao Início ao recarregar ou reabrir, até 5 minutos sem usar a aplicação."
-                : "Ao recarregar ou fechar a página, será preciso Entrar de novo."}
-            </p>
           </div>
 
           <button

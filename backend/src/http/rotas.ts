@@ -955,14 +955,10 @@ export function registrarRotasDeUsuarios(
 
 /**
  * Forma dos corpos das rotas de conta (017): textos, e nada mais é exigido na
- * borda. O descarte de espaços, o alfabeto, o intervalo e a Senha atual são
- * julgados exclusivamente pelo `Identidade`; forma inválida usa o mesmo código
- * `dados_invalidos` da recusa de regra, para o cliente ter um só caminho.
+ * borda. O intervalo e a Senha atual são julgados exclusivamente pelo
+ * `Identidade`; forma inválida usa o mesmo código `dados_invalidos` da recusa
+ * de regra, para o cliente ter um só caminho.
  */
-const corpoDeNovoNomeDeUsuario = z.object({
-  senhaAtual: z.string(),
-  novoNomeDeUsuario: z.string(),
-});
 const corpoDeTrocaDeSenha = z.object({
   senhaAtual: z.string(),
   novaSenha: z.string(),
@@ -980,9 +976,9 @@ const DADOS_DA_CONTA_INVALIDOS = {
 /**
  * Traduz a recusa da gestão da conta em resposta: `400` para regra violada,
  * `403` para a Senha atual incorreta — e não `401`, que é reservado à Credencial
- * recusada e dispararia o descarte da Credencial (FR-091, FR-279) —, `409` para
- * o Nome de usuário indisponível e `503` para a falha do armazenamento. A
- * resposta carrega apenas código, mensagem e campo: nunca a Senha (FR-078).
+ * recusada e dispararia o descarte da Credencial (FR-091, FR-279) — e `503`
+ * para a falha do armazenamento. A resposta carrega apenas código, mensagem e
+ * campo: nunca a Senha (FR-078).
  */
 function responderRecusaDeConta(
   resposta: FastifyReply,
@@ -995,11 +991,9 @@ function responderRecusaDeConta(
   const status =
     recusa.erro === "senha_atual_incorreta"
       ? 403
-      : recusa.erro === "nome_indisponivel"
-        ? 409
-        : recusa.erro === "indisponivel"
-          ? INDISPONIVEL
-          : 400;
+      : recusa.erro === "indisponivel"
+        ? INDISPONIVEL
+        : 400;
 
   return resposta.status(status).send({
     erro: recusa.erro,
@@ -1010,9 +1004,13 @@ function responderRecusaDeConta(
 
 /**
  * Registra as rotas de gestão da conta do Usuário (017): `GET /conta`,
- * `PUT /conta/nome-de-usuario`, `PUT /conta/senha` e `DELETE /conta`. Operam
- * sempre sobre o Usuário da Credencial apresentada, que o hook decorou na
- * requisição — não há como alcançar a conta de outro Usuário (FR-287).
+ * `PUT /conta/senha` e `DELETE /conta`. Operam sempre sobre o Usuário da
+ * Credencial apresentada, que o hook decorou na requisição — não há como
+ * alcançar a conta de outro Usuário (FR-287).
+ *
+ * `PUT /conta/nome-de-usuario` não existe mais (020): a rota antiga **não é
+ * registrada**, e uma requisição autenticada a ela recebe o `404` padrão do
+ * roteador — a alteração do Nome de usuário saiu do contrato.
  */
 export function registrarRotasDeConta(
   servidor: FastifyInstance,
@@ -1020,12 +1018,12 @@ export function registrarRotasDeConta(
   acessos: Acessos,
 ): void {
   /**
-   * 018 (FR-296): trocar a Senha ou alterar o Nome de usuário **encerra todos os
-   * Acessos** do Usuário — outros navegadores incluídos — e, quando a requisição
-   * foi autenticada por Acesso, emite um Acesso **novo** para este navegador,
-   * que segue operando sem Entrar de novo. Devolve `false` quando o
-   * armazenamento falha: a mudança já foi aplicada, mas os Acessos antigos
-   * podem continuar valendo, e a resposta não pode ser de sucesso.
+   * 018 (FR-296): trocar a Senha **encerra todos os Acessos** do Usuário —
+   * outros navegadores incluídos — e, quando a requisição foi autenticada por
+   * Acesso, emite um Acesso **novo** para este navegador, que segue operando
+   * sem Entrar de novo. Devolve `false` quando o armazenamento falha: a mudança
+   * já foi aplicada, mas os Acessos antigos podem continuar valendo, e a
+   * resposta não pode ser de sucesso.
    */
   async function renovarOsAcessos(
     requisicao: FastifyRequest,
@@ -1066,31 +1064,6 @@ export function registrarRotasDeConta(
       nomeDeUsuario: resultado.conta.nomeDeUsuario,
       contagens: resultado.conta.contagens,
     });
-  });
-
-  servidor.put("/conta/nome-de-usuario", async (requisicao, resposta) => {
-    const corpo = corpoDeNovoNomeDeUsuario.safeParse(requisicao.body);
-
-    if (!corpo.success) {
-      return resposta.status(400).send(DADOS_DA_CONTA_INVALIDOS);
-    }
-
-    const resultado = await identidade.alterarNomeDeUsuario(
-      requisicao.usuarioQueEntrou.id,
-      corpo.data,
-    );
-
-    if (!resultado.ok) {
-      return responderRecusaDeConta(resposta, resultado);
-    }
-
-    if (!(await renovarOsAcessos(requisicao, resposta))) {
-      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
-    }
-
-    return resposta
-      .status(200)
-      .send({ nomeDeUsuario: resultado.nomeDeUsuario });
   });
 
   servidor.put("/conta/senha", async (requisicao, resposta) => {

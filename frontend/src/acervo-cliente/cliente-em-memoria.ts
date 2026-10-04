@@ -33,7 +33,6 @@ import type {
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
   DadosDeInicioDeCompromisso,
-  DadosDeNovoNomeDeUsuario,
   DadosDeTrocaDeSenha,
   DadosDeRegistro,
   DadosDeRotina,
@@ -46,7 +45,6 @@ import type {
   RecusaDeConta,
   ResultadoDasPrevias,
   ResultadoDeAcaoDeConta,
-  ResultadoDeAlteracaoDeNomeDeUsuario,
   ResultadoDeObterAcesso,
   ResultadoDeObterConta,
   ResultadoDeRenovarAcesso,
@@ -1307,68 +1305,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         contagens: this.contagensDoDono(dono.id),
       },
     };
-  }
-
-  /**
-   * Altera o Nome de usuário com as regras da API (FR-259..FR-265): valida o
-   * novo nome, confere a Senha atual, recusa o mesmo nome e o nome de outro
-   * Usuário sem distinguir maiúsculas de minúsculas.
-   */
-  async alterarNomeDeUsuario(
-    dados: DadosDeNovoNomeDeUsuario,
-  ): Promise<ResultadoDeAlteracaoDeNomeDeUsuario> {
-    if (this.indisponivel) {
-      return this.falhaDeIndisponibilidadeDaConta();
-    }
-
-    const dono = this.dono();
-
-    if (dono === null) {
-      return this.falhaDeNaoAutenticado();
-    }
-
-    const novoNome = dados.novoNomeDeUsuario.trim();
-    const invalido = validarNomeDeUsuario(novoNome);
-
-    if (invalido !== null) {
-      return {
-        ok: false,
-        erro: "dados_invalidos",
-        mensagem: invalido.mensagem,
-        campo: "nomeDeUsuario",
-      };
-    }
-
-    if (dono.senha !== dados.senhaAtual) {
-      return this.recusaDeSenhaAtual();
-    }
-
-    if (dono.nomeDeUsuario === novoNome) {
-      return {
-        ok: false,
-        erro: "mesmo_nome",
-        mensagem: "O novo nome de usuário é igual ao atual.",
-      };
-    }
-
-    const chave = novoNome.toLowerCase();
-    const emUso = this.base.usuarios.some(
-      (usuario) =>
-        usuario.id !== dono.id && usuario.nomeDeUsuario.toLowerCase() === chave,
-    );
-
-    if (emUso) {
-      return {
-        ok: false,
-        erro: "nome_indisponivel",
-        mensagem: "Este nome de usuário já existe. Escolha outro.",
-      };
-    }
-
-    dono.nomeDeUsuario = novoNome;
-    this.renovarOsAcessosDoDono(dono.id, this.credencial === null);
-
-    return { ok: true, nomeDeUsuario: novoNome };
   }
 
   /** Troca a Senha com as regras da API (FR-266..FR-271). */
