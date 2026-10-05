@@ -18,3 +18,10 @@ plan.md e tasks.md escritos pelo Arquiteto. Analyze por leitura: 9 FRs (FR-339�
 - tsc/build: os únicos erros são os herdados da 020 (`minha-conta-resultado-incerto.test.tsx`, `pagina-de-inicio.test.tsx`).
 - Playwright completo: 44 passam e 30 falham. As 30 falhas foram reproduzidas na base sem a 021 (minha-conta, preferências, visual-e-contraste, percurso-por-teclado na linha 308 «Preferências», acesso-temporario, agendamento, estatísticas e repetição espaçada). O percurso por teclado já passa pelos passos «Editar <Baralho>». Todos os specs ligados às listas passam: lista-de-baralhos (360/390/768/1440), baralhos-/cartoes-responsividade, persistência de baralhos/cartões/vínculos, excluir/editar cartão e baralho, ações do baralho e edição/exclusão-responsividade.
 - Sem commit: aguardando o PO. `verificar:ci` só fica verde depois de concluir as pendências da 020.
+
+## 2026-10-05 — correção: altura da linha dependia da fonte do sistema
+- Sintoma: no CI (Linux), `lista-de-baralhos.spec.ts` a 360 px media 102,8 px por linha, com teto de 72 px. No macOS passava.
+- Causa: a linha comum usava `flex-wrap` com base de 6 rem para o texto. Com a fonte do sistema mais larga do Linux, as ações Estudar e Editar não cabiam ao lado do nome e desciam para uma segunda linha; a altura passava a depender da fonte de cada máquina.
+- Reprodução local: com o CSS antigo e a fonte trocada por Verdana, de métricas largas como a DejaVu Sans, deu exatamente 102,8 px a 360 px.
+- Correção: as ações ficam sempre à direita e o texto ocupa a sobra, quebrando dentro da própria coluna. As ações só descem para baixo do texto em viewport de até 15 rem (telefone com zoom de 200%), por media query, sem depender da fonte.
+- Verificação: com Verdana, `lista-de-baralhos`, `baralhos-responsividade` e `cartoes-responsividade` passam; com a fonte real, `verificar:ci` verde (backend 907 + 232, frontend 806, Playwright 81/81).

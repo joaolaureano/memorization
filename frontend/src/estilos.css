@@ -1078,11 +1078,12 @@ dialog .acoes {
   border-top: 1px solid var(--border);
 }
 
-/* Em telas estreitas ou com zoom de 200%, as ações descem para baixo do
- * texto em vez de espremê-lo ou provocar rolagem horizontal (FR-346). */
+/* As ações ficam sempre à direita e o texto ocupa a sobra, quebrando dentro
+ * da própria coluna (FR-339, FR-346). Quebrar a linha inteira quando as ações
+ * não cabem faria a altura depender da largura da fonte de cada sistema; por
+ * isso a decisão é da largura da viewport, abaixo. */
 .linha-da-lista {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
   min-width: 0;
@@ -1090,8 +1091,21 @@ dialog .acoes {
 }
 
 .linha-da-lista__texto {
-  flex: 1 1 6rem;
+  flex: 1 1 0;
   min-width: 0;
+}
+
+/* Viewport estreita de verdade — um telefone com zoom de 200% —: as ações
+ * descem para baixo do texto, sem espremê-lo nem provocar rolagem horizontal
+ * (FR-346). */
+@media (max-width: 15rem) {
+  .linha-da-lista {
+    flex-wrap: wrap;
+  }
+
+  .linha-da-lista__texto {
+    flex-basis: 100%;
+  }
 }
 
 /* O título é texto somente leitura (FR-341, FR-344): sem cor de link. */
@@ -1113,7 +1127,7 @@ dialog .acoes {
 
 .linha-da-lista__acoes {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
   gap: 8px;
   margin-left: auto;
 }
