@@ -30,7 +30,7 @@ Sem tarefas: nenhuma dependência nova.
 
 **Goal**: Sessão com todos embaralhados e Registro temporário. **Independent Test**: 3 Cartões estudados geram um Registro e Agendamentos.
 
-- [ ] T2309 [US2] Variante `selecaoTemporaria` em PaginaDeEstudo.tsx: início imediato com todos embaralhados; h1 «Estudar baralho temporário»; registro com `origem: "temporario"`; Resumo com o texto secundário «Estudo com baralho temporário», «Salvar como baralho» (desabilitado com motivo até registrar) e «Voltar para Baralhos»; provas: todos uma vez, ordem fixa, Registro com origem temporária, falha e nova tentativa sem duplicar, interrupção sem Registro. FR-366, FR-368–FR-370, FR-375, SC-145.
+- [X] T2309 [US2] Variante `selecaoTemporaria` em PaginaDeEstudo.tsx: início imediato com todos embaralhados; h1 «Estudar baralho temporário»; registro com `origem: "temporario"`; Resumo com o texto secundário «Estudo com baralho temporário», «Salvar como baralho» (desabilitado com motivo até registrar) e «Voltar para Baralhos»; provas: todos uma vez, ordem fixa, Registro com origem temporária, falha e nova tentativa sem duplicar, interrupção sem Registro. FR-366, FR-368–FR-370, FR-375, SC-145.
 - [ ] T2310 [US2] Histórico: PaginaDoRegistro.tsx e EstatisticasDoEstudo.tsx nomeiam a origem `temporario` como «Estudo com baralho temporário», sem selo nem link de Baralho; provas. FR-376.
 
 ## Phase 5: User Story 3 — Salvar depois de estudar (P1)

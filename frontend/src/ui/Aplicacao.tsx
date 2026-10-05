@@ -33,6 +33,8 @@ import {
 } from "./PaginaDeEntrada";
 import type { AvisoDaEntrada, EscolhaDeEntrada } from "./PaginaDeEntrada";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
+import { PaginaDaSelecaoTemporaria } from "./PaginaDaSelecaoTemporaria";
+import type { Cartao } from "../acervo-cliente/cliente";
 import { PaginaDeInicio } from "./PaginaDeInicio";
 import { PaginaDePreferencias } from "./PaginaDePreferencias";
 import { PaginaDoBaralho } from "./PaginaDoBaralho";
@@ -399,6 +401,26 @@ function CascaDaAplicacao({
   const [inicioDaAgenda, setInicioDaAgenda] =
     useState<InicioDeCompromisso | null>(null);
 
+  /**
+   * Os Cartões capturados ao iniciar o baralho temporário (FR-366, FR-375)
+   * ficam só na memória da casca; sair da rota da Sessão — ou recarregar —
+   * os descarta e nada é registrado.
+   */
+  const [selecaoDoEstudoTemporario, setSelecaoDoEstudoTemporario] =
+    useState<readonly Cartao[] | null>(null);
+
+  const iniciarEstudoTemporario = useCallback(
+    (cartoes: readonly Cartao[]) => {
+      setSelecaoDoEstudoTemporario(cartoes);
+    },
+    [],
+  );
+
+  const sairDoEstudoTemporario = useCallback(() => {
+    setSelecaoDoEstudoTemporario(null);
+    irParaRota("#/baralhos");
+  }, []);
+
   const iniciarEstudoDaAgenda = useCallback(
     (inicio: InicioDeCompromisso) => {
       setInicioDaAgenda(inicio);
@@ -415,6 +437,15 @@ function CascaDaAplicacao({
   useEffect(() => {
     if (rota.nome !== "estudo-da-agenda") {
       setInicioDaAgenda(null);
+    }
+  }, [rota.nome]);
+
+  useEffect(() => {
+    if (
+      rota.nome !== "estudo-temporario" &&
+      rota.nome !== "selecao-temporaria"
+    ) {
+      setSelecaoDoEstudoTemporario(null);
     }
   }, [rota.nome]);
 
@@ -585,6 +616,9 @@ function CascaDaAplicacao({
           inicioDaAgenda={inicioDaAgenda}
           aoIniciarEstudoDaAgenda={iniciarEstudoDaAgenda}
           aoSairDoEstudoDaAgenda={sairDoEstudoDaAgenda}
+          selecaoDoEstudoTemporario={selecaoDoEstudoTemporario}
+          aoIniciarEstudoTemporario={iniciarEstudoTemporario}
+          aoSairDoEstudoTemporario={sairDoEstudoTemporario}
         />
       </main>
     </>
@@ -610,6 +644,9 @@ function TelaDaRota({
   inicioDaAgenda,
   aoIniciarEstudoDaAgenda,
   aoSairDoEstudoDaAgenda,
+  selecaoDoEstudoTemporario,
+  aoIniciarEstudoTemporario,
+  aoSairDoEstudoTemporario,
 }: {
   rota: Rota;
   cliente: ClienteDoAcervo;
@@ -623,6 +660,9 @@ function TelaDaRota({
   inicioDaAgenda: InicioDeCompromisso | null;
   aoIniciarEstudoDaAgenda: (inicio: InicioDeCompromisso) => void;
   aoSairDoEstudoDaAgenda: () => void;
+  selecaoDoEstudoTemporario: readonly Cartao[] | null;
+  aoIniciarEstudoTemporario: (cartoes: readonly Cartao[]) => void;
+  aoSairDoEstudoTemporario: () => void;
 }) {
   switch (rota.nome) {
     case "inicio":
@@ -711,11 +751,28 @@ function TelaDaRota({
       return <PaginaDeEstudo cliente={cliente} id={rota.id} />;
 
     case "selecao-temporaria":
+      // FR-360: a montagem do baralho temporário.
+      return (
+        <PaginaDaSelecaoTemporaria
+          cliente={cliente}
+          aoEstudar={aoIniciarEstudoTemporario}
+        />
+      );
+
     case "estudo-temporario":
       // FR-366: a Sessão do baralho temporário só existe enquanto a seleção
       // capturada está na memória da casca; sem ela, a pessoa volta para
-      // Baralhos. A montagem ganha tela própria na T2308.
-      return <VoltarParaBaralhos />;
+      // Baralhos.
+      return selecaoDoEstudoTemporario === null ? (
+        <VoltarParaBaralhos />
+      ) : (
+        <PaginaDeEstudo
+          cliente={cliente}
+          id=""
+          selecaoTemporaria={selecaoDoEstudoTemporario}
+          aoSair={aoSairDoEstudoTemporario}
+        />
+      );
 
     case "cartoes":
       return <PaginaDeCartoes cliente={cliente} />;

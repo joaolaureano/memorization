@@ -22,6 +22,7 @@ import type {
   EstadoDaSessaoConcluida,
 } from "../sessao-de-estudo/sessao-de-estudo";
 import { ResumoDaSessao } from "./ResumoDaSessao";
+import type { Cartao } from "../acervo-cliente/cliente";
 import type { ItemDoResumo } from "./ResumoDaSessao";
 import { irParaRota } from "./navegacao";
 import { useAcaoProtegida, useProtecaoDeSaida } from "./protecao-de-saida";
@@ -104,6 +105,12 @@ interface PropriedadesDaPaginaDeEstudo {
    * descarta o início e volta a Início. Sem ela, vale a navegação por hash.
    */
   aoSair?: () => void;
+  /**
+   * Os Cartões capturados na montagem do baralho temporário (023, FR-366): a
+   * Sessão começa direto com todos, embaralhados juntos, e registra com a
+   * origem «temporario». Vive só na memória da casca.
+   */
+  selecaoTemporaria?: readonly Cartao[];
 }
 
 type AlvoDeFoco = "frente" | "verso" | "resumo" | "quantidade";
@@ -126,6 +133,7 @@ export function PaginaDeEstudo({
   aleatoriedade,
   inicioDaAgenda,
   aoSair,
+  selecaoTemporaria,
 }: PropriedadesDaPaginaDeEstudo) {
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
@@ -177,6 +185,44 @@ export function PaginaDeEstudo({
     setPrevias({});
     idDoRegistroDeSessao.current = null;
     alvoDeFoco.current = null;
+
+    if (selecaoTemporaria !== undefined) {
+      // Baralho temporário (FR-366, FR-368): todos os Cartões da seleção,
+      // embaralhados juntos uma única vez, sem configurar quantidade.
+      const iniciada = SessaoDeEstudo.iniciar(
+        "",
+        selecaoTemporaria.length,
+        selecaoTemporaria,
+        aleatoriedadeDaSessao,
+      );
+
+      setBaralho({
+        id: "",
+        nome: "baralho temporário",
+        elegivel: true,
+        cartoes: [...selecaoTemporaria],
+      });
+
+      if (iniciada.ok) {
+        const estadoInicial = iniciada.sessao.estadoAtual();
+
+        setSessao(iniciada.sessao);
+        setEstado(estadoInicial);
+        carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
+        alvoDeFoco.current = "frente";
+        anunciar(
+          `Sessão iniciada com ${estadoInicial.total} ${
+            estadoInicial.total === 1 ? "Item" : "Itens"
+          }.`,
+        );
+      } else {
+        setFalhaDeCarregamento(iniciada.mensagem);
+      }
+
+      setCarregando(false);
+
+      return;
+    }
 
     if (inicioDaAgenda !== undefined) {
       // Sessão da Agenda (FR-231, FR-232): começa direto, na ordem e com o
@@ -233,7 +279,7 @@ export function PaginaDeEstudo({
     return () => {
       ativo = false;
     };
-  }, [cliente, id, inicioDaAgenda]);
+  }, [cliente, id, inicioDaAgenda, selecaoTemporaria]);
 
   // Movimentação de foco que reage a uma mudança de fase precisa ser um efeito
   // de layout: `useEffect` roda depois da pintura, então por um instante o foco
@@ -377,6 +423,18 @@ export function PaginaDeEstudo({
    * início); a do Baralho volta ao Baralho.
    */
   function sairDaPagina(): void {
+    if (selecaoTemporaria !== undefined) {
+      // O baralho temporário volta para Baralhos pela casca, que descarta a
+      // seleção — FR-375.
+      if (aoSair !== undefined) {
+        aoSair();
+      } else {
+        irParaRota("#/baralhos");
+      }
+
+      return;
+    }
+
     if (inicioDaAgenda !== undefined) {
       if (aoSair !== undefined) {
         aoSair();
@@ -529,8 +587,9 @@ export function PaginaDeEstudo({
     void cliente
       .registrarSessao({
         id: idDoRegistro,
-        origem: "baralho",
-        baralhoId: id,
+        // O servidor deriva o nome «Baralho temporário» (FR-369).
+        origem: selecaoTemporaria !== undefined ? "temporario" : "baralho",
+        baralhoId: selecaoTemporaria !== undefined ? "" : id,
         nomeDoBaralho: baralho.nome,
         ...(inicioDaAgenda !== undefined
           ? { inicioAgendaId: inicioDaAgenda.id }
@@ -616,6 +675,7 @@ export function PaginaDeEstudo({
     </p>
   );
   const ehDaAgenda = inicioDaAgenda !== undefined;
+  const ehTemporario = selecaoTemporaria !== undefined;
   const avisoDaAgenda =
     inicioDaAgenda !== undefined &&
     inicioDaAgenda.quantidadeSolicitada !== null &&
@@ -699,6 +759,11 @@ export function PaginaDeEstudo({
             <h1 ref={resumoRef} tabIndex={-1}>
               Sessão concluída
             </h1>
+            {ehTemporario && (
+              <p className="texto-secundario">
+                Estudo com baralho temporário
+              </p>
+            )}
           </div>
         </header>
 
@@ -743,6 +808,37 @@ export function PaginaDeEstudo({
             </div>
           )}
 
+          {ehTemporario ? (
+            <div className="acoes resumo__acoes">
+              <button
+                className="botao botao--primario"
+                type="button"
+                disabled={situacaoDoRegistro.estado !== "registrada"}
+                aria-describedby={
+                  situacaoDoRegistro.estado !== "registrada"
+                    ? "motivo-de-salvar-como-baralho"
+                    : undefined
+                }
+              >
+                Salvar como baralho
+              </button>
+              <a
+                className="botao botao--secundario"
+                href="#/baralhos"
+                onClick={(evento) => {
+                  evento.preventDefault();
+                  protegerAcao(sairDaPagina);
+                }}
+              >
+                Voltar para Baralhos
+              </a>
+              {situacaoDoRegistro.estado !== "registrada" && (
+                <p id="motivo-de-salvar-como-baralho" className="ajuda">
+                  Registre a Sessão para salvar o baralho.
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="acoes resumo__acoes">
             {!ehDaAgenda && (
               <button
@@ -771,6 +867,7 @@ export function PaginaDeEstudo({
               {ehDaAgenda ? "Voltar para Início" : "Voltar para o Baralho"}
             </a>
           </div>
+          )}
         </ResumoDaSessao>
       </div>
     );
