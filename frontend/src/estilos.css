@@ -1571,3 +1571,151 @@ label.campo--opcao {
     flex-wrap: wrap;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Baralho temporário (023)
+ * ------------------------------------------------------------------------- */
+
+.cabecalho-da-pagina .acoes {
+  flex-wrap: wrap;
+}
+
+.montagem {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.fontes,
+.selecao {
+  min-width: 0;
+}
+
+.selecao {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.alternar-fontes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.alternar-fontes button[aria-pressed="true"] {
+  color: var(--accent);
+  box-shadow: inset 0 -3px var(--accent);
+}
+
+.filtros-montagem {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.filtros-montagem .campo:first-child {
+  grid-column: 1 / -1;
+}
+
+.filtros-montagem select,
+.filtros-montagem input {
+  width: 100%;
+  min-width: 0;
+}
+
+.filtros-montagem .campo {
+  min-width: 0;
+}
+
+.lista-da-selecao {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+
+.lista-da-selecao li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.lista-da-selecao p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lista-da-selecao button {
+  flex-shrink: 0;
+  padding: 8px 12px;
+}
+
+/* Exceção: alvo de toque de 44px (FR-377); o padding reduzido não pode encolher a altura. */
+.lista-da-selecao button {
+  min-height: 44px;
+}
+
+.titulo-contagem {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.titulo-contagem h2 {
+  margin: 0;
+}
+
+.titulo-contagem span {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.acoes-selecao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.acoes-selecao button {
+  flex: 1 1 auto;
+}
+
+.nota-selecao {
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.estado-vazio h3 {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 850px) {
+  .montagem {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .filtros-montagem {
+    grid-template-columns: 1fr;
+  }
+
+  .selecao {
+    padding: 16px;
+  }
+
+  .titulo-contagem {
+    flex-wrap: wrap;
+  }
+}
