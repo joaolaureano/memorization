@@ -20,7 +20,7 @@ Sem tarefas: nenhuma dependência, configuração ou migração nova.
 
 **Goal**: buscar Baralhos pelo nome. **Independent Test**: com «Álgebra linear», buscar `algebra` e ver o Baralho com Estudar e Editar.
 
-- [ ] T2204 [US1] Painel `.filtros.filtros--busca-unica` com «Buscar baralhos», faixa `.resultado-cabecalho` (contagem `role="status"` e Limpar filtros) e estado «Nenhum resultado encontrado», conforme contracts/ui.md, usando `filtrarBaralhos`, em frontend/src/ui/PaginaDeBaralhos.tsx; acrescentar `.filtros`, `.filtros--busca-unica`, `.resultado-cabecalho` e as media queries de contracts/ui.md em frontend/src/estilos.css; provas em frontend/tests/pagina-de-baralhos.test.tsx: busca normalizada, contagem singular/plural, sem resultados com Limpar filtros, Limpar restaura e foca a busca, ações Estudar/Editar preservadas, com o mesmo destino, durante a busca, falha e nova tentativa preservando a consulta. FR-348, FR-350, FR-354–FR-358.
+- [X] T2204 [US1] Painel `.filtros.filtros--busca-unica` com «Buscar baralhos», faixa `.resultado-cabecalho` (contagem `role="status"` e Limpar filtros) e estado «Nenhum resultado encontrado», conforme contracts/ui.md, usando `filtrarBaralhos`, em frontend/src/ui/PaginaDeBaralhos.tsx; acrescentar `.filtros`, `.filtros--busca-unica`, `.resultado-cabecalho` e as media queries de contracts/ui.md em frontend/src/estilos.css; provas em frontend/tests/pagina-de-baralhos.test.tsx: busca normalizada, contagem singular/plural, sem resultados com Limpar filtros, Limpar restaura e foca a busca, ações Estudar/Editar preservadas, com o mesmo destino, durante a busca, falha e nova tentativa preservando a consulta. FR-348, FR-350, FR-354–FR-358.
 
 ## Phase 4: User Story 2 — Encontrar Cartões combinando critérios (P1)
 

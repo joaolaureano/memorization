@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   BaralhoListado,
   ClienteDoAcervo,
 } from "../acervo-cliente/cliente";
+import { filtrarBaralhos } from "../acervo-cliente/busca-no-acervo";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { hashDaRota } from "./navegacao";
 
 /**
- * Tela de Baralhos (T2101; spec 021: FR-339–FR-343, FR-346, FR-347; spec 012
- * herdada em FR-140, FR-148 e FR-153).
+ * Tela de Baralhos (T2101; spec 021: FR-339–FR-343, FR-346, FR-347; spec 022:
+ * FR-348, FR-350, FR-354–FR-358; spec 012 herdada em FR-140, FR-148 e FR-153).
  *
  * É **somente a lista**: a criação mora em `PaginaDoFormularioDeBaralho` e
  * começa apenas por ação da pessoa, pelo link "Criar baralho" (FR-140). A tela
@@ -18,8 +19,24 @@ import { hashDaRota } from "./navegacao";
  * regra de domínio: as mensagens exibidas são as que o cliente devolve, em
  * português (FR-046).
  *
+ * A busca da spec 022 acrescenta, logo depois do cabeçalho, o painel de
+ * `Buscar baralhos` e a faixa de resultados (FR-354): o painel e o "Limpar
+ * filtros" aparecem **sempre** — também enquanto a lista carrega ou falha —,
+ * de modo que se possa digitar sem esperar a rede e a ação não desapareça
+ * justamente quando é precisa. A consulta é estado local da página e não é
+ * zerada pelo "Tentar novamente": a releitura só refaz a leitura (FR-148).
+ *
+ * O texto casa por trecho contínuo, sem acentos e sem caixa, e a consulta
+ * vazia não restringe (FR-348, FR-350); as contas ficam em `filtrarBaralhos`,
+ * o Módulo puro compartilhado com a página de Cartões. Digitar só refiltra: a
+ * tela nunca move o foco nem oferece botão de envio (FR-358).
+ *
  * Carregando, falha e vazio vêm de `EstadoDaCarga` (FR-153, FR-347), e a
  * falha oferece "Tentar novamente", que relê a lista pela Interface (FR-148).
+ * Quando há Baralhos mas nenhum satisfaz a consulta, a tela mostra "Nenhum
+ * resultado encontrado" — distinto do acervo vazio, que continua convidando a
+ * criar o primeiro Baralho (FR-356, FR-357). A contagem de resultados é
+ * anunciada por `role="status"` (FR-355).
  *
  * Cada Baralho é uma linha compacta no mesmo vocabulário da lista de Cartões
  * (FR-339): o nome é texto somente leitura — nunca link, sem foco e sem ação
@@ -39,6 +56,9 @@ export function PaginaDeBaralhos({
   const [carregando, setCarregando] = useState(true);
   const [falhaDeListagem, setFalhaDeListagem] = useState<string | null>(null);
   const [tentativa, setTentativa] = useState(0);
+  const [consulta, setConsulta] = useState("");
+
+  const campoDeBusca = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let ativo = true;
@@ -68,11 +88,24 @@ export function PaginaDeBaralhos({
   /**
    * Relê a lista pela Interface: é a ação "Tentar novamente" da falha
    * (FR-148). Nenhuma mensagem é inventada; a releitura só substitui o que a
-   * Interface devolver.
+   * Interface devolver. A consulta digitada continua onde está — o "Tentar
+   * novamente" só refaz a leitura.
    */
   function recarregar() {
     setTentativa((atual) => atual + 1);
   }
+
+  /**
+   * Limpa a busca e devolve o foco ao campo, para que a próxima digitação
+   * caia no lugar certo sem um clique extra (FR-356).
+   */
+  function limparFiltros() {
+    setConsulta("");
+    campoDeBusca.current?.focus();
+  }
+
+  const baralhosFiltrados = filtrarBaralhos(baralhos, consulta);
+  const listaCarregada = !carregando && falhaDeListagem === null;
 
   return (
     <div className="pagina">
@@ -87,6 +120,38 @@ export function PaginaDeBaralhos({
           Criar baralho
         </a>
       </header>
+
+      <section className="filtros filtros--busca-unica" aria-label="Busca e filtros">
+        <div className="campo">
+          <label className="rotulo" htmlFor="busca-de-baralhos">
+            Buscar baralhos
+          </label>
+          <input
+            id="busca-de-baralhos"
+            type="search"
+            autoComplete="off"
+            placeholder="Digite o nome do baralho"
+            value={consulta}
+            onChange={(evento) => setConsulta(evento.target.value)}
+            ref={campoDeBusca}
+          />
+        </div>
+      </section>
+
+      <div className="resultado-cabecalho">
+        <p role="status" aria-live="polite" aria-atomic="true">
+          {listaCarregada
+            ? contagemDeResultados(baralhosFiltrados.length)
+            : null}
+        </p>
+        <button
+          type="button"
+          className="botao botao--secundario"
+          onClick={limparFiltros}
+        >
+          Limpar filtros
+        </button>
+      </div>
 
       {carregando ? (
         <EstadoDaCarga estado="carregando" mensagem="Carregando Baralhos…" />
@@ -106,15 +171,32 @@ export function PaginaDeBaralhos({
             </a>
           }
         />
+      ) : baralhosFiltrados.length === 0 ? (
+        <div className="estado-vazio">
+          <h2>Nenhum resultado encontrado</h2>
+          <p>Altere a busca ou limpe os filtros para ver o acervo.</p>
+          <button
+            type="button"
+            className="botao botao--secundario"
+            onClick={limparFiltros}
+          >
+            Limpar filtros
+          </button>
+        </div>
       ) : (
         <ul className="lista lista--compacta">
-          {baralhos.map((baralho) => (
+          {baralhosFiltrados.map((baralho) => (
             <ItemDeBaralho key={baralho.id} baralho={baralho} />
           ))}
         </ul>
       )}
     </div>
   );
+}
+
+/** A contagem de resultados, com o plural da língua (FR-355). */
+function contagemDeResultados(quantidade: number): string {
+  return `${quantidade} ${quantidade === 1 ? "resultado" : "resultados"}`;
 }
 
 /**
@@ -179,4 +261,3 @@ function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
 function contagemDeCartoes(quantidade: number): string {
   return `${quantidade} ${quantidade === 1 ? "Cartão" : "Cartões"}`;
 }
-

@@ -1515,3 +1515,59 @@ label.campo--opcao {
     border-radius: 8px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Busca e filtros do acervo (022)
+ * ------------------------------------------------------------------------- */
+
+.filtros {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.filtros--busca-unica {
+  grid-template-columns: 1fr;
+}
+
+.filtros .campo {
+  min-width: 0;
+  margin: 0;
+}
+
+.filtros input,
+.filtros select {
+  width: 100%;
+  min-width: 0;
+}
+
+.resultado-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+
+.resultado-cabecalho p {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .filtros {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .resultado-cabecalho {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}

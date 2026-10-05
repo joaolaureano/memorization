@@ -77,13 +77,18 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
   it("anuncia o carregamento como região ativa polida (FR-153)", async () => {
     render(<PaginaDeBaralhos cliente={clienteDeProva()} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Carregando Baralhos…",
-    );
+    // A faixa de contagem da busca (spec 022) também é `role="status"`: a
+    // região do carregamento é localizada de forma inequívoca pelo próprio
+    // texto, não pelo papel.
+    const regiaoDoCarregamento = screen
+      .getByText("Carregando Baralhos…")
+      .closest('[role="status"]');
+
+    expect(regiaoDoCarregamento).toHaveTextContent("Carregando Baralhos…");
 
     await screen.findByText(/ainda não há Baralhos/i);
 
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(regiaoDoCarregamento).not.toBeInTheDocument();
   });
 
   it("o estado vazio traz a mensagem e o acesso à criação (FR-153)", async () => {

@@ -257,3 +257,196 @@ describe("PaginaDeBaralhos", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
+
+describe("PaginaDeBaralhos — busca (022)", () => {
+  /** A região de «Nenhum resultado encontrado», para restringir asserções. */
+  function regiaoSemResultados(): HTMLElement {
+    const titulo = screen.getByRole("heading", {
+      name: "Nenhum resultado encontrado",
+    });
+    const regiao = titulo.closest("div");
+
+    if (regiao === null) {
+      throw new Error("Região de «Nenhum resultado encontrado» não achada.");
+    }
+
+    return regiao;
+  }
+
+  it("encontra «Álgebra linear» buscando «algebra», com a contagem «1 resultado» (FR-348, FR-350, FR-355)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Álgebra linear");
+    await semearBaralho(cliente, "Biologia");
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    const campo = screen.getByRole("searchbox", { name: "Buscar baralhos" });
+    campo.focus();
+
+    // O texto casa por trecho contínuo, sem acentos e sem caixa (FR-348).
+    fireEvent.change(campo, { target: { value: "algebra" } });
+
+    expect(
+      within(itemDoBaralho("Álgebra linear")).getByText("Álgebra linear"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.queryByText("Biologia")).not.toBeInTheDocument();
+
+    // A contagem é anunciada pela faixa `role="status"` (FR-355).
+    expect(screen.getByRole("status")).toHaveTextContent("1 resultado");
+
+    // Digitar só refiltra: o foco não sai do campo (FR-358).
+    expect(campo).toHaveFocus();
+  });
+
+  it("conta no plural e mostra todos com a busca vazia ou só com espaços (FR-350, FR-355)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Álgebra linear");
+    await semearBaralho(cliente, "Biologia");
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    const campo = screen.getByRole("searchbox", { name: "Buscar baralhos" });
+
+    expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
+
+    // Consulta só com espaços não restringe (FR-350).
+    fireEvent.change(campo, { target: { value: "   " } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
+
+    fireEvent.change(campo, { target: { value: "" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
+  });
+
+  it("mostra «Nenhum resultado encontrado» com Limpar filtros, que restaura a lista e devolve o foco à busca (FR-354, FR-355)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Álgebra linear");
+    await semearBaralho(cliente, "Biologia");
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    const campo = screen.getByRole("searchbox", { name: "Buscar baralhos" });
+    fireEvent.change(campo, { target: { value: "xyz" } });
+
+    // Nenhum Baralho satisfaz a consulta: estado distinto do acervo vazio
+    // (FR-354), com a contagem honesta (FR-355).
+    expect(
+      screen.getByRole("heading", { name: "Nenhum resultado encontrado" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("0 resultados");
+
+    // O "Limpar filtros" acionado é o do próprio estado vazio, não o da faixa.
+    fireEvent.click(
+      within(regiaoSemResultados()).getByRole("button", {
+        name: "Limpar filtros",
+      }),
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(campo).toHaveValue("");
+    expect(campo).toHaveFocus();
+    expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
+  });
+
+  it("preserva Estudar e Editar com o mesmo destino durante a busca (FR-356)", async () => {
+    const cliente = clienteDeProva();
+    const id = await semearBaralho(cliente, "Álgebra linear", ["Fórmula"]);
+    await semearBaralho(cliente, "Biologia");
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    const hrefDeEstudo = within(itemDoBaralho("Álgebra linear"))
+      .getByRole("link", { name: "Estudar Álgebra linear" })
+      .getAttribute("href");
+    const hrefDeEdicao = within(itemDoBaralho("Álgebra linear"))
+      .getByRole("link", { name: "Editar Álgebra linear" })
+      .getAttribute("href");
+
+    expect(hrefDeEstudo).toBe(`#/baralhos/${id}/estudo`);
+    expect(hrefDeEdicao).toBe(`#/baralhos/${id}`);
+
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+      { target: { value: "algebra" } },
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      within(itemDoBaralho("Álgebra linear"))
+        .getByRole("link", { name: "Estudar Álgebra linear" })
+        .getAttribute("href"),
+    ).toBe(hrefDeEstudo);
+    expect(
+      within(itemDoBaralho("Álgebra linear"))
+        .getByRole("link", { name: "Editar Álgebra linear" })
+        .getAttribute("href"),
+    ).toBe(hrefDeEdicao);
+  });
+
+  it("acervo vazio continua com o estado vazio existente, não com «Nenhum resultado» (FR-355)", async () => {
+    renderizarPaginaDeBaralhos();
+
+    await screen.findByText(/ainda não há Baralhos/i);
+
+    const campo = screen.getByRole("searchbox", { name: "Buscar baralhos" });
+    fireEvent.change(campo, { target: { value: "xyz" } });
+
+    expect(estadoVazio()).toHaveTextContent(
+      "Ainda não há Baralhos. Crie o primeiro para começar a estudar.",
+    );
+    expect(
+      within(estadoVazio()).getByRole("link", { name: "Criar baralho" }),
+    ).toHaveAttribute("href", "#/baralhos/novo");
+    expect(
+      screen.queryByRole("heading", { name: "Nenhum resultado encontrado" }),
+    ).not.toBeInTheDocument();
+    expect(campo).toBeInTheDocument();
+  });
+
+  it("falha de leitura não mostra contagem e Tentar novamente preserva a consulta (FR-357)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Álgebra linear");
+    await semearBaralho(cliente, "Biologia");
+    cliente.simularIndisponibilidade();
+
+    renderizarPaginaDeBaralhos(cliente);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+    );
+
+    // A faixa de contagem existe sempre, mas fica vazia durante a falha.
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    // O painel de busca continua disponível durante a falha: a consulta é
+    // digitada entre a falha e a nova tentativa.
+    const campo = screen.getByRole("searchbox", { name: "Buscar baralhos" });
+    fireEvent.change(campo, { target: { value: "algebra" } });
+
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+
+    cliente.restaurarDisponibilidade();
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await screen.findAllByRole("listitem");
+
+    // A releitura não zera a consulta: o texto permanece e o filtro segue
+    // aplicado (FR-357).
+    expect(campo).toHaveValue("algebra");
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      within(itemDoBaralho("Álgebra linear")).getByText("Álgebra linear"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Biologia")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 resultado");
+  });
+});
