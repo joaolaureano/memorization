@@ -11,5 +11,11 @@ export default defineConfig({
     environment: "jsdom",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     setupFiles: ["./vitest.setup.ts"],
+    // Os tetos de tempo só existem para um teste travado não prender a suíte:
+    // eles não podem decidir o resultado conforme a velocidade ou a carga da
+    // máquina. Uma prova correta termina assim que a condição vale; o teto só
+    // é alcançado quando algo de fato não acontece.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });

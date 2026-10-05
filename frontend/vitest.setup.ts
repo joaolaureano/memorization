@@ -2,8 +2,11 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 
-// Início carrega estatísticas após Entrar; sob carga paralela o padrão de 1s causava falhas intermitentes.
-configure({ asyncUtilTimeout: 4000 });
+// O prazo de `findBy*` e `waitFor` é um teto contra travamento, e não uma
+// expectativa de velocidade: sob carga paralela, 1 s e depois 4 s fizeram provas
+// corretas falharem. A espera termina assim que a condição vale; só uma
+// condição que nunca vem chega a esse teto.
+configure({ asyncUtilTimeout: 30_000 });
 
 /**
  * O «hoje» de toda prova: uma quarta-feira, ao meio-dia no fuso de teste (o

@@ -107,6 +107,14 @@ export async function aguardarVerificacaoDoAcesso(): Promise<void> {
   await waitFor(() => {
     expect(screen.queryByText("Verificando o acesso…")).not.toBeInTheDocument();
   });
+
+  // O texto some no commit que monta a casca, mas os efeitos passivos desse
+  // commit — entre eles o ouvinte de `hashchange` — ainda podem estar pendentes
+  // quando o `waitFor` termina. Uma prova que navegue logo em seguida dispararia
+  // o evento antes de haver ouvinte, e o evento se perderia: o resultado
+  // passaria a depender de quando o agendador roda. Esvaziar os efeitos aqui
+  // faz a casca estar pronta, de fato, quando a espera acaba.
+  await act(async () => {});
 }
 
 /**

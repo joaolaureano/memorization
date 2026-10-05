@@ -12,6 +12,10 @@ export default defineConfig({
   test: {
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],
+    // Teto contra travamento, e não expectativa de velocidade: o resultado não
+    // pode depender da carga da máquina.
+    testTimeout: 60_000,
+    hookTimeout: 120_000,
     fileParallelism: false,
     include: [
       "tests/armazenamento/construcao.test.ts",
