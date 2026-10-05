@@ -369,3 +369,43 @@ describe("migração 8 — esquema da Agenda de estudo no PostgreSQL", () => {
     });
   });
 });
+
+const VERSAO_CORRENTE = MIGRACOES[MIGRACOES.length - 1]?.versao ?? 0;
+
+describe("migração 11 — origem 'temporario' no PostgreSQL", () => {
+  it("amplia a constraint registro_de_sessao_origem_check e aceita só 'temporario' a mais", async () => {
+    await comBase("migracao-origem-temporaria", VERSAO_CORRENTE, async (piscina) => {
+      const dono = await gravarDono(piscina, "dono-um", "ana.silva");
+
+      const { rows } = await piscina.query<{ definicao: string }>(
+        `SELECT pg_get_constraintdef(oid) AS definicao
+           FROM pg_constraint
+          WHERE conrelid = 'registro_de_sessao'::regclass
+            AND conname = 'registro_de_sessao_origem_check'`,
+      );
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.definicao).toContain("temporario");
+
+      await piscina.query(
+        `INSERT INTO registro_de_sessao
+           (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+            estudados, acertos, erros, origem)
+         VALUES ($1, $2, 'b1', 'Inglês', $3, 1, 1, 0, 'temporario')`,
+        ["reg-temporario", dono, INSTANTE],
+      );
+
+      await expect(
+        piscina.query(
+          `INSERT INTO registro_de_sessao
+             (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+              estudados, acertos, erros, origem)
+           VALUES ($1, $2, 'b1', 'Inglês', $3, 1, 1, 0, 'outra')`,
+          ["reg-invalido", dono, INSTANTE],
+        ),
+      ).rejects.toThrow();
+
+      expect(await contarLinhas(piscina, "registro_de_sessao")).toBe(1);
+    });
+  });
+});

@@ -419,6 +419,23 @@ ALTER TABLE preferencias DROP COLUMN limite_de_novos_por_dia;
 `;
 
 /**
+ * Migração 11 — `registro_de_sessao.origem` passa a aceitar `'temporario'`.
+ *
+ * A migração 7 criou a restrição sem nome explícito e o PostgreSQL a nomeou
+ * `registro_de_sessao_origem_check`. O `DROP CONSTRAINT IF EXISTS` seguido do
+ * `ADD CONSTRAINT` troca a restrição sem tocar nos dados: só os valores aceitos
+ * de `origem` mudam.
+ */
+const ESQUEMA_ORIGEM_TEMPORARIA = `
+ALTER TABLE registro_de_sessao
+  DROP CONSTRAINT IF EXISTS registro_de_sessao_origem_check;
+
+ALTER TABLE registro_de_sessao
+  ADD CONSTRAINT registro_de_sessao_origem_check
+  CHECK (origem IN ('baralho','revisao','temporario'));
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -434,4 +451,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 8, sql: ESQUEMA_AGENDA_DE_ESTUDO },
   { versao: 9, sql: ESQUEMA_ACESSO_TEMPORARIO },
   { versao: 10, sql: ESQUEMA_SEM_LIMITE_DE_NOVOS },
+  { versao: 11, sql: ESQUEMA_ORIGEM_TEMPORARIA },
 ];

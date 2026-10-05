@@ -45,9 +45,12 @@ describe("migração 10 — Preferências sem limite de Cartões novos", () => {
 
     expect(colunasDasPreferencias(banco)).toContain("limite_de_novos_por_dia");
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 10),
+    );
 
-    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(10);
+    expect(MIGRACOES.find((migracao) => migracao.versao === 10)).toBeDefined();
     expect(colunasDasPreferencias(banco)).not.toContain(
       "limite_de_novos_por_dia",
     );

@@ -408,6 +408,79 @@ ALTER TABLE preferencias DROP COLUMN limite_de_novos_por_dia;
 `;
 
 /**
+ * Migração 11 — `registro_de_sessao.origem` passa a aceitar `'temporario'`.
+ *
+ * O SQLite não altera o `CHECK` de uma coluna existente e a migração roda com
+ * `foreign_keys = ON`: um `DROP` direto de `registro_de_sessao` apagaria em
+ * cascata os Itens. Por isso, numa única transação:
+ *
+ * 1. criar `registro_de_sessao_v11` com o DDL atual da tabela e o `CHECK` de
+ *    origem ampliado para `('baralho','revisao','temporario')`;
+ * 2. criar `item_de_registro_v11` com o DDL atual e a chave estrangeira
+ *    apontando para `registro_de_sessao_v11(id) ON DELETE CASCADE`;
+ * 3. copiar as linhas, primeiro dos Registros e depois dos Itens, com
+ *    `INSERT … SELECT` nas colunas explícitas;
+ * 4. `DROP TABLE item_de_registro`; depois `DROP TABLE registro_de_sessao` —
+ *    na ordem filho → pai, o cascade não alcança as tabelas novas;
+ * 5. `ALTER TABLE registro_de_sessao_v11 RENAME TO registro_de_sessao`;
+ * 6. `ALTER TABLE item_de_registro_v11 RENAME TO item_de_registro`;
+ * 7. recriar o índice `registro_de_sessao_usuario_concluida`.
+ *
+ * Nenhum dado é alterado: só a restrição de valores de `origem` muda.
+ */
+const ESQUEMA_ORIGEM_TEMPORARIA = `
+CREATE TABLE registro_de_sessao_v11 (
+  id              TEXT PRIMARY KEY,
+  usuario_id      TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  baralho_id      TEXT NOT NULL,
+  nome_do_baralho TEXT NOT NULL,
+  concluida_em    TEXT NOT NULL,
+  estudados       INTEGER NOT NULL CHECK (estudados >= 1),
+  acertos         INTEGER NOT NULL CHECK (acertos >= 0),
+  erros           INTEGER NOT NULL CHECK (erros >= 0),
+  origem          TEXT NOT NULL DEFAULT 'baralho'
+    CHECK (origem IN ('baralho','revisao','temporario')),
+  CHECK (acertos + erros = estudados)
+);
+
+CREATE TABLE item_de_registro_v11 (
+  registro_id TEXT NOT NULL
+    REFERENCES registro_de_sessao_v11(id) ON DELETE CASCADE,
+  posicao     INTEGER NOT NULL,
+  frente      TEXT NOT NULL,
+  verso       TEXT NOT NULL,
+  resultado   TEXT NOT NULL CHECK (resultado IN ('acertou', 'errou')),
+  cartao_id   TEXT NULL,
+  avaliacao   TEXT NULL
+    CHECK (avaliacao IS NULL OR avaliacao IN ('errei','dificil','bom','facil')),
+  PRIMARY KEY (registro_id, posicao)
+);
+
+INSERT INTO registro_de_sessao_v11
+  (id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+   estudados, acertos, erros, origem)
+SELECT
+  id, usuario_id, baralho_id, nome_do_baralho, concluida_em,
+  estudados, acertos, erros, origem
+FROM registro_de_sessao;
+
+INSERT INTO item_de_registro_v11
+  (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
+SELECT
+  registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao
+FROM item_de_registro;
+
+DROP TABLE item_de_registro;
+DROP TABLE registro_de_sessao;
+
+ALTER TABLE registro_de_sessao_v11 RENAME TO registro_de_sessao;
+ALTER TABLE item_de_registro_v11 RENAME TO item_de_registro;
+
+CREATE INDEX registro_de_sessao_usuario_concluida
+  ON registro_de_sessao (usuario_id, concluida_em DESC);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -423,4 +496,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 8, sql: ESQUEMA_AGENDA_DE_ESTUDO },
   { versao: 9, sql: ESQUEMA_ACESSO_TEMPORARIO },
   { versao: 10, sql: ESQUEMA_SEM_LIMITE_DE_NOVOS },
+  { versao: 11, sql: ESQUEMA_ORIGEM_TEMPORARIA },
 ];
