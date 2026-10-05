@@ -14,6 +14,7 @@ import type {
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
+  DesfechoDeBaralhoComVinculos,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -173,6 +174,15 @@ const OBTER_CARTAO = `
 SELECT id, frente, verso FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
+/**
+ * Os Cartões de `$2` que pertencem ao Usuário `$1`. Os `id` **ausentes** do
+ * resultado são os indisponíveis: Cartão inexistente e Cartão de outro dono são
+ * indistinguíveis, como no resto do acervo (FR-093, FR-372, FR-373).
+ */
+const LISTAR_CARTOES_DO_DONO_POR_IDS = `
+SELECT id FROM cartao WHERE usuario_id = $1 AND id = ANY($2::text[]);
+`;
+
 const ATUALIZAR_CARTAO = `
 UPDATE cartao SET frente = $1, verso = $2 WHERE id = $3 AND usuario_id = $4;
 `;
@@ -191,6 +201,16 @@ SELECT id, nome FROM baralho WHERE usuario_id = $1;
 
 const OBTER_BARALHO = `
 SELECT id, nome FROM baralho WHERE id = $1 AND usuario_id = $2;
+`;
+
+/**
+ * A busca do Baralho por `id` **sem escopo de dono** é deliberada (FR-372,
+ * FR-373): é ela que distingue o reenvio idempotente — o Baralho já existe e é
+ * do próprio Usuário, e a criação o devolve como está, sem gravar de novo — do
+ * `id` tomado por **outro** dono, que é `conflito`, e não `nao_encontrado`.
+ */
+const OBTER_BARALHO_DE_QUALQUER_DONO = `
+SELECT id, nome, usuario_id AS "usuarioId" FROM baralho WHERE id = $1;
 `;
 
 const ATUALIZAR_BARALHO = `
@@ -697,6 +717,13 @@ type LinhaDeBaralho = {
   nome: string;
 };
 
+/**
+ * Linha de `baralho` com o dono: é o que distingue o reenvio idempotente — o
+ * Baralho já é do próprio Usuário — do `id` tomado por outro dono, que é
+ * `conflito` (FR-372, FR-373).
+ */
+type LinhaDeBaralhoComDono = LinhaDeBaralho & { usuarioId: string };
+
 /** Linha da contagem por Baralho; o `COUNT` do PostgreSQL chega como texto. */
 type LinhaDeContagem = {
   baralhoId: string;
@@ -866,6 +893,39 @@ async function comDesfecho<T>(
     return await operacao();
   } catch (erro) {
     return desfechoDaFalha(erro);
+  }
+}
+
+/** Desfecho de falha do armazenamento na criação de Baralho com Vínculos. */
+const BARALHO_COM_VINCULOS_INDISPONIVEL: DesfechoDeBaralhoComVinculos = {
+  ok: false,
+  erro: "indisponivel",
+};
+
+/**
+ * Desfecho do `id` de Baralho já usado por **outro** dono (FR-372, FR-373): o
+ * reenvio do mesmo Usuário é idempotente, mas o `id` tomado não pode ser
+ * sobrescrito nem confundido com Cartões indisponíveis.
+ */
+const CONFLITO_DE_BARALHO: DesfechoDeBaralhoComVinculos = {
+  ok: false,
+  erro: "conflito",
+};
+
+/**
+ * Executa a operação e traduz a falha do driver em `indisponivel` no
+ * vocabulário da criação de Baralho com Vínculos (FR-372, FR-373). Os desfechos
+ * de domínio — `conflito` e `cartoes_indisponiveis` — são devolvidos antes de
+ * qualquer exceção e atravessam intactos; nenhum erro do driver chega ao
+ * chamador (FR-107, FR-118).
+ */
+async function comDesfechoDeBaralhoComVinculos(
+  operacao: () => Promise<DesfechoDeBaralhoComVinculos>,
+): Promise<DesfechoDeBaralhoComVinculos> {
+  try {
+    return await operacao();
+  } catch {
+    return BARALHO_COM_VINCULOS_INDISPONIVEL;
   }
 }
 
@@ -1313,6 +1373,77 @@ export async function abrirArmazenamentoPostgresql(
 
         return { ok: true, valor: baralho };
       });
+    },
+
+    /**
+     * Cria o Baralho e os Vínculos com os Cartões numa **única transação**
+     * (FR-372, FR-373): ou o Baralho entra com todos os Vínculos, ou nada é
+     * gravado. O `id` do Baralho é lido **sem escopo de dono** — o Baralho já
+     * existente e do próprio Usuário é reenvio idempotente, devolvido como está
+     * (`novo: false`), e o de outro dono é `conflito`. Só depois de reconhecer
+     * que o Baralho é novo é que os Cartões são conferidos: os que não estão no
+     * acervo do Usuário — inexistentes ou alheios, indistinguíveis (FR-093) —
+     * recusam como `cartoes_indisponiveis`, na ordem recebida, sem gravar
+     * Baralho nem Vínculo algum.
+     */
+    async inserirBaralhoComVinculos(usuarioId, baralho, cartaoIds) {
+      return comDesfechoDeBaralhoComVinculos(() =>
+        emTransacao<DesfechoDeBaralhoComVinculos>(
+          piscina,
+          async (cliente) => {
+            const { rows } = await cliente.query<LinhaDeBaralhoComDono>(
+              OBTER_BARALHO_DE_QUALQUER_DONO,
+              [baralho.id],
+            );
+            const existente = rows[0];
+
+            if (existente !== undefined) {
+              return existente.usuarioId === usuarioId
+                ? {
+                    ok: true,
+                    valor: {
+                      baralho: baralhoDaLinha(existente),
+                      novo: false,
+                    },
+                  }
+                : CONFLITO_DE_BARALHO;
+            }
+
+            const { rows: disponiveis } = await cliente.query<{ id: string }>(
+              LISTAR_CARTOES_DO_DONO_POR_IDS,
+              [usuarioId, cartaoIds],
+            );
+            const doUsuario = new Set(disponiveis.map((linha) => linha.id));
+            const indisponiveis = cartaoIds.filter(
+              (id) => !doUsuario.has(id),
+            );
+
+            if (indisponiveis.length > 0) {
+              return {
+                ok: false,
+                erro: "cartoes_indisponiveis",
+                cartaoIds: indisponiveis,
+              };
+            }
+
+            await cliente.query(INSERIR_BARALHO, [
+              baralho.id,
+              baralho.nome,
+              usuarioId,
+            ]);
+
+            for (const cartaoId of cartaoIds) {
+              await cliente.query(INSERIR_VINCULO, [
+                cartaoId,
+                baralho.id,
+                usuarioId,
+              ]);
+            }
+
+            return { ok: true, valor: { baralho, novo: true } };
+          },
+        ),
+      );
     },
 
     async listarBaralhos(usuarioId) {

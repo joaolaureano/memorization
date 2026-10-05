@@ -13,6 +13,7 @@ import type {
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
+  DesfechoDeBaralhoComVinculos,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -92,6 +93,23 @@ const CONFLITO: Desfecho<never> = {
   erro: "conflito",
 };
 
+/** Desfecho de falha do armazenamento na criação do Baralho com Vínculos (FR-372). */
+const BARALHO_COM_VINCULOS_INDISPONIVEL: DesfechoDeBaralhoComVinculos = {
+  ok: false,
+  erro: "indisponivel",
+};
+
+/**
+ * Desfecho do `id` de Baralho já usado pelo acervo de **outro** Usuário
+ * (FR-373). Como o `conflito` do Registro de Sessão, a colisão entre donos é
+ * recusa de domínio — nunca falha do armazenamento nem revelação do Baralho
+ * alheio.
+ */
+const BARALHO_COM_VINCULOS_EM_CONFLITO: DesfechoDeBaralhoComVinculos = {
+  ok: false,
+  erro: "conflito",
+};
+
 /**
  * Padrões das Preferências quando o Usuário nunca as salvou (D5, FR-200). A
  * Porta sintetiza os padrões na leitura e nunca grava linha a priori.
@@ -126,6 +144,22 @@ function comDesfecho<T>(operacao: () => Desfecho<T>): Desfecho<T> {
     return operacao();
   } catch {
     return FALHA_INDISPONIVEL;
+  }
+}
+
+/**
+ * Executa a operação do Baralho com Vínculos e traduz a falha do SQLite em
+ * `indisponivel` (FR-372). O desfecho `cartoes_indisponiveis` é **devolvido**,
+ * e não lançado: só o erro do driver vira indisponibilidade, e a lista de
+ * `cartaoIds` recusados atravessa a Porta intacta (FR-373).
+ */
+function comDesfechoDeBaralhoComVinculos(
+  operacao: () => DesfechoDeBaralhoComVinculos,
+): DesfechoDeBaralhoComVinculos {
+  try {
+    return operacao();
+  } catch {
+    return BARALHO_COM_VINCULOS_INDISPONIVEL;
   }
 }
 
@@ -472,6 +506,16 @@ export async function abrirArmazenamentoSqlite(
   );
   const obterBaralhoPorId = banco.prepare(
     "SELECT id, nome FROM baralho WHERE id = ? AND usuario_id = ?",
+  );
+  /**
+   * A busca por `id` **sem** escopo de dono é deliberada em
+   * `inserirBaralhoComVinculos`: é ela que distingue a reinserção idempotente
+   * do mesmo Usuário (FR-372) do `id` que já pertence a outro Usuário, que é
+   * `conflito` (FR-373). Ela nunca alimenta a resposta do caminho de conflito
+   * — só o booleano do dono atravessa.
+   */
+  const obterBaralhoPorIdDeQualquerDono = banco.prepare(
+    "SELECT id, nome, usuario_id FROM baralho WHERE id = ?",
   );
   const atualizarBaralho = banco.prepare(
     "UPDATE baralho SET nome = ? WHERE id = ? AND usuario_id = ?",
@@ -913,6 +957,69 @@ export async function abrirArmazenamentoSqlite(
 
         return { ok: true, valor: baralho };
       });
+    },
+
+    /**
+     * Cria o Baralho e um Vínculo por Cartão numa transação só (FR-372,
+     * FR-373): a idempotência do `id`, a conferência de posse de cada Cartão e
+     * as duas gravações compartilham o mesmo desfazer.
+     */
+    async inserirBaralhoComVinculos(usuarioId, baralho, cartaoIds) {
+      return comDesfechoDeBaralhoComVinculos(() =>
+        /**
+         * Baralho e Vínculos numa transação só (FR-372): um Baralho sem os
+         * Vínculos que o Module prometeu seria acervo meio-gravado, e a
+         * releitura idempotente devolveria um retrato incompleto.
+         */
+        emTransacao(banco, () => {
+          const existente = obterBaralhoPorIdDeQualquerDono.get(baralho.id);
+
+          if (existente !== undefined) {
+            /**
+             * O mesmo `id` do mesmo Usuário é a retentativa idempotente
+             * (FR-372): o Baralho guardado volta intacto, com `novo: false`, e
+             * nada é gravado de novo. O `id` de **outro** Usuário é recusa de
+             * domínio (FR-373), sem que nada do Baralho alheio atravesse a
+             * Porta.
+             */
+            return (existente.usuario_id as string) === usuarioId
+              ? {
+                  ok: true,
+                  valor: {
+                    baralho: baralhoDaLinha(existente),
+                    novo: false,
+                  },
+                }
+              : BARALHO_COM_VINCULOS_EM_CONFLITO;
+          }
+
+          /**
+           * A conferência de cada Cartão é feita **no escopo do dono**: o
+           * Cartão que não existe e o de outro Usuário são a mesma ausência
+           * (FR-092), e os `id` recusados voltam na ordem recebida, sem que
+           * nada seja gravado (FR-373).
+           */
+          const indisponiveis = cartaoIds.filter(
+            (cartaoId) => obterCartaoPorId.get(cartaoId, usuarioId) === undefined,
+          );
+
+          if (indisponiveis.length > 0) {
+            return {
+              ok: false,
+              erro: "cartoes_indisponiveis",
+              cartaoIds: indisponiveis,
+            };
+          }
+
+          inserirBaralho.run(baralho.id, baralho.nome, usuarioId);
+
+          for (const cartaoId of cartaoIds) {
+            inserirVinculo.run(cartaoId, baralho.id);
+          }
+
+          return { ok: true, valor: { baralho, novo: true } };
+        }),
+      );
     },
 
     async listarBaralhos(usuarioId) {

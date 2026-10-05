@@ -374,6 +374,12 @@ export type CodigoDeFalhaDeArmazenamento =
  * `indisponivel` não apresenta a operação como feita e pode tentar de novo com
  * o mesmo conteúdo informado (FR-044, FR-045, FR-107).
  */
+/** Desfecho de `inserirBaralhoComVinculos` (FR-372, FR-373). */
+export type DesfechoDeBaralhoComVinculos =
+  | { ok: true; valor: { baralho: Baralho; novo: boolean } }
+  | { ok: false; erro: "cartoes_indisponiveis"; cartaoIds: string[] }
+  | { ok: false; erro: "conflito" | "indisponivel" };
+
 export type Desfecho<T> =
   | { ok: true; valor: T }
   | { ok: false; erro: CodigoDeFalhaDeArmazenamento };
@@ -620,6 +626,19 @@ export interface ArmazenamentoDoAcervo {
    * repetidos são legítimos (FR-012).
    */
   inserirBaralho(usuarioId: string, baralho: Baralho): Promise<Desfecho<Baralho>>;
+
+  /**
+   * Cria o Baralho e um Vínculo para cada Cartão numa única transação (FR-372,
+   * FR-373). O mesmo `id` do mesmo dono devolve o Baralho guardado
+   * (`novo: false`), sem gravar de novo; de outro dono é `conflito`. Cartão
+   * inexistente ou alheio recusa tudo como `cartoes_indisponiveis`, com os ids
+   * na ordem recebida.
+   */
+  inserirBaralhoComVinculos(
+    usuarioId: string,
+    baralho: Baralho,
+    cartaoIds: readonly string[],
+  ): Promise<DesfechoDeBaralhoComVinculos>;
 
   /** Devolve os Baralhos de `usuarioId`, sem prometer ordem alguma. */
   listarBaralhos(usuarioId: string): Promise<Baralho[]>;
