@@ -8,6 +8,13 @@ Abra `index.html` no navegador. Os dados são ilustrativos e voltam ao estado
 inicial ao recarregar. É possível selecionar dias, criar um estudo recorrente
 e simular a conclusão de uma Sessão.
 
+Com as dependências Playwright já disponíveis no repositório, confira os
+estados responsivos, a edição, o texto centralizado e a pausa com:
+
+```sh
+rtk proxy node design/agendamento/verificar.mjs
+```
+
 ## Início
 
 1. **Hoje**: data, estudos concluídos/previstos e ação para o próximo estudo.
@@ -33,8 +40,13 @@ apenas da cor. O calendário é um grupo de botões de seleção, utilizável po
 - Resumo antes de salvar: “Inglês · toda segunda e quinta · 20 Cartões”.
 - Ações: Salvar agendamento e Cancelar.
 
-Gerenciar agenda deve oferecer editar, pausar/retomar e excluir. A proposta
-visual desta primeira rodada concentra-se no calendário e na criação.
+Gerenciar agenda apresenta rotinas ativas e pausadas, com Editar,
+Pausar/Retomar e Excluir. A linha e a etiqueta “Pausada” recebem um tom âmbar
+discreto, além do rótulo textual. Editar abre os campos preenchidos; o texto
+do combo-box Baralho fica centralizado. Ao salvar, uma confirmação contextual
+resume os efeitos sobre hoje, o futuro, conclusões passadas e Sessões já
+iniciadas. O parágrafo genérico que ficava no fim do formulário foi removido.
+Pausar e excluir também pedem confirmação das consequências.
 
 ## Regras da primeira exploração (histórico)
 
@@ -48,8 +60,9 @@ visual desta primeira rodada concentra-se no calendário e na criação.
 - Dia passado incompleto mostra “Não realizado” e a contagem. Não acumula
   automaticamente no próximo dia. Dias futuros mostram “Programado”.
 - Dia vazio mostra “Sem estudos”, sem tratá-lo como concluído ou perdido.
-- Editar ou pausar uma rotina afeta ocorrências futuras; conclusões passadas
-  são preservadas. Criar hoje inclui hoje quando o dia da semana foi escolhido.
+- Editar ou pausar uma rotina afeta ocorrências pendentes de hoje e futuras;
+  conclusões passadas são preservadas. Criar hoje inclui hoje quando o dia da
+  semana foi escolhido.
 - Baralho vazio ou excluído mostra “Baralho indisponível”, ação para ajustar
   a rotina e nenhuma conclusão automática.
 - O dia segue o fuso do navegador, como o Início atual. Viagens e mudança de
@@ -67,7 +80,6 @@ revisão calculada pela repetição espaçada.
 ## Continuação pelo Spec Kit
 
 A [spec 016](../../specs/016-agendamento-de-estudo/spec.md) registra os fluxos
-completos, inclusive gerenciamento, datas e concorrência não demonstrados neste
-HTML. Seu [checklist](../../specs/016-agendamento-de-estudo/checklists/requirements.md)
-registra a revisão documental. As premissas A-01 a A-07 são os pontos propostos
-para a etapa `speckit-clarify`, antes do planejamento técnico.
+completos, inclusive datas e concorrência não simuladas neste HTML. O protótipo
+permite inspecionar e interagir com criação, edição, pausa/retomada e exclusão;
+os dados continuam fictícios e locais à página.

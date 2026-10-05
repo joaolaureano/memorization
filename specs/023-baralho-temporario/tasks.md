@@ -73,3 +73,13 @@ Backend primeiro (T2301–T2304), depois o cliente (T2305) e o Module (T2306), e
 | FR-376 | T2302, T2310 |
 | FR-377 | T2308, T2313 |
 | SC-143–SC-149 | T2306, T2308, T2309, T2311, T2312, T2313 |
+
+## Phase 7: Convergence
+
+- [X] T2315 Backend: `AlgoritmoDeRepeticao` ganha `opcoesDeAvaliacao` ordenadas (`chave`, `rotulo`, `resultado` acertou/errou); SM-2 declara Errei/Difícil/Bom/Fácil; `GET /preferencias` expõe as opções de cada algoritmo; migração (SQLite e PostgreSQL) acrescenta `item_de_registro.avaliacao_rotulo` nulo; o Acervo grava o rótulo derivado pelo servidor e lê Itens antigos com chave e sem rótulo pelos rótulos do SM-2; provas no Acervo, armazenamentos e HTTP per 015 FR-191, FR-196, FR-197 (missing)
+- [X] T2316 ResumoDaSessao.tsx agrupa Itens por opção de Avaliação (chave/rótulo do Registro, opções do algoritmo com contagem zero), um botão independente por grupo com `aria-expanded`/`aria-controls`, grupo vazio indisponível com explicação, Itens sem Avaliação em «Sem avaliação» sem inferência; placar e legenda por grupo; provas pelo DOM per 013 FR-174, FR-175, SC-073, 015 FR-216, 023 FR-370 (contradicts)
+- [X] T2317 Cliente e Sessão: tipo de opção de Avaliação no cliente (HTTP e em memória), botões de Avaliação e atalhos montados pelas opções do algoritmo do Usuário em vez de `AVALIACOES` fixo; Registro envia a chave e lê o rótulo per 015 FR-191, FR-194, FR-218 (partial)
+- [X] T2318 Nome temporário opcional: campo na montagem (PaginaDaSelecaoTemporaria.tsx, até 100 caracteres, preservado durante a montagem); o Acervo aceita `nomeDoBaralho` em `origem: "temporario"` (vazio/ausente → «Baralho temporário», acima de 100 recusado); Sessão, Resumo, PaginaDoRegistro.tsx e EstatisticasDoEstudo.tsx exibem o nome do Registro; provas per FR-369, FR-371, FR-376, US1/AC2, US2/AC4 (missing)
+- [X] T2319 SalvarSelecaoComoBaralho.tsx inicia o campo com o nome temporário ou «Baralho temporário», editável; provas per US3/AC1, FR-371 (partial)
+- [X] T2320 FontesDaSelecao.tsx: fonte de Baralhos mantém o filtro Situação da revisão sem etiquetas Pendente/Revisado/Sem cartões nas linhas; lista principal de Baralhos inalterada; provas per 024 FR-382, SC-150, 023 FR-362 (contradicts)
+- [X] T2321 Atualizar e2e (baralho-temporario, responsividade, estatísticas/histórico e revisão afetados) para grupos por Avaliação, nome temporário e fonte sem etiquetas; atualizar README e research.md; rodar `npm run verificar:ci` per T2312–T2314, SC-073, SC-143–SC-148 (partial)

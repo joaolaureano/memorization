@@ -52,6 +52,7 @@ import type {
   Estatisticas,
   ItemRegistrado,
   OpcaoDeAlgoritmo,
+  OpcaoDeAvaliacao,
   Preferencias,
   Previa,
   RegistroDeSessao,
@@ -1907,6 +1908,14 @@ function lerItemRegistrado(corpo: unknown): ItemRegistrado | null {
     item.avaliacao = campos.avaliacao;
   }
 
+  if (campos.avaliacaoRotulo !== undefined) {
+    if (campos.avaliacaoRotulo !== null && typeof campos.avaliacaoRotulo !== "string") {
+      return null;
+    }
+
+    item.avaliacaoRotulo = campos.avaliacaoRotulo;
+  }
+
   return item;
 }
 
@@ -2112,11 +2121,53 @@ function lerOpcaoDeAlgoritmo(corpo: unknown): OpcaoDeAlgoritmo | null {
 
   const campos = corpo as Record<string, unknown>;
 
-  if (typeof campos.id !== "string" || typeof campos.rotulo !== "string") {
+  if (
+    typeof campos.id !== "string" ||
+    typeof campos.rotulo !== "string" ||
+    !Array.isArray(campos.opcoesDeAvaliacao)
+  ) {
     return null;
   }
 
-  return { id: campos.id, rotulo: campos.rotulo };
+  const opcoesDeAvaliacao: OpcaoDeAvaliacao[] = [];
+
+  for (const item of campos.opcoesDeAvaliacao) {
+    const opcao = lerOpcaoDeAvaliacao(item);
+
+    if (opcao === null) {
+      return null;
+    }
+
+    opcoesDeAvaliacao.push(opcao);
+  }
+
+  return {
+    id: campos.id,
+    rotulo: campos.rotulo,
+    opcoesDeAvaliacao,
+  };
+}
+
+function lerOpcaoDeAvaliacao(corpo: unknown): OpcaoDeAvaliacao | null {
+  if (typeof corpo !== "object" || corpo === null) {
+    return null;
+  }
+
+  const campos = corpo as Record<string, unknown>;
+
+  if (
+    !ehAvaliacao(campos.chave) ||
+    typeof campos.rotulo !== "string" ||
+    (campos.resultado !== "acertou" && campos.resultado !== "errou")
+  ) {
+    return null;
+  }
+
+  return {
+    chave: campos.chave,
+    rotulo: campos.rotulo,
+    resultado: campos.resultado,
+  };
 }
 
 function lerPreferencias(corpo: unknown): Preferencias | null {

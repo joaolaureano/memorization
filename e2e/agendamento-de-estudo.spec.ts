@@ -594,6 +594,141 @@ test("teclado: criar, pausar, retomar e excluir a Rotina inteiramente por teclad
   }
 });
 
+test("editar Rotina: diálogo de confirmação, Voltar cancela, confirmar salva; select centralizado; Rotina pausada com cor distinta (T2321, FR-226)", async ({
+  browser,
+}) => {
+  const ambiente = await subirAmbiente("agenda-edicao-");
+
+  try {
+    const lu = await criarUsuarioDeProva(ambiente.enderecoDaApi, "lu.santos");
+
+    const baralhoId = await prepararBaralho(ambiente, lu, "Português", 2);
+
+    const pagina = await abrirComoUsuario(browser, ambiente, lu);
+
+    // Criar uma Rotina
+    await pagina.goto(`${ambiente.enderecoDoFrontend}/#/agenda/nova`);
+    await expect(
+      pagina.getByRole("heading", { level: 1, name: "Agendar estudo" }),
+    ).toBeVisible();
+
+    await pagina.getByLabel("Baralho").selectOption({ label: "Português (2 Cartões)" });
+
+    for (const dia of ["segunda-feira", "quarta-feira"]) {
+      await pagina.getByRole("checkbox", { name: dia }).check();
+    }
+
+    await pagina.getByRole("button", { name: "Salvar agendamento" }).click();
+
+    await expect(
+      pagina.getByRole("heading", { level: 1, name: "Rotinas de estudo" }),
+    ).toBeVisible();
+
+    // Editar a Rotina: abre o formulário
+    await pagina
+      .getByRole("link", { name: "Editar rotina de Português", exact: true })
+      .click();
+
+    await expect(
+      pagina.getByRole("heading", { level: 1, name: "Editar rotina" }),
+    ).toBeVisible();
+
+    // O select do Baralho é centralizado em modo edição (FR-226)
+    const seletor = pagina.getByLabel("Baralho");
+    const textAlignLast = await seletor.evaluate((elemento) =>
+      getComputedStyle(elemento).textAlignLast || getComputedStyle(elemento).textAlign,
+    );
+
+    expect(textAlignLast).toBe("center");
+
+    // Alterar um dia e salvar com confirmação
+    await pagina.getByRole("checkbox", { name: "quinta-feira" }).check();
+
+    // Clicar em "Salvar alterações": diálogo de confirmação aparece
+    const salvarAlteracoes = pagina.getByRole("button", { name: "Salvar alterações" });
+    await salvarAlteracoes.click();
+
+    const dialogo = pagina
+      .getByRole("dialog")
+      .filter({ hasText: "Confirmar alterações" });
+
+    await expect(dialogo).toBeVisible();
+    await expect(dialogo.getByRole("button", { name: "Voltar" })).toBeVisible();
+
+    // Clicar em "Voltar" no diálogo: cancela e volta ao formulário
+    await dialogo.getByRole("button", { name: "Voltar" }).click();
+
+    await expect(dialogo).toBeHidden();
+    await expect(
+      pagina.getByRole("heading", { level: 1, name: "Editar rotina" }),
+    ).toBeVisible();
+
+    // A mudança continua no formulário
+    await expect(
+      pagina.getByRole("checkbox", { name: "quinta-feira" }),
+    ).toBeChecked();
+
+    // Clicar em "Salvar alterações" novamente e confirmar: as mudanças são salvas
+    await salvarAlteracoes.click();
+
+    await expect(dialogo).toBeVisible();
+
+    const confirmar = dialogo.getByRole("button", { name: /^Confirmar/ });
+
+    await expect(confirmar).toBeVisible();
+    await confirmar.click();
+
+    await expect(
+      pagina.getByRole("heading", { level: 1, name: "Rotinas de estudo" }),
+    ).toBeVisible();
+
+    // A mudança foi salva: quinta-feira aparece no resumo
+    // Usar last() para pegar o elemento da lista, não o do status
+    await expect(
+      pagina.getByText("Português · segunda, quarta e quinta · Todos os Cartões").last(),
+    ).toBeVisible();
+
+    // Pausar a Rotina: a linha tem classe "agenda__rotina--pausada" e fundo âmbar
+    await pagina.getByRole("button", { name: "Pausar rotina de Português" }).click();
+
+    const dialogoP = pagina
+      .getByRole("dialog")
+      .filter({ hasText: "Pausar" });
+
+    await expect(dialogoP).toBeVisible();
+    await dialogoP.getByRole("button", { name: "Pausar Rotina" }).click();
+
+    await expect(
+      pagina.getByText("Rotina de Português pausada."),
+    ).toBeVisible();
+
+    // A linha da Rotina pausada tem um fundo distinto (não totalmente transparente)
+    const linhaPausada = pagina
+      .getByRole("listitem")
+      .filter({ has: pagina.getByText("Português", { exact: true }).first() });
+
+    const bgcolor = await linhaPausada.evaluate((elemento) => {
+      const estilo = getComputedStyle(elemento);
+      const rgba = estilo.backgroundColor;
+
+      // Verifica se é uma cor não transparente (não rgba com alpha 0)
+      if (rgba.includes("rgba")) {
+        const matches = rgba.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+        if (matches) {
+          const alpha = parseFloat(matches[4]);
+          return { rgba, alpha, notTransparent: alpha > 0.1 };
+        }
+      }
+
+      return { rgba, notTransparent: rgba !== "rgba(0, 0, 0, 0)" && rgba !== "transparent" };
+    });
+
+    expect(bgcolor.notTransparent).toBe(true);
+  } finally {
+    await ambiente.encerrar();
+  }
+});
+
 for (const largura of [360, 390, 768, 1440]) {
   test(`geometria ${largura}px: sete dias na mesma linha, alvos de 44px e sem rolagem horizontal, com nome de Baralho longo (FR-253, SC-101)`, async ({
     browser,

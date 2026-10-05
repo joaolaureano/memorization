@@ -102,3 +102,7 @@ Sem CRITICAL. Todos os FRs (FR-360 a FR-377) e SCs (SC-143 a SC-149) têm tarefa
 - T2301–T2314 implementadas por workers DeepSeek flash (Princípio XI), revisadas e verificadas pelo Arquiteto; correções de revisão sempre devolvidas ao worker.
 - Telefone: o cabeçalho de Baralhos mantém as duas ações numa linha quando cabem (`.cabecalho-da-pagina .acoes .botao { flex: 1 1 auto }` até 480 px); em 390 px «Criar baralho temporário» quebra linha, como o FR-360 permite, e a prova do SC-079 (`e2e/lista-de-baralhos.spec.ts`) passa a exigir cinco linhas inteiras na primeira tela, em vez de seis.
 - `npm run verificar:ci` verde: backend 915 (SQLite) + 239 (PostgreSQL), frontend 883, e2e 91.
+
+## Convergence de 2026-10-05
+
+Ajustes implementados: opções de Avaliação fornecidas pelo algoritmo e rótulo gravado no Registro (migração 12, com backfill dos quatro rótulos do SM-2), Resumo agrupado por opção com «Sem avaliação» para Itens legados, nome temporário opcional (padrão «Baralho temporário») até o Histórico e o salvamento, e fonte de Baralhos da montagem sem etiquetas. O `delegate` estava sem saldo; o código foi escrito por subagentes Haiku, com a revisão e a verificação feitas pelo Arquiteto. `npm run verificar:ci`: backend 921 + 239, frontend 922, build, e2e 96, todos aprovados.

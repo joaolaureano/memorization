@@ -244,8 +244,9 @@ test("Temporário: A + B + C4 rendem «4 Cartões», o estudo vira Baralho salvo
     await expect(
       page.getByRole("heading", { name: "Sessão concluída" }),
     ).toBeVisible();
+    // O nome padrão "Baralho temporário" aparece quando nenhum nome é fornecido (T2321)
     await expect(
-      page.getByText("Estudo com baralho temporário").first(),
+      page.getByText("Baralho temporário").first(),
     ).toBeVisible();
 
     // O botão só habilita depois que o Registro sobe.
@@ -335,8 +336,9 @@ test("Temporário sem salvar: nenhum Baralho novo e o Histórico registra (SC-14
 
     await abrirTela(page, ambiente, "estudo", credencial);
 
+    // O nome padrão "Baralho temporário" aparece no histórico quando nenhum nome é fornecido (T2321)
     await expect(
-      page.getByText("Estudo com baralho temporário").first(),
+      page.getByText("Baralho temporário").first(),
     ).toBeVisible();
   } finally {
     await derrubarAmbiente(ambiente);
@@ -439,6 +441,101 @@ test("Isolamento: a montagem só oferece Baralhos e Cartões do próprio Usuári
     await expect(
       page.getByRole("button", { name: "Adicionar How are you?", exact: true }),
     ).toHaveCount(0);
+  } finally {
+    await derrubarAmbiente(ambiente);
+  }
+});
+
+test("Temporário: nome do baralho aparece no Resumo e no Histórico (FR-363, T2321)", async ({ page, browserName }) => {
+  expect(browserName).toBe("chromium");
+
+  const ambiente = await subirAmbiente();
+
+  try {
+    const credencial = await criarUsuarioDeProva(
+      ambiente.enderecoDaApi,
+      "usuario.nomeado",
+    );
+
+    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
+    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
+
+    await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
+
+    await abrirTela(page, ambiente, "baralhos", credencial);
+
+    await page
+      .getByRole("link", { name: "Criar baralho temporário", exact: true })
+      .click();
+
+    await expect(page).toHaveURL(/#\/baralhos\/temporario$/);
+    await expect(
+      page.getByRole("heading", { name: "Criar baralho temporário" }),
+    ).toBeVisible();
+
+    // Preencher o nome do baralho temporário
+    const nomeDoBaralho = "Aula de Inglês";
+    await page.getByLabel("Nome do baralho temporário (opcional)").fill(nomeDoBaralho);
+
+    // Adicionar cartões
+    await page.getByRole("button", { name: "Adicionar Inglês", exact: true }).click();
+    await expect(selecaoDoEstudo(page)).toContainText("2 Cartões");
+
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
+
+    await expect(page).toHaveURL(/#\/baralhos\/temporario\/estudo$/);
+    await expect(
+      page.getByRole("heading", { name: "Revisar baralho temporário" }),
+    ).toBeVisible();
+
+    // Estudar os cartões
+    for (let indice = 1; indice <= 2; indice++) {
+      await expect(
+        page.getByRole("article", { name: `Item ${indice} de 2` }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Revelar verso", exact: true }).click();
+      await page.getByRole("button", { name: /^Bom/ }).click();
+    }
+
+    await expect(
+      page.getByRole("heading", { name: "Sessão concluída" }),
+    ).toBeVisible();
+
+    // O nome aparece no Resumo em vez de "Estudo com baralho temporário"
+    await expect(
+      page.getByText(nomeDoBaralho).first(),
+    ).toBeVisible();
+
+    // Salvar como baralho: o nome vem preenchido no formulário
+    const salvarComoBaralho = page.getByRole("button", {
+      name: "Salvar como baralho",
+      exact: true,
+    });
+
+    await expect(salvarComoBaralho).toBeEnabled();
+    await salvarComoBaralho.click();
+
+    // O formulário vem preenchido com o nome escolhido
+    const nomeDoBaralhoInput = page.getByLabel("Nome do baralho");
+    await expect(nomeDoBaralhoInput).toHaveValue(nomeDoBaralho);
+
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+
+    await expect(page.getByText("Baralho salvo.").first()).toBeVisible();
+
+    // Verificar que o baralho salvo mantém o nome e aparece na lista
+    await abrirTela(page, ambiente, "baralhos", credencial);
+
+    await expect(
+      itemDeBaralho(page, nomeDoBaralho).getByText("2 Cartões"),
+    ).toBeVisible();
+
+    // Verificar que o nome aparece também no histórico
+    await abrirTela(page, ambiente, "estudo", credencial);
+
+    await expect(
+      page.getByText(nomeDoBaralho).first(),
+    ).toBeVisible();
   } finally {
     await derrubarAmbiente(ambiente);
   }

@@ -403,14 +403,17 @@ function totalDeItens(registros: RegistroResumido[]): number {
 
 /**
  * O nome da Sessão: o Baralho, a Revisão do dia quando foi ela (FR-315) ou o
- * estudo com baralho temporário (FR-376).
+ * estudo com baralho temporário (FR-376, T2318).
  */
 function tituloDaSessao(registro: RegistroResumido): string {
-  return registro.origem === "revisao"
-    ? "Revisão do dia"
-    : registro.origem === "temporario"
-      ? "Estudo com baralho temporário"
-      : registro.nomeDoBaralho;
+  if (registro.origem === "revisao") {
+    return "Revisão do dia";
+  }
+  const nome = registro.nomeDoBaralho || "";
+  if (registro.origem === "temporario") {
+    return nome.trim() ? nome : "Estudo com baralho temporário";
+  }
+  return nome || "Estudo com baralho temporário"; // Fallback para nomes vazios (unlikely)
 }
 
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-315). */

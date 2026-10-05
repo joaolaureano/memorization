@@ -556,6 +556,7 @@ describe("ClienteEmMemoria — histórico", () => {
         resultado: "acertou",
         cartaoId: CARTAO_DE_TESTE,
         avaliacao: "bom",
+        avaliacaoRotulo: "Bom",
       },
       {
         posicao: 1,
@@ -564,6 +565,7 @@ describe("ClienteEmMemoria — histórico", () => {
         resultado: "errou",
         cartaoId: CARTAO_DE_TESTE,
         avaliacao: "errei",
+        avaliacaoRotulo: "Errei",
       },
       {
         posicao: 2,
@@ -572,6 +574,7 @@ describe("ClienteEmMemoria — histórico", () => {
         resultado: "acertou",
         cartaoId: CARTAO_DE_TESTE,
         avaliacao: "bom",
+        avaliacaoRotulo: "Bom",
       },
     ]);
     expect(new Date(resultado.registro.concluidaEm).toISOString()).toBe(

@@ -153,10 +153,10 @@ describe("PaginaDeEstudo para leitor de tela", () => {
     expect(screen.getByText("de acertos")).toBeInTheDocument();
     expect(screen.getByText("0 de 1 Cartão")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Acertos (0)" }),
+      screen.getByRole("button", { name: "Bom (0)" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Erros (1)" }),
+      screen.getByRole("button", { name: "Errei (1)" }),
     ).toBeInTheDocument();
   });
 

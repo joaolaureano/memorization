@@ -99,7 +99,10 @@ describe("migração 11 — origem 'temporario'", () => {
     const registrosAntes = registros(banco);
     const itensAntes = itens(banco);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 11),
+    );
 
     expect(contarLinhas(banco, "registro_de_sessao")).toBe(2);
     expect(contarLinhas(banco, "item_de_registro")).toBe(3);
@@ -107,14 +110,13 @@ describe("migração 11 — origem 'temporario'", () => {
     expect(itens(banco)).toEqual(itensAntes);
   });
 
-  it("é a última migração do esquema", () => {
-    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(11);
-  });
-
   it("mantém a chave estrangeira de item_de_registro apontando para registro_de_sessao", () => {
     const banco = abrirBanco(10);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 11),
+    );
 
     const tabelas = banco
       .prepare(`SELECT "table" FROM pragma_foreign_key_list('item_de_registro')`)
@@ -128,7 +130,10 @@ describe("migração 11 — origem 'temporario'", () => {
   it("recria o índice registro_de_sessao_usuario_concluida", () => {
     const banco = abrirBanco(10);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 11),
+    );
 
     const indices = banco
       .prepare("SELECT name FROM pragma_index_list('registro_de_sessao')")
@@ -145,7 +150,10 @@ describe("migração 11 — origem 'temporario'", () => {
     gravarRegistro(banco, "r1", dono, "baralho");
     gravarItem(banco, "r1", 0, "acertou", null, null);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 11),
+    );
 
     banco.prepare("DELETE FROM usuario WHERE id = ?").run(dono);
 
@@ -157,7 +165,10 @@ describe("migração 11 — origem 'temporario'", () => {
     const banco = abrirBanco(10);
     const dono = gravarDono(banco, "u1");
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 11),
+    );
 
     expect(() => gravarRegistro(banco, "r1", dono, "temporario")).not.toThrow();
     expect(() => gravarRegistro(banco, "r2", dono, "outra")).toThrow();

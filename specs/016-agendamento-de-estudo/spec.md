@@ -27,6 +27,13 @@ sobre seus dados de exemplo, limitações e interações simuladas.
 - **Delimitação**: esta entrega é a especificação da feature 016. O tamanho fixo do cartão de Sessão permanece requisito transversal de `012`, FR-150; não constitui uma segunda feature neste documento.
 - **Decisões propostas**: o “OK” autoriza estruturar a proposta. Não é registrado como resposta individual às questões de conclusão, datas, duplicidade e alterações. Os padrões adotados para tornar a spec verificável estão identificados em Assumptions como **premissa a validar**.
 
+### Ajustes de UX confirmados em 2026-10-05
+
+- No formulário Editar rotina, o texto selecionado no combo-box Baralho fica centralizado.
+- Remover do fim do formulário o parágrafo “A mudança vale para o estudo de hoje...”. As consequências relevantes da alteração são apresentadas em uma confirmação contextual antes de salvar, conforme FR-238.
+- Rotinas pausadas recebem um tom âmbar discreto tanto na linha quanto na etiqueta “Pausada”, preservando contraste e identificação textual.
+- Estes ajustes foram implementados em 2026-10-05 (tarefas T1626–T1629).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Programar um Baralho para os dias da semana (Priority: P1)
@@ -133,6 +140,8 @@ Compromissos futuros e a preservação dos passados e concluídos.
 4. **Given** uma Rotina com Histórico, **When** exclui e confirma, **Then** a Rotina deixa a lista ativa, os compromissos passados e concluídos permanecem, e nenhum Cartão, Baralho ou Registro é excluído (FR-239).
 5. **Given** edição ainda não salva ou confirmação de exclusão, **When** cancela, **Then** preserva a programação; abandonar formulário alterado exige confirmação de descarte (FR-242, FR-251).
 6. **Given** a mesma Rotina alterada em outra aba, **When** tenta salvar uma versão anterior, **Then** recebe aviso de conflito e pode revisar os valores atuais sem sobrescrever silenciosamente a mudança (FR-249).
+7. **Given** uma Rotina pausada em Gerenciar agenda, **When** a pessoa a localiza, **Then** linha e etiqueta têm realce âmbar discreto e texto “Pausada”, sem depender só da cor.
+8. **Given** o formulário Editar rotina, **When** escolhe o Baralho, **Then** o texto da opção selecionada aparece centralizado; o parágrafo explicativo antigo não aparece no fim, e uma confirmação contextual resume os efeitos antes de salvar.
 
 ### User Story 6 - Entender indisponibilidade e mudanças de data (Priority: P2)
 
@@ -200,8 +209,8 @@ meia-noite durante outro Compromisso; conferir mensagens, datas e totais.
 
 **Gerenciamento e estados de interface**
 
-- **FR-237**: Gerenciar agenda MUST ser acessível pelo bloco da Agenda em Início e apresentar Rotinas ativas e pausadas, com nome do Baralho, dias, quantidade, situação e ações Editar, Pausar/Retomar e Excluir. MUST oferecer volta a Início, Agendar estudo e Atualizar agenda.
-- **FR-238**: Editar uma Rotina MUST preservar sua identidade, os Compromissos passados e as conclusões. A mudança MUST afetar Compromissos ainda não concluídos de hoje e os futuros: dias removidos cancelam o Compromisso de hoje, dias adicionados podem criá-lo e mudanças de Baralho/quantidade atualizam sua configuração pendente. O formulário MUST explicar esses efeitos antes de confirmar. Um Compromisso cancelado MUST permanecer identificável nos detalhes do dia e fora dos totais, salvo conclusão válida conforme FR-245.
+- **FR-237**: Gerenciar agenda MUST ser acessível pelo bloco da Agenda em Início e apresentar Rotinas ativas e pausadas, com nome do Baralho, dias, quantidade, situação e ações Editar, Pausar/Retomar e Excluir. Rotinas pausadas MUST receber tom âmbar discreto na linha e na etiqueta “Pausada”, mantendo contraste e texto identificável sem depender da cor. MUST oferecer volta a Início, Agendar estudo e Atualizar agenda.
+- **FR-238**: Editar uma Rotina MUST preservar sua identidade, os Compromissos passados e as conclusões. A mudança MUST afetar Compromissos ainda não concluídos de hoje e os futuros: dias removidos cancelam o Compromisso de hoje, dias adicionados podem criá-lo e mudanças de Baralho/quantidade atualizam sua configuração pendente. Antes de salvar, uma confirmação contextual MUST explicar quais efeitos se aplicam à alteração. O texto explicativo genérico que ficava no fim do formulário MUST ser removido. Um Compromisso cancelado MUST permanecer identificável nos detalhes do dia e fora dos totais, salvo conclusão válida conforme FR-245.
 - **FR-239**: Pausar e excluir MUST pedir confirmação das consequências, cancelar pendentes de hoje e impedir novos Compromissos futuros; MUST preservar os passados, os concluídos e todo o acervo e Histórico. Retomar MUST aplicar a recorrência a partir de hoje, sem gerar obrigações para a pausa. A mesma Rotina/data MUST reutilizar o Compromisso existente, preservando sua conclusão quando houver. Exclusão não oferece desfazer nesta entrega.
 - **FR-240**: Início e Gerenciar agenda MUST distinguir carregamento, vazio, falha e dados carregados. Falhas MUST oferecer Tentar novamente sem impedir acesso ao acervo, à Revisão do dia ou ao Histórico. Durante atualização, dados anteriores podem permanecer visíveis apenas com indicação de atualização ou falha, sem aparência de informação atual confirmada.
 - **FR-241**: Sem Rotinas, Início MUST orientar Agendar estudo; sem Compromissos hoje, MUST permitir consultar a semana e agendar. Sem Baralho elegível, o formulário MUST orientar Criar Baralho ou adicionar Cartões ao Baralho existente, com caminho de retorno.
@@ -226,6 +235,7 @@ meia-noite durante outro Compromisso; conferir mensagens, datas e totais.
 - **FR-254**: As regras de propriedade, elegibilidade, quantidade, dias, data e correspondência entre Compromisso e Registro MUST ser validadas de forma autoritativa, inclusive quando a operação não parte da interface. Uma conclusão MUST corresponder à Sessão legitimamente iniciada para aquele Compromisso, seu Usuário, Baralho capturado e quantidade efetiva, admitindo as mudanças posteriores de FR-245.
 - **FR-255**: A Sessão iniciada pela Agenda MUST cumprir FR-150 de `012`: cartão de tamanho fixo, áreas reservadas para Frente, Verso e ações, sem abertura/fechamento ou deslocamento de controles ao revelar, avaliar, carregar prévias ou avançar; texto longo com rolagem interna acessível por teclado.
 - **FR-256**: Sessões da Agenda MUST participar das Estatísticas, do Histórico e do Agendamento dos Cartões pelas mesmas regras do estudo por Baralho de `013`/`015`. A programação semanal MUST NOT alterar por si só a próxima revisão dos Cartões, o algoritmo ou o limite diário de novos. A Agenda e a Revisão do dia MUST ter contagens e mensagens de conclusão distintas.
+- **FR-257**: No formulário Editar rotina, o texto do combo-box Baralho MUST ficar centralizado, sem alterar a leitura acessível do valor selecionado ou o foco do controle.
 
 ### Definição da UI
 
@@ -266,7 +276,7 @@ fuso; o total real é preservado e a precedência da tabela continua válida.
 #### Formulário e gerenciamento
 
 - **Agendar estudo**: Baralho; sete seletores de dia; Todos os Cartões ou Definir quantidade; campo numérico; resumo; Salvar agendamento e Cancelar. O padrão é Todos os Cartões e nenhum dia selecionado, para não salvar um dia escolhido silenciosamente.
-- **Editar rotina**: os mesmos campos preenchidos; Salvar alterações e Cancelar; explicação de efeito sobre hoje e futuro, preservação do passado e exceção para Sessões já iniciadas.
+- **Editar rotina**: os mesmos campos preenchidos; combo-box Baralho com texto centralizado; Salvar alterações e Cancelar. O texto genérico no fim do formulário é removido. Antes de aplicar, uma confirmação contextual resume os efeitos sobre hoje e o futuro, a preservação do passado e a exceção para Sessões já iniciadas.
 - **Gerenciar agenda**: Rotinas ativas e pausadas identificadas em texto, na ordem de criação; edição, pausa/retomada e exclusão. Exclusão pede confirmação nomeando o Baralho e explicando a preservação do Histórico.
 - **Operação em andamento**: ação de envio indisponível com indicação de salvamento; a conclusão confirmada devolve foco à Rotina ou a um destino estável se ela saiu da lista.
 - **Falha e cancelamento**: conteúdo preservado; confirmação inicia em Cancelar, aceita Escape e devolve o foco ao acionador ao cancelar.

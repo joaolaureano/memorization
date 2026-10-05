@@ -125,6 +125,12 @@ const fixo: AlgoritmoDeRepeticao = {
   id: "fixo",
   versao: 1,
   rotulo: "Fixo",
+  opcoesDeAvaliacao: [
+    { chave: "errei", rotulo: "Errei", resultado: "errou" },
+    { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+    { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+    { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+  ],
   avaliar(_estado, _avaliacao, agora) {
     return {
       estado: { algoritmo: "fixo", versao: 1, dados: { intervalos: 2 } },

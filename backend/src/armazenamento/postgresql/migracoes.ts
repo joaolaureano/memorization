@@ -436,6 +436,25 @@ ALTER TABLE registro_de_sessao
 `;
 
 /**
+ * A migração 12 acrescenta a coluna `avaliacao_rotulo` a `item_de_registro`
+ * — o rótulo legível da opção de Avaliação escolhida, gravado no Registro
+ * (FR-196, FR-197). Itens anteriores à 015 têm `avaliacao_rotulo` nulo.
+ *
+ * O `ALTER TABLE` não precisa reconstituir tabelas: é uma adição simples,
+ * segura, e Itens antigos ganham `NULL` pela coluna nova.
+ */
+const ESQUEMA_AVALIACAO_ROTULO = `
+ALTER TABLE item_de_registro ADD COLUMN avaliacao_rotulo TEXT NULL;
+
+UPDATE item_de_registro SET avaliacao_rotulo = CASE avaliacao
+  WHEN 'errei' THEN 'Errei'
+  WHEN 'dificil' THEN 'Difícil'
+  WHEN 'bom' THEN 'Bom'
+  WHEN 'facil' THEN 'Fácil'
+END WHERE avaliacao IS NOT NULL;
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -452,4 +471,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 9, sql: ESQUEMA_ACESSO_TEMPORARIO },
   { versao: 10, sql: ESQUEMA_SEM_LIMITE_DE_NOVOS },
   { versao: 11, sql: ESQUEMA_ORIGEM_TEMPORARIA },
+  { versao: 12, sql: ESQUEMA_AVALIACAO_ROTULO },
 ];

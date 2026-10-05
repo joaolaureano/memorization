@@ -143,4 +143,5 @@ describe("baralho temporário na casca Aplicacao", () => {
       await exigirTituloDaPagina("Baralhos");
     },
   );
+
 });

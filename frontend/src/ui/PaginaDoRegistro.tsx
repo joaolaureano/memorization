@@ -156,14 +156,17 @@ const TITULO_DO_TEMPORARIO = "Estudo com baralho temporário";
  * O título do Registro: o nome do Baralho no estudo livre, o nome próprio da
  * Revisão do dia (FR-215) ou o do estudo com baralho temporário (FR-376).
  * Registros anteriores à 015 são de estudo livre e seguem trazendo o nome do
- * Baralho (FR-197).
+ * Baralho (FR-197, T2318).
  */
 function tituloDaSessao(registro: RegistroDeSessao): string {
-  return registro.origem === "revisao"
-    ? TITULO_DA_REVISAO
-    : registro.origem === "temporario"
-      ? TITULO_DO_TEMPORARIO
-      : registro.nomeDoBaralho;
+  if (registro.origem === "revisao") {
+    return TITULO_DA_REVISAO;
+  }
+  const nome = registro.nomeDoBaralho || "";
+  if (registro.origem === "temporario") {
+    return nome.trim() ? nome : TITULO_DO_TEMPORARIO;
+  }
+  return nome || TITULO_DO_TEMPORARIO; // Fallback para nomes vazios (unlikely)
 }
 
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-177). */

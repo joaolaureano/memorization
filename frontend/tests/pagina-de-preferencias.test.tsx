@@ -17,8 +17,26 @@ import { ProvedorDeProtecaoDeSaida } from "../src/ui/protecao-de-saida";
 const PREFERENCIAS_CARREGADAS: Preferencias = {
   algoritmo: "sm2",
   algoritmos: [
-    { id: "sm2", rotulo: "SM-2" },
-    { id: "outro", rotulo: "Outro" },
+    {
+      id: "sm2",
+      rotulo: "SM-2",
+      opcoesDeAvaliacao: [
+        { chave: "errei", rotulo: "Errei", resultado: "errou" },
+        { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+        { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+        { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+      ],
+    },
+    {
+      id: "outro",
+      rotulo: "Outro",
+      opcoesDeAvaliacao: [
+        { chave: "errei", rotulo: "Errei", resultado: "errou" },
+        { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+        { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+        { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+      ],
+    },
   ],
 };
 

@@ -677,16 +677,17 @@ async function visitarAsTelas(
     pagina.getByText(NOME_DO_BARALHO_COM_CARTOES),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
 
-  const botaoDeAcertos = pagina.getByRole("button", { name: /^Acertos \(/ });
-  const botaoDeErros = pagina.getByRole("button", { name: /^Erros \(/ });
+  // Os botões agora são por opção de Avaliação, não por resultado (T2316)
+  const botaoBom = pagina.getByRole("button", { name: /^Bom \(/ });
+  const botaoErrei = pagina.getByRole("button", { name: /^Errei \(/ });
 
-  // A Sessão mais recente tem um acerto e um erro: os dois grupos existem e
+  // A Sessão mais recente tem um acerto (Bom) e um erro (Errei): os dois grupos existem e
   // podem ser abertos (um grupo vazio ficaria desabilitado).
-  await expect(botaoDeAcertos).toBeEnabled({ timeout: ESPERA_DA_TELA });
-  await expect(botaoDeErros).toBeEnabled({ timeout: ESPERA_DA_TELA });
+  await expect(botaoBom).toBeEnabled({ timeout: ESPERA_DA_TELA });
+  await expect(botaoErrei).toBeEnabled({ timeout: ESPERA_DA_TELA });
 
-  await botaoDeAcertos.click();
-  await botaoDeErros.click();
+  await botaoBom.click();
+  await botaoErrei.click();
   await conferirTela(pagina, cenario, "Registro da Sessão (listas abertas)");
 
   // Início vazio: o de um Usuário que ainda não concluiu nenhuma Sessão

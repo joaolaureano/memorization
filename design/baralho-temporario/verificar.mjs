@@ -121,14 +121,15 @@ try {
   await page.getByRole('button', { name: 'Interromper', exact: true }).click();
   await page.getByRole('button', { name: 'Descartar', exact: true }).click();
 
-  // --- Montagem: sem link de voltar; Situação só na fonte Baralhos (FR-382)
+  // --- Montagem: filtro de situação sem etiquetas nas linhas (FR-382)
   await scenario('baralhos');
   await page.getByRole('button', { name: 'Criar baralho temporário', exact: true }).click();
   await expect(page.locator('#tela').getByRole('link', { name: /Voltar para Baralhos/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Revisar', exact: true })).toBeDisabled();
+  await page.getByLabel(/Nome do baralho temporário/).fill('Baralho de viagem');
   const fonteDe = nome => page.locator('#lista-fontes li').filter({ hasText: nome });
-  await expect(fonteDe('Álgebra linear').locator('.bf-etiqueta')).toHaveText('Revisado');
-  await expect(fonteDe('História do Brasil').locator('.bf-etiqueta')).toHaveText('Sem cartões');
+  await expect(fonteDe('Álgebra linear').locator('.bf-etiqueta')).toHaveCount(0);
+  await expect(fonteDe('História do Brasil').locator('.bf-etiqueta')).toHaveCount(0);
   await expect(fonteDe('História do Brasil').getByRole('button', { name: 'Adicionar História do Brasil', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Adicionar Inglês cotidiano', exact: true }).click();
   await expect(page.locator('#selecao li')).toHaveCount(3);
@@ -155,7 +156,7 @@ try {
   await page.locator('#filtros-fontes').getByRole('button', { name: 'Limpar filtros', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Revisar baralho temporário' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Revisar Baralho de viagem' })).toBeVisible();
   const fronts = new Set();
   for (let i = 0; i < 5; i++) {
     fronts.add(await page.locator('.conteudo-do-cartao').first().textContent());
@@ -166,12 +167,17 @@ try {
   }
   if (fronts.size !== 5) throw new Error('Cartão duplicado ou ausente na Sessão');
   await expect(page.getByRole('heading', { name: 'Sessão concluída' })).toBeVisible();
-  await expect(page.locator('.resumo-demo > h1 + .texto-secundario')).toHaveText('Estudo com baralho temporário');
+  await expect(page.locator('.resumo-demo > h1 + .texto-secundario')).toHaveText('Estudo com Baralho de viagem');
   await expect(page.locator('.placar')).toHaveText('80%');
+  await expect(page.locator('.detalhes-resultado summary', { hasText: 'Errei (1)' })).toBeVisible();
+  await expect(page.locator('.detalhes-resultado summary', { hasText: 'Bom (4)' })).toBeVisible();
+  await expect(page.locator('.detalhes-resultado summary', { hasText: 'Acertos (' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Revisar novamente', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Salvar como baralho', exact: true })).toBeEnabled();
   await expect(page.locator('#tela [role="status"]')).toHaveClass(/visualmente-oculto/);
   await page.getByRole('button', { name: 'Salvar como baralho', exact: true }).click();
+  await expect(page.getByLabel('Nome do baralho')).toHaveValue('Baralho de viagem');
+  await page.getByLabel('Nome do baralho').fill('');
   await page.getByRole('button', { name: 'Salvar', exact: true }).click();
   await expect(page.locator('#erro-salvar')).toContainText('1 a 100');
   await expect(page.getByLabel('Nome do baralho')).toBeFocused();
@@ -191,6 +197,17 @@ try {
   await expect(linhaDe('Viagens').locator('.bf-etiqueta')).toHaveText('Revisado');
   await expect(linhaDe('Biologia').locator('.bf-etiqueta')).toHaveText('Pendente');
   await expect(page.locator('#lista-baralhos li')).toHaveCount(6);
+
+  await scenario('resumo');
+  await expect(page.locator('.resumo-demo > h1 + .texto-secundario')).toHaveText('Estudo com Baralho temporário');
+  await page.getByRole('button', { name: 'Salvar como baralho', exact: true }).click();
+  await expect(page.getByLabel('Nome do baralho')).toHaveValue('Baralho temporário');
+  await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+
+  // Registros anteriores à Avaliação mantêm um único grupo Sem avaliação.
+  await scenario('resumo-legado');
+  await expect(page.locator('.detalhes-resultado summary', { hasText: 'Sem avaliação (5)' })).toBeVisible();
+  await expect(page.locator('.detalhes-resultado summary', { hasText: 'Errei (' })).toHaveCount(0);
 
   // --- Falhas e recuperações existentes.
   await scenario('falha-registro');
@@ -224,5 +241,5 @@ try {
   await page.evaluate(() => document.body.style.zoom = '200%');
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Overflow zoom CSS 200%');
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log('Protótipo 024 validado: 5 telas em 4 larguras; situação derivada com etiquetas e filtro em Baralhos; modal de pendentes com foco, Tab e Escape; subconjunto só pendentes, todos e revisado direto; revisão temporária direta com salvamento; revisão comum sem Salvar; conclusão deixa em dia os Baralhos que compartilham Cartões e a interrupção não atualiza; falhas e recuperações; zoom CSS 200%. 20 capturas geradas.');
+  console.log('Protótipo 024 validado: 5 telas em 4 larguras; etiquetas e filtro na lista principal; montagem com filtro sem etiquetas e nome opcional; grupos por avaliação e fallback legado; revisão temporária com nome reutilizado ao salvar; fluxos e recuperações; zoom CSS 200%. Capturas geradas.');
 } finally { await browser.close(); }

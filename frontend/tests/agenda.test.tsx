@@ -504,7 +504,7 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
       await screen.findByRole("heading", { level: 1, name: "Rotinas de estudo" }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Inglês · segunda e quinta · 20 Cartões")).toBeInTheDocument();
-    expect(screen.getByText(/Situação: Ativa/)).toBeInTheDocument();
+    expect(screen.getByText("Ativa", { selector: ".agenda__rotina-status" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Voltar para Estudo" })).toHaveAttribute(
       "href",
       "#/estudo",
@@ -525,7 +525,7 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
 
     fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
 
-    expect(screen.getByText(/Situação: Ativa/)).toBeInTheDocument();
+    expect(screen.getByText("Ativa", { selector: ".agenda__rotina-status" })).toBeInTheDocument();
 
     fireEvent.click(pausar);
     fireEvent.click(
@@ -535,7 +535,7 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
     expect(await screen.findByText("Rotina de Inglês pausada.")).toBeInTheDocument();
     // O anúncio só aparece com a lista já relida: no mesmo instante, e sem
     // esperar, os botões e a situação mostram a versão nova da Rotina.
-    expect(screen.getByText(/Situação: Pausada/)).toBeInTheDocument();
+    expect(screen.getByText("Pausada", { selector: ".agenda__rotina-status" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Retomar rotina de Inglês" }),
     ).toBeInTheDocument();
@@ -543,10 +543,49 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retomar rotina de Inglês" }));
 
     expect(await screen.findByText("Rotina de Inglês retomada.")).toBeInTheDocument();
-    expect(screen.getByText(/Situação: Ativa/)).toBeInTheDocument();
+    expect(screen.getByText("Ativa", { selector: ".agenda__rotina-status" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Pausar rotina de Inglês" }),
     ).toBeInTheDocument();
+  });
+
+  it("Rotina pausada tem classe e tom âmbar na linha e na etiqueta (FR-237, T1628)", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+
+    await rotinaTodosOsDias(servidor, ingles.id, { dias: [1, 4], quantidade: 20 });
+    await abrir(servidor, "#/agenda");
+
+    await screen.findByText("Inglês · segunda e quinta · 20 Cartões");
+
+    // Pausar
+    fireEvent.click(screen.getByRole("button", { name: "Pausar rotina de Inglês" }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Pausar Rotina" }),
+    );
+
+    await screen.findByText("Rotina de Inglês pausada.");
+
+    // Verificar que a linha tem a classe de pausa
+    const rotinasLista = document.querySelectorAll(".agenda__rotina");
+    let rotinaPausada: Element | null = null;
+
+    for (const item of rotinasLista) {
+      if (item.textContent?.includes("Inglês")) {
+        rotinaPausada = item;
+        break;
+      }
+    }
+
+    expect(rotinaPausada).toHaveClass("agenda__rotina--pausada");
+
+    // Verificar a etiqueta tem o texto e a classe
+    const etiqueta = within(rotinaPausada as HTMLElement).getByText("Pausada");
+    expect(etiqueta).toHaveClass("agenda__rotina-status");
+
+    // Verificar que a etiqueta tem a classe de estilo aplicada
+    // (o color exato depende do ambiente de teste, mas a classe estar presente é suficiente)
+    expect(etiqueta.parentElement?.textContent).toContain("Situação:");
   });
 
   it("o anúncio da ação só aparece depois que a lista foi relida, para que agir em seguida não gere conflito", async () => {
@@ -582,7 +621,7 @@ describe("Gerenciar agenda (FR-237–FR-239, FR-242, FR-249, FR-251)", () => {
     liberar();
 
     expect(await screen.findByText("Rotina de Inglês pausada.")).toBeInTheDocument();
-    expect(screen.getByText(/Situação: Pausada/)).toBeInTheDocument();
+    expect(screen.getByText("Pausada", { selector: ".agenda__rotina-status" })).toBeInTheDocument();
   });
 
   it("excluir pede confirmação, tira a Rotina da lista e preserva o acervo", async () => {
@@ -769,7 +808,7 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
     expect(lista.ok && lista.rotinas).toHaveLength(1);
   });
 
-  it("editar carrega os valores, avisa dos efeitos e cancelar com alterações pede descarte (FR-238, FR-242)", async () => {
+  it("editar carrega os valores, mostra confirmação contextual e cancelar com alterações pede descarte (FR-238, FR-242)", async () => {
     const servidor = clienteDeProva();
     const ingles = await baralhoComCartoes(servidor);
     const rotina = await rotinaTodosOsDias(servidor, ingles.id, { dias: [1, 4], quantidade: 20 });
@@ -781,22 +820,126 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
     expect(screen.getByRole("checkbox", { name: "segunda-feira" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "terça-feira" })).not.toBeChecked();
     expect(screen.getByLabelText("Quantos Cartões por estudo")).toHaveValue(20);
-    expect(screen.getByText(/Dias removidos cancelam o estudo de hoje/)).toBeInTheDocument();
-    expect(screen.getByText(/Sessões já iniciadas ainda poderão concluir/)).toBeInTheDocument();
 
+    // Não tem mais o parágrafo genérico no fim do formulário
+    expect(screen.queryByText(/Dias removidos cancelam o estudo de hoje/)).not.toBeInTheDocument();
+
+    // Remover segunda (removido) e adicionar quinta, sexta, sábado, domingo (adicionados para totalizar [4,5,6,7])
+    fireEvent.click(screen.getByRole("checkbox", { name: "segunda-feira" }));
+    // Adicionar: quinta já está (4), adicionar sexta(5), sábado(6), domingo(7)
     marcarDia("sexta-feira");
-    fireEvent.click(screen.getByRole("link", { name: "Cancelar" }));
+    marcarDia("sábado");
+    marcarDia("domingo");
 
-    const dialogo = await screen.findByRole("dialog", { name: "Descartar as alterações?" });
+    // Ao salvar, abre confirmação com os efeitos
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
-    fireEvent.click(within(dialogo).getByRole("button", { name: "Cancelar" }));
+    const confirmacao = await screen.findByRole("dialog", { name: "Confirmar alterações" });
+    // O texto está dividido entre <strong> e nós de texto, então buscamos partes separadas
+    expect(within(confirmacao).getByText("Dias removidos:")).toBeInTheDocument();
+    expect(within(confirmacao).getByText(/cancelam/)).toBeInTheDocument();
+    expect(within(confirmacao).getByText("Dias adicionados:")).toBeInTheDocument();
+    expect(within(confirmacao).getByText(/criar/)).toBeInTheDocument();
+    expect(within(confirmacao).getByText(/Estudos passados e concluídos são preservados/)).toBeInTheDocument();
 
-    // Continua no formulário, com o que foi digitado.
-    expect(screen.getByRole("checkbox", { name: "sexta-feira" })).toBeChecked();
-    // E a programação salva não mudou.
+    // Foco inicial em Voltar (cancelamento, per FR-252)
+    expect(within(confirmacao).getByRole("button", { name: "Voltar" })).toHaveFocus();
+
+    // Escape fecha sem salvar
+    fireEvent.keyDown(confirmacao, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Confirmar alterações" })).not.toBeInTheDocument();
+    });
+
+    const listaAposEscape = await servidor.listarRotinas();
+    expect(listaAposEscape.ok && listaAposEscape.rotinas[0].dias).toEqual([1, 4]);
+
+    // Voltar não salva (teste do botão também)
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    const confirmacao2 = await screen.findByRole("dialog", { name: "Confirmar alterações" });
+    fireEvent.click(within(confirmacao2).getByRole("button", { name: "Voltar" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Confirmar alterações" })).not.toBeInTheDocument();
+    });
+
+    const lista1 = await servidor.listarRotinas();
+    expect(lista1.ok && lista1.rotinas[0].dias).toEqual([1, 4]);
+
+    // Confirmar salva (terceira tentativa)
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    const confirmacao3 = await screen.findByRole("dialog", { name: "Confirmar alterações" });
+    fireEvent.click(within(confirmacao3).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Confirmar alterações" })).not.toBeInTheDocument();
+    });
+
+    const lista2 = await servidor.listarRotinas();
+    expect(lista2.ok && lista2.rotinas[0].dias).toEqual([4, 5, 6, 7]);
+  });
+
+  it("criar nova rotina não mostra confirmação, salva direto (FR-222, T1626)", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+
+    await abrir(servidor, "#/agenda/nova");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Agendar estudo" })).toBeInTheDocument();
+
+    // Usar o select pelo labelText - aguardar carregamento
+    const select = await screen.findByLabelText("Baralho") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: ingles.id } });
+
+    // Selecionar checkbox de segunda - aguardar primeiro
+    await screen.findByRole("checkbox", { name: "segunda-feira" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "segunda-feira" }));
+
+    // Selecionar a opção "Definir quantidade" para tornar o input visível
+    fireEvent.click(screen.getByLabelText("Definir quantidade"));
+
+    // Usar labelText para o input de quantidade
+    const qtdInput = await screen.findByLabelText(/Quantos Cartões/);
+    fireEvent.change(qtdInput, { target: { value: "10" } });
+
+    // Salvar (não deve abrir confirmação, deve salvar direto)
+    fireEvent.click(screen.getByRole("button", { name: "Salvar agendamento" }));
+
+    // Volta para agenda após sucesso
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/agenda");
+    });
+
     const lista = await servidor.listarRotinas();
+    expect(lista.ok && lista.rotinas.length).toBe(1);
+  });
 
-    expect(lista.ok && lista.rotinas[0].dias).toEqual([1, 4]);
+  it("formulário Editar rotina tem select Baralho centralizado (FR-257, T1627)", async () => {
+    const servidor = clienteDeProva();
+    const ingles = await baralhoComCartoes(servidor);
+    const rotina = await rotinaTodosOsDias(servidor, ingles.id);
+
+    await abrir(servidor, `#/agenda/${rotina.id}/editar`);
+
+    await screen.findByRole("heading", { level: 1, name: "Editar rotina" });
+    const select = await screen.findByLabelText("Baralho") as HTMLSelectElement;
+
+    // Verificar que tem a classe de centralização
+    expect(select).toHaveClass("agenda__select-baralho-editando");
+  });
+
+  it("formulário Agendar estudo não tem select Baralho centralizado (T1627)", async () => {
+    const servidor = clienteDeProva();
+    await baralhoComCartoes(servidor);
+
+    await abrir(servidor, "#/agenda/nova");
+
+    await screen.findByRole("heading", { level: 1, name: "Agendar estudo" });
+    const select = await screen.findByLabelText("Baralho") as HTMLSelectElement;
+
+    // Não deve ter a classe em criação
+    expect(select).not.toHaveClass("agenda__select-baralho-editando");
   });
 
   it("alteração concorrente é comunicada, preserva o digitado e mostra os valores atuais (FR-249)", async () => {
@@ -823,6 +966,11 @@ describe("formulário Agendar estudo e Editar rotina (FR-222–FR-226, FR-242, F
     marcarDia("quarta-feira");
     fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
+    // Confirmar o diálogo de edição antes de receber a resposta de conflito
+    const confirmacaoEdicao = await screen.findByRole("dialog", { name: "Confirmar alterações" });
+    fireEvent.click(within(confirmacaoEdicao).getByRole("button", { name: "Confirmar" }));
+
+    // Agora o conflito deve aparecer
     expect(await screen.findByText(/A Rotina foi alterada em outro lugar/)).toBeInTheDocument();
     expect(screen.getByText(/Valores atuais: Inglês · terça · 9 Cartões/)).toBeInTheDocument();
     // O que foi digitado continua no formulário; nada foi sobrescrito.

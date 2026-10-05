@@ -15,7 +15,7 @@
 O Memorization deixa de ser POC. A Sessão de estudo **concluída** passa a ser lembrada como **Registro de sessão** (veja `CONTEXT.md`), e o conjunto desses registros forma o **Histórico de estudo** de cada Usuário. A partir dele:
 
 - **Início**, a nova primeira tela depois de Entrar, apresenta as **Estatísticas**: tamanho do acervo, ritmo de estudo dos últimos 7 dias, Taxa de acerto e as últimas Sessões.
-- O **Resumo da sessão** ganha os botões **Acertos** e **Erros**, que mostram quais Cartões foram acertados e quais foram errados. Isso vale tanto ao concluir uma Sessão quanto ao abrir um registro antigo.
+- O **Resumo da sessão** mostra os resultados agrupados por opção de Avaliação oferecida pelo algoritmo usado na Sessão. Registros antigos sem Avaliação ficam no grupo “Sem avaliação”. Isso vale tanto ao concluir uma Sessão quanto ao abrir um registro antigo.
 
 A Sessão **interrompida** continua sendo descartada sem rastro (FR-039 mantido). O registro guarda o Resultado de cada Item, com a Frente, o Verso e o nome do Baralho como eram ao concluir. Essa decisão do Product Owner prepara funcionalidades futuras, como repetição espaçada e "Cartões que você mais erra", sem incluí-las agora.
 
@@ -55,32 +55,33 @@ Depois de Entrar, a pessoa chega em Início e vê, de relance, o tamanho do acer
 3. **Given** nenhuma Sessão registrada, **When** Início abre, **Then** os números do acervo aparecem, a Taxa de acerto aparece como "—" (sem dados, nunca 0%), e há um próximo passo que leva a Baralhos para estudar.
 4. **Given** o gráfico de 7 dias, **When** lido por leitor de tela ou sem cor, **Then** cada dia tem rótulo e valor em texto. O gráfico nunca é a única forma de obter os números.
 
-### User Story 3 - Saber o que acertou e o que errou (Priority: P2)
+### User Story 3 - Rever os resultados por avaliação (Priority: P2)
 
-No Resumo, a pessoa usa os botões Acertos e Erros para ver a lista dos Cartões de cada grupo, com Frente e Verso.
+No Resumo, a pessoa abre os grupos de cada opção de Avaliação e consulta os Cartões correspondentes, com Frente e Verso.
 
 **Why this priority**: torna o Resumo acionável. Pedido explícito do Product Owner.
 
-**Independent Test**: numa Sessão de 3 Itens com 2 acertos e 1 erro, "Erros (1)" mostra a Frente e o Verso do Cartão errado, e "Acertos (2)" mostra os outros dois.
+**Independent Test**: numa Sessão que usa Errei, Difícil, Bom e Fácil, cada grupo mostra exatamente os Cartões avaliados com aquela opção; um Registro legado sem Avaliação reúne seus Itens em “Sem avaliação”.
 
 **Acceptance Scenarios**:
 
-1. **Given** o Resumo, **When** a pessoa aciona "Erros", **Then** a lista dos Itens errados é mostrada com Frente e Verso. O botão indica o estado expandido (`aria-expanded`) e mostra a contagem no próprio rótulo.
-2. **Given** uma lista aberta, **When** a pessoa aciona o mesmo botão, **Then** a lista se recolhe. Os dois botões funcionam de forma independente.
-3. **Given** um grupo vazio (por exemplo, 0 erros), **When** o Resumo abre, **Then** o botão fica indisponível com a explicação "Nenhum erro nesta Sessão".
-4. A seção "Itens estudados" (ladrilho de estudados) é removida do Resumo, porque o total continua dito no texto do percentual ("2 de 3 Itens"). Os ladrilhos Acertos e Erros passam a ser os botões.
+1. **Given** o Resumo de uma Sessão, **When** a pessoa aciona uma opção de Avaliação, **Then** a lista de Itens daquele grupo é mostrada. O botão indica expansão por `aria-expanded`/`aria-controls` e mostra a contagem.
+2. **Given** um grupo aberto, **When** a pessoa aciona novamente seu botão, **Then** o grupo se recolhe. Cada grupo funciona independentemente.
+3. **Given** um grupo vazio, **When** o Resumo abre, **Then** o botão fica indisponível e explica que não há Cartões naquela Avaliação.
+4. **Given** um Registro anterior à Avaliação, **When** seu Resumo é aberto, **Then** todos os Itens sem Avaliação são apresentados juntos em “Sem avaliação”, preservando seus Resultados históricos.
+5. A seção “Itens estudados” (ladrilho de estudados) é removida do Resumo, porque o total continua dito no texto do percentual (“2 de 3 Itens”). Os grupos de Avaliação são os controles de detalhamento.
 
 ### User Story 4 - Rever uma Sessão antiga (Priority: P2)
 
-Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as listas de acertos e erros.
+Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com os grupos de Avaliação registrados.
 
 **Why this priority**: dá uso ao Histórico além dos números.
 
-**Independent Test**: depois de editar a Frente de um Cartão e excluir o Baralho, o registro antigo ainda mostra a Frente e o nome do Baralho como eram.
+**Independent Test**: depois de editar a Frente de um Cartão e excluir o Baralho, o registro antigo ainda mostra o grupo de Avaliação, a Frente e o nome do Baralho como eram.
 
 **Acceptance Scenarios**:
 
-1. **Given** Início com Sessões recentes, **When** a pessoa abre uma, **Then** vê o Resumo daquele registro: Baralho, data e hora, percentual, contagens e os botões Acertos/Erros.
+1. **Given** Início com Sessões recentes, **When** a pessoa abre uma, **Then** vê o Resumo daquele registro: Baralho, data e hora, percentual, contagens e grupos de Avaliação ou “Sem avaliação”.
 2. **Given** um registro cujo Baralho ou Cartões foram editados ou excluídos depois, **When** ele é aberto, **Then** mostra os textos e o nome como eram ao concluir. Se o Baralho foi excluído, isso é indicado ("Baralho excluído").
 3. **Given** o id de um registro inexistente ou de outro Usuário, **When** aberto, **Then** aparece a mensagem única de recurso não encontrado, com volta a Início (FR-156).
 
@@ -119,8 +120,8 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 
 **Resumo detalhado**
 
-- **FR-174**: O Resumo (da Sessão recém-concluída e de um registro aberto) MUST oferecer os botões "Acertos (n)" e "Erros (n)". Cada um expande e recolhe a lista dos Itens do grupo, com Frente e Verso, e expõe o estado por `aria-expanded`/`aria-controls`. Os botões são independentes, e ambos começam recolhidos. *(Revisado em 2026-10-03 a pedido do Product Owner: o Resumo vira um placar — percentual em destaque, "x de y Cartões" e barra segmentada por nível de Avaliação com legenda em texto —; os botões "Erros (n)" e "Acertos (n)" abrem a lista dos Cartões do grupo mostrando **apenas a Frente** de cada um, e cada Cartão é um botão próprio (`aria-expanded`/`aria-controls`) que revela ou recolhe o seu Verso e o nível da Avaliação. O título da tela passa a ser "Sessão concluída", com o nome do Baralho — ou "Revisão do dia" — acima dele.)*
-- **FR-175**: Um grupo vazio MUST deixar o botão indisponível, com a explicação ("Nenhum acerto nesta Sessão" / "Nenhum erro nesta Sessão").
+- **FR-174**: O Resumo da Sessão recém-concluída ou do Registro MUST agrupar Itens por cada opção de Avaliação registrada para aquela Sessão, usando a chave e o rótulo preservados no Registro pelo algoritmo escolhido. Os grupos MUST ser controles independentes, começar recolhidos e expor estado por `aria-expanded`/`aria-controls`. Cada grupo abre os Cartões mostrando apenas a Frente; cada Cartão é um botão acessível que revela ou recolhe seu Verso e a Avaliação. O placar MUST apresentar percentual, “x de y Cartões” e uma barra segmentada com legenda textual por grupo. O título é “Sessão concluída”, com nome do Baralho ou “Revisão do dia” acima dele.
+- **FR-175**: Um grupo vazio MUST deixar o botão indisponível e explicar que não há Cartões naquela opção de Avaliação. Registros sem Avaliação MUST apresentar todos os Itens sem esse dado em um único grupo “Sem avaliação”, sem inferir ou reconstruir a Avaliação a partir do Resultado antigo.
 - **FR-176**: O Resumo MUST apresentar o percentual (FR-152) e o total no texto ("2 de 3 Itens"). O ladrilho separado "Itens estudados" MUST ser removido.
 
 **Rever registro**
@@ -150,7 +151,7 @@ Em Início, a pessoa abre uma das últimas Sessões e vê o Resumo dela, com as 
 
 - **SC-071**: Em 100% das conclusões, inclusive com falha seguida de nova tentativa, o Histórico contém exatamente um registro por Sessão concluída. Nenhuma Sessão interrompida gera registro.
 - **SC-072**: Os números de Início conferem com os registros em todos os cenários de teste: 0 registros; 1 registro; vários no mesmo dia; registros nos 7 dias; registros fora da janela; Sessão concluída perto da meia-noite.
-- **SC-073**: Para Sessões de 1 e 3 Itens (todos acertos, todos erros, 2 de 3), as listas de Acertos e Erros contêm exatamente os Cartões de cada grupo, e as contagens dos botões somam o total.
+- **SC-073**: Em Sessões com cada opção de Avaliação e em Registros legados sem Avaliação, os grupos exibem exatamente os Itens correspondentes e suas contagens somam o total.
 - **SC-074**: Depois de editar e excluir Cartões e o Baralho de uma Sessão registrada, o registro aberto mostra os textos e o nome originais em 100% dos casos.
 - **SC-075**: Um Usuário nunca vê, conta ou abre registros de outro (prova com dois Usuários em navegadores distintos).
 - **SC-076**: As telas novas atendem SC-062/063/068 da `012`: percurso por teclado, larguras de 360 a 1440 px, zoom de 200%, alvos de 44 px e contraste.

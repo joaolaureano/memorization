@@ -12,6 +12,16 @@ import { sm2 } from "./sm2.ts";
 /** Níveis de Avaliação de um Cartão (FR-193). */
 export type Avaliacao = "errei" | "dificil" | "bom" | "facil";
 
+/**
+ * Opção de Avaliação oferecida por um algoritmo (FR-191, FR-192): a chave do
+ * nível, seu rótulo legível para a tela e o resultado que produz.
+ */
+export interface OpcaoDeAvaliacao {
+  readonly chave: Avaliacao;
+  readonly rotulo: string;
+  readonly resultado: "acertou" | "errou";
+}
+
 /** Estado do Agendamento, opaco para quem não é o algoritmo que o criou. */
 export interface EstadoDoAgendamento {
   readonly algoritmo: string; // "sm2"
@@ -29,6 +39,8 @@ export interface AlgoritmoDeRepeticao {
   readonly id: string; // "sm2"
   readonly versao: number; // 1
   readonly rotulo: string; // "SM-2"
+  /** Opções de Avaliação oferecidas por este algoritmo (FR-191, FR-192). */
+  readonly opcoesDeAvaliacao: readonly OpcaoDeAvaliacao[];
   /** Pura: sem relógio, sem I/O. `estado === null` = Cartão novo. */
   avaliar(
     estado: EstadoDoAgendamento | null,
@@ -47,6 +59,20 @@ export const ALGORITMO_PADRAO = "sm2" as const;
 /** Desconhecido ou removido → SM-2 (FR-191). */
 export function algoritmoPorId(id: string): AlgoritmoDeRepeticao {
   return ALGORITMOS.get(id) ?? ALGORITMOS.get(ALGORITMO_PADRAO) ?? sm2;
+}
+
+/**
+ * Busca o rótulo da Avaliação entre as opções de todos os algoritmos
+ * registrados; cai na chave como fallback (FR-191, FR-196, FR-197).
+ */
+export function rotuloDaAvaliacao(chave: Avaliacao): string {
+  for (const algoritmo of ALGORITMOS.values()) {
+    const opcao = algoritmo.opcoesDeAvaliacao.find((o) => o.chave === chave);
+    if (opcao !== undefined) {
+      return opcao.rotulo;
+    }
+  }
+  return chave;
 }
 
 /**

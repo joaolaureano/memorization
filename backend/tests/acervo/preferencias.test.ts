@@ -13,6 +13,12 @@ const ALGORITMO_FALSO: AlgoritmoDeRepeticao = {
   id: "falso",
   versao: 1,
   rotulo: "Falso",
+  opcoesDeAvaliacao: [
+    { chave: "errei", rotulo: "Errei", resultado: "errou" },
+    { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+    { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+    { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+  ],
   avaliar(_estado, avaliacao, agora) {
     return {
       estado: { algoritmo: "falso", versao: 1, dados: { avaliacao } },
@@ -49,7 +55,18 @@ describe("obterPreferencias — os padrões", () => {
       ok: true,
       preferencias: {
         algoritmo: "sm2",
-        algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+        algoritmos: [
+          {
+            id: "sm2",
+            rotulo: "SM-2",
+            opcoesDeAvaliacao: [
+              { chave: "errei", rotulo: "Errei", resultado: "errou" },
+              { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+              { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+              { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+            ],
+          },
+        ],
       },
     });
   });
@@ -61,7 +78,18 @@ describe("salvarPreferencias — validação", () => {
       ok: true,
       preferencias: {
         algoritmo: "sm2",
-        algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+        algoritmos: [
+          {
+            id: "sm2",
+            rotulo: "SM-2",
+            opcoesDeAvaliacao: [
+              { chave: "errei", rotulo: "Errei", resultado: "errou" },
+              { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+              { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+              { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+            ],
+          },
+        ],
       },
     });
   });
@@ -76,7 +104,18 @@ describe("salvarPreferencias — validação", () => {
       ok: true,
       preferencias: {
         algoritmo: "sm2",
-        algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+        algoritmos: [
+          {
+            id: "sm2",
+            rotulo: "SM-2",
+            opcoesDeAvaliacao: [
+              { chave: "errei", rotulo: "Errei", resultado: "errou" },
+              { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+              { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+              { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+            ],
+          },
+        ],
       },
     });
   });

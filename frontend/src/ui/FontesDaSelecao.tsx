@@ -5,7 +5,6 @@ import {
   filtrarBaralhos,
   filtrarBaralhosPorSituacao,
   filtrarCartoes,
-  rotuloDaSituacaoDoBaralho,
   type FiltroDeBaralho,
   type FiltroDeSituacaoDoBaralho,
 } from "../acervo-cliente/busca-no-acervo";
@@ -24,9 +23,9 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  *
  * Busca e filtros (FR-362, FR-382): busca por nome nos Baralhos e por
  * Frente/Verso nos Cartões. Na fonte Adicionar baralhos há o filtro de
- * Situação da revisão e as etiquetas Pendente/Revisado/Sem cartões; a
- * fonte de Cartões individuais conserva apenas a busca e o filtro de
- * Baralho — a Situação saiu de lá (FR-382, SC-150). Os filtros afetam
+ * Situação da revisão; as etiquetas Pendente/Revisado/Sem cartões saíram
+ * (FR-382). A fonte de Cartões individuais conserva apenas a busca e o
+ * filtro de Baralho — a Situação saiu de lá (SC-150). Os filtros afetam
  * somente o que é exibido; nunca a seleção, e adicionar um Baralho
  * continua incluindo todos os Cartões dele.
  *
@@ -186,12 +185,10 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
               cartoesAusentes(selecao, ids).length > 0;
             const rotulo =
               ids.length > 0 && !podeAdicionar ? "Adicionado" : "Adicionar";
-            const situacao =
-              situacoesDosBaralhos.get(baralho.id) ?? "sem-cartoes";
 
             return (
               <li
-                className="linha-da-lista linha-da-lista--com-etiqueta"
+                className="linha-da-lista"
                 key={baralho.id}
               >
                 <div className="linha-da-lista__texto">
@@ -201,9 +198,6 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                   </p>
                 </div>
                 <div className="linha-da-lista__acoes">
-                  <span className={`etiqueta etiqueta--${situacao}`}>
-                    {rotuloDaSituacaoDoBaralho(situacao)}
-                  </span>
                   <button
                     type="button"
                     className={

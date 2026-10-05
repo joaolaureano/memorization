@@ -42,7 +42,18 @@ function pedir(requisicao: InjectOptions) {
 /** O padrão do Usuário sem linha de Preferências: SM-2. */
 const PADRAO = {
   algoritmo: "sm2",
-  algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+  algoritmos: [
+    {
+      id: "sm2",
+      rotulo: "SM-2",
+      opcoesDeAvaliacao: [
+        { chave: "errei", rotulo: "Errei", resultado: "errou" },
+        { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+        { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+        { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+      ],
+    },
+  ],
 };
 
 const DADOS_DAS_PREFERENCIAS_INVALIDOS = {

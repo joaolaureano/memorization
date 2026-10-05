@@ -306,8 +306,8 @@ RETURNING concluida_em AS "concluidaEm";
  */
 const INSERIR_ITEM_DE_REGISTRO = `
 INSERT INTO item_de_registro
-       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 `;
 
 /**
@@ -361,7 +361,7 @@ SELECT ${COLUNAS_DE_RESUMO}
  */
 const LISTAR_ITENS_DO_REGISTRO = `
 SELECT posicao, frente, verso, resultado,
-       cartao_id AS "cartaoId", avaliacao
+       cartao_id AS "cartaoId", avaliacao, avaliacao_rotulo AS "avaliacaoRotulo"
   FROM item_de_registro
  WHERE registro_id = $1
  ORDER BY posicao;
@@ -769,6 +769,7 @@ type LinhaDeItem = {
   resultado: ResultadoDoItemRegistrado;
   cartaoId: string | null;
   avaliacao: Avaliacao | null;
+  avaliacaoRotulo: string | null;
 };
 
 /** Linha de `agendamento`; `estado` é `JSONB` e chega já como objeto. */
@@ -1033,6 +1034,7 @@ function itemDaLinha(linha: LinhaDeItem): ItemRegistrado {
     resultado: linha.resultado,
     cartaoId: linha.cartaoId,
     avaliacao: linha.avaliacao,
+    avaliacaoRotulo: linha.avaliacaoRotulo ?? null,
   };
 }
 
@@ -1219,6 +1221,7 @@ async function gravarItens(
       item.resultado,
       item.cartaoId ?? null,
       item.avaliacao ?? null,
+      item.avaliacaoRotulo ?? null,
     ]);
   }
 }

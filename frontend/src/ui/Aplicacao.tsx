@@ -404,20 +404,23 @@ function CascaDaAplicacao({
   /**
    * Os Cartões capturados ao iniciar o baralho temporário (FR-366, FR-375)
    * ficam só na memória da casca; sair da rota da Sessão — ou recarregar —
-   * os descarta e nada é registrado.
+   * os descarta e nada é registrado. T2318: inclui o nome opcional do baralho.
    */
   const [selecaoDoEstudoTemporario, setSelecaoDoEstudoTemporario] =
     useState<readonly Cartao[] | null>(null);
+  const [nomeDoBaralhoTemporario, setNomeDoBaralhoTemporario] = useState("");
 
   const iniciarEstudoTemporario = useCallback(
-    (cartoes: readonly Cartao[]) => {
+    (cartoes: readonly Cartao[], nomeDoBaralho: string) => {
       setSelecaoDoEstudoTemporario(cartoes);
+      setNomeDoBaralhoTemporario(nomeDoBaralho);
     },
     [],
   );
 
   const sairDoEstudoTemporario = useCallback(() => {
     setSelecaoDoEstudoTemporario(null);
+    setNomeDoBaralhoTemporario("");
     irParaRota("#/baralhos");
   }, []);
 
@@ -617,6 +620,7 @@ function CascaDaAplicacao({
           aoIniciarEstudoDaAgenda={iniciarEstudoDaAgenda}
           aoSairDoEstudoDaAgenda={sairDoEstudoDaAgenda}
           selecaoDoEstudoTemporario={selecaoDoEstudoTemporario}
+          nomeDoBaralhoTemporario={nomeDoBaralhoTemporario}
           aoIniciarEstudoTemporario={iniciarEstudoTemporario}
           aoSairDoEstudoTemporario={sairDoEstudoTemporario}
         />
@@ -645,6 +649,7 @@ function TelaDaRota({
   aoIniciarEstudoDaAgenda,
   aoSairDoEstudoDaAgenda,
   selecaoDoEstudoTemporario,
+  nomeDoBaralhoTemporario,
   aoIniciarEstudoTemporario,
   aoSairDoEstudoTemporario,
 }: {
@@ -661,7 +666,8 @@ function TelaDaRota({
   aoIniciarEstudoDaAgenda: (inicio: InicioDeCompromisso) => void;
   aoSairDoEstudoDaAgenda: () => void;
   selecaoDoEstudoTemporario: readonly Cartao[] | null;
-  aoIniciarEstudoTemporario: (cartoes: readonly Cartao[]) => void;
+  nomeDoBaralhoTemporario: string;
+  aoIniciarEstudoTemporario: (cartoes: readonly Cartao[], nomeDoBaralho: string) => void;
   aoSairDoEstudoTemporario: () => void;
 }) {
   switch (rota.nome) {
@@ -770,6 +776,7 @@ function TelaDaRota({
           cliente={cliente}
           id=""
           selecaoTemporaria={selecaoDoEstudoTemporario}
+          nomeDoBaralhoTemporario={nomeDoBaralhoTemporario}
           aoSair={aoSairDoEstudoTemporario}
         />
       );

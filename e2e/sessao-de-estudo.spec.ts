@@ -213,13 +213,15 @@ test("Sessão de revisão real encerra no Resumo e a interrupção descarta o an
     ).toContainText("de acertos");
     // SC-004: o Resumo deriva tudo dos mesmos três Itens apresentados — dois
     // acertos e um erro —, e a tela os apresenta na contagem e nos botões dos
-    // grupos (FR-174, FR-176).
+    // grupos (FR-174, FR-176). Os botões agora exibem a opção de Avaliação
+    // escolhida na Sessão (T2316): "Bom" foi escolhido para os dois acertos
+    // e "Errei" para o erro.
     await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Acertos (2)" }),
+      page.getByRole("button", { name: "Bom (2)" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Erros (1)" }),
+      page.getByRole("button", { name: "Errei (1)" }),
     ).toBeVisible();
 
     // FR-161, FR-163: a Sessão concluída é registrada no histórico assim que

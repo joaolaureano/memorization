@@ -12,6 +12,8 @@ import type {
   Avaliacao,
   CartaoListado,
   DadosDeRegistro,
+  OpcaoDeAvaliacao,
+  ResultadoDePreferencias,
 } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
@@ -646,10 +648,10 @@ describe("PaginaDeEstudo", () => {
     expect(screen.getByText("de acertos")).toBeInTheDocument();
     expect(screen.getByText("2 de 3 Cartões")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Acertos (2)" }),
+      screen.getByRole("button", { name: "Bom (2)" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Erros (1)" }),
+      screen.getByRole("button", { name: "Errei (1)" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Itens estudados")).not.toBeInTheDocument();
   });
@@ -960,4 +962,146 @@ describe("PaginaDeEstudo", () => {
       await screen.findByRole("article", { name: "Item 2 de 2" }),
     ).toBeInTheDocument();
   });
+
+  // T2317 — Opções de Avaliação customizadas do algoritmo do Usuário
+  it(
+    "carrega algoritmo com exatamente 2 opções: " +
+      "exibe 2 botões de avaliação com os rótulos corretos e atalhos 1 e 2 (T2317)",
+    async () => {
+      const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
+
+      // Customiza obterPreferencias para devolver 2 opções de Avaliação.
+      const opcoesCustomizadas: readonly OpcaoDeAvaliacao[] = [
+        { chave: "errei", rotulo: "De novo", resultado: "errou" },
+        { chave: "bom", rotulo: "Lembrei", resultado: "acertou" },
+      ];
+
+      const obterPreferenciasOriginal = cliente.obterPreferencias.bind(cliente);
+      vi.spyOn(cliente, "obterPreferencias").mockImplementation(async () => {
+        const resultado = await obterPreferenciasOriginal();
+        if (resultado.ok) {
+          // Sobrescreve as opções de Avaliação do primeiro (e único) algoritmo.
+          resultado.preferencias.algoritmos[0].opcoesDeAvaliacao =
+            opcoesCustomizadas;
+        }
+        return resultado;
+      });
+
+      renderizar(cliente, idDoBaralho);
+
+      // Abre a modal de escolha (diálogo presente no DOM).
+      const dialogo = await screen.findByRole("dialog");
+      expect(dialogo).toBeInTheDocument();
+
+      // Escolhe "Todos os cartões" para iniciar.
+      const botaoTodos = screen.getByRole("button", {
+        name: "Todos os cartões",
+      });
+      fireEvent.click(botaoTodos);
+
+      // Aguarda a sessão iniciar - verifica a presença de "Revisar baralho".
+      await screen.findByRole("heading", { name: /Revisar/ });
+
+      // Clica em "Revelar verso" para ver as opções de avaliação.
+      const botaoRevelar = await screen.findByRole("button", {
+        name: "Revelar verso",
+      });
+      fireEvent.click(botaoRevelar);
+
+      // Aguarda a revelação do verso.
+      await screen.findByRole("heading", { name: "Verso" });
+
+      // Verifica que há exatamente 2 botões de avaliação com os rótulos customizados.
+      const botoesDeAvaliacao = screen.getAllByRole("button").filter((btn) =>
+        /De novo|Lembrei/.test(btn.textContent ?? "")
+      );
+      expect(botoesDeAvaliacao).toHaveLength(2);
+      expect(screen.getByRole("button", { name: /De novo/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Lembrei/ }),
+      ).toBeInTheDocument();
+
+      // Verifica os atalhos: 1 = "De novo", 2 = "Lembrei".
+      const botaoDeNovo = screen.getByRole("button", { name: /De novo/ });
+      const botaoLembrei = screen.getByRole("button", { name: /Lembrei/ });
+      expect(botaoDeNovo).toHaveAttribute("aria-keyshortcuts", "1");
+      expect(botaoLembrei).toHaveAttribute("aria-keyshortcuts", "2");
+
+      // Atalho 3 não deve fazer nada (não há terceira opção).
+      fireEvent.keyDown(document, { key: "3" });
+      // Ainda está na tela de verso, prova de que "3" não avançou.
+      expect(
+        screen.getByRole("heading", { name: "Verso" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it(
+    "falha ao carregar preferências: fallback para 4 opções do SM-2 " +
+      "(Errei, Difícil, Bom, Fácil) (T2317)",
+    async () => {
+      const { cliente, idDoBaralho } = await criarAcervoElegivel(2);
+
+      // Faz obterPreferencias devolver falha.
+      vi.spyOn(cliente, "obterPreferencias").mockResolvedValue({
+        ok: false,
+        erro: "indisponivel",
+        mensagem: "Não foi possível carregar preferências",
+      } as ResultadoDePreferencias);
+
+      renderizar(cliente, idDoBaralho);
+
+      // Aguarda a modal aparecer.
+      const dialogo = await screen.findByRole("dialog");
+      expect(dialogo).toBeInTheDocument();
+
+      // Escolhe "Todos os cartões".
+      const botaoTodos = screen.getByRole("button", {
+        name: "Todos os cartões",
+      });
+      fireEvent.click(botaoTodos);
+
+      // Aguarda a sessão iniciar.
+      await screen.findByRole("heading", { name: /Revisar/ });
+
+      // Clica em "Revelar verso" para ver as opções de avaliação.
+      const botaoRevelar = await screen.findByRole("button", {
+        name: "Revelar verso",
+      });
+      fireEvent.click(botaoRevelar);
+
+      // Aguarda o verso aparecer.
+      await screen.findByRole("heading", { name: "Verso" });
+
+      // Verifica que há exatamente 4 botões com os rótulos do SM-2.
+      const botoesDeAvaliacao = screen.getAllByRole("button").filter((btn) =>
+        /Errei|Difícil|Bom|Fácil/.test(btn.textContent ?? "")
+      );
+      expect(botoesDeAvaliacao).toHaveLength(4);
+      expect(screen.getByRole("button", { name: /^Errei/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /^Difícil/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Bom/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /^Fácil/ }),
+      ).toBeInTheDocument();
+
+      // Verifica os atalhos do SM-2: 1=Errei, 2=Difícil, 3=Bom, 4=Fácil.
+      expect(screen.getByRole("button", { name: /^Errei/ })).toHaveAttribute(
+        "aria-keyshortcuts",
+        "1",
+      );
+      expect(
+        screen.getByRole("button", { name: /^Difícil/ }),
+      ).toHaveAttribute("aria-keyshortcuts", "2");
+      expect(screen.getByRole("button", { name: /^Bom/ })).toHaveAttribute(
+        "aria-keyshortcuts",
+        "3",
+      );
+      expect(
+        screen.getByRole("button", { name: /^Fácil/ }),
+      ).toHaveAttribute("aria-keyshortcuts", "4");
+    },
+  );
 });

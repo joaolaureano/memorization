@@ -98,6 +98,8 @@ export interface ItemRegistrado {
   readonly cartaoId?: string | null;
   /** Avaliação em 4 níveis; ausente/nula em Itens anteriores à 015 (FR-196, FR-197). */
   readonly avaliacao?: Avaliacao | null;
+  /** Rótulo da opção de Avaliação escolhida; ausente/nulo em Itens anteriores à 015 (FR-196, FR-197). */
+  readonly avaliacaoRotulo?: string | null;
 }
 
 /**

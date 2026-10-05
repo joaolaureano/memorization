@@ -40,6 +40,7 @@ coverage/
 test-results/
 playwright-report/
 .playwright/
+.vitest/
 
 # Caches de ferramentas de agente — regeneráveis, fora do repositório.
 # .serena/ é versionado por decisão do Product Owner: sua própria .gitignore

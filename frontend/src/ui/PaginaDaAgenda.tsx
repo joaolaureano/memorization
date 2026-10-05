@@ -330,13 +330,18 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
                     }
                   }}
                   tabIndex={-1}
-                  className="agenda__rotina"
+                  className={`agenda__rotina ${
+                    rotina.estado === "pausada" ? "agenda__rotina--pausada" : ""
+                  }`}
                 >
                   <div className="agenda__rotina-texto">
                     <h3 className="titulo-do-item">{rotina.nomeDoBaralho}</h3>
                     <p>{resumoDaRotina(rotina)}</p>
                     <p className="texto-secundario">
-                      Situação: {rotina.estado === "pausada" ? "Pausada" : "Ativa"}
+                      Situação:{" "}
+                      <span className="agenda__rotina-status">
+                        {rotina.estado === "pausada" ? "Pausada" : "Ativa"}
+                      </span>
                       {rotina.indisponivel ? (
                         <>
                           {" · "}

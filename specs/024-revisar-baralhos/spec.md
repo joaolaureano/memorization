@@ -12,6 +12,7 @@
 - Baralho revisado (também chamado de pronto na conversa): Revisar inicia todos os Cartões embaralhados, sem modal ou quantidade.
 - A alteração vale para aplicação, specs e protótipos.
 - Baralho vazio fica neutro, com Sem cartões e Revisar indisponível; não é classificado como Revisado.
+- Os ajustes posteriores registrados na spec 023 (nome temporário, grupos por Avaliação e sem etiquetas na fonte temporária) foram implementados em 2026-10-05 (023, T2315–T2321).
 
 ## User Scenarios & Testing
 
@@ -45,7 +46,7 @@ Como Usuário, quero escolher o Baralho e entrar na revisão usando todos os Car
 **Independent Test**: montar seleção usando Baralhos e Cartões individuais; filtros não alteram a seleção; Revisar inicia todos juntos sem modal adicional.
 
 1. Na montagem temporária, Situação da revisão pertence à fonte Adicionar baralhos, não à fonte Adicionar cartões.
-2. As linhas de Baralhos na montagem também exibem etiqueta antes das ações. Adicionar um Baralho inclui todos os seus Cartões; o filtro não altera sua composição.
+2. As linhas de Baralhos na montagem temporária não exibem etiquetas Pendente/Revisado. Adicionar um Baralho inclui todos os seus Cartões; o filtro não altera sua composição.
 3. Revisar a seleção temporária inicia todos os selecionados embaralhados, preservando o salvamento opcional ao final.
 
 ## Functional Requirements
@@ -54,7 +55,7 @@ Como Usuário, quero escolher o Baralho e entrar na revisão usando todos os Car
 - **FR-379 — Situação por Baralho**: derivar Pendente quando existir Cartão sem Agendamento ou com data de revisão hoje/anterior no calendário local do navegador; Revisado somente quando todos estiverem no futuro e o conjunto não for vazio. Cartão compartilhado tem o mesmo Agendamento em todos os Baralhos. Dado ilegível ou ausente inesperadamente não pode produzir Revisado.
 - **FR-380 — Baralho vazio**: mostrar Sem cartões como situação neutra, preservar Editar, desabilitar Revisar e comunicar o motivo. Filtros Pendente e Revisado excluem vazios.
 - **FR-381 — Filtro e etiqueta**: Situação da revisão na lista de Baralhos oferece Todos, Pendente e Revisado, com Todos como padrão; combina com busca por nome. Etiqueta textual aparece imediatamente à esquerda dos botões Revisar/Editar e antes das ações na ordem de leitura. Não depender somente de cor. Em telas estreitas pode quebrar linha antes das ações, sem truncar os rótulos ou criar rolagem horizontal.
-- **FR-382 — Cartões e montagem**: remover filtro de situação da página Cartões e da fonte de Cartões individuais da montagem. Preservar busca e filtro de Baralho. Na fonte Adicionar baralhos, oferecer filtro de situação e etiquetas; adicionar continua incluindo todos os Cartões da fonte. Filtrar não modifica seleção já montada.
+- **FR-382 — Cartões e montagem**: remover filtro de situação da página Cartões e da fonte de Cartões individuais da montagem. Preservar busca e filtro de Baralho. Na fonte Adicionar baralhos da montagem temporária, oferecer o filtro de situação, sem etiquetas Pendente/Revisado nas linhas. A lista principal de Baralhos mantém suas etiquetas conforme FR-381. Adicionar continua incluindo todos os Cartões da fonte; filtrar não modifica seleção já montada.
 - **FR-383 — Escolha para pendentes**: ao solicitar revisão de Baralho pendente, abrir modal pequena com duas ações Só pendentes e Todos os cartões, com suas contagens, e Cancelar. Só pendentes inclui Cartões novos ou vencidos; cada ação inicia diretamente o conjunto correspondente embaralhado e sem duplicatas. Não oferecer configuração de quantidade.
 - **FR-384 — Início direto**: Baralho Revisado inicia todos imediatamente. Um novo carregamento determina a situação atual, inclusive ao entrar diretamente pela rota de revisão. O fluxo da seleção temporária inicia todos os selecionados sem a modal, pois o conteúdo já foi escolhido. Agenda preserva a seleção prevista pelo Compromisso.
 - **FR-385 — Atualização e integridade**: carregar Agendamentos antes de classificar ou iniciar. Se a leitura falhar, exibir falha e nova tentativa, sem classificação falsa. A escolha da modal usa os dados carregados para aquele início; novas revisões releem os dados. Concluir mantém Registro/Agendamentos atômicos e idempotentes; interromper mantém descarte existente. Revisar novamente aplica a mesma decisão entre modal e início direto com dados atuais.
@@ -70,7 +71,7 @@ Como Usuário, quero escolher o Baralho e entrar na revisão usando todos os Car
 
 ## Success Criteria
 
-- **SC-150**: nenhuma lista de Cartões ou seletor de Cartões individuais oferece Situação da revisão; listas de Baralhos oferecem filtro e etiquetas consistentes.
+- **SC-150**: nenhuma lista de Cartões ou seletor de Cartões individuais oferece Situação da revisão; a lista principal de Baralhos oferece filtro e etiquetas consistentes, e a fonte de Baralhos da montagem temporária mantém o filtro sem repetir as etiquetas.
 - **SC-151**: classificação correta para novos, ontem, hoje, amanhã, compartilhados e vazios, sem falso Revisado em falha de leitura.
 - **SC-152**: Baralho pendente permite revisar o subconjunto pendente ou todos, sem quantidade; revisado inicia todos em um clique; temporário preserva todos os selecionados.
 - **SC-153**: conclusão, interrupção, nova revisão e falha preservam as garantias existentes de Registro e Agendamento.

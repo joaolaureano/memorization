@@ -210,6 +210,7 @@ describe("registrarSessao — registro da Sessão concluída", () => {
           resultado: "acertou",
           cartaoId: primeiro.cartaoId,
           avaliacao: "bom",
+          avaliacaoRotulo: "Bom",
         },
         {
           posicao: 1,
@@ -218,6 +219,7 @@ describe("registrarSessao — registro da Sessão concluída", () => {
           resultado: "errou",
           cartaoId: segundo.cartaoId,
           avaliacao: "errei",
+          avaliacaoRotulo: "Errei",
         },
         {
           posicao: 2,
@@ -226,6 +228,7 @@ describe("registrarSessao — registro da Sessão concluída", () => {
           resultado: "acertou",
           cartaoId: terceiro.cartaoId,
           avaliacao: "facil",
+          avaliacaoRotulo: "Fácil",
         },
       ],
     });

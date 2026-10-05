@@ -20,15 +20,15 @@ Também há capturas em 360 e 768 px na mesma pasta. A galeria ao final do prot�
 
 Cabeçalho Baralhos → Criar Baralho (primário) / Criar baralho temporário (secundário escuro) → busca pelo nome e Situação da revisão → lista com etiqueta antes de Revisar / Editar.
 
-Os botões ficam lado a lado no desktop, na ordem indicada. No celular podem quebrar linha sem truncar os textos. Criar baralho temporário abre uma seleção vazia; não exige nome e não adiciona item à lista de Baralhos.
+Os botões ficam lado a lado no desktop, na ordem indicada. No celular podem quebrar linha sem truncar os textos. Criar baralho temporário abre uma seleção vazia com nome opcional; não adiciona item à lista de Baralhos.
 
 Revisar um Baralho pendente abre uma modal pequena com Só pendentes, Todos os cartões e Cancelar. Revisado inicia todos embaralhados diretamente. Revisar uma seleção temporária também inicia todos diretamente; não há campo de quantidade. Regras da spec 024.
 
 ## 2. Criar baralho temporário
 
-Criar baralho temporário → “Escolha o conteúdo para esta Sessão. Você poderá salvar o baralho ao terminar.”
+Criar baralho temporário → nome opcional → “Escolha o conteúdo para esta Sessão. Você poderá salvar o baralho ao terminar.” Se vazio, usa “Baralho temporário”.
 
-- Adicionar baralhos: busca por nome / Situação da revisão → nome, contagem e etiqueta → Adicionar cartões.
+- Adicionar baralhos: busca por nome / Situação da revisão → nome e contagem (sem etiqueta Pendente/Revisado) → Adicionar cartões. A etiqueta continua na lista principal de Baralhos.
 - Adicionar cartões: busca na Frente/Verso → Baralho → Frente → Adicionar.
 - Seleção do estudo: N Cartões únicos → Frente de cada Cartão / Remover → Limpar seleção.
 - “Todos os cartões selecionados serão estudados em ordem aleatória.” → Revisar / Cancelar. Não há campo de quantidade ou ordem. Seleção vazia ou acima de 1.000 Cartões comunica por que não pode iniciar.
@@ -43,7 +43,7 @@ Interromper usa a confirmação de descarte vigente. Todos os selecionados são 
 
 ## 4. Resumo
 
-Sessão concluída → Estudo com baralho temporário (texto secundário abaixo do título) → placar e grupos de resultados existentes → Salvar como baralho / Voltar para Baralhos.
+Sessão concluída → nome temporário (ou “Baralho temporário”) como identificação secundária → placar e grupos por cada opção de Avaliação fornecida pelo algoritmo (quatro no atual) → Salvar como baralho / Voltar para Baralhos. O nome é reaproveitado, mas editável, ao salvar. Registros antigos sem Avaliação aparecem num grupo único “Sem avaliação”.
 
 Confirmação de registro apenas anunciada ao leitor de tela. Registro pendente: mensagem de salvamento do Histórico; Salvar como baralho indisponível com motivo. Falha: Tentar registrar novamente, preservando o Resumo.
 

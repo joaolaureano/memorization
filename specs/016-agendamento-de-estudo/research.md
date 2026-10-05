@@ -127,3 +127,7 @@ não equivale a uma confirmação individual de cada uma.
   dois anos; a semana e o resumo respondem muito abaixo de 1 s e a leitura se
   restringe à janela pedida, sem tocar o Histórico de Sessões.
 - **Converge**: FR-222–FR-256 e SC-095–SC-104 têm teste (matriz em `tasks.md`).
+
+## Convergence de 2026-10-05
+
+Ajustes de UX implementados: confirmação contextual ao salvar a edição de Rotina (no lugar do parágrafo genérico), combo-box Baralho centralizado e tom âmbar nas Rotinas pausadas. Provas em frontend/tests/agenda.test.tsx (33) e e2e/agendamento-de-estudo.spec.ts; `npm run verificar:ci` aprovado.

@@ -1536,6 +1536,47 @@ details summary {
   overflow-wrap: anywhere;
 }
 
+/* T1628: Rotinas pausadas recebem tom âmbar discreto na linha e na etiqueta
+ * (FR-237, US5/AC7). O contraste do texto é mantido e a identificação é clara.
+ * Define tokens âmbar para reutilização. */
+:root {
+  --amber: #ffc76b;
+  --amber-bg: rgba(255, 199, 107, 0.08);
+  --amber-border: rgba(255, 199, 107, 0.24);
+  --amber-text: #ffd995;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --amber: #ffc76b;
+    --amber-bg: rgba(255, 199, 107, 0.08);
+    --amber-border: rgba(255, 199, 107, 0.24);
+    --amber-text: #ffd995;
+  }
+
+  :root[data-theme="dark"] {
+    --amber: #ffc76b;
+    --amber-bg: rgba(255, 199, 107, 0.08);
+    --amber-border: rgba(255, 199, 107, 0.24);
+    --amber-text: #ffd995;
+  }
+}
+
+.agenda__rotina {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.agenda__rotina--pausada {
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+}
+
+.agenda__rotina--pausada .agenda__rotina-status {
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+  border-color: rgba(255, 199, 107, 0.5);
+  color: var(--amber-text);
+}
+
 .agenda__rotina .acoes {
   margin-top: 0;
 }
@@ -1554,6 +1595,21 @@ fieldset.campo--grupo {
 
 .agenda__resumo-da-rotina {
   margin-bottom: 28px;
+}
+
+/* T1627: no formulário Editar rotina, o Baralho fica com texto centralizado
+ * sem mudar a leitura acessível (FR-257). */
+.agenda__select-baralho-editando {
+  text-align: center;
+  text-align-last: center;
+}
+
+.agenda__confirmacao-de-edicao p {
+  margin: 0 0 16px;
+}
+
+.agenda__confirmacao-de-edicao p strong {
+  font-weight: 600;
 }
 
 .agenda__resumo-da-rotina p {

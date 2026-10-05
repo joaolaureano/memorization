@@ -143,7 +143,7 @@ it(
       name: "Sessão concluída",
     });
     expect(
-      screen.getByText("Estudo com baralho temporário"),
+      screen.getByText("Baralho temporário"),
     ).toBeInTheDocument();
 
     expect(espiao).toHaveBeenCalledTimes(1);
@@ -229,3 +229,106 @@ it("interromper e confirmar não registra nada (FR-375)", async () => {
   await waitFor(() => expect(aoSair).toHaveBeenCalledTimes(1));
   expect(espiao).not.toHaveBeenCalled();
 });
+
+// T2319 — Formulário "Salvar como baralho" com nome inicial
+it(
+  "sem nome no baralho temporário, " +
+    '"Salvar como baralho" abre com "Baralho temporário" no campo (T2319)',
+  async () => {
+    const cliente = clienteDeProva();
+    const selecao = await criarSelecao(cliente);
+    renderizar(cliente, selecao);
+
+    await concluirSessao();
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Sessão concluída",
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Salvar como baralho" }),
+    );
+    await screen.findByRole("heading", { name: "Salvar como baralho" });
+
+    const campoDeNome = screen.getByLabelText(
+      "Nome do baralho",
+    ) as HTMLInputElement;
+    expect(campoDeNome.value).toBe("Baralho temporário");
+  },
+);
+
+it(
+  'com nome "Inglês da viagem" no baralho temporário, ' +
+    '"Salvar como baralho" abre com esse nome no campo (T2319)',
+  async () => {
+    const cliente = clienteDeProva();
+    const selecao = await criarSelecao(cliente);
+    const nomeTemporario = "Inglês da viagem";
+
+    render(
+      comProtecaoDeSaida(
+        <PaginaDeEstudo
+          cliente={cliente}
+          id=""
+          selecaoTemporaria={selecao}
+          nomeDoBaralhoTemporario={nomeTemporario}
+          aleatoriedade={new AleatoriedadeDeterministica([0.99, 0.99])}
+          aoSair={vi.fn()}
+        />,
+      ),
+    );
+
+    await concluirSessao();
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Sessão concluída",
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Salvar como baralho" }),
+    );
+    await screen.findByRole("heading", { name: "Salvar como baralho" });
+
+    const campoDeNome = screen.getByLabelText(
+      "Nome do baralho",
+    ) as HTMLInputElement;
+    expect(campoDeNome.value).toBe(nomeTemporario);
+  },
+);
+
+it(
+  'o registro enviado tem nomeDoBaralho com o nome temporário ou "Baralho temporário" (T2319)',
+  async () => {
+    const cliente = clienteDeProva();
+    const selecao = await criarSelecao(cliente);
+    const nomeTemporario = "Inglês da viagem";
+    const espiao = vi.spyOn(cliente, "registrarSessao");
+
+    render(
+      comProtecaoDeSaida(
+        <PaginaDeEstudo
+          cliente={cliente}
+          id=""
+          selecaoTemporaria={selecao}
+          nomeDoBaralhoTemporario={nomeTemporario}
+          aleatoriedade={new AleatoriedadeDeterministica([0.99, 0.99])}
+          aoSair={vi.fn()}
+        />,
+      ),
+    );
+
+    await concluirSessao();
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("status", { name: "Situação do registro da Sessão" }),
+      ).toHaveTextContent("Sessão registrada no histórico."),
+    );
+
+    // Verifica que registrarSessao foi chamado com o nome correto
+    expect(espiao).toHaveBeenCalled();
+    const registroChamado = espiao.mock.calls[0][0];
+    expect(registroChamado.nomeDoBaralho).toBe(nomeTemporario);
+  },
+);
+

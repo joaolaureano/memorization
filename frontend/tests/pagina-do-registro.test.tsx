@@ -174,13 +174,12 @@ describe("PaginaDoRegistro", () => {
       await screen.findByRole("heading", { name: "Sessão concluída" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Estudo com baralho temporário"),
+      screen.getByText("Baralho temporário"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Baralho excluído")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "Ver baralho" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("Baralho temporário")).not.toBeInTheDocument();
   });
 
   it("mostra 'Revisão do dia' sem selo nem link para Baralho (FR-215)", async () => {
@@ -203,9 +202,9 @@ describe("PaginaDoRegistro", () => {
     // nem selo, nem link quebrado (FR-215).
     expect(screen.queryByText("Baralho excluído")).toBeNull();
     expect(screen.queryByRole("link", { name: "Ver baralho" })).toBeNull();
-    // As Avaliações dos Itens chegam ao Resumo (FR-197, FR-216).
+    // As Avaliações dos Itens chegam ao Resumo (FR-197, FR-216, T2316).
     expect(
-      screen.getByLabelText("Contagem por nível de Avaliação"),
+      screen.getByLabelText("Contagem por opção de Avaliação"),
     ).toBeTruthy();
     expect(screen.getByText("Bom 1")).toBeTruthy();
     expect(screen.getByText("Errei 1")).toBeTruthy();
@@ -232,11 +231,12 @@ describe("PaginaDoRegistro", () => {
     expect(
       screen.getByRole("link", { name: "Ver baralho" }).getAttribute("href"),
     ).toBe("#/baralhos/baralho-1");
-    // Itens sem Avaliação — Registros anteriores à 015 — não ganham a contagem
-    // por nível e aparecem exatamente como antes (FR-197, FR-214).
+    // Itens sem Avaliação — Registros anteriores à 015 — agora mostram a
+    // legenda com "Sem avaliação" (FR-174, FR-197, FR-214, T2316).
     expect(
-      screen.queryByLabelText("Contagem por nível de Avaliação"),
-    ).toBeNull();
+      screen.getByLabelText("Contagem por opção de Avaliação"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sem avaliação 3")).toBeInTheDocument();
   });
 
   it("avisa quando o Registro não existe e oferece a volta a Estudo", async () => {

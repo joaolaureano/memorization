@@ -50,6 +50,12 @@ const ALGORITMO_FALSO: AlgoritmoDeRepeticao = {
   id: "falso",
   versao: 1,
   rotulo: "Falso",
+  opcoesDeAvaliacao: [
+    { chave: "errei", rotulo: "Errei (falso)", resultado: "errou" },
+    { chave: "dificil", rotulo: "Difícil (falso)", resultado: "acertou" },
+    { chave: "bom", rotulo: "Bom (falso)", resultado: "acertou" },
+    { chave: "facil", rotulo: "Fácil (falso)", resultado: "acertou" },
+  ],
   avaliar(_estado, avaliacao, agora) {
     return {
       estado: { algoritmo: "falso", versao: 1, dados: { avaliacao } },
@@ -226,7 +232,7 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
       corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
         origem: "temporario",
         baralhoId: "qualquer",
-        nomeDoBaralho: "qualquer",
+        nomeDoBaralho: "",
       }),
     );
 
@@ -241,6 +247,39 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
     });
 
     expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
+  });
+
+  it("aceita nome válido para baralho temporário e o preserva (FR-369)", async () => {
+    const cartao = await criarCartao();
+
+    const registro = await registrar(
+      corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
+        origem: "temporario",
+        baralhoId: "qualquer",
+        nomeDoBaralho: "Inglês da viagem",
+      }),
+    );
+
+    expect(registro.origem).toBe("temporario");
+    expect(registro.baralhoId).toBe("");
+    expect(registro.nomeDoBaralho).toBe("Inglês da viagem");
+  });
+
+  it("recusa baralho temporário com nome muito longo (FR-369)", async () => {
+    const cartao = await criarCartao();
+
+    const resultado = await acervo.registrarSessao(
+      corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
+        origem: "temporario",
+        baralhoId: "qualquer",
+        nomeDoBaralho: "a".repeat(101),
+      }),
+    );
+
+    expect(resultado.ok).toBe(false);
+    if (!resultado.ok) {
+      expect(resultado.erro).toBe("dados_invalidos");
+    }
   });
 
   it("deriva o Resultado de cada Item da Avaliação (FR-194, FR-195)", async () => {
@@ -329,7 +368,16 @@ describe("salvarPreferencias — troca de algoritmo", () => {
     const preferencias = await comFalso.obterPreferencias();
 
     expect(preferencias.ok && preferencias.preferencias.algoritmos).toEqual([
-      { id: "falso", rotulo: "Falso" },
+      {
+        id: "falso",
+        rotulo: "Falso",
+        opcoesDeAvaliacao: [
+          { chave: "errei", rotulo: "Errei (falso)", resultado: "errou" },
+          { chave: "dificil", rotulo: "Difícil (falso)", resultado: "acertou" },
+          { chave: "bom", rotulo: "Bom (falso)", resultado: "acertou" },
+          { chave: "facil", rotulo: "Fácil (falso)", resultado: "acertou" },
+        ],
+      },
     ]);
 
     const salvo = await comFalso.salvarPreferencias({

@@ -181,3 +181,10 @@ os arquivos):
   limite legado de 1000 Itens só fora da Agenda.
 - **PostgreSQL**: o Adapter implementa as mesmas operações, mas a bateria não pôde
   ser executada aqui (ver `specs/017-gerenciar-conta-usuario/tasks.md`).
+
+## Phase 10: Convergence
+
+- [X] T1626 Editar rotina: remover o parágrafo genérico do fim de PaginaDoFormularioDeRotina.tsx e, ao Salvar alterações, abrir confirmação contextual (DialogoDeConfirmacao) que resume somente os efeitos da alteração — dias removidos cancelam o pendente de hoje, dias adicionados podem criá-lo, Baralho/quantidade atualizam pendentes, passado e conclusões preservados, exceção de Sessão já iniciada; foco inicial em Cancelar, Escape cancela; provas pelo DOM per FR-238, US5/AC8 (contradicts)
+- [X] T1627 Combo-box Baralho do formulário Editar rotina com texto centralizado (`text-align-last`/`text-align: center`), sem mudar nome acessível nem foco; prova de estilo computado em e2e per FR-257, US5/AC8 (missing)
+- [X] T1628 Gerenciar agenda: linha e etiqueta «Pausada» com tom âmbar discreto (tokens em estilos.css, contraste ≥ 4.5:1 no texto, rótulo textual mantido); provas pelo DOM e contraste em e2e per FR-237, US5/AC7 (missing)
+- [X] T1629 Atualizar e2e/agendamento-de-estudo.spec.ts afetado e rodar `npm run verificar:ci` per T1623–T1624 (partial)

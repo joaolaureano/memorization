@@ -21,7 +21,7 @@ Início ganha a **Revisão do dia**: quantos Cartões estão vencidos, quantos C
 ### Session 2026-10-02
 
 - Q: Quais algoritmos entram nesta entrega e como outros entram depois? → A: Só o SM-2, atrás de uma interface plugável. FSRS, Leitner e outros entram depois como novos algoritmos, sem mudar telas, Histórico nem Agendamentos existentes (FR-187–FR-191).
-- Q: Qual é a escala da Avaliação e como ela se relaciona com Acertei/Errei? → A: Quatro níveis comuns a todos os algoritmos: Errei, Difícil, Bom e Fácil. Errei = errou; Difícil, Bom e Fácil = acertou no Histórico da 013 (FR-192–FR-197).
+- Q: Qual é a escala da Avaliação e como ela se relaciona com Acertei/Errei? → A: O SM-2 atual oferece quatro opções: Errei, Difícil, Bom e Fácil. Errei = errou; Difícil, Bom e Fácil = acertou no Histórico da 013. Cada algoritmo fornece as próprias opções e rótulos de grupo (FR-192–FR-197).
 - Q: Quem escolhe o algoritmo? → A: O Usuário, em Preferências. Hoje a lista tem só o SM-2, e trocar de algoritmo não perde o Histórico (FR-212, FR-213).
 - Q: Como fica o uso diário? → A: Início mostra "N Cartões para revisar hoje" (vencidos de todos os Baralhos) com o botão Revisar e um limite diário de Cartões novos. O estudo por Baralho continua como estudo livre e também alimenta o Agendamento (FR-198–FR-206).
 - Q: O Agendamento pertence ao Vínculo ou ao Cartão? → A: Ao Cartão e ao Usuário, nunca ao Vínculo (FR-207).
@@ -29,6 +29,10 @@ Início ganha a **Revisão do dia**: quantos Cartões estão vencidos, quantos C
 - Q: Como a Revisão do dia apresenta muitos Cartões vencidos? → A: Em lotes de no máximo 20 Itens. Cada lote concluído registra e reagenda (FR-203).
 - Q: O que acontece com os Cartões estudados antes da 015? → A: Todos começam como Cartões novos. Os Registros antigos, sem Avaliação, não geram Agendamento, mas continuam no Histórico e nas Estatísticas (FR-214).
 - Q: Os botões de Avaliação mostram quando o Cartão voltará? → A: Sim. Cada botão mostra a próxima revisão que resultaria dele, por exemplo "Bom · 3 dias" (FR-221).
+
+### Session 2026-10-05
+
+- Q: Como o Resumo agrupa os resultados e como se adapta a novos algoritmos? → A: Sempre por opção de Avaliação; o algoritmo fornece as opções que definem os grupos. O algoritmo atual oferece Errei, Difícil, Bom e Fácil. Cada Registro preserva a chave e o rótulo da opção escolhida. Registros antigos sem Avaliação aparecem juntos como “Sem avaliação”.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -133,16 +137,16 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 - **FR-188**: O estado MUST ser próprio de cada algoritmo, identificado pelo algoritmo e pela versão dele.
 - **FR-189**: O restante do produto MUST apenas ler a próxima data de revisão e o Cartão e o Usuário a que o Agendamento pertence.
 - **FR-190**: A primeira entrega MUST ter apenas o SM-2, já selecionado por padrão.
-- **FR-191**: Incluir um segundo algoritmo MUST NOT exigir alterar telas, Histórico nem Agendamentos de outros algoritmos; basta registrá-lo na lista.
+- **FR-191**: Incluir um segundo algoritmo MUST NOT exigir alterar telas, Histórico nem Agendamentos de outros algoritmos; basta registrá-lo na lista. Cada algoritmo MUST fornecer sua lista ordenada de opções de Avaliação, com chave estável, rótulo apresentado ao Usuário e classificação de resultado necessária às Estatísticas. Sessão, Resumo e Históricos MUST usar essa lista, sem codificar grupos de avaliação na interface.
 
 **Avaliação**
 
-- **FR-192**: A Avaliação MUST ter quatro níveis: Errei, Difícil, Bom e Fácil.
+- **FR-192**: O algoritmo atual MUST oferecer quatro opções de Avaliação: Errei, Difícil, Bom e Fácil. A lista de opções pertence ao algoritmo, de modo que algoritmos futuros possam fornecer suas próprias opções e rótulos.
 - **FR-193**: A Avaliação MUST ocorrer somente após a Revelação (FR-150 mantido).
-- **FR-194**: A Avaliação MUST substituir os botões Acertei/Errei em toda Sessão, inclusive no estudo livre por Baralho e na Revisão do dia.
+- **FR-194**: As opções de Avaliação fornecidas pelo algoritmo MUST substituir os botões Acertei/Errei em toda Sessão, inclusive no estudo livre por Baralho e na Revisão do dia.
 - **FR-195**: Para o Histórico e as Estatísticas da 013, Errei MUST contar como erro; Difícil, Bom e Fácil MUST contar como acerto.
-- **FR-196**: O Registro de sessão MUST guardar a Avaliação de cada Item, além do que já guarda (FR-161).
-- **FR-197**: Registros antigos, com apenas acertou/errou, MUST continuar válidos e exibidos como antes.
+- **FR-196**: O Registro de sessão MUST guardar, para cada Item, a chave estável e o rótulo da opção de Avaliação escolhida, além do que já guarda (FR-161). Esses dados históricos MUST preservar o grupo mesmo se as opções ou o algoritmo mudarem depois. Registros existentes com os quatro valores atuais MUST continuar reconhecíveis pelos rótulos Errei, Difícil, Bom e Fácil.
+- **FR-197**: Registros antigos, sem Avaliação, MUST continuar válidos; no Resumo, seus Itens MUST ser reunidos no grupo “Sem avaliação”, sem inferir opção a partir de acertou/errou.
 
 **Revisão do dia e Início**
 
@@ -179,9 +183,9 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 **Resumo, Histórico e acessibilidade**
 
 - **FR-215**: O Resumo da Revisão do dia MUST ser o mesmo Resumo detalhado da 013, com "Revisão do dia" no lugar do nome do Baralho, tanto ao concluir quanto no Histórico e em Início. No lugar de "Estudar novamente" e "Voltar ao Baralho", o Resumo da Revisão do dia MUST oferecer "Continuar revisão" (próximo lote, quando ainda houver Cartões para hoje) e "Voltar a Início".
-- **FR-216**: O Resumo MUST mostrar a contagem por nível de Avaliação.
+- **FR-216**: O Resumo MUST mostrar a contagem de cada opção de Avaliação registrada, agrupada pela chave e pelo rótulo preservados no Registro; opções oferecidas pelo algoritmo sem Itens MUST aparecer com contagem zero. Itens legados sem Avaliação MUST formar o grupo “Sem avaliação”.
 - **FR-217**: Início MUST distinguir carregamento, falha com nova tentativa e sucesso no bloco de revisão (FR-153); uma falha nele MUST NOT impedir o restante de Início.
-- **FR-218**: Os quatro botões de Avaliação MUST ser acessíveis por teclado, com nomes acessíveis, alvos de 44 px e sem depender de cor (FR-158). Atalhos opcionais 1–4 MUST funcionar apenas após a Revelação.
+- **FR-218**: Todos os botões de Avaliação oferecidos pelo algoritmo MUST ser acessíveis por teclado, com nomes acessíveis, alvos de 44 px e sem depender de cor (FR-158). No SM-2 atual, atalhos opcionais 1–4 MUST funcionar apenas após a Revelação.
 - **FR-221**: Cada botão de Avaliação MUST mostrar, junto do nível, a próxima revisão que resultaria dele, calculada pelo algoritmo do Usuário para aquele Cartão (por exemplo, "Bom · 3 dias", "Errei · 1 dia"). A prévia MUST estar no nome acessível do botão ("Bom, próxima revisão em 3 dias"), igual no estudo livre e na Revisão do dia, e MUST NOT depender de cor. O rótulo é **sempre** a diferença em dias locais do navegador, no formato "N dias" ou "1 dia" (inclusive "0 dias"), sem "hoje" nem "amanhã". *(Revisado em 2026-10-03 a pedido do Product Owner: consistência acima de tudo.)* Se a prévia não puder ser obtida, os botões MUST aparecer só com o nível, a falha MUST ser anunciada, e o estudo MUST continuar possível.
 
 **Isolamento e persistência**
@@ -202,8 +206,8 @@ Quem já estudava antes da 015 vê o acervo inteiro como Cartões novos, introdu
 ### Key Entities
 
 - **Agendamento do Cartão**: relação entre um Usuário e um Cartão. Guarda o algoritmo e a versão, o estado próprio do algoritmo, a próxima data de revisão, a última Avaliação e o instante da última revisão.
-- **Avaliação**: declaração do Usuário em quatro níveis — Errei, Difícil, Bom, Fácil — sobre um Item, após a Revelação.
-- **Algoritmo de repetição espaçada**: identidade e versão; recebe o estado atual, a Avaliação e o instante, e devolve o novo estado. Nesta entrega, apenas o SM-2.
+- **Avaliação**: declaração do Usuário, após a Revelação, escolhida entre as opções oferecidas pelo Algoritmo. No algoritmo atual: Errei, Difícil, Bom e Fácil.
+- **Algoritmo de repetição espaçada**: identidade e versão; fornece as opções de Avaliação e recebe o estado atual, a Avaliação e o instante para devolver o novo estado. Nesta entrega, apenas o SM-2.
 - **Preferências do Usuário**: Algoritmo de repetição espaçada escolhido e limite diário de Cartões novos.
 - **Revisão do dia**: Sessão de estudo que reúne Cartões de vários Baralhos e Cartões sem Vínculo.
 - **Registro de sessão** (ampliado): ganha a origem ("Baralho" ou "Revisão do dia") e a Avaliação de cada Item.

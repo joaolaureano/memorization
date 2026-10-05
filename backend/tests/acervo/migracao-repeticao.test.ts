@@ -195,6 +195,12 @@ function criarAlgoritmoFalso(id: string): AlgoritmoEspiao {
     id,
     versao: 1,
     rotulo: "Algoritmo falso",
+    opcoesDeAvaliacao: [
+      { chave: "errei", rotulo: "Errei", resultado: "errou" },
+      { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+      { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+      { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+    ],
     get chamadas(): number {
       return chamadas;
     },
@@ -313,7 +319,17 @@ describe("migração da 013 para a repetição espaçada — acervo antigo abert
           ok: true,
           preferencias: {
             algoritmo: "falso",
-            algoritmos: [{ id: "falso", rotulo: "Algoritmo falso" }],
+            algoritmos: [
+              {
+                id: "falso",
+                rotulo: "Algoritmo falso",
+                opcoesDeAvaliacao: algoritmoFalso.opcoesDeAvaliacao.map((opcao) => ({
+                  chave: opcao.chave,
+                  rotulo: opcao.rotulo,
+                  resultado: opcao.resultado,
+                })),
+              },
+            ],
           },
         });
 

@@ -38,7 +38,7 @@ export function PaginaDaSelecaoTemporaria({
   aoEstudar,
 }: {
   cliente: ClienteDoAcervo;
-  aoEstudar: (cartoes: readonly Cartao[]) => void;
+  aoEstudar: (cartoes: readonly Cartao[], nomeDoBaralho: string) => void;
 }) {
   const [carga, setCarga] = useState<Carga>("carregando");
   const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
@@ -54,12 +54,15 @@ export function PaginaDaSelecaoTemporaria({
   >([]);
   const [falhaAoEstudar, setFalhaAoEstudar] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
+  const [nomeDoBaralho, setNomeDoBaralho] = useState("");
 
   const refDoTitulo = useRef<HTMLHeadingElement>(null);
   const refDaSelecao = useRef<HTMLHeadingElement>(null);
   const navegarSemProtecao = useNavegarSemProtecao();
 
-  useProtecaoDeSaida(selecao.length > 0 ? DESCARTE : null);
+  useProtecaoDeSaida(
+    selecao.length > 0 || nomeDoBaralho.trim().length > 0 ? DESCARTE : null,
+  );
 
   useEffect(() => {
     refDoTitulo.current?.focus();
@@ -156,9 +159,9 @@ export function PaginaDaSelecaoTemporaria({
       });
     }
 
-    aoEstudar(capturados);
+    aoEstudar(capturados, nomeDoBaralho || "Baralho temporário");
     navegarSemProtecao("#/baralhos/temporario/estudo");
-  }, [aoEstudar, cliente, navegarSemProtecao, selecao]);
+  }, [aoEstudar, cliente, navegarSemProtecao, selecao, nomeDoBaralho]);
 
   const aoCancelar = useCallback(() => {
     irParaRota("#/baralhos");
@@ -208,6 +211,23 @@ export function PaginaDaSelecaoTemporaria({
               Seleção do estudo
             </h2>
             <span>{contagemDeCartoes(selecao.length)}</span>
+          </div>
+
+          <div className="campo-de-texto">
+            <label htmlFor="nome-do-baralho-temporario">
+              Nome do baralho temporário (opcional)
+            </label>
+            <input
+              id="nome-do-baralho-temporario"
+              type="text"
+              maxLength={100}
+              value={nomeDoBaralho}
+              onChange={(e) => setNomeDoBaralho(e.currentTarget.value)}
+              placeholder="Baralho temporário"
+            />
+            <p className="contador-caracteres">
+              {nomeDoBaralho.length}/100
+            </p>
           </div>
 
           {selecao.length === 0 ? (

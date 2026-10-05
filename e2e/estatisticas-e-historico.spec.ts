@@ -39,7 +39,7 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // percorrida no Chromium pela tela real.
 //
 // Os cenários cobrem: (1) a Sessão concluída vira Registro e o Resumo lista
-// Acertos/Erros; (2) a Sessão interrompida (ou descartada pela recarga) não
+// Bom/Errei (opções de Avaliação; T2316); (2) a Sessão interrompida (ou descartada pela recarga) não
 // deixa rastro; (3) o Registro preserva os textos e o nome do Baralho mesmo
 // depois de editar e excluir; (4) o Histórico é isolado por Usuário; (5) uma
 // falha ao registrar oferece nova tentativa e não duplica.
@@ -236,65 +236,66 @@ async function responderItens(
 }
 
 /**
- * Confere os botões "Acertos (n)" / "Erros (n)" e as listas que eles abrem:
+ * Confere os botões "Bom (n)" / "Errei (n)" e as listas que eles abrem:
  * um grupo vazio é um botão indisponível com a explicação; um grupo com Itens
- * expande e mostra Frente e Verso de cada um (FR-174, FR-175, SC-073).
+ * expande e mostra Frente e Verso de cada um (FR-174, FR-175, FR-216, SC-073).
+ * Os botões agora são por opção de Avaliação, não por resultado (T2316).
  */
 async function verificarGruposDoResumo(
   page: Page,
   itens: readonly ItemEstudado[],
 ): Promise<void> {
-  const acertos = itens.filter((item) => item.resultado === "acertou");
-  const erros = itens.filter((item) => item.resultado === "errou");
+  const bom = itens.filter((item) => item.resultado === "acertou");
+  const errei = itens.filter((item) => item.resultado === "errou");
 
-  const botaoAcertos = page.getByRole("button", {
-    name: `Acertos (${acertos.length})`,
+  const botaoBom = page.getByRole("button", {
+    name: `Bom (${bom.length})`,
   });
-  const botaoErros = page.getByRole("button", {
-    name: `Erros (${erros.length})`,
+  const botaoErrei = page.getByRole("button", {
+    name: `Errei (${errei.length})`,
   });
 
-  if (acertos.length === 0) {
-    await expect(botaoAcertos).toBeDisabled();
-    await expect(page.getByText("Nenhum acerto nesta Sessão")).toBeVisible();
+  if (bom.length === 0) {
+    await expect(botaoBom).toBeDisabled();
+    await expect(page.getByText("Nenhum Cartão avaliado como Bom")).toBeVisible();
   }
 
-  if (erros.length === 0) {
-    await expect(botaoErros).toBeDisabled();
-    await expect(page.getByText("Nenhum erro nesta Sessão")).toBeVisible();
+  if (errei.length === 0) {
+    await expect(botaoErrei).toBeDisabled();
+    await expect(page.getByText("Nenhum Cartão avaliado como Errei")).toBeVisible();
   }
 
-  if (erros.length > 0) {
-    await expect(botaoErros).toHaveAttribute("aria-expanded", "false");
-    await botaoErros.click();
-    await expect(botaoErros).toHaveAttribute("aria-expanded", "true");
+  if (errei.length > 0) {
+    await expect(botaoErrei).toHaveAttribute("aria-expanded", "false");
+    await botaoErrei.click();
+    await expect(botaoErrei).toHaveAttribute("aria-expanded", "true");
 
-    for (const erro of erros) {
+    for (const item of errei) {
       const botaoDoCartao = page.getByRole("button", {
-        name: erro.frente,
+        name: item.frente,
         exact: true,
       });
 
       await expect(botaoDoCartao).toBeVisible();
       await botaoDoCartao.click();
-      await expect(page.getByText(erro.verso, { exact: true })).toBeVisible();
+      await expect(page.getByText(item.verso, { exact: true })).toBeVisible();
     }
   }
 
-  if (acertos.length > 0) {
-    await expect(botaoAcertos).toHaveAttribute("aria-expanded", "false");
-    await botaoAcertos.click();
-    await expect(botaoAcertos).toHaveAttribute("aria-expanded", "true");
+  if (bom.length > 0) {
+    await expect(botaoBom).toHaveAttribute("aria-expanded", "false");
+    await botaoBom.click();
+    await expect(botaoBom).toHaveAttribute("aria-expanded", "true");
 
-    for (const acerto of acertos) {
+    for (const item of bom) {
       const botaoDoCartao = page.getByRole("button", {
-        name: acerto.frente,
+        name: item.frente,
         exact: true,
       });
 
       await expect(botaoDoCartao).toBeVisible();
       await botaoDoCartao.click();
-      await expect(page.getByText(acerto.verso, { exact: true })).toBeVisible();
+      await expect(page.getByText(item.verso, { exact: true })).toBeVisible();
     }
   }
 }
@@ -336,7 +337,7 @@ async function irParaInicio(page: Page, nomeDeUsuario: string): Promise<void> {
 
 // --- Cenário 1: concluir, ver o Resumo e revê-lo no Histórico ---------------
 
-test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161, FR-174 a FR-177, SC-071, SC-072, SC-073)", async ({ page, browserName }) => {
+test("Sessão concluída vira Registro e o Resumo lista grupos por opção de Avaliação (FR-161, FR-174 a FR-177, SC-071, SC-072, SC-073, T2316)", async ({ page, browserName }) => {
   expect(browserName).toBe("chromium");
 
   const ambiente = await subirAmbiente();

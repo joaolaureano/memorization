@@ -251,10 +251,10 @@ describe("PaginaDeEstudo por teclado", () => {
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("2 de 2 Cartões")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Acertos (2)" }),
+      screen.getByRole("button", { name: "Bom (2)" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Erros (0)" }),
+      screen.getByRole("button", { name: "Errei (0)" }),
     ).toBeInTheDocument();
   });
 });

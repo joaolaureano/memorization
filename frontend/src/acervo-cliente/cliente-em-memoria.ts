@@ -39,6 +39,7 @@ import type {
   DadosDeSelecaoParaBaralho,
   DadosDeUsuario,
   OpcaoDeAlgoritmo,
+  OpcaoDeAvaliacao,
   Preferencias,
   Previa,
   RegistroDeSessao,
@@ -96,9 +97,25 @@ import {
   validarVerso,
 } from "./validacao";
 
+/**
+ * As opções de Avaliação do SM-2 (FR-191, FR-192): em ordem apresentada,
+ * com chave estável e classificação de resultado para Estatísticas.
+ * Exportada para fallback nas sessões (T2317).
+ */
+export const OPCOES_DE_AVALIACAO_SM2: readonly OpcaoDeAvaliacao[] = [
+  { chave: "errei", rotulo: "Errei", resultado: "errou" },
+  { chave: "dificil", rotulo: "Difícil", resultado: "acertou" },
+  { chave: "bom", rotulo: "Bom", resultado: "acertou" },
+  { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
+];
+
 /** O algoritmo padrão e a lista oferecida pela tela de Preferências (FR-212). */
 const ALGORITMOS_DISPONIVEIS: OpcaoDeAlgoritmo[] = [
-  { id: "sm2", rotulo: "SM-2" },
+  {
+    id: "sm2",
+    rotulo: "SM-2",
+    opcoesDeAvaliacao: OPCOES_DE_AVALIACAO_SM2,
+  },
 ];
 
 /** O algoritmo padrão quando o Usuário nunca salvou Preferências (D5). */
@@ -1066,10 +1083,10 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       usuarioId: dono.id,
       origem: dados.origem,
       // Na Revisão do dia e no Baralho temporário, o Baralho é derivado: sem
-      // Baralho e com o nome fixo (FR-196, D5, FR-369).
+      // Baralho e com o nome fixo (FR-196, D5, FR-369, FR-371).
       baralhoId: semBaralho ? "" : dados.baralhoId,
       nomeDoBaralho: ehTemporario
-        ? "Baralho temporário"
+        ? dados.nomeDoBaralho || "Baralho temporário"
         : ehRevisao
           ? "Revisão do dia"
           : (inicioDaAgenda?.nomeDoBaralho ?? dados.nomeDoBaralho),
@@ -1083,6 +1100,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
           (cartao) => cartao.id === item.cartaoId,
         );
 
+        // O rótulo da avaliação vem das opções do SM-2 (T2317).
+        const opcao = OPCOES_DE_AVALIACAO_SM2.find(
+          (o) => o.chave === item.avaliacao,
+        );
+
         return {
           posicao,
           frente: doSnapshot?.frente ?? item.frente,
@@ -1090,6 +1112,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
           resultado: resultadoDaAvaliacao(item.avaliacao),
           cartaoId: item.cartaoId,
           avaliacao: item.avaliacao,
+          avaliacaoRotulo: opcao?.rotulo ?? null,
         };
       }),
     };

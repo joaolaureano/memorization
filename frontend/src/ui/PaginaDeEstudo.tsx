@@ -11,9 +11,11 @@ import type {
   ClienteDoAcervo,
   DadosDeRegistro,
   InicioDeCompromisso,
+  OpcaoDeAvaliacao,
   Previa,
   ResultadoDasPrevias,
 } from "../acervo-cliente/cliente";
+import { OPCOES_DE_AVALIACAO_SM2 } from "../acervo-cliente/cliente-em-memoria";
 import {
   cartoesDoBaralho,
   cartoesPendentes,
@@ -105,17 +107,6 @@ import type { Protecao } from "./protecao-de-saida";
  */
 
 /** As quatro Avaliações na ordem exibida, com rótulo e atalho (FR-192, FR-218). */
-const NIVEIS_DE_AVALIACAO: readonly {
-  readonly avaliacao: Avaliacao;
-  readonly rotulo: string;
-  readonly atalho: string;
-}[] = [
-  { avaliacao: "errei", rotulo: "Errei", atalho: "1" },
-  { avaliacao: "dificil", rotulo: "Difícil", atalho: "2" },
-  { avaliacao: "bom", rotulo: "Bom", atalho: "3" },
-  { avaliacao: "facil", rotulo: "Fácil", atalho: "4" },
-];
-
 /**
  * O máximo de Cartões por chamada de `obterPrevias` (FR-221), como no contrato
  * do cliente (§5): acima disso, a Sessão pede as prévias em blocos.
@@ -144,6 +135,11 @@ interface PropriedadesDaPaginaDeEstudo {
    * origem «temporario». Vive só na memória da casca.
    */
   selecaoTemporaria?: readonly Cartao[];
+  /**
+   * O nome do baralho temporário (T2318, FR-371): identifica a Sessão e o
+   * Registro, exibido no título e no Resumo. Vive só na memória da casca.
+   */
+  nomeDoBaralhoTemporario?: string;
 }
 
 type AlvoDeFoco = "frente" | "verso" | "resumo";
@@ -167,6 +163,7 @@ export function PaginaDeEstudo({
   inicioDaAgenda,
   aoSair,
   selecaoTemporaria,
+  nomeDoBaralhoTemporario,
 }: PropriedadesDaPaginaDeEstudo) {
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
@@ -206,6 +203,9 @@ export function PaginaDeEstudo({
   // As prévias de próxima revisão por Cartão e por Avaliação (FR-221), quando
   // o cliente consegue obtê-las; sem elas, os botões mostram só o nível.
   const [previas, setPrevias] = useState<Record<string, Previa>>({});
+  // As opções de Avaliação do algoritmo do Usuário (T2317): usadas para renderizar
+  // os botões de avaliação e os grupos do Resumo. Fallback para SM-2 se falhar.
+  const [opcoes, setOpcoes] = useState(() => OPCOES_DE_AVALIACAO_SM2);
 
   const alvoDeFoco = useRef<AlvoDeFoco | null>(null);
   const frenteRef = useRef<HTMLHeadingElement>(null);
@@ -218,6 +218,38 @@ export function PaginaDeEstudo({
   const botaoDeSalvarRef = useRef<HTMLButtonElement>(null);
   const linkDoBaralhoSalvoRef = useRef<HTMLAnchorElement>(null);
   const focoAoVoltarAoResumo = useRef<"salvar" | "abrir" | null>(null);
+
+  // Carrega as opções de Avaliação do algoritmo do Usuário (T2317): fallback para
+  // SM-2 se a carga falhar.
+  useEffect(() => {
+    let ativo = true;
+
+    (async () => {
+      const resultado = await cliente.obterPreferencias();
+
+      if (!ativo) {
+        return;
+      }
+
+      if (resultado.ok) {
+        const opcaoAtiva = resultado.preferencias.algoritmos.find(
+          (algo) => algo.id === resultado.preferencias.algoritmo,
+        );
+
+        if (opcaoAtiva !== undefined) {
+          setOpcoes(opcaoAtiva.opcoesDeAvaliacao);
+          return;
+        }
+      }
+
+      // Fallback para SM-2 se a carga falhar (T2317).
+      setOpcoes(OPCOES_DE_AVALIACAO_SM2);
+    })();
+
+    return () => {
+      ativo = false;
+    };
+  }, [cliente]);
 
   // FR-370, FR-373 — Cancelar volta o foco a «Salvar como baralho»; o
   // sucesso o leva a «Abrir baralho».
@@ -443,16 +475,16 @@ export function PaginaDeEstudo({
         return;
       }
 
-      const nivel = NIVEIS_DE_AVALIACAO.find(
-        (candidato) => candidato.atalho === evento.key,
+      const indiceDaOpcao = opcoes.findIndex(
+        (_opcao, indice) => (indice + 1).toString() === evento.key,
       );
 
-      if (nivel === undefined) {
+      if (indiceDaOpcao === -1) {
         return;
       }
 
       evento.preventDefault();
-      registrarAvaliacao(nivel.avaliacao);
+      registrarAvaliacao(opcoes[indiceDaOpcao].chave);
     }
 
     document.addEventListener("keydown", aoTeclar);
@@ -460,7 +492,7 @@ export function PaginaDeEstudo({
     return () => {
       document.removeEventListener("keydown", aoTeclar);
     };
-  }, [sessao, estado]);
+  }, [sessao, estado, opcoes]);
 
   const emAndamento = sessao !== null && estado !== null && !estado.concluida;
   // Sessão concluída e ainda não registrada: sair perde o Registro, e por isso
@@ -686,7 +718,7 @@ export function PaginaDeEstudo({
     }
 
     alvoDeFoco.current = "frente";
-    anunciar(`Avaliação registrada: ${rotuloDaAvaliacao(avaliacao)}.`);
+    anunciar(`Avaliação registrada: ${rotuloDaAvaliacao(opcoes, avaliacao)}.`);
   }
 
   /**
@@ -726,10 +758,13 @@ export function PaginaDeEstudo({
     void cliente
       .registrarSessao({
         id: idDoRegistro,
-        // O servidor deriva o nome «Baralho temporário» (FR-369).
+        // O servidor deriva o nome «Baralho temporário» (FR-369, T2318).
         origem: selecaoTemporaria !== undefined ? "temporario" : "baralho",
         baralhoId: selecaoTemporaria !== undefined ? "" : id,
-        nomeDoBaralho: baralho.nome,
+        nomeDoBaralho:
+          selecaoTemporaria !== undefined
+            ? nomeDoBaralhoTemporario || "Baralho temporário"
+            : baralho.nome,
         ...(inicioDaAgenda !== undefined
           ? { inicioAgendaId: inicioDaAgenda.id }
           : {}),
@@ -864,8 +899,14 @@ export function PaginaDeEstudo({
         <header className="cabecalho-da-pagina">
           <div>
             <h1>
-              {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+              {ehDaAgenda ? "Estudar" : "Revisar"}{" "}
+              {ehTemporario && nomeDoBaralhoTemporario
+                ? nomeDoBaralhoTemporario
+                : baralho.nome}
             </h1>
+            {ehTemporario && (
+              <p className="texto-secundario">{nomeDoBaralhoTemporario || "Baralho temporário"}</p>
+            )}
           </div>
         </header>
 
@@ -896,6 +937,7 @@ export function PaginaDeEstudo({
         <SalvarSelecaoComoBaralho
           cliente={cliente}
           cartaoIds={selecaoTemporaria.map((cartao) => cartao.id)}
+          nomeInicial={nomeDoBaralhoTemporario || "Baralho temporário"}
           aoSalvar={(baralho) => {
             focoAoVoltarAoResumo.current = "abrir";
             setBaralhoSalvo(baralho);
@@ -918,13 +960,17 @@ export function PaginaDeEstudo({
             </h1>
             {ehTemporario && (
               <p className="texto-secundario">
-                Estudo com baralho temporário
+                {nomeDoBaralhoTemporario || "Baralho temporário"}
               </p>
             )}
           </div>
         </header>
 
-        <ResumoDaSessao itens={itensDoResumo(estado)} origem="baralho">
+        <ResumoDaSessao
+          itens={itensDoResumo(estado)}
+          opcoes={opcoes}
+          origem="baralho"
+        >
           {situacaoDoRegistro.estado === "registrando" && (
             <p
               role="status"
@@ -1113,21 +1159,22 @@ export function PaginaDeEstudo({
             </h2>
             <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
-              {NIVEIS_DE_AVALIACAO.map(({ avaliacao, rotulo, atalho }) => {
+              {opcoes.map(({ chave, rotulo }, indice) => {
+                const atalho = (indice + 1).toString();
                 const previa = previaDaAvaliacao(
                   previas,
                   estado.itemAtual.cartaoId,
-                  avaliacao,
+                  chave,
                 );
 
                 return (
                   <button
-                    key={avaliacao}
+                    key={chave}
                     className="botao botao--secundario"
                     type="button"
                     aria-label={nomeAcessivelDaAvaliacao(rotulo, previa)}
                     aria-keyshortcuts={atalho}
-                    onClick={() => registrarAvaliacao(avaliacao)}
+                    onClick={() => registrarAvaliacao(chave)}
                   >
                     {previa === null ? rotulo : `${rotulo} · ${previa}`}
                   </button>
@@ -1192,12 +1239,13 @@ function itensDoRegistro(
 }
 
 /** O rótulo em português de uma Avaliação, para anúncios (FR-046). */
-function rotuloDaAvaliacao(avaliacao: Avaliacao): string {
-  const nivel = NIVEIS_DE_AVALIACAO.find(
-    (candidato) => candidato.avaliacao === avaliacao,
-  );
+function rotuloDaAvaliacao(
+  opcoes: readonly OpcaoDeAvaliacao[],
+  avaliacao: Avaliacao,
+): string {
+  const opcao = opcoes.find((candidato) => candidato.chave === avaliacao);
 
-  return nivel?.rotulo ?? avaliacao;
+  return opcao?.rotulo ?? avaliacao;
 }
 
 /**

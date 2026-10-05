@@ -15,7 +15,7 @@ Título Revisar baralho → nome do Baralho → Só pendentes / Todos os cartõe
 
 ## Cartões e seleção temporária
 
-Cartões oferece busca e Baralho, sem situação. Na montagem temporária, a fonte de Baralhos oferece busca, situação e etiquetas; a fonte de Cartões oferece busca e Baralho. A seleção permanece independente dos filtros; Revisar inicia todos embaralhados.
+Cartões oferece busca e Baralho, sem situação. Na montagem temporária, a fonte de Baralhos oferece busca e situação, sem etiquetas de situação nas linhas; a fonte de Cartões oferece busca e Baralho. A lista principal de Baralhos mantém as etiquetas. A seleção permanece independente dos filtros; Revisar inicia todos embaralhados.
 
 ## Limites
 

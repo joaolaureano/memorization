@@ -269,6 +269,7 @@ function itemDaLinha(linha: Record<string, unknown>): ItemRegistrado {
     /** Nulos nos Itens anteriores à 015, exibidos como antes (FR-197). */
     cartaoId: (linha.cartao_id as string | null) ?? null,
     avaliacao: (linha.avaliacao as ItemRegistrado["avaliacao"]) ?? null,
+    avaliacaoRotulo: (linha.avaliacao_rotulo as string | null) ?? null,
   };
 }
 
@@ -583,8 +584,8 @@ export async function abrirArmazenamentoSqlite(
   );
   const inserirItemDoRegistro = banco.prepare(
     `INSERT INTO item_de_registro
-       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   /**
    * A busca por `id` **sem** escopo de dono é deliberada: é ela que distingue
@@ -610,7 +611,7 @@ export async function abrirArmazenamentoSqlite(
       WHERE id = ? AND usuario_id = ?`,
   );
   const listarItensDoRegistro = banco.prepare(
-    `SELECT posicao, frente, verso, resultado, cartao_id, avaliacao
+    `SELECT posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo
        FROM item_de_registro
       WHERE registro_id = ?
       ORDER BY posicao`,
@@ -1173,6 +1174,7 @@ export async function abrirArmazenamentoSqlite(
               item.resultado,
               item.cartaoId ?? null,
               item.avaliacao ?? null,
+              item.avaliacaoRotulo ?? null,
             );
           }
         });
@@ -1295,6 +1297,7 @@ export async function abrirArmazenamentoSqlite(
               item.resultado,
               item.cartaoId ?? null,
               item.avaliacao ?? null,
+              item.avaliacaoRotulo ?? null,
             );
           }
 
@@ -1728,6 +1731,7 @@ export async function abrirArmazenamentoSqlite(
                 item.resultado,
                 item.cartaoId ?? null,
                 item.avaliacao ?? null,
+                item.avaliacaoRotulo ?? null,
               );
             }
 

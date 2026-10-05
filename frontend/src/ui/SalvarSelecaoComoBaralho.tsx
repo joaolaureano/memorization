@@ -7,6 +7,11 @@ type Props = {
   cartaoIds: readonly string[];
   aoSalvar: (baralho: Baralho) => void;
   aoCancelar: () => void;
+  /**
+   * Nome inicial para o baralho (T2318, T2319): prefill do campo de nome
+   * com o nome do baralho temporário, editável.
+   */
+  nomeInicial?: string;
 };
 
 /**
@@ -23,8 +28,9 @@ export function SalvarSelecaoComoBaralho({
   cartaoIds,
   aoSalvar,
   aoCancelar,
+  nomeInicial,
 }: Props) {
-  const [nome, setNome] = useState("");
+  const [nome, setNome] = useState(nomeInicial ?? "Baralho temporário");
   const [restantes, setRestantes] = useState<string[]>([...cartaoIds]);
   const [salvando, setSalvando] = useState(false);
   const [erroDeNome, setErroDeNome] = useState<string | null>(null);

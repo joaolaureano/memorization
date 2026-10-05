@@ -599,8 +599,9 @@ test("Lista de Baralhos e montador têm etiqueta e filtro de situação; Cartõe
     ).toBeVisible();
     await expect(page.getByLabel("Baralho")).toBeVisible();
 
-    // (F) Montador: a fonte "Baralhos" tem o filtro e a etiqueta "Sem
-    // cartões"; o filtro separa os Baralhos por situação.
+    // (F) Montador: a fonte "Baralhos" tem o filtro; o filtro separa os
+    // Baralhos por situação. As etiquetas (Pendente/Revisado/Sem cartões) já
+    // não aparecem nas linhas da montagem (spec 024), apenas na lista principal.
     await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/temporario`);
     await entrarSeNecessario(page, credencial);
 
@@ -611,9 +612,20 @@ test("Lista de Baralhos e montador têm etiqueta e filtro de situação; Cartõe
     const filtroDoMontador = page.getByLabel("Situação da revisão");
 
     await expect(filtroDoMontador).toBeVisible();
+
+    // Mostrar todos os Baralhos: o vazio ("Francês") está listado mas sem etiqueta
+    await filtroDoMontador.selectOption({ label: "Todos" });
+    const botaoAAdicionarFrances = page.getByRole("button", { name: "Adicionar Francês", exact: true });
+
+    await expect(botaoAAdicionarFrances).toBeVisible();
+
+    // A linha do Francês no montador está visível mas sem etiqueta "Sem cartões"
+    const linhaFrancesNoMontador = page.locator("li").filter({
+      has: botaoAAdicionarFrances,
+    });
     await expect(
-      page.getByText("Sem cartões", { exact: true }),
-    ).toBeVisible();
+      linhaFrancesNoMontador.getByText("Sem cartões", { exact: true }),
+    ).toHaveCount(0);
 
     await filtroDoMontador.selectOption({ label: "Pendente" });
     await expect(

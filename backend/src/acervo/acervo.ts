@@ -15,6 +15,7 @@ import {
   ALGORITMOS,
   algoritmoPorId,
   previa,
+  rotuloDaAvaliacao,
 } from "../repeticao/algoritmo.ts";
 import type {
   AlgoritmoDeRepeticao,
@@ -413,6 +414,7 @@ export type ResultadoDeObterRegistro =
 export interface OpcaoDeAlgoritmo {
   id: string;
   rotulo: string;
+  opcoesDeAvaliacao: { chave: string; rotulo: string; resultado: "acertou" | "errou" }[];
 }
 
 /**
@@ -847,6 +849,7 @@ function interpretarItem(
     resultado: resultadoDaAvaliacao(avaliacao),
     cartaoId,
     avaliacao,
+    avaliacaoRotulo: rotuloDaAvaliacao(avaliacao),
   };
 }
 
@@ -887,12 +890,24 @@ function interpretarRegistro(
   let baralhoDoRegistro: string;
   let nomeDoBaralhoDoRegistro: string;
 
-  if (origem === "revisao" || origem === "temporario") {
+  if (origem === "revisao") {
     baralhoDoRegistro = "";
-    nomeDoBaralhoDoRegistro =
-      origem === "revisao"
-        ? NOME_DA_REVISAO_DO_DIA
-        : NOME_DO_BARALHO_TEMPORARIO;
+    nomeDoBaralhoDoRegistro = NOME_DA_REVISAO_DO_DIA;
+  } else if (origem === "temporario") {
+    baralhoDoRegistro = "";
+    // Se nomeDoBaralho não for string ou vazio após trim, usar o padrão
+    if (
+      typeof nomeDoBaralho !== "string" ||
+      nomeDoBaralho.trim().length === 0
+    ) {
+      nomeDoBaralhoDoRegistro = NOME_DO_BARALHO_TEMPORARIO;
+    } else {
+      // Validar o nome como seria para Baralho normal
+      if (validarNomeDeBaralho(nomeDoBaralho) !== null) {
+        return null; // dados_invalidos
+      }
+      nomeDoBaralhoDoRegistro = nomeDoBaralho.trim();
+    }
   } else {
     if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
       return null;
@@ -1144,6 +1159,11 @@ export function criarAcervo(
     return [...algoritmos.values()].map((algoritmo) => ({
       id: algoritmo.id,
       rotulo: algoritmo.rotulo,
+      opcoesDeAvaliacao: algoritmo.opcoesDeAvaliacao.map((opcao) => ({
+        chave: opcao.chave,
+        rotulo: opcao.rotulo,
+        resultado: opcao.resultado,
+      })),
     }));
   }
 
@@ -1225,6 +1245,7 @@ export function criarAcervo(
         resultado: resultadoDaAvaliacao(avaliacao),
         cartaoId: cartao.id,
         avaliacao,
+        avaliacaoRotulo: rotuloDaAvaliacao(avaliacao),
       });
     }
 

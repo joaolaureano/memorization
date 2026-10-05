@@ -108,6 +108,7 @@ export function PaginaDoFormularioDeRotina({
     mensagem: string;
     atual: RotinaDeEstudo | null;
   } | null>(null);
+  const [confirmacaoDeEdicao, setConfirmacaoDeEdicao] = useState(false);
 
   const campoDeBaralho = useRef<HTMLSelectElement>(null);
   const primeiroDia = useRef<HTMLInputElement>(null);
@@ -200,6 +201,39 @@ export function PaginaDoFormularioDeRotina({
         ? rascunho.dias.filter((item) => item !== dia)
         : [...rascunho.dias, dia].sort((a, b) => a - b),
     });
+  }
+
+  /** Determina quais efeitos se aplicam à mudança na edição. */
+  function determinarEfetosDeEdicao(): {
+    diasRemovidos: boolean;
+    diasAdicionados: boolean;
+    baralhoOuQuantidadeMudaram: boolean;
+  } {
+    if (!editando || rotina === null) {
+      return {
+        diasRemovidos: false,
+        diasAdicionados: false,
+        baralhoOuQuantidadeMudaram: false,
+      };
+    }
+
+    const diasRemovidos = rotina.dias.some(
+      (dia) => !rascunho.dias.includes(dia),
+    );
+    const diasAdicionados = rascunho.dias.some(
+      (dia) => !rotina.dias.includes(dia),
+    );
+    const baralhoOuQuantidadeMudaram =
+      rascunho.baralhoId !== rotina.baralhoId ||
+      rascunho.modo !== (rotina.quantidade === null ? "todos" : "definir") ||
+      (rascunho.modo === "definir" &&
+        Number(rascunho.quantidade) !== rotina.quantidade);
+
+    return {
+      diasRemovidos,
+      diasAdicionados,
+      baralhoOuQuantidadeMudaram,
+    };
   }
 
   /** Valida o que o Usuário digitou, focando o primeiro campo com problema. */
@@ -322,6 +356,14 @@ export function PaginaDoFormularioDeRotina({
 
   function aoEnviar(evento: FormEvent<HTMLFormElement>): void {
     evento.preventDefault();
+
+    // Em edição, pede confirmação com os efeitos específicos
+    if (editando && !confirmacaoDeEdicao) {
+      setConfirmacaoDeEdicao(true);
+      return;
+    }
+
+    setConfirmacaoDeEdicao(false);
     void enviar(false);
   }
 
@@ -415,6 +457,7 @@ export function PaginaDoFormularioDeRotina({
               <select
                 id="campo-do-baralho"
                 ref={campoDeBaralho}
+                className={editando ? "agenda__select-baralho-editando" : ""}
                 value={rascunho.baralhoId}
                 onChange={(evento) => alterar({ baralhoId: evento.target.value })}
                 aria-invalid={erros.baralho !== undefined}
@@ -554,15 +597,6 @@ export function PaginaDoFormularioDeRotina({
               </p>
             </div>
 
-            {editando ? (
-              <p className="alcance-da-edicao">
-                A mudança vale para o estudo de hoje, se ainda não foi
-                concluído, e para os próximos. Dias removidos cancelam o estudo
-                de hoje. Estudos passados e concluídos são preservados.
-                Sessões já iniciadas ainda poderão concluir o estudo de hoje.
-              </p>
-            ) : null}
-
             {conflito !== null ? (
               <div role="alert" className="aviso aviso--erro">
                 <p>{conflito.mensagem}</p>
@@ -637,6 +671,49 @@ export function PaginaDoFormularioDeRotina({
           </form>
         </section>
       ) : null}
+
+      {editando && rotina !== null ? (() => {
+        const efeitos = determinarEfetosDeEdicao();
+
+        return (
+          <DialogoDeConfirmacao
+            aberto={confirmacaoDeEdicao}
+            titulo="Confirmar alterações"
+            rotuloDeConfirmacao="Confirmar"
+            rotuloDeCancelamento="Voltar"
+            aoConfirmar={() => {
+              setConfirmacaoDeEdicao(false);
+              void enviar(false);
+            }}
+            aoCancelar={() => setConfirmacaoDeEdicao(false)}
+          >
+            <div className="agenda__confirmacao-de-edicao">
+              {efeitos.diasRemovidos ? (
+                <p>
+                  <strong>Dias removidos:</strong> cancelam o estudo pendente de
+                  hoje.
+                </p>
+              ) : null}
+              {efeitos.diasAdicionados ? (
+                <p>
+                  <strong>Dias adicionados:</strong> podem criar o estudo de
+                  hoje.
+                </p>
+              ) : null}
+              {efeitos.baralhoOuQuantidadeMudaram ? (
+                <p>
+                  <strong>Baralho ou quantidade mudaram:</strong> atualizam os
+                  compromissos pendentes de hoje e futuros.
+                </p>
+              ) : null}
+              <p className="texto-secundario">
+                Estudos passados e concluídos são preservados. Sessões já
+                iniciadas ainda poderão concluir o estudo capturado.
+              </p>
+            </div>
+          </DialogoDeConfirmacao>
+        );
+      })() : null}
 
       <DialogoDeConfirmacao
         aberto={sobreposicao !== null}

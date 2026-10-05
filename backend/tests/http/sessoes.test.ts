@@ -257,6 +257,7 @@ describe("POST /sessoes — criação conforme o contrato", () => {
           resultado: "acertou",
           cartaoId: expect.any(String),
           avaliacao: "bom",
+          avaliacaoRotulo: "Bom",
         },
         {
           posicao: 1,
@@ -265,6 +266,7 @@ describe("POST /sessoes — criação conforme o contrato", () => {
           resultado: "errou",
           cartaoId: expect.any(String),
           avaliacao: "errei",
+          avaliacaoRotulo: "Errei",
         },
       ],
     });
@@ -308,6 +310,7 @@ describe("POST /sessoes — criação conforme o contrato", () => {
       resultado: "acertou",
       cartaoId: expect.any(String),
       avaliacao: "bom",
+      avaliacaoRotulo: "Bom",
     });
   });
 });
@@ -801,7 +804,7 @@ describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
     const corpo = registroCru({
       origem: "temporario",
       baralhoId: "ignorado",
-      nomeDoBaralho: "ignorado",
+      nomeDoBaralho: "",
     });
 
     const resposta = await postarSessao(corpo);
@@ -829,6 +832,33 @@ describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
 
     const estatisticas = await lerEstatisticas();
     expect(estatisticas.json().recentes).toHaveLength(1);
+  });
+
+  it("aceta nome válido para baralho temporário e o preserva (FR-369)", async () => {
+    const corpo = registroCru({
+      origem: "temporario",
+      baralhoId: "ignorado",
+      nomeDoBaralho: "Inglês da viagem",
+    });
+
+    const resposta = await postarSessao(corpo);
+    expect(resposta.statusCode).toBe(201);
+
+    const registro = resposta.json() as RegistroEsperado;
+    expect(registro.origem).toBe("temporario");
+    expect(registro.baralhoId).toBe("");
+    expect(registro.nomeDoBaralho).toBe("Inglês da viagem");
+  });
+
+  it("recusa baralho temporário com nome muito longo (FR-369)", async () => {
+    const corpo = registroCru({
+      origem: "temporario",
+      baralhoId: "ignorado",
+      nomeDoBaralho: "a".repeat(101),
+    });
+
+    const resposta = await postarSessao(corpo);
+    expect(resposta.statusCode).toBe(400);
   });
 
   it("a leitura do registro mostra 'Revisão do dia' e nenhum Baralho (FR-215)", async () => {

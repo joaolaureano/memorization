@@ -110,6 +110,7 @@ function registroDe(
       resultado: "acertou",
       cartaoId: null,
       avaliacao: null,
+            avaliacaoRotulo: null,
     },
   ],
 ): RegistroDeSessao {
@@ -157,6 +158,12 @@ function itemAvaliadoDe(
   cartaoId: string,
   avaliacao: Avaliacao = "bom",
 ): ItemRegistrado {
+  const rotuloMap: Record<Avaliacao, string> = {
+    errei: "Errei",
+    dificil: "Difícil",
+    bom: "Bom",
+    facil: "Fácil",
+  };
   return {
     posicao,
     frente: "To walk",
@@ -164,6 +171,7 @@ function itemAvaliadoDe(
     resultado: avaliacao === "errei" ? "errou" : "acertou",
     cartaoId,
     avaliacao,
+    avaliacaoRotulo: rotuloMap[avaliacao],
   };
 }
 
@@ -898,6 +906,7 @@ export function bateriaDaPorta(
             resultado: "acertou",
             cartaoId: null,
             avaliacao: null,
+            avaliacaoRotulo: null,
           },
           {
             posicao: 1,
@@ -906,6 +915,7 @@ export function bateriaDaPorta(
             resultado: "errou",
             cartaoId: null,
             avaliacao: null,
+            avaliacaoRotulo: null,
           },
           {
             posicao: 2,
@@ -914,6 +924,7 @@ export function bateriaDaPorta(
             resultado: "acertou",
             cartaoId: null,
             avaliacao: null,
+            avaliacaoRotulo: null,
           },
         ]);
 

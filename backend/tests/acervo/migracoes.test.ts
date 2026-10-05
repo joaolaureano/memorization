@@ -497,7 +497,7 @@ describe("migração 7 — repetição espaçada", () => {
       aplicarEsquema(banco);
 
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
-      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(11);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(12);
 
       expect(existeTabela(banco, "agendamento")).toBe(true);
       expect(existeTabela(banco, "preferencias")).toBe(true);

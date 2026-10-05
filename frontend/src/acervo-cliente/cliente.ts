@@ -531,6 +531,8 @@ export interface ItemRegistrado {
   cartaoId?: string | null;
   /** Avaliação em 4 níveis; ausente/nula em Itens anteriores à 015 (FR-196). */
   avaliacao?: Avaliacao | null;
+  /** Rótulo da opção de Avaliação; ausente ou nulo em Itens anteriores à 015 (FR-196). */
+  avaliacaoRotulo?: string | null;
 }
 
 /**
@@ -663,10 +665,22 @@ export type ResultadoDeObterRegistro =
  */
 export type Previa = Record<Avaliacao, string>;
 
+/**
+ * Uma opção de Avaliação oferecida por um Algoritmo de repetição espaçada
+ * (FR-191, FR-192): chave estável, rótulo apresentado e classificação de
+ * resultado para Estatísticas.
+ */
+export interface OpcaoDeAvaliacao {
+  chave: Avaliacao;
+  rotulo: string;
+  resultado: "acertou" | "errou";
+}
+
 /** Uma opção de algoritmo oferecida pela tela de Preferências (FR-212). */
 export interface OpcaoDeAlgoritmo {
   id: string;
   rotulo: string;
+  opcoesDeAvaliacao: readonly OpcaoDeAvaliacao[];
 }
 
 /**
