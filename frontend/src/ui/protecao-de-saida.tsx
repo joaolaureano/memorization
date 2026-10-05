@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -241,7 +242,11 @@ export function ProvedorDeProtecaoDeSaida({
     [abrirDescarte, anunciarPendencia],
   );
 
-  useEffect(() => {
+  // O ouvinte é registrado no próprio commit (efeito de layout), e não num
+  // efeito passivo: o provedor monta depois da verificação do Acesso, e um
+  // `hashchange` que chegasse entre o commit e os efeitos passivos se perderia,
+  // deixando a tela na rota antiga.
+  useLayoutEffect(() => {
     const aoMudarHash = (): void => {
       const hashPedido = window.location.hash;
 

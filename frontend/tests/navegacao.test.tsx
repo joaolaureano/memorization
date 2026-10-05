@@ -360,6 +360,75 @@ describe("Aplicacao sem Credencial", () => {
     }
   });
 
+  it("a navegação feita logo depois do commit da verificação do acesso não se perde (FR-097)", async () => {
+    // O provedor da rota só monta quando a verificação do Acesso conclui. Um
+    // `hashchange` entregue logo depois desse commit — antes dos efeitos
+    // passivos — precisa encontrar o ouvinte já registrado. Sob carga, a ordem
+    // entre os efeitos e o fim do `waitFor` variava, e a prova do Cadastro
+    // falhava de forma intermitente.
+    window.history.replaceState(null, "", "#/cartoes");
+
+    let abrirPortao: () => void = () => undefined;
+    const portao = new Promise<void>((resolver) => {
+      abrirPortao = resolver;
+    });
+    const fabrica = fabricaDeClienteDeProva();
+
+    render(
+      <Aplicacao
+        criarCliente={(credencial) => {
+          const cliente = fabrica(credencial);
+
+          return new Proxy(cliente, {
+            get(alvo, propriedade, receptor) {
+              if (propriedade === "obterAcesso") {
+                return async () => {
+                  await portao;
+
+                  return alvo.obterAcesso();
+                };
+              }
+
+              const valor = Reflect.get(alvo, propriedade, receptor) as unknown;
+
+              return typeof valor === "function" ? valor.bind(alvo) : valor;
+            },
+          });
+        }}
+      />,
+    );
+
+    // Fora do `act`, o `MutationObserver` acorda logo depois do commit, antes
+    // dos efeitos passivos. A URL muda sem `hashchange` nativo, para que só o
+    // evento entregue nessa janela possa levar ao Cadastro.
+    const ambiente = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const anterior = ambiente.IS_REACT_ACT_ENVIRONMENT;
+
+    ambiente.IS_REACT_ACT_ENVIRONMENT = false;
+
+    try {
+      await new Promise<void>((resolver) => {
+        const observador = new MutationObserver(() => {
+          if (screen.queryByText("Verificando o acesso…") === null) {
+            observador.disconnect();
+            window.history.replaceState(null, "", "#/criar-conta");
+            window.dispatchEvent(new Event("hashchange"));
+            resolver();
+          }
+        });
+
+        observador.observe(document.body, { childList: true, subtree: true });
+        abrirPortao();
+      });
+    } finally {
+      ambiente.IS_REACT_ACT_ENVIRONMENT = anterior;
+    }
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Criar conta" }),
+    ).toBeInTheDocument();
+  });
+
   it("o Cadastro continua alcançável e oferece a volta a Entrar (FR-097)", async () => {
     render(<Aplicacao criarCliente={fabricaDeClienteDeProva()} />);
     await aguardarVerificacaoDoAcesso();

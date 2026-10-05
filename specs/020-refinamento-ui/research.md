@@ -33,3 +33,15 @@ Analyze realizado como leitura de spec/plan/tasks/constituição: 12 FRs e 3 SCs
 - T2012, evidências: backend `typecheck` e `lint` limpos, 903 testes gerais verdes e suíte PostgreSQL verde; frontend `tsc`, lint e 802 testes verdes, build ok; E2E completo 79/79. O diff foi relido; as capturas manuais não foram feitas, e a matriz automatizada cobre as quatro larguras e o zoom de 200% apenas na tela Entrar.
 - Ressalvas do ambiente (não do código): sem `gitleaks`, então a etapa «Segredos» não rodou; Node 22 (o projeto pede ≥ 24), por isso um teste de FR-103 em `construcao.test.ts` vê o aviso do `node:sqlite` na saída; a suíte PostgreSQL só roda fora de root.
 - Observação: `ResumoDeSeteDias` em `EstatisticasDoEstudo.tsx` ficou sem uso na interface depois do FR-330; só os testes o referenciam.
+
+## 2026-10-05 — integração com o trabalho local (sessão paralela)
+Fonte: pedido do PO para harmonizar o trabalho local com o remoto, que outra sessão havia reescrito (70534db, 3edc478, 15e3cda, e379de5), e acrescentar o conteúdo local. O remoto vale como base da 020; da conclusão local da 020 só entrou o que o remoto não tinha:
+- FR-336: a ação `alterar-nome` saiu de `frontend/src/conta/resultado-incerto.ts` e de `resultado-incerto.test.ts`, onde ainda restava.
+- `e2e/refinamento-ui.spec.ts`: matriz de 360/390/768/1440 px e zoom de 200% para Entrar, Sair, Perfil (32 px entre Configuração e Minha conta), Início (sem fuso nem resumo de sete dias), Estudo e dia vazio. Complementa `refinamento-da-entrada.spec.ts`. Prova de mutação: com Mostrar em 6 rem, reprova.
+- READMEs (pt/en) e um comentário de `SecaoMinhaConta.tsx` ainda falavam em «Preferências».
+- Intermitente de `navegacao.test.tsx › o Cadastro continua alcançável`:
+  - Causa: o `ProvedorDeProtecaoDeSaida` só monta depois da verificação do Acesso e registrava o ouvinte de `hashchange` num efeito passivo. Um `hashchange` entre o commit e os efeitos se perdia.
+  - Correção: o ouvinte passou a `useLayoutEffect`.
+  - Prova: uma regressão dispara o evento nessa janela, sem `hashchange` nativo; falha 3/3 sem a correção.
+  - O `act` que e379de5 acrescentou ao helper protege as provas que usam o helper; a correção no provedor fecha a corrida no próprio app.
+

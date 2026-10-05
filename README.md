@@ -28,7 +28,7 @@ every feature started from a specification in [`specs/`](specs/).
 | Cards | Create, list, edit and delete Cards, with size limits | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Decks | Create, rename and delete Decks, and link a Card to several Decks | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Study a Deck | Cards in random order, reveal the Back, rate the answer and see a Summary at the end | [004](specs/004-sessao-de-estudo/) |
-| Spaced repetition | SM-2 with a four-level rating; the daily Review gathers due Cards and a limited number of new ones; the algorithm and the daily limit are Preferences | [015](specs/015-repeticao-espacada/) |
+| Spaced repetition | SM-2 with a four-level rating; the daily Review gathers due Cards and a limited number of new ones; the algorithm and the daily limit live in the Profile settings | [015](specs/015-repeticao-espacada/) |
 | Study schedule | Weekly Routines per Deck (for example, "English every Monday"), today's commitments and a week calendar showing what was done | [016](specs/016-agendamento-de-estudo/) |
 | Home and Study | Home shows a greeting, the daily Review and today's schedule in one column; the Study area holds the week, statistics and recent Sessions | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Statistics and history | Items studied, Sessions completed and hit rate over the last 7 days, a daily chart and the record of each Session, with what was right and wrong | [013](specs/013-estatisticas-e-historico/) |

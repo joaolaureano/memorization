@@ -1,8 +1,9 @@
 /**
  * Resultado incerto de uma ação da conta (017; FR-280..FR-283, SC-110).
  *
- * Quando a resposta de alterar o Nome de usuário, trocar a Senha ou excluir a
- * conta se perde, a interface não sabe se a mudança foi aplicada: anunciar
+ * Quando a resposta de trocar a Senha ou excluir a conta se perde (a alteração
+ * do Nome de usuário saiu do produto na 020, FR-336), a interface não sabe se
+ * a mudança foi aplicada: anunciar
  * sucesso ou falha seria chute. Ela então **verifica** o estado real, apresentando
  * ao Entrar a Credencial nova e a antiga, e este Module decide, sem rede e sem
  * estado, o que as verificações significam:
@@ -18,12 +19,12 @@
  */
 
 /** A ação cuja resposta se perdeu. */
-export type AcaoDeConta = "alterar-nome" | "trocar-senha" | "excluir";
+export type AcaoDeConta = "trocar-senha" | "excluir";
 
 /** Desfecho de apresentar uma Credencial ao Entrar para verificar o estado real. */
 export type Verificacao = "aceita" | "recusada" | "falhou";
 
-/** O que já se sabe: a Credencial nova só existe para renomear e trocar a Senha. */
+/** O que já se sabe: a Credencial nova só existe para trocar a Senha. */
 export interface Verificacoes {
   nova?: Verificacao;
   antiga?: Verificacao;

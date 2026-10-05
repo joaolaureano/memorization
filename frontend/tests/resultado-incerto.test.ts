@@ -35,19 +35,19 @@ type Linha = [
 
 describe("decidirResultadoIncerto", () => {
   const tabela: Linha[] = [
-    // Renomear e trocar a Senha: a Credencial nova vale → aplicada.
-    ["alterar-nome", "aceita", undefined, "aplicada"],
+    // Trocar a Senha: a Credencial nova vale → aplicada.
+    ["trocar-senha", "aceita", undefined, "aplicada"],
     ["trocar-senha", "aceita", "recusada", "aplicada"],
     // Falta verificar.
-    ["alterar-nome", undefined, undefined, null],
+    ["trocar-senha", undefined, undefined, null],
     ["trocar-senha", "recusada", undefined, null],
     ["trocar-senha", "falhou", undefined, null],
     // A antiga vale → nada mudou.
-    ["alterar-nome", "recusada", "aceita", "nao_aplicada"],
+    ["trocar-senha", "recusada", "aceita", "nao_aplicada"],
     ["trocar-senha", "falhou", "aceita", "nao_aplicada"],
     // Nenhuma vale, ou a verificação falhou → desconhecido.
-    ["alterar-nome", "recusada", "recusada", "desconhecido"],
-    ["alterar-nome", "falhou", "falhou", "desconhecido"],
+    ["trocar-senha", "recusada", "recusada", "desconhecido"],
+    ["trocar-senha", "falhou", "falhou", "desconhecido"],
     ["trocar-senha", "recusada", "falhou", "desconhecido"],
     // Excluir: só a antiga importa.
     ["excluir", undefined, undefined, null],
@@ -66,11 +66,11 @@ describe("decidirResultadoIncerto", () => {
 
 describe("proximaVerificacao", () => {
   it("pede a Credencial nova primeiro, depois a antiga, e nada quando há decisão", () => {
-    expect(proximaVerificacao("alterar-nome", {})).toBe("nova");
-    expect(proximaVerificacao("alterar-nome", { nova: "recusada" })).toBe(
+    expect(proximaVerificacao("trocar-senha", {})).toBe("nova");
+    expect(proximaVerificacao("trocar-senha", { nova: "recusada" })).toBe(
       "antiga",
     );
-    expect(proximaVerificacao("alterar-nome", { nova: "aceita" })).toBeNull();
+    expect(proximaVerificacao("trocar-senha", { nova: "aceita" })).toBeNull();
     expect(
       proximaVerificacao("trocar-senha", {
         nova: "recusada",
@@ -132,7 +132,7 @@ describe("verificarResultadoIncerto", () => {
     const { cliente, apresentadas } = clienteQueAceita([antiga]);
 
     expect(
-      await verificarResultadoIncerto(cliente, "alterar-nome", {
+      await verificarResultadoIncerto(cliente, "trocar-senha", {
         antiga,
         nova,
       }),
@@ -166,7 +166,7 @@ describe("verificarResultadoIncerto", () => {
     const { cliente } = clienteQueAceita([antiga]);
 
     expect(
-      await verificarResultadoIncerto(cliente, "alterar-nome", { antiga }),
+      await verificarResultadoIncerto(cliente, "trocar-senha", { antiga }),
     ).toBe("nao_aplicada");
   });
 });

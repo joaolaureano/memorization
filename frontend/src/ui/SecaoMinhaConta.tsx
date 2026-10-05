@@ -20,7 +20,7 @@ import { FormularioDeTrocaDeSenha } from "./FormularioDeTrocaDeSenha";
  *
  * O servidor é a fonte do que aparece: o Nome de usuário e as contagens vêm de
  * `obterConta`, e a falha de carregamento oferece «Tentar novamente» sem
- * impedir o restante da tela de Preferências (FR-044, FR-045).
+ * impedir o restante da tela de Perfil (FR-044, FR-045).
  */
 
 type Acao = "senha" | "excluir";
