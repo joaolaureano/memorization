@@ -544,6 +544,9 @@ test("SC-087: Início monta com leituras agregadas e em número fixo, com 2.000 
       .getByRole("link", { name: "Cartões" })
       .click();
     await expect(page).toHaveURL(/#\/cartoes/);
+    // Espera a contagem visível: garante que GET /cartoes e /baralhos
+    // concluíram e não vazam para a prova do Início.
+    await expect(page.getByText(/^\d+ resultados?$/)).toBeVisible();
 
     // SC-087, sem relógio: o orçamento de 1 s é consequência de o Início montar
     // com leituras pequenas e em número fixo. A prova é

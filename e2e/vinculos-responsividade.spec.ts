@@ -35,6 +35,7 @@ function cartoesDeterministicos(): Array<{
   frente: string;
   verso: string;
   baralhos: Array<{ id: string; nome: string }>;
+  proximaRevisaoEm: string | null;
 }> {
   return Array.from({ length: QUANTIDADE_DE_CARTOES }, (_, indice) => {
     const numero = String(indice + 1).padStart(2, '0');
@@ -47,6 +48,7 @@ function cartoesDeterministicos(): Array<{
         indice < QUANTIDADE_DE_VINCULADOS
           ? [{ id: 'b1', nome: 'Inglês' }]
           : [],
+      proximaRevisaoEm: null,
     };
   });
 }

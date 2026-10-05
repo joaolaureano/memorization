@@ -29,6 +29,7 @@ function cartoesDeterministicos(): Array<{
   frente: string;
   verso: string;
   baralhos: Array<{ id: string; nome: string }>;
+  proximaRevisaoEm: string | null;
 }> {
   return Array.from({ length: QUANTIDADE_DE_CARTOES }, (_, indice) => {
     const numero = String(indice + 1).padStart(2, '0');
@@ -38,6 +39,7 @@ function cartoesDeterministicos(): Array<{
       frente: `Frente do Cartão ${numero}`,
       verso: `Verso do Cartão ${numero}`,
       baralhos: [],
+      proximaRevisaoEm: null,
     };
   });
 }
@@ -64,6 +66,21 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(cartoes),
+      });
+      return;
+    }
+
+    await rota.fallback();
+  });
+
+  // A página de Cartões também lê GET /baralhos para o seletor de Baralho
+  // (spec 022).
+  await page.route(/\/baralhos$/, async (rota) => {
+    if (rota.request().method() === 'GET') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '[]',
       });
       return;
     }
