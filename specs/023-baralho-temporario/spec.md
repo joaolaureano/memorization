@@ -1,7 +1,7 @@
 # Feature Specification: Baralho temporário para um estudo
 
 **Created**: 2026-10-05
-**Status**: Em implementação (2026-10-05), seguindo os protótipos de `design/baralho-temporario/` com os esclarecimentos da sessão de 2026-10-05.
+**Status**: Implementada (2026-10-05), seguindo os protótipos de `design/baralho-temporario/` com os esclarecimentos da sessão de 2026-10-05.
 **Input**: Permitir reunir vários Baralhos e Cartões individuais para um estudo e, ao final, salvar a seleção como um Baralho, se o Usuário desejar. Estudar é o fluxo único de exercício e revisão; o Usuário escolhe o conteúdo e pode estudá-lo novamente quando quiser.
 **Depende de**: `002-criar-baralho`, `003-vincular-cartao-baralho`, `004-sessao-de-estudo`, `012-interface-visual-navegavel`, `013-estatisticas-e-historico`, `015-repeticao-espacada`, `021-consistencia-baralhos-cartoes` e `022-busca-e-filtros-no-acervo`.
 
