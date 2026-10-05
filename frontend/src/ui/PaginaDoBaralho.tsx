@@ -289,13 +289,8 @@ export function PaginaDoBaralho({
 
   return (
     <div className="pagina">
-      <p className="voltar">
-        <a href="#/baralhos">← Voltar para Baralhos</a>
-      </p>
-
       <div className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Baralho</p>
           <h1>
             {baralhoNaoEncontrado !== null
               ? "Baralho não encontrado"

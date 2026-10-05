@@ -49,14 +49,12 @@ import type {
   DadosDeRotina,
   DadosDeUsuario,
   Estatisticas,
-  ItemDoLoteDeRevisao,
   ItemRegistrado,
   OpcaoDeAlgoritmo,
   Preferencias,
   Previa,
   RegistroDeSessao,
   RegistroResumido,
-  ResumoDaRevisao,
   ResultadoDasPrevias,
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
@@ -80,8 +78,6 @@ import type {
   ResultadoDeSalvarPreferencias,
   ResultadoDeSalvarRotina,
   ResultadoDeVinculacao,
-  ResultadoDoLoteDeRevisao,
-  ResultadoDoResumoDaRevisao,
   Usuario,
 } from "./cliente";
 import { ehCodigoDeErroDeBaralho, ehCodigoDeErroDeCartao } from "./validacao";
@@ -1011,75 +1007,6 @@ export class ClienteHttp implements ClienteDoAcervo {
   }
 
   /**
-   * O resumo da Revisão do dia (FR-198, FR-199). Os limites do dia vão na
-   * query, codificados, e nenhuma resposta fora do contrato atravessa: vira
-   * `indisponivel` (FR-044).
-   */
-  async obterResumoDaRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoResumoDaRevisao> {
-    try {
-      const resposta = await this.pedir(
-        `${this.endereco}/revisao?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
-        { headers: this.cabecalho() },
-      );
-
-      if (resposta.status === 401) {
-        return await this.falhaDeNaoAutenticadoDe(resposta);
-      }
-
-      if (resposta.status === 200) {
-        const resumo = lerResumoDaRevisao(await resposta.json());
-
-        if (resumo !== null) {
-          return { ok: true, resumo };
-        }
-
-        return this.falhaDeIndisponibilidadeDeRevisao();
-      }
-
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    } catch {
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    }
-  }
-
-  /**
-   * O lote da Revisão do dia, já ordenado pelo servidor (FR-201, FR-203). Cada
-   * Item traz a prévia de cada Avaliação (FR-221).
-   */
-  async obterLoteDeRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoLoteDeRevisao> {
-    try {
-      const resposta = await this.pedir(
-        `${this.endereco}/revisao/lote?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
-        { headers: this.cabecalho() },
-      );
-
-      if (resposta.status === 401) {
-        return await this.falhaDeNaoAutenticadoDe(resposta);
-      }
-
-      if (resposta.status === 200) {
-        const itens = lerLoteDeRevisao(await resposta.json());
-
-        if (itens !== null) {
-          return { ok: true, itens };
-        }
-
-        return this.falhaDeIndisponibilidadeDeRevisao();
-      }
-
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    } catch {
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    }
-  }
-
-  /**
    * A prévia dos Cartões informados, para o estudo livre (FR-221). Os
    * `cartaoIds` vão no corpo, como no contrato.
    */
@@ -1139,22 +1066,18 @@ export class ClienteHttp implements ClienteDoAcervo {
   }
 
   /**
-   * Salva as Preferências (FR-200, FR-212). O `400 dados_invalidos` é a única
+   * Salva as Preferências (FR-212). O `400 dados_invalidos` é a única
    * recusa de domínio; qualquer outro código de 400 é resposta fora do
    * contrato e vira `indisponivel`.
    */
   async salvarPreferencias(preferencias: {
     algoritmo: string;
-    limiteDeNovosPorDia: number;
   }): Promise<ResultadoDeSalvarPreferencias> {
     try {
       const resposta = await this.pedir(`${this.endereco}/preferencias`, {
         method: "PUT",
         headers: { "content-type": "application/json", ...this.cabecalho() },
-        body: JSON.stringify({
-          algoritmo: preferencias.algoritmo,
-          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
-        }),
+        body: JSON.stringify({ algoritmo: preferencias.algoritmo }),
       });
 
       if (resposta.status === 401) {
@@ -2034,28 +1957,6 @@ function lerRegistroComBaralho(
   return { registro, baralhoExiste: campos.baralhoExiste };
 }
 
-function lerResumoDaRevisao(corpo: unknown): ResumoDaRevisao | null {
-  if (typeof corpo !== "object" || corpo === null) {
-    return null;
-  }
-
-  const campos = corpo as Record<string, unknown>;
-
-  if (
-    typeof campos.vencidos !== "number" ||
-    typeof campos.novosHoje !== "number" ||
-    typeof campos.total !== "number"
-  ) {
-    return null;
-  }
-
-  return {
-    vencidos: campos.vencidos,
-    novosHoje: campos.novosHoje,
-    total: campos.total,
-  };
-}
-
 /** Reconhece a prévia: o instante ISO de cada uma das 4 Avaliações (FR-221). */
 function lerPrevia(corpo: unknown): Previa | null {
   if (typeof corpo !== "object" || corpo === null) {
@@ -2079,48 +1980,6 @@ function lerPrevia(corpo: unknown): Previa | null {
     bom: campos.bom,
     facil: campos.facil,
   };
-}
-
-function lerItemDoLote(corpo: unknown): ItemDoLoteDeRevisao | null {
-  if (typeof corpo !== "object" || corpo === null) {
-    return null;
-  }
-
-  const campos = corpo as Record<string, unknown>;
-  const cartao = lerCartao(campos.cartao);
-  const previa = lerPrevia(campos.previa);
-
-  if (cartao === null || previa === null) {
-    return null;
-  }
-
-  return { cartao, previa };
-}
-
-function lerLoteDeRevisao(corpo: unknown): ItemDoLoteDeRevisao[] | null {
-  if (typeof corpo !== "object" || corpo === null) {
-    return null;
-  }
-
-  const campos = corpo as Record<string, unknown>;
-
-  if (!Array.isArray(campos.itens)) {
-    return null;
-  }
-
-  const itens: ItemDoLoteDeRevisao[] = [];
-
-  for (const item of campos.itens) {
-    const lido = lerItemDoLote(item);
-
-    if (lido === null) {
-      return null;
-    }
-
-    itens.push(lido);
-  }
-
-  return itens;
 }
 
 function lerPrevias(corpo: unknown): Record<string, Previa> | null {
@@ -2174,7 +2033,6 @@ function lerPreferencias(corpo: unknown): Preferencias | null {
 
   if (
     typeof campos.algoritmo !== "string" ||
-    typeof campos.limiteDeNovosPorDia !== "number" ||
     !Array.isArray(campos.algoritmos)
   ) {
     return null;
@@ -2194,7 +2052,6 @@ function lerPreferencias(corpo: unknown): Preferencias | null {
 
   return {
     algoritmo: campos.algoritmo,
-    limiteDeNovosPorDia: campos.limiteDeNovosPorDia,
     algoritmos,
   };
 }

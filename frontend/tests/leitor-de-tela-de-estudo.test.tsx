@@ -133,15 +133,13 @@ describe("PaginaDeEstudo para leitor de tela", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^Errei/ }));
 
-    const anuncio = await screen.findByRole("status", {
-      name: "Mudança de estado da Sessão",
+    // A conclusão é anunciada pelo foco no título do Resumo, sem a mensagem
+    // "Sessão concluída." à vista.
+    const titulo = await screen.findByRole("heading", {
+      name: "Sessão concluída",
     });
-
-    expect(anuncio).toHaveAccessibleName("Mudança de estado da Sessão");
-    expect(anuncio).toHaveTextContent(/Sessão concluída\./);
-    expect(
-      await screen.findByRole("heading", { name: "Sessão concluída" }),
-    ).toBeInTheDocument();
+    expect(titulo).toHaveFocus();
+    expect(screen.queryByText("Sessão concluída.")).toBeNull();
     expect(screen.getByText("0%")).toBeInTheDocument();
     expect(screen.getByText("de acertos")).toBeInTheDocument();
     expect(screen.getByText("0 de 1 Cartão")).toBeInTheDocument();

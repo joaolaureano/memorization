@@ -29,7 +29,7 @@ describe("PaginaDeCartoes", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Cartões" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Seu acervo")).toBeInTheDocument();
+    expect(screen.queryByText("Seu acervo")).toBeNull();
 
     expect(await screen.findByText(/ainda não há Cartões/i)).toBeInTheDocument();
     expect(screen.getByText(/crie o primeiro/i)).toBeInTheDocument();

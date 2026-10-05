@@ -23,7 +23,6 @@ import { PaginaDaAgenda } from "./PaginaDaAgenda";
 import { PaginaDaCentralDeEstudo } from "./PaginaDaCentralDeEstudo";
 import { PaginaDoFormularioDeRotina } from "./PaginaDoFormularioDeRotina";
 import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
-import { PaginaDaRevisao } from "./PaginaDaRevisao";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import { PaginaDeCartoes } from "./PaginaDeCartoes";
@@ -721,11 +720,6 @@ function TelaDaRota({
     case "editar-cartao":
       // FR-141: a edição de Cartão ganha tela própria.
       return <PaginaDoFormularioDeCartao cliente={cliente} id={rota.id} />;
-
-    case "revisao":
-      // FR-198: a Revisão do dia é lançada de Início e tem tela própria; por
-      // isso `destinoAtivo` a marca como pertencente ao Início (§7).
-      return <PaginaDaRevisao cliente={cliente} />;
 
     case "preferencias":
       // FR-212: as Preferências têm tela própria, alcançável pela Moldura.

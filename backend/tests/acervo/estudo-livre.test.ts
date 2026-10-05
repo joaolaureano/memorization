@@ -23,8 +23,9 @@ import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
  * editar a Frente nem cria um segundo Agendamento nem apaga o existente
  * (FR-205 a FR-208).
  *
- * Toda asserção atravessa a Interface do `Acervo` sobre o Adapter do
- * armazenamento local em memória; nenhum teste inspeciona tabela. O relógio é
+ * As ações atravessam a Interface do `Acervo` sobre o Adapter do
+ * armazenamento local em memória; o Agendamento resultante é lido pela Porta
+ * do armazenamento, e nenhum teste inspeciona tabela. O relógio é
  * controlado com `vi.setSystemTime`, porque as datas das revisões nascem dele.
  */
 
@@ -37,16 +38,8 @@ const INSTANTE_INICIAL = new Date("2026-10-01T12:00:00.000Z");
 const UM_SEGUNDO_EM_MILISSEGUNDOS = 1000;
 const UM_DIA_EM_MILISSEGUNDOS = 24 * 60 * 60 * 1000;
 
-/** O dia de `INSTANTE_INICIAL` e o seguinte, como a tela os envia (D3). */
-const DIA_DO_ESTUDO = [
-  "2026-10-01T00:00:00.000Z",
-  "2026-10-02T00:00:00.000Z",
-] as const;
-
-const DIA_SEGUINTE = [
-  "2026-10-02T00:00:00.000Z",
-  "2026-10-03T00:00:00.000Z",
-] as const;
+/** O fim do dia seguinte a `INSTANTE_INICIAL`. */
+const FIM_DO_DIA_SEGUINTE = new Date("2026-10-03T00:00:00.000Z");
 
 let aberto: ArmazenamentoSqliteAberto;
 let usuarioId: string;
@@ -138,45 +131,36 @@ async function registrar(corpo: DadosDeRegistro): Promise<RegistroDeSessao> {
   return resultado.registro;
 }
 
-/** Os identificadores dos Cartões de um lote, na ordem em que vieram. */
-async function idsDoLote(
-  inicioDoDia: string,
-  fimDoDia: string,
-): Promise<string[]> {
-  const resultado = await acervo.obterLoteDeRevisao(inicioDoDia, fimDoDia);
-
-  if (!resultado.ok) {
-    throw new Error(`lote recusado inesperadamente: ${resultado.erro}`);
-  }
-
-  return resultado.itens.map((item) => item.cartao.id);
+/** Os Agendamentos do dono, lidos pela Porta do armazenamento. */
+async function agendamentos() {
+  return aberto.armazenamento.listarAgendamentos(usuarioId);
 }
 
-/** Os identificadores dos Cartões numa janela a partir de um instante ISO. */
+/** Os Cartões com revisão marcada antes de `fim`. */
+async function idsVencidosAte(fim: Date): Promise<string[]> {
+  return (await agendamentos())
+    .filter((agendamento) => Date.parse(agendamento.proximaRevisaoEm) < fim.getTime())
+    .map((agendamento) => agendamento.cartaoId);
+}
+
+/** Os Cartões vencidos até o fim do dia que começa em `instante`. */
 async function idsNoDiaDe(instante: Date): Promise<string[]> {
-  return idsDoLote(
-    instante.toISOString(),
-    new Date(instante.getTime() + UM_DIA_EM_MILISSEGUNDOS).toISOString(),
+  return idsVencidosAte(
+    new Date(instante.getTime() + UM_DIA_EM_MILISSEGUNDOS),
   );
 }
 
 describe("registrarSessao no estudo livre — o Agendamento nasce do Cartão", () => {
-  it("conclui a Sessão de um Cartão novo e reduz em 1 os novos de hoje (FR-205, FR-206)", async () => {
+  it("conclui a Sessão de um Cartão novo e cria o seu Agendamento (FR-205, FR-206)", async () => {
     const cartao = await criarCartao();
 
-    // Antes de estudar, o Cartão é novo e conta no resumo de hoje.
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 1, total: 1 },
-    });
+    // Antes de estudar, o Cartão é novo: não tem Agendamento.
+    expect(await agendamentos()).toEqual([]);
 
     await registrar(corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")]));
 
-    // O Agendamento nasceu: o Cartão deixou de ser novo hoje.
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 0, total: 0 },
-    });
+    // O Agendamento nasceu: o Cartão deixou de ser novo.
+    expect((await agendamentos()).map((a) => a.cartaoId)).toEqual([cartao.id]);
 
     // E reaparece no dia que o SM-2 calculou a partir da primeira Avaliação.
     expect(await idsNoDiaDe(new Date(
@@ -190,13 +174,13 @@ describe("registrarSessao no estudo livre — o Agendamento nasce do Cartão", (
     await registrar(corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")]));
 
     // O primeiro "bom" empurrou a revisão para o dia seguinte.
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
 
     // Estudar de novo no mesmo dia é permitido mesmo sem vencimento: o SM-2
     // avança as repetições e a revisão salta de um para seis dias.
     await registrar(corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")]));
 
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([]);
 
     const sextoDia = new Date(
       INSTANTE_INICIAL.getTime() + 6 * UM_DIA_EM_MILISSEGUNDOS,
@@ -223,11 +207,8 @@ describe("o Agendamento é do Cartão, não do Vínculo (FR-206, FR-207, FR-208)
       }),
     );
 
-    // Um Agendamento só: o vencido conta uma vez, não uma por Vínculo.
-    expect(await acervo.obterResumoDaRevisao(...DIA_SEGUINTE)).toEqual({
-      ok: true,
-      resumo: { vencidos: 1, novosHoje: 0, total: 1 },
-    });
+    // Um Agendamento só: o Cartão conta uma vez, não uma por Vínculo.
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
   });
 
   it("preserva o Agendamento ao desvincular e ao editar a Frente (FR-207, FR-208)", async () => {
@@ -243,7 +224,7 @@ describe("o Agendamento é do Cartão, não do Vínculo (FR-206, FR-207, FR-208)
       }),
     );
 
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
 
     // Nem perder o Vínculo nem trocar a Frente mexem no Agendamento.
     expect(await acervo.desvincular(cartao.id, baralho.id)).toEqual({
@@ -257,7 +238,7 @@ describe("o Agendamento é do Cartão, não do Vínculo (FR-206, FR-207, FR-208)
       cartao: { id: cartao.id, frente: "To stroll", verso: VERSO },
     });
 
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
   });
 
   it("não reaplica a Avaliação ao reenviar o mesmo id (FR-205, FR-210, SC-085)", async () => {

@@ -399,6 +399,15 @@ CREATE INDEX indice_acesso_temporario_por_usuario
 `;
 
 /**
+ * A migração 10 remove o **limite de Cartões novos por dia** das Preferências:
+ * ele só valia para a Revisão do dia, que saiu da aplicação. As Preferências de
+ * cada Usuário — o algoritmo — sobrevivem intactas.
+ */
+const ESQUEMA_SEM_LIMITE_DE_NOVOS = `
+ALTER TABLE preferencias DROP COLUMN limite_de_novos_por_dia;
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -413,4 +422,5 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 7, sql: ESQUEMA_REPETICAO_ESPACADA },
   { versao: 8, sql: ESQUEMA_AGENDA_DE_ESTUDO },
   { versao: 9, sql: ESQUEMA_ACESSO_TEMPORARIO },
+  { versao: 10, sql: ESQUEMA_SEM_LIMITE_DE_NOVOS },
 ];

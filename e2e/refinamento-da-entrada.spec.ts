@@ -11,7 +11,7 @@ import { prepararAcessoAusente } from './servidores-locais';
 // Entrar é a primeira e única sem Credencial.
 //
 // Provas, em 360, 390, 768 e 1440 px e com zoom de 200% (720 px @2x):
-// - sobretítulo «Bem-vindo» e opção de acesso sem texto de ajuda (FR-327, FR-328);
+// - sem sobretítulo e opção de acesso sem texto de ajuda (FR-327, FR-328);
 // - caixa de marcar grande de 37 px e rótulo clicável de pelo menos 44 x 44 px (FR-328);
 // - Mostrar/Ocultar com 7 rem de largura, antes e depois de alternar (FR-329);
 // - sem rolagem horizontal e com a ordem de Tab Nome de usuário → Senha →
@@ -51,7 +51,7 @@ for (const cenario of CENARIOS) {
       await prepararAcessoAusente(page);
       await page.goto(`${ENDERECO_DO_FRONTEND}/#/entrar`);
 
-      await expect(page.getByText('Bem-vindo', { exact: true })).toBeVisible();
+      await expect(page.getByText('Bem-vindo', { exact: true })).toHaveCount(0);
       await expect(
         page.getByRole('heading', { level: 1, name: 'Entrar' }),
       ).toBeVisible();

@@ -94,7 +94,7 @@ describe("PaginaDeCadastro para leitor de tela", () => {
     // Os limites também são comunicados por texto, e não só na descrição.
     expect(
       screen.getByText(
-        `De ${LIMITE_MINIMO_DE_SENHA} a ${LIMITE_MAXIMO_DE_SENHA} caracteres, qualquer caractere, inclusive espaços.`,
+        `De ${LIMITE_MINIMO_DE_SENHA} a ${LIMITE_MAXIMO_DE_SENHA} caracteres: qualquer caractere, inclusive espaços.`,
       ),
     ).toBeInTheDocument();
   });

@@ -93,7 +93,7 @@ describe("PaginaDeBaralhos", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Baralhos" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Seu acervo")).toBeInTheDocument();
+    expect(screen.queryByText("Seu acervo")).toBeNull();
     expect(
       screen.getByText("Escolha o que você quer memorizar hoje."),
     ).toBeInTheDocument();

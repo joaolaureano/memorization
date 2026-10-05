@@ -478,8 +478,9 @@ export function PaginaDeEstudo({
     setEstado(estadoAtualizado);
 
     if (estadoAtualizado.concluida) {
+      // A conclusão é anunciada pelo foco no título "Sessão concluída".
       alvoDeFoco.current = "resumo";
-      anunciar("Sessão concluída.");
+      setAnuncio(null);
       // Os Itens do Registro saem do estado da Sessão concluída, na ordem em
       // que foram apresentados (FR-176): é essa a ordem que a tela exibe e que
       // o Registro transporta, com Cartão e Avaliação (FR-196).
@@ -628,7 +629,6 @@ export function PaginaDeEstudo({
         {linkDeVoltar}
         <header className="cabecalho-da-pagina">
           <div>
-            <p className="sobretitulo">Sessão de estudo</p>
             <h1>Estudar {baralho.nome}</h1>
           </div>
         </header>
@@ -645,7 +645,6 @@ export function PaginaDeEstudo({
         {linkDeVoltar}
         <header className="cabecalho-da-pagina">
           <div>
-            <p className="sobretitulo">Sessão de estudo</p>
             <h1>Estudar {baralho.nome}</h1>
           </div>
         </header>
@@ -697,24 +696,11 @@ export function PaginaDeEstudo({
       <div className="pilha">
         <header className="cabecalho-da-pagina resumo__cabecalho">
           <div>
-            <p className="sobretitulo">{baralho.nome}</p>
             <h1 ref={resumoRef} tabIndex={-1}>
               Sessão concluída
             </h1>
           </div>
         </header>
-
-        {anuncio !== null && (
-          <p
-            key={sequenciaDeAnuncio}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-            aria-label="Mudança de estado da Sessão"
-          >
-            {anuncio}
-          </p>
-        )}
 
         <ResumoDaSessao itens={itensDoResumo(estado)} origem="baralho">
           {situacaoDoRegistro.estado === "registrando" && (
@@ -733,11 +719,10 @@ export function PaginaDeEstudo({
               role="status"
               aria-live="polite"
               aria-label="Situação do registro da Sessão"
-              className="aviso aviso--sucesso"
+              className="visualmente-oculto"
             >
-              <span aria-hidden="true">✓</span> Registrada no seu histórico
-              {ehDaAgenda ? ". O estudo programado de hoje foi concluído." : ""}{" "}
-              <a href="#/inicio">Ver em Início</a>
+              Sessão registrada no histórico.
+              {ehDaAgenda ? " O estudo programado de hoje foi concluído." : ""}
             </p>
           )}
 

@@ -184,7 +184,7 @@ async function percorrerCaso(
     await pagina.goto(ambiente.enderecoDoFrontend);
 
     // --- Entrar (FR-327, FR-328, FR-329) -----------------------------------
-    await expect(pagina.getByText("Bem-vindo", { exact: true })).toBeVisible();
+    await expect(pagina.getByText("Bem-vindo", { exact: true })).toHaveCount(0);
     await expect(
       pagina.getByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeVisible();
@@ -313,13 +313,7 @@ async function percorrerCaso(
     await expect(
       pagina.getByRole("link", { name: "Criar o primeiro Cartão" }),
     ).toBeVisible();
-    await expect(
-      pagina.getByRole("heading", {
-        level: 3,
-        name: "Nada para revisar.",
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(pagina.getByText("Revisão do dia")).toHaveCount(0);
     await expect(pagina.getByText("Seu estudo")).toHaveCount(0);
     await expect(pagina.locator("p.resumo-de-sete-dias")).toHaveCount(0);
     await expect(pagina.getByText(/fuso/i)).toHaveCount(0);

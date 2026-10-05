@@ -77,18 +77,6 @@ export const CAMINHO_DAS_SESSOES = "/sessoes";
 export const CAMINHO_DAS_ESTATISTICAS = "/estatisticas";
 
 /**
- * Caminho das rotas de Revisão (contrato da `015`, §4). Recebe o mesmo
- * tratamento de CORS mínimo das demais, porque o Estudo de hoje é consumido do
- * navegador, em outra origem.
- */
-export const CAMINHO_DA_REVISAO = "/revisao";
-
-/**
- * Caminho do lote de Revisão (contrato da `015`, §4), com o mesmo CORS.
- */
-export const CAMINHO_DO_LOTE_DE_REVISAO = "/revisao/lote";
-
-/**
  * Caminho da rota de Prévias (contrato da `015`, §4), com o mesmo CORS.
  */
 export const CAMINHO_DAS_PREVIAS = "/previas";
@@ -355,8 +343,6 @@ export function criarServidor(
       CAMINHO_DAS_SESSOES,
       "/sessoes/:id",
       CAMINHO_DAS_ESTATISTICAS,
-      CAMINHO_DA_REVISAO,
-      CAMINHO_DO_LOTE_DE_REVISAO,
       CAMINHO_DAS_PREVIAS,
       CAMINHO_DAS_PREFERENCIAS,
       CAMINHO_DA_AGENDA,
@@ -384,8 +370,6 @@ export function criarServidor(
         caminho === CAMINHO_DAS_SESSOES ||
         caminho.startsWith("/sessoes/") ||
         caminho === CAMINHO_DAS_ESTATISTICAS ||
-        caminho === CAMINHO_DA_REVISAO ||
-        caminho === CAMINHO_DO_LOTE_DE_REVISAO ||
         caminho === CAMINHO_DAS_PREVIAS ||
         caminho === CAMINHO_DAS_PREFERENCIAS ||
         caminho === CAMINHO_DA_AGENDA ||

@@ -131,23 +131,16 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
       ),
     );
 
-    const linkDeVoltar = screen.getByRole("link", {
-      name: "← Voltar para Cartões",
-    });
     const campoFrente = screen.getByLabelText("Frente");
     const campoVerso = screen.getByLabelText("Verso");
     const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
 
-    // A ordem de tabulação acompanha a disposição visual da coluna única: o
-    // caminho de volta, os dois campos e o salvamento (FR-054, SC-017).
+    // A ordem de tabulação acompanha a disposição visual da coluna única: os
+    // dois campos e o salvamento (FR-054, SC-017).
     const controles = controlesInterativos();
-    expect(controles[0]).toBe(linkDeVoltar);
-    expect(controles[1]).toBe(campoFrente);
-    expect(controles[2]).toBe(campoVerso);
-    expect(controles[3]).toBe(botaoDeSalvar);
-
-    apertarTab();
-    expect(document.activeElement).toBe(linkDeVoltar);
+    expect(controles[0]).toBe(campoFrente);
+    expect(controles[1]).toBe(campoVerso);
+    expect(controles[2]).toBe(botaoDeSalvar);
 
     apertarTab();
     expect(document.activeElement).toBe(campoFrente);
@@ -182,9 +175,8 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
       digitarPeloTeclado(campoFrente, caso.frente);
       digitarPeloTeclado(campoVerso, caso.verso);
 
-      // Submete percorrendo a ordem visual por teclado, do caminho de volta
-      // ao salvamento.
-      apertarTab(); // ← Voltar para Cartões
+      // Submete percorrendo a ordem visual por teclado, da Frente ao
+      // salvamento.
       apertarTab(); // Frente
       apertarTab(); // Verso
       apertarTab(); // Salvar
@@ -218,7 +210,6 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
 
     cliente.simularIndisponibilidade();
 
-    apertarTab(); // ← Voltar para Cartões
     apertarTab(); // Frente
     apertarTab(); // Verso
     apertarTab(); // Salvar

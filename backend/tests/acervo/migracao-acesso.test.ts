@@ -41,9 +41,12 @@ describe("migração 9 — Acesso temporário no SQLite", () => {
         .all(),
     ).toHaveLength(0);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 9),
+    );
 
-    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(9);
+    expect(MIGRACOES.find((migracao) => migracao.versao === 9)).toBeDefined();
     expect(
       Number(
         (banco.prepare("SELECT versao FROM versao_do_esquema").get() as {

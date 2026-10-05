@@ -296,12 +296,11 @@ async function percursoPorTeclado(
   ).toBeVisible();
   await expect(page.getByText(/100\s*%/)).toBeVisible();
 
-  // Spec 013: concluída, a Sessão é registrada no histórico pela API real, e o
-  // Resumo confirma o Registro com o caminho para revê-lo em Início.
+  // Spec 013: concluída, a Sessão é registrada no histórico pela API real; a
+  // confirmação é anunciada ao leitor de tela.
   await expect(
     page.getByRole("status", { name: "Situação do registro da Sessão" }),
-  ).toContainText(/Registrada no seu histórico/);
-  await expect(linkExato(page, "Ver em Início")).toBeVisible();
+  ).toContainText(/Sessão registrada no histórico/);
 
   // Preferências, pela navegação Principal: o quarto destino da Moldura
   // (FR-212, SC-088). A travessia continua sendo só de teclado.
@@ -311,45 +310,12 @@ async function percursoPorTeclado(
   ).toBeVisible();
   await conferirSemTransbordo(page);
 
-  // Revisão do dia, lançada de Início (FR-198, FR-202): volta a Início pelo
-  // link textual e segue para a Revisão. Estudado o único Cartão, não há
-  // vencidos nem novos, e "Revisar" nasce indisponível (FR-202); com algo a
-  // revisar, é um link para #/revisao, e é ele que o teclado aciona.
+  // Início, pelo link textual da navegação Principal.
   await acionarPorTab(page, linkExato(page, "Início"));
   await expect(
     page.getByRole("heading", {
       level: 1,
       name: `Olá, ${credencial.nomeDeUsuario}`,
-      exact: true,
-    }),
-  ).toBeVisible();
-
-  const linkRevisar = linkExato(page, "Revisar");
-  const botaoRevisar = page.getByRole("button", {
-    name: "Revisar",
-    exact: true,
-  });
-
-  if ((await linkRevisar.count()) > 0) {
-    await acionarPorTab(page, linkRevisar);
-  } else {
-    // Nada para revisar (FR-202): "Revisar" fica indisponível e fora da ordem
-    // de foco — um <button disabled> que o Tab não alcança —, e o bloco "Nada
-    // para revisar." explica o porquê. A tela da Revisão do dia é aberta
-    // pela rota, para a conferência de transbordo (FR-159, SC-088).
-    if ((await botaoRevisar.count()) > 0) {
-      await expect(botaoRevisar).toBeDisabled();
-    } else {
-      await expect(page.getByText("Revisar", { exact: true })).toBeVisible();
-    }
-
-    await expect(page.getByText("Nada para revisar.")).toBeVisible();
-    await page.goto(`${enderecoDoFrontend}/#/revisao`);
-  }
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Revisão do dia",
       exact: true,
     }),
   ).toBeVisible();

@@ -171,14 +171,13 @@ describe("PaginaDoBaralho", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Inglês" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Baralho")).toBeInTheDocument();
     expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Estudar este Baralho" }),
     ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
     expect(
-      screen.getByRole("link", { name: "← Voltar para Baralhos" }),
-    ).toHaveAttribute("href", "#/baralhos");
+      screen.queryByRole("link", { name: "← Voltar para Baralhos" }),
+    ).toBeNull();
   });
 
   it("sem Cartões, Estudar fica desabilitado com a explicação e o vazio oferece adicionar (FR-145, FR-153)", async () => {
@@ -256,9 +255,6 @@ describe("PaginaDoBaralho", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Baralho não encontrado.")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "← Voltar para Baralhos" }),
-    ).toHaveAttribute("href", "#/baralhos");
   });
 
   it("com o cliente indisponível, remover falha e o Vínculo confirmado permanece exibido (FR-044, FR-045, SC-012)", async () => {

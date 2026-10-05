@@ -140,7 +140,7 @@ describe("PaginaDaCentralDeEstudo", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Estudo" }),
     ).toBeTruthy();
-    expect(screen.getByText("Seu estudo")).toBeTruthy();
+    expect(screen.queryByText("Seu estudo")).toBeNull();
     expect(
       screen.getByRole("link", { name: "Agendar estudo" }).getAttribute("href"),
     ).toBe("#/agenda/nova");

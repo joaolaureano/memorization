@@ -522,11 +522,9 @@ describe("PaginaDeEstudo", () => {
         screen.getByRole("status", {
           name: "Situação do registro da Sessão",
         }),
-      ).toHaveTextContent(/Registrada no seu histórico/);
+      ).toHaveTextContent(/Sessão registrada no histórico/);
     });
-    expect(
-      screen.getByRole("link", { name: "Ver em Início" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ver em Início" })).toBeNull();
     expect(espiao).toHaveBeenCalledTimes(1);
     expect(espiao.mock.calls[0][0]).toEqual({
       id: expect.any(String),
@@ -602,11 +600,9 @@ describe("PaginaDeEstudo", () => {
         screen.getByRole("status", {
           name: "Situação do registro da Sessão",
         }),
-      ).toHaveTextContent(/Registrada no seu histórico/);
+      ).toHaveTextContent(/Sessão registrada no histórico/);
     });
-    expect(
-      screen.getByRole("link", { name: "Ver em Início" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ver em Início" })).toBeNull();
     expect(espiao).toHaveBeenCalledTimes(2);
     expect(espiao.mock.calls[1][0].id).toBe(espiao.mock.calls[0][0].id);
   });

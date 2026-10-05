@@ -398,8 +398,8 @@ async function irParaTela(
   const destino = pagina.getByRole("heading", { level: 1, name: titulo });
   const confirmacao = pagina.getByRole("dialog");
 
-  // Sair de uma Sessão ou Revisão já iniciada pede confirmação de descarte
-  // (FR-151): se a Revisão acabou de carregar quando a travessia a deixa, a
+  // Sair de uma Sessão já iniciada pede confirmação de descarte
+  // (FR-151): se a Sessão acabou de carregar quando a travessia a deixa, a
   // prova confirma a saída em vez de depender da ordem do carregamento.
   await expect(destino.or(confirmacao)).toBeVisible({
     timeout: ESPERA_DA_TELA,
@@ -529,13 +529,9 @@ async function visitarAsTelas(
     "Editar Cartão",
   );
 
-  // Preferências (FR-200, FR-212): algoritmo e limite de novos por dia.
+  // Preferências (FR-212): algoritmo de repetição espaçada.
   await irParaTela(pagina, "#/preferencias", "Perfil");
   await conferirTela(pagina, cenario, "Perfil");
-
-  // Revisão do dia (FR-198, FR-202): a tela lançada de Início.
-  await irParaTela(pagina, "#/revisao", "Revisão do dia");
-  await conferirTela(pagina, cenario, "Revisão do dia");
 
   // Estudo — configuração.
   await irParaTela(
@@ -571,7 +567,7 @@ async function visitarAsTelas(
   // não dispara "Sair sem registrar a Sessão?" (SC-076).
   await expect(
     pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
-  ).toContainText(/Registrada no seu histórico/, { timeout: ESPERA_DA_TELA });
+  ).toContainText(/Sessão registrada no histórico/, { timeout: ESPERA_DA_TELA });
 
   // Segunda Sessão, agora com um acerto e um erro: é ela que sustenta o
   // Registro com os dois grupos de Itens preenchidos (FR-176, FR-178).
@@ -608,7 +604,7 @@ async function visitarAsTelas(
 
   await expect(
     pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
-  ).toContainText(/Registrada no seu histórico/, { timeout: ESPERA_DA_TELA });
+  ).toContainText(/Sessão registrada no histórico/, { timeout: ESPERA_DA_TELA });
 
   // Início com registros: a saudação confirma o histórico recém-alimentado
   // (FR-164, FR-165, FR-171). O gráfico de sete dias e as últimas Sessões

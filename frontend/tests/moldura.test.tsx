@@ -31,7 +31,6 @@ const CASOS: ReadonlyArray<{
     rota: { nome: "registro", id: "s1" },
     ativo: "Estudo",
   },
-  { descricao: "Revisão do dia", rota: { nome: "revisao" }, ativo: "Início" },
   { descricao: "Central de Estudo", rota: { nome: "central-de-estudo" }, ativo: "Estudo" },
   { descricao: "Rotinas de estudo", rota: { nome: "agenda" }, ativo: "Estudo" },
   { descricao: "Agendar estudo", rota: { nome: "nova-rotina" }, ativo: "Estudo" },

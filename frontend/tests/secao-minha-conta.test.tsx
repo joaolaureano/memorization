@@ -113,7 +113,7 @@ describe("SecaoMinhaConta (FR-257, FR-258)", () => {
     );
 
     expect(await screen.findByText("Minha conta")).toBeInTheDocument();
-    expect(await screen.findByLabelText("Cartões novos por dia")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Algoritmo de repetição espaçada")).toBeInTheDocument();
   });
 
   it("Preferências sem os callbacks não mostram a seção", async () => {
@@ -123,7 +123,7 @@ describe("SecaoMinhaConta (FR-257, FR-258)", () => {
       </ProvedorDeProtecaoDeSaida>,
     );
 
-    expect(await screen.findByLabelText("Cartões novos por dia")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Algoritmo de repetição espaçada")).toBeInTheDocument();
     expect(screen.queryByText("Minha conta")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 
 /**
  * Campo de senha com o botão Mostrar/Ocultar (FR-142).
@@ -21,6 +21,9 @@ import type { Ref } from "react";
  * informados: um campo comum não carrega `aria-describedby`, `aria-invalid`
  * nem `required` vazios. A referência é encaminhada para o `<input>`, o alvo
  * que quem foca precisa alcançar.
+ *
+ * `children` entra no mesmo `.campo`, logo abaixo do campo: é onde ficam as
+ * regras, o contador e os avisos, com o mesmo estilo dos demais campos.
  */
 export function CampoDeSenha({
   id,
@@ -32,6 +35,7 @@ export function CampoDeSenha({
   invalido,
   referencia,
   obrigatorio,
+  children,
 }: {
   id: string;
   rotulo: string;
@@ -42,6 +46,7 @@ export function CampoDeSenha({
   invalido?: boolean;
   referencia?: Ref<HTMLInputElement>;
   obrigatorio?: boolean;
+  children?: ReactNode;
 }) {
   const [visivel, setVisivel] = useState(false);
 
@@ -75,6 +80,8 @@ export function CampoDeSenha({
           {visivel ? "Ocultar" : "Mostrar"}
         </button>
       </div>
+
+      {children}
     </div>
   );
 }

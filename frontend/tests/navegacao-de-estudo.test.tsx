@@ -4,14 +4,13 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Aplicacao } from "../src/ui/Aplicacao";
 import { interpretarRota } from "../src/ui/navegacao";
-import { CREDENCIAL_DE_PROVA, clienteDeProva, observarOperacao,
+import { CREDENCIAL_DE_PROVA, clienteDeProva,
   aguardarVerificacaoDoAcesso,
 } from "./apoio-de-prova";
 
@@ -290,7 +289,7 @@ describe("Aplicacao — rota de estudo", () => {
  * mesmo cliente com guarda de Credencial das demais páginas. O lançamento da
  * Revisão se dá pelo botão "Revisar" do Início (FR-198), que leva a `#/revisao`.
  */
-describe("Aplicacao — Revisão do dia e Preferências", () => {
+describe("Aplicacao — Preferências", () => {
   /** Entra na casca pela tela "Entrar", como as demais provas de navegação. */
   function entrar(): void {
     fireEvent.change(screen.getByLabelText("Nome de usuário"), {
@@ -301,67 +300,6 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
   }
-
-  it("apresenta a Revisão do dia em #/revisao e marca Início como corrente (FR-198, §7)", async () => {
-    const cliente = clienteDeProva();
-    let esperarCarga: (() => Promise<void>) | undefined;
-
-    navegarPara("#/revisao");
-    render(
-      <Aplicacao
-        criarCliente={(credencial) => {
-          const clienteDaSessao = cliente.comoUsuario(credencial);
-
-          // `criarCliente` também é chamado sem Credencial; só o cliente que
-          // carrega a Revisão interessa, e fica o **último** observado.
-          if (typeof clienteDaSessao.obterLoteDeRevisao === "function") {
-            esperarCarga = observarOperacao(
-              clienteDaSessao,
-              "obterLoteDeRevisao",
-            );
-          }
-
-          return clienteDaSessao;
-        }}
-      />,
-    );
-    await aguardarVerificacaoDoAcesso();
-
-    entrar();
-
-    // Sem prazo de relógio: cada `act` deixa o React aplicar o que está
-    // pendente — inclusive criar o cliente com Credencial e rodar o efeito que
-    // chama `obterLoteDeRevisao` —, e o laço termina quando a observação está
-    // armada.
-    for (let tentativa = 0; tentativa < 50; tentativa += 1) {
-      await act(async () => {});
-
-      if (esperarCarga !== undefined) {
-        break;
-      }
-    }
-
-    if (esperarCarga === undefined) {
-      throw new Error(
-        "a casca não criou o cliente da Revisão com `obterLoteDeRevisao`",
-      );
-    }
-
-    await esperarCarga();
-
-    // A carga terminou: o <h1> encontrado já é o do estado final, e o texto do
-    // estado de carregamento não está mais no documento — nenhuma troca de nó
-    // acontece entre esta asserção e a seguinte (FR-202).
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Revisão do dia" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Carregando a revisão…")).toBeNull();
-    // A Revisão do dia pertence ao Início (`destinoAtivo`, §7).
-    expect(screen.getByRole("link", { name: "Início" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-  });
 
   it("apresenta o Perfil em #/preferencias e marca Perfil como corrente (FR-212, §7)", async () => {
     const cliente = clienteDeProva();
@@ -385,38 +323,5 @@ describe("Aplicacao — Revisão do dia e Preferências", () => {
     expect(
       screen.getByRole("link", { name: "Perfil" }),
     ).toHaveAttribute("aria-current", "page");
-  });
-
-  it("o botão Revisar do Início leva a #/revisao (FR-198, FR-202)", async () => {
-    const cliente = clienteDeProva();
-    await cliente.criarCartao({ frente: "To walk", verso: "Caminhar" });
-
-    navegarPara("#/inicio");
-    render(
-      <Aplicacao
-        criarCliente={(credencial) => cliente.comoUsuario(credencial)}
-      />,
-    );
-    await aguardarVerificacaoDoAcesso();
-
-    entrar();
-
-    fireEvent.click(await screen.findByRole("link", { name: "Revisar" }));
-
-    // A PaginaDaRevisao troca de <h1> entre os estados (carregando → Sessão),
-    // e o elemento achado por `findByRole` sai do documento antes do expect;
-    // `waitFor` espera o estado estável (FR-202).
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", {
-          level: 1,
-          name: "Revisão do dia",
-        }),
-      ).toBeInTheDocument(),
-    );
-    // Com 1 Cartão novo, a Sessão fica pronta e o botão de Revelar aparece,
-    // confirmando o estado estável antes de conferir a rota.
-    await screen.findByRole("button", { name: "Revelar verso" });
-    expect(window.location.hash).toBe("#/revisao");
   });
 });

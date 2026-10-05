@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { limitesDoDia, nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../src/revisao/dia";
+import { nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../src/revisao/dia";
 
 /**
  * Módulo puro do dia (FR-204, FR-221).
@@ -13,45 +13,6 @@ import { limitesDoDia, nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../src/r
 
 /** Sexta-feira, 2 de outubro de 2026, às 15:00, no fuso local. */
 const AGORA = new Date(2026, 9, 2, 15, 0, 0, 0);
-
-/** Os componentes locais de um instante ISO, para afirmar fronteiras de dia. */
-function componentes(iso: string): number[] {
-  const data = new Date(iso);
-
-  return [
-    data.getFullYear(),
-    data.getMonth(),
-    data.getDate(),
-    data.getHours(),
-    data.getMinutes(),
-    data.getSeconds(),
-    data.getMilliseconds(),
-  ];
-}
-
-describe("limitesDoDia", () => {
-  it("no meio do dia, o início é a meia-noite local e o fim, a do dia seguinte (FR-204)", () => {
-    const { inicioDoDia, fimDoDia } = limitesDoDia(AGORA);
-
-    expect(componentes(inicioDoDia)).toEqual([2026, 9, 2, 0, 0, 0, 0]);
-    expect(componentes(fimDoDia)).toEqual([2026, 9, 3, 0, 0, 0, 0]);
-  });
-
-  it("perto da meia-noite, o dia ainda é o de hoje (FR-204)", () => {
-    const { inicioDoDia, fimDoDia } = limitesDoDia(
-      new Date(2026, 9, 2, 23, 59, 59, 999),
-    );
-
-    expect(componentes(inicioDoDia)).toEqual([2026, 9, 2, 0, 0, 0, 0]);
-    expect(componentes(fimDoDia)).toEqual([2026, 9, 3, 0, 0, 0, 0]);
-  });
-
-  it("o fim é exatamente o início do dia seguinte (FR-204)", () => {
-    const { fimDoDia } = limitesDoDia(AGORA);
-
-    expect(limitesDoDia(new Date(2026, 9, 3, 0, 0)).inicioDoDia).toBe(fimDoDia);
-  });
-});
 
 describe("rotuloDaPrevia", () => {
   it("conta zero dias para o próprio dia corrente (FR-221)", () => {

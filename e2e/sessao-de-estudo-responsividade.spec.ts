@@ -121,7 +121,18 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
   const inicial = await medir();
   await page.getByRole('button', { name: 'Revelar verso' }).click();
   expect(await medir()).toEqual(inicial);
-  const botoes = await page.locator('.botoes-de-resultado').boundingBox();
+  // A linha de Avaliações é medida no documento, como o cartão: a rolagem da
+  // página entre um Item e outro não é o que se prova aqui.
+  const medirBotoes = () =>
+    page.locator('.botoes-de-resultado').evaluate((elemento) => {
+      const caixa = elemento.getBoundingClientRect();
+      return {
+        width: caixa.width,
+        height: caixa.height,
+        top: caixa.top + window.scrollY,
+      };
+    });
+  const botoes = await medirBotoes();
 
   await expect(page.getByRole('heading', { name: 'Verso' })).toBeVisible();
   await expect(
@@ -138,6 +149,15 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
   ).toBeVisible();
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
+  // As quatro Avaliações ficam numa única linha, lado a lado.
+  const topos = await page
+    .locator('.botoes-de-resultado > .botao')
+    .evaluateAll((botoes) =>
+      botoes.map((botao) => Math.round(botao.getBoundingClientRect().top)),
+    );
+  expect(topos).toHaveLength(4);
+  expect(new Set(topos).size).toBe(1);
+
   await page.getByRole('button', { name: /^Bom/ }).click();
 
   await expect(
@@ -147,64 +167,6 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
   expect(await medir()).toEqual(inicial);
   await page.getByRole('button', { name: 'Revelar verso' }).click();
   expect(await medir()).toEqual(inicial);
-  expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(botoes);
+  expect(await medirBotoes()).toEqual(botoes);
 });
-}
-
-
-for (const largura of [360, 1440]) {
-  test(`Revisão do dia mantém cartão e ações fixos em ${largura}px`, async ({ page }) => {
-    await page.setViewportSize({ width: largura, height: 1000 });
-    const credencial = await prepararEntradaInterceptada(page);
-    const data = new Date(Date.now() + 86400000).toISOString();
-    await page.route(/\/revisao\/lote\?/, async rota => {
-      await rota.fulfill({ json: { itens: CARTOES.map(cartao => ({
-        cartao, previa: { errei: data, dificil: data, bom: data, facil: data },
-      })) } });
-    });
-    await page.goto(`${ENDERECO_DO_FRONTEND}/#/revisao`);
-    await entrarPelaUi(page, credencial);
-    const cartao = page.getByRole('article');
-    await expect(cartao).toHaveAccessibleName('Item 1 de 3');
-    const medir = () => cartao.evaluate(elemento => {
-      const { width, height, top } = elemento.getBoundingClientRect();
-      return { width, height, top: top + window.scrollY };
-    });
-    const inicial = await medir();
-    await page.getByRole('button', { name: 'Revelar verso' }).click();
-    const acoes = await page.locator('.botoes-de-resultado').boundingBox();
-    expect(await medir()).toEqual(inicial);
-    await page.getByRole('button', { name: /^Bom/ }).click();
-    await expect(cartao).toHaveAccessibleName('Item 2 de 3');
-    expect(await medir()).toEqual(inicial);
-    const frente = page.locator('.conteudo-do-cartao').first();
-    await frente.focus();
-    // Espera a rolagem terminar (o End anima) pelo evento `scrollend`, sem
-    // amostrar o tempo: só então o próximo Item prova que a posição é reposta,
-    // sem competir com uma animação ainda em curso sob carga.
-    // O ouvinte é registrado e confirmado antes da tecla; só então o End é
-    // enviado, para que o evento não possa chegar antes do ouvinte.
-    await frente.evaluate((el) => {
-      (el as HTMLElement & { __fimDaRolagem?: Promise<number> }).__fimDaRolagem =
-        new Promise<number>((resolver) => {
-          el.addEventListener('scrollend', () => resolver(el.scrollTop), {
-            once: true,
-          });
-        });
-    });
-    await page.keyboard.press('End');
-    expect(
-      await frente.evaluate(
-        (el) =>
-          (el as HTMLElement & { __fimDaRolagem?: Promise<number> })
-            .__fimDaRolagem,
-      ),
-    ).toBeGreaterThan(0);
-    await page.getByRole('button', { name: 'Revelar verso' }).click();
-    expect(await medir()).toEqual(inicial);
-    expect(await page.locator('.botoes-de-resultado').boundingBox()).toEqual(acoes);
-    await page.getByRole('button', { name: /^Bom/ }).click();
-    await expect(cartao).toHaveAccessibleName('Item 3 de 3');
-    await expect.poll(() => frente.evaluate(el => el.scrollTop)).toBe(0);
-  });
 }

@@ -189,7 +189,7 @@ describe("PaginaDeCadastro", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        `De ${LIMITE_MINIMO_DE_SENHA} a ${LIMITE_MAXIMO_DE_SENHA} caracteres, qualquer caractere, inclusive espaços.`,
+        `De ${LIMITE_MINIMO_DE_SENHA} a ${LIMITE_MAXIMO_DE_SENHA} caracteres: qualquer caractere, inclusive espaços.`,
       ),
     ).toBeInTheDocument();
     expect(

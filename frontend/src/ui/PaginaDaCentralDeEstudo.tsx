@@ -45,7 +45,6 @@ export function PaginaDaCentralDeEstudo({
     <div className="pagina pilha">
       <div className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Seu estudo</p>
           <h1>Estudo</h1>
           <p className="texto-secundario">
             Acompanhe a semana, seus resultados e as últimas Sessões.

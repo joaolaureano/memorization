@@ -42,7 +42,7 @@ import { useProtecaoDeSaida, type Protecao } from "./protecao-de-saida";
  * momento da tela.
  *
  * FR-141 a FR-143: a tela segue o vocabulário visual do protótipo (`acesso`,
- * `cartao`, `sobretitulo`, `botao--primario`) e os dois campos de Senha usam o
+ * `cartao`, `botao--primario`) e os dois campos de Senha usam o
  * `CampoDeSenha`, cada um com o seu próprio Mostrar/Ocultar (FR-142). Concluído
  * o Cadastro, a confirmação aparece com acesso a Entrar — nunca uma entrada
  * automática.
@@ -176,7 +176,6 @@ export function PaginaDeCadastro({
 
   return (
     <section className="acesso">
-      <p className="sobretitulo">Cadastro</p>
       <h1>Criar conta</h1>
 
       {usuarioCadastrado !== null && (
@@ -242,19 +241,20 @@ export function PaginaDeCadastro({
               : "regras-da-senha contador-da-senha aviso-da-senha"
           }
           referencia={campoDeSenha}
-        />
-        <p id="regras-da-senha" className="ajuda">
-          De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres,
-          qualquer caractere, inclusive espaços.
-        </p>
-        <p id="contador-da-senha" className="contador">
-          {senha.length} / {LIMITE_MAXIMO_DE_SENHA} caracteres
-        </p>
-        {avisoDaSenha !== null && (
-          <p id="aviso-da-senha" className="ajuda">
-            {avisoDaSenha}
+        >
+          <p id="regras-da-senha" className="ajuda">
+            De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres:
+            qualquer caractere, inclusive espaços.
           </p>
-        )}
+          <p id="contador-da-senha" className="contador">
+            {senha.length} / {LIMITE_MAXIMO_DE_SENHA} caracteres
+          </p>
+          {avisoDaSenha !== null && (
+            <p id="aviso-da-senha" className="ajuda">
+              {avisoDaSenha}
+            </p>
+          )}
+        </CampoDeSenha>
 
         <CampoDeSenha
           id="campo-confirmacao-da-senha"

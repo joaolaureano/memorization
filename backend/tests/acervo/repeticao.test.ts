@@ -37,16 +37,9 @@ const INSTANTE_INICIAL = new Date("2026-10-01T12:00:00.000Z");
 const UM_SEGUNDO_EM_MILISSEGUNDOS = 1000;
 const UM_DIA_EM_MILISSEGUNDOS = 24 * 60 * 60 * 1000;
 
-/** O dia de `INSTANTE_INICIAL` e o seguinte, como a tela os envia (D3). */
-const DIA_DO_ESTUDO = [
-  "2026-10-01T00:00:00.000Z",
-  "2026-10-02T00:00:00.000Z",
-] as const;
-
-const DIA_SEGUINTE = [
-  "2026-10-02T00:00:00.000Z",
-  "2026-10-03T00:00:00.000Z",
-] as const;
+/** O fim do dia de `INSTANTE_INICIAL` e o do dia seguinte. */
+const FIM_DO_DIA_DO_ESTUDO = "2026-10-02T00:00:00.000Z";
+const FIM_DO_DIA_SEGUINTE = "2026-10-03T00:00:00.000Z";
 
 /**
  * Algoritmo falso, **não registrado** em `ALGORITMOS`: empurra toda revisão
@@ -146,31 +139,13 @@ async function registrar(corpo: DadosDeRegistro): Promise<RegistroDeSessao> {
   return resultado.registro;
 }
 
-/** Salva o limite diário de Cartões novos mantendo o SM-2. */
-async function salvarLimite(limite: number): Promise<void> {
-  const resultado = await acervo.salvarPreferencias({
-    algoritmo: "sm2",
-    limiteDeNovosPorDia: limite,
-  });
+/** Os Cartões com revisão marcada antes de `fim`, lidos pela Porta. */
+async function idsVencidosAte(fim: string): Promise<string[]> {
+  const agendamentos = await aberto.armazenamento.listarAgendamentos(usuarioId);
 
-  if (!resultado.ok) {
-    throw new Error(`preferências recusadas inesperadamente: ${resultado.erro}`);
-  }
-}
-
-/** Os identificadores dos Cartões de um lote, na ordem em que vieram. */
-async function idsDoLote(
-  inicioDoDia: string,
-  fimDoDia: string,
-  de: Acervo = acervo,
-): Promise<string[]> {
-  const resultado = await de.obterLoteDeRevisao(inicioDoDia, fimDoDia);
-
-  if (!resultado.ok) {
-    throw new Error(`lote recusado inesperadamente: ${resultado.erro}`);
-  }
-
-  return resultado.itens.map((item) => item.cartao.id);
+  return agendamentos
+    .filter((agendamento) => agendamento.proximaRevisaoEm < fim)
+    .map((agendamento) => agendamento.cartaoId);
 }
 
 describe("registrarSessao — a Avaliação vira Agendamento", () => {
@@ -179,14 +154,16 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
 
     await registrar(corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")]));
 
-    // No dia do estudo o Cartão nem venceu nem é novo: o Agendamento nasceu.
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 0, total: 0 },
-    });
+    // No dia do estudo o Cartão ainda não venceu, mas o Agendamento nasceu.
+    expect(await idsVencidosAte(FIM_DO_DIA_DO_ESTUDO)).toEqual([]);
+    expect(
+      (await aberto.armazenamento.listarAgendamentos(usuarioId)).map(
+        (agendamento) => agendamento.cartaoId,
+      ),
+    ).toEqual([cartao.id]);
 
     // Um dia depois ele vence — era essa a data que o SM-2 calculou.
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
   });
 
   it("não reaplica as Avaliações quando o mesmo registro é reenviado (FR-210, SC-085)", async () => {
@@ -203,7 +180,7 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
     expect(reenviado.concluidaEm).toBe(INSTANTE_INICIAL.toISOString());
 
     // Se tivesse reaplicado, a revisão teria saltado de um dia para seis.
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
   });
 
   it("registra a Sessão de um Cartão que já não existe sem criar Agendamento (FR-165, FR-213)", async () => {
@@ -217,12 +194,9 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
 
     expect(registro.itens[0]?.cartaoId).toBe(cartao.id);
 
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 0, total: 0 },
-    });
-
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([]);
+    expect(
+      await aberto.armazenamento.listarAgendamentos(usuarioId),
+    ).toEqual([]);
   });
 
   it("deriva Baralho, nome e Baralho inexistente da Sessão de Revisão do dia (FR-196, FR-215)", async () => {
@@ -262,96 +236,6 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
       "acertou",
       "acertou",
     ]);
-  });
-});
-
-describe("obterResumoDaRevisao e obterLoteDeRevisao — o dia", () => {
-  it("limita os Cartões novos ao limite diário e mantém a ordem de criação (FR-199, FR-200, FR-201)", async () => {
-    const primeiro = await criarCartao("To walk", "Caminhar");
-    const segundo = await criarCartao("To run", "Correr");
-    const terceiro = await criarCartao("To sleep", "Dormir");
-
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 3, total: 3 },
-    });
-
-    expect(await idsDoLote(...DIA_DO_ESTUDO)).toEqual([
-      primeiro.id,
-      segundo.id,
-      terceiro.id,
-    ]);
-
-    await salvarLimite(1);
-
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 1, total: 1 },
-    });
-
-    expect(await idsDoLote(...DIA_DO_ESTUDO)).toEqual([primeiro.id]);
-
-    await salvarLimite(0);
-
-    expect(await acervo.obterResumoDaRevisao(...DIA_DO_ESTUDO)).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 0, total: 0 },
-    });
-
-    expect(await idsDoLote(...DIA_DO_ESTUDO)).toEqual([]);
-  });
-
-  it("põe os vencidos antes dos novos (FR-201)", async () => {
-    const primeiro = await criarCartao("To walk", "Caminhar");
-    const segundo = await criarCartao("To run", "Correr");
-
-    await registrar(
-      corpoComItens([
-        itemDe(primeiro.frente, primeiro.verso, primeiro.id, "bom"),
-      ]),
-    );
-
-    avancar(24 * 60 * 60);
-
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([
-      primeiro.id,
-      segundo.id,
-    ]);
-  });
-
-  it("recusa janelas inválidas como dados_invalidos (FR-204)", async () => {
-    const recusadas: [unknown, unknown][] = [
-      ["", ""],
-      ["ontem", "amanhã"],
-      ["2026-10-02T00:00:00.000Z", "2026-10-01T00:00:00.000Z"],
-      ["2026-10-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z"],
-      ["2026-10-01T00:00:00.000Z", "2026-10-02T03:00:00.000Z"],
-      [42, null],
-    ];
-
-    for (const [inicio, fim] of recusadas) {
-      expect(await acervo.obterResumoDaRevisao(inicio, fim)).toEqual({
-        ok: false,
-        erro: "dados_invalidos",
-      });
-
-      expect(await acervo.obterLoteDeRevisao(inicio, fim)).toEqual({
-        ok: false,
-        erro: "dados_invalidos",
-      });
-    }
-  });
-
-  it("aceita a jornada de um dia e o limite de 26 h (FR-204)", async () => {
-    expect(
-      await acervo.obterResumoDaRevisao(
-        "2026-10-01T00:00:00.000Z",
-        "2026-10-02T02:00:00.000Z",
-      ),
-    ).toEqual({
-      ok: true,
-      resumo: { vencidos: 0, novosHoje: 0, total: 0 },
-    });
   });
 });
 
@@ -412,7 +296,7 @@ describe("salvarPreferencias — troca de algoritmo", () => {
     await registrar(corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")]));
 
     // Com o SM-2, o Cartão vence no dia seguinte.
-    expect(await idsDoLote(...DIA_SEGUINTE)).toEqual([cartao.id]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
 
     const comFalso = criarAcervo(aberto.armazenamento, usuarioId, {
       algoritmos: new Map([["falso", ALGORITMO_FALSO]]),
@@ -432,16 +316,14 @@ describe("salvarPreferencias — troca de algoritmo", () => {
     expect(salvo.ok && salvo.preferencias.algoritmo).toBe("falso");
 
     // A reconstrução empurrou a revisão para daqui a 100 dias.
-    expect(await idsDoLote(...DIA_SEGUINTE, comFalso)).toEqual([]);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([]);
 
     const instanteDaRevisao =
       INSTANTE_INICIAL.getTime() + 100 * UM_DIA_EM_MILISSEGUNDOS;
 
     expect(
-      await idsDoLote(
-        new Date(instanteDaRevisao).toISOString(),
+      await idsVencidosAte(
         new Date(instanteDaRevisao + UM_DIA_EM_MILISSEGUNDOS).toISOString(),
-        comFalso,
       ),
     ).toEqual([cartao.id]);
   });

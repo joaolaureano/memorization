@@ -40,15 +40,11 @@ import {
  */
 const QUANTIDADE_DE_CARTOES = 21;
 
-/** Teto diário padrão de Cartões novos, o que `resumoDaRevisao` respeita (FR-199). */
-const LIMITE_PADRAO_DE_NOVOS_POR_DIA = 20;
 
 /** O que cada teste precisa do acervo da `013` já migrado e aberto pela Porta. */
 interface ContextoDoAcervoDaVersaoSeis {
   readonly armazenamento: ArmazenamentoDoAcervo;
   readonly dono: string;
-  readonly inicioDoDia: string;
-  readonly fimDoDia: string;
   readonly desde: string;
   readonly concluidaEm: string;
 }
@@ -157,12 +153,6 @@ async function comAcervoDaVersaoSeis(
     const concluidaEm = new Date(
       agora.getTime() - 60 * 60 * 1000,
     ).toISOString();
-    const inicioDoDia = new Date(
-      agora.getTime() - 2 * 60 * 60 * 1000,
-    ).toISOString();
-    const fimDoDia = new Date(
-      agora.getTime() + 2 * 60 * 60 * 1000,
-    ).toISOString();
     const desde = new Date(
       agora.getTime() - 24 * 60 * 60 * 1000,
     ).toISOString();
@@ -174,8 +164,6 @@ async function comAcervoDaVersaoSeis(
       await corpo({
         armazenamento: aberto.armazenamento,
         dono,
-        inicioDoDia,
-        fimDoDia,
         desde,
         concluidaEm,
       });
@@ -222,28 +210,13 @@ function criarAlgoritmoFalso(id: string): AlgoritmoEspiao {
 }
 
 describe("migração da 013 para a repetição espaçada — acervo antigo aberto pelo Acervo", () => {
-  it("trata todos os Cartões anteriores como novos, sem vencidos, respeitando o teto de 20 por dia (FR-214, FR-199)", async () => {
-    await comAcervoDaVersaoSeis(
-      async ({ armazenamento, dono, inicioDoDia, fimDoDia }) => {
-        const acervo = criarAcervo(armazenamento, dono);
-
-        const disponiveisHoje = Math.min(
-          QUANTIDADE_DE_CARTOES,
-          LIMITE_PADRAO_DE_NOVOS_POR_DIA,
-        );
-
-        expect(
-          await acervo.obterResumoDaRevisao(inicioDoDia, fimDoDia),
-        ).toEqual({
-          ok: true,
-          resumo: {
-            vencidos: 0,
-            novosHoje: disponiveisHoje,
-            total: disponiveisHoje,
-          },
-        });
-      },
-    );
+  it("trata todos os Cartões anteriores como novos, sem Agendamento (FR-214)", async () => {
+    await comAcervoDaVersaoSeis(async ({ armazenamento, dono }) => {
+      expect(await armazenamento.listarCartoes(dono)).toHaveLength(
+        QUANTIDADE_DE_CARTOES,
+      );
+      expect(await armazenamento.listarAgendamentos(dono)).toEqual([]);
+    });
   });
 
   it('preserva o Histórico anterior — Estatísticas iguais e Registro com origem "baralho" e Itens sem Avaliação (FR-197)', async () => {
@@ -326,7 +299,7 @@ describe("migração da 013 para a repetição espaçada — acervo antigo abert
 
   it("ignora os Itens sem Avaliação ao reconstruir os Agendamentos na troca de algoritmo (FR-213)", async () => {
     await comAcervoDaVersaoSeis(
-      async ({ armazenamento, dono, inicioDoDia, fimDoDia }) => {
+      async ({ armazenamento, dono }) => {
         const algoritmoFalso = criarAlgoritmoFalso("falso");
         const acervo = criarAcervo(armazenamento, dono, {
           algoritmos: new Map([[algoritmoFalso.id, algoritmoFalso]]),
@@ -334,14 +307,12 @@ describe("migração da 013 para a repetição espaçada — acervo antigo abert
 
         const salvo = await acervo.salvarPreferencias({
           algoritmo: algoritmoFalso.id,
-          limiteDeNovosPorDia: LIMITE_PADRAO_DE_NOVOS_POR_DIA,
         });
 
         expect(salvo).toEqual({
           ok: true,
           preferencias: {
             algoritmo: "falso",
-            limiteDeNovosPorDia: LIMITE_PADRAO_DE_NOVOS_POR_DIA,
             algoritmos: [{ id: "falso", rotulo: "Algoritmo falso" }],
           },
         });
@@ -350,21 +321,7 @@ describe("migração da 013 para a repetição espaçada — acervo antigo abert
         expect(algoritmoFalso.chamadas).toBe(0);
 
         /** Sem Agendamento novo, todos os Cartões continuam novos. */
-        const disponiveisHoje = Math.min(
-          QUANTIDADE_DE_CARTOES,
-          LIMITE_PADRAO_DE_NOVOS_POR_DIA,
-        );
-
-        expect(
-          await acervo.obterResumoDaRevisao(inicioDoDia, fimDoDia),
-        ).toEqual({
-          ok: true,
-          resumo: {
-            vencidos: 0,
-            novosHoje: disponiveisHoje,
-            total: disponiveisHoje,
-          },
-        });
+        expect(await armazenamento.listarAgendamentos(dono)).toEqual([]);
       },
     );
   });

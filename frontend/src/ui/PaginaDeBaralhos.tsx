@@ -78,7 +78,6 @@ export function PaginaDeBaralhos({
     <div className="pagina">
       <header className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Seu acervo</p>
           <h1>Baralhos</h1>
           <p className="texto-secundario">
             Escolha o que você quer memorizar hoje.

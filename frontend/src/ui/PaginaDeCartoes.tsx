@@ -206,7 +206,6 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     <div className="pagina">
       <header className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Seu acervo</p>
           <h1>Cartões</h1>
           <p className="texto-secundario">
             Perguntas e respostas para construir sua memória.

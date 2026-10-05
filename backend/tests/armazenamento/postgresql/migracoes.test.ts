@@ -1258,19 +1258,18 @@ describe("migração 7 — repetição espaçada", () => {
       expect(porDonoEVencimento?.definicao).toMatch(/usuario_id/);
       expect(porDonoEVencimento?.definicao).toMatch(/proxima_revisao_em/);
 
-      /** O `CHECK` de 0 a 999 duplica FR-200 como rede de segurança (D5). */
-      const dasPreferencias = await consultar<{ definicao: string }>(
-        `SELECT pg_get_constraintdef(oid) AS definicao
-           FROM pg_constraint
-          WHERE conrelid = 'preferencias'::regclass AND contype = 'c';`,
+      /**
+       * A migração 10 removeu o limite de Cartões novos por dia: as
+       * Preferências guardam só o algoritmo.
+       */
+      const colunasDasPreferencias = await consultar<{ nome: string }>(
+        `SELECT column_name AS nome
+           FROM information_schema.columns
+          WHERE table_name = 'preferencias';`,
       );
 
-      /**
-       * O PostgreSQL normaliza `BETWEEN 0 AND 999` para a forma explícita com
-       * `>=` e `<=`; as duas expressam a mesma regra de FR-200.
-       */
-      expect(dasPreferencias.map((r) => r.definicao).join(" ")).toMatch(
-        /limite_de_novos_por_dia >= 0\)? AND \(?limite_de_novos_por_dia <= 999/,
+      expect(colunasDasPreferencias.map((r) => r.nome)).not.toContain(
+        "limite_de_novos_por_dia",
       );
     });
   });
@@ -1323,12 +1322,6 @@ describe("migração 7 — repetição espaçada", () => {
       await expect(inserirItem(0, null)).resolves.toBeDefined();
       await expect(inserirItem(1, "bom")).resolves.toBeDefined();
 
-      await expect(
-        piscina.query(
-          "INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia) VALUES ($1, 'sm2', 1000);",
-          [dono],
-        ),
-      ).rejects.toThrow();
     } finally {
       await piscina.end();
     }

@@ -352,7 +352,7 @@ SELECT posicao, frente, verso, resultado,
  * sintetiza na leitura, sem gravar linha a priori (D5, FR-212).
  */
 const OBTER_PREFERENCIAS = `
-SELECT algoritmo, limite_de_novos_por_dia AS "limiteDeNovosPorDia"
+SELECT algoritmo
   FROM preferencias
  WHERE usuario_id = $1;
 `;
@@ -362,11 +362,10 @@ SELECT algoritmo, limite_de_novos_por_dia AS "limiteDeNovosPorDia"
  * atualizada (FR-212).
  */
 const SALVAR_PREFERENCIAS = `
-INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
-VALUES ($1, $2, $3)
+INSERT INTO preferencias (usuario_id, algoritmo)
+VALUES ($1, $2)
 ON CONFLICT (usuario_id) DO UPDATE
-   SET algoritmo               = EXCLUDED.algoritmo,
-       limite_de_novos_por_dia = EXCLUDED.limite_de_novos_por_dia;
+   SET algoritmo = EXCLUDED.algoritmo;
 `;
 
 /** Todos os Agendamentos do Usuário, sem ordem prometida (FR-187). */
@@ -760,7 +759,6 @@ type LinhaDeAgendamento = {
 /** Linha de `preferencias`; ausência de linha significa os padrões (D5). */
 type LinhaDePreferencias = {
   algoritmo: string;
-  limiteDeNovosPorDia: number;
 };
 
 /** Linha de Item com Avaliação, para o replay dos Agendamentos (FR-213). */
@@ -996,7 +994,6 @@ function agendamentoDaLinha(linha: LinhaDeAgendamento): Agendamento {
 function preferenciasDaLinha(linha: LinhaDePreferencias): Preferencias {
   return {
     algoritmo: linha.algoritmo,
-    limiteDeNovosPorDia: linha.limiteDeNovosPorDia,
   };
 }
 
@@ -1012,12 +1009,11 @@ function itemAvaliadoDaLinha(linha: LinhaDeItemAvaliado): ItemAvaliado {
 
 /**
  * As Preferências padrão da Porta (D5): a ausência de linha em `preferencias`
- * equivale a `algoritmo = "sm2"` e `limiteDeNovosPorDia = 20`, e a leitura as
+ * equivale a `algoritmo = "sm2"`, e a leitura o
  * sintetiza sem gravar linha a priori (FR-212).
  */
 const PREFERENCIAS_PADRAO: Preferencias = {
   algoritmo: "sm2",
-  limiteDeNovosPorDia: 20,
 };
 
 /**
@@ -1535,7 +1531,6 @@ export async function abrirArmazenamentoPostgresql(
         await piscina.query(SALVAR_PREFERENCIAS, [
           usuarioId,
           preferencias.algoritmo,
-          preferencias.limiteDeNovosPorDia,
         ]);
 
         return { ok: true, valor: preferencias };
@@ -1616,7 +1611,6 @@ export async function abrirArmazenamentoPostgresql(
           await cliente.query(SALVAR_PREFERENCIAS, [
             usuarioId,
             preferencias.algoritmo,
-            preferencias.limiteDeNovosPorDia,
           ]);
 
           await cliente.query(EXCLUIR_AGENDAMENTOS, [usuarioId]);

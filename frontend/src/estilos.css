@@ -1,6 +1,6 @@
 /* Vocabulário de classes
  * Estrutura:  moldura, marca, navegacao-principal, botao-de-saida, aplicacao
- * Blocos:     cabecalho-da-pagina, sobretitulo, texto-secundario, ajuda,
+ * Blocos:     cabecalho-da-pagina, texto-secundario, ajuda,
  *             pilha, grade
  * Cartões:    cartao, titulo-do-item, acoes, selo, estado-vazio
  * Botões:     botao, botao--primario, botao--secundario, botao--perigo,
@@ -226,14 +226,6 @@ summary:focus-visible {
   gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 28px;
-}
-
-.sobretitulo {
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .texto-secundario,
@@ -573,7 +565,7 @@ textarea[aria-invalid="true"] {
 .cartao-de-estudo {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 24px minmax(0, 1fr) 24px minmax(0, 1fr) 124px;
+  grid-template-rows: 24px minmax(0, 1fr) 24px minmax(0, 1fr) 64px;
   gap: 12px;
   height: 620px;
   padding: clamp(24px, 5vw, 56px);
@@ -611,14 +603,21 @@ textarea[aria-invalid="true"] {
   display: none;
 }
 
+/* As quatro Avaliações ficam numa única linha, lado a lado; Mostrar verso
+ * ocupa a mesma linha inteira, de modo que nada se move na Revelação. */
 .cartao-de-estudo > :is(.acoes, .botoes-de-resultado) {
   grid-row: 5;
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, 56px);
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: 64px;
+  gap: 8px;
   align-content: end;
+}
+
+.cartao-de-estudo > .botoes-de-resultado > .botao {
+  font-size: 14px;
+  line-height: 1.2;
 }
 
 .cartao-de-estudo .botao {
@@ -630,7 +629,6 @@ textarea[aria-invalid="true"] {
 
 .cartao-de-estudo > .acoes > .botao {
   grid-column: 1 / -1;
-  grid-row: 2;
 }
 
 .lado-do-cartao {
@@ -1306,10 +1304,6 @@ details summary {
   margin-bottom: 12px;
 }
 
-.agenda__cabecalho .sobretitulo {
-  margin: 0;
-}
-
 .agenda__links {
   display: flex;
   flex-wrap: wrap;
@@ -1321,10 +1315,6 @@ details summary {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 12px;
-}
-
-.agenda__hoje .sobretitulo {
-  margin: 0 0 4px;
 }
 
 .agenda__hoje h2 {

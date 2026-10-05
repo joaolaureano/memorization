@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
-import type { CartaoListado, ClienteDoAcervo } from "../acervo-cliente/cliente";
+import type { ClienteDoAcervo } from "../acervo-cliente/cliente";
 import {
   LIMITE_DE_CARACTERES_DE_CARTAO,
   ehCodigoDeErroDeCartao,
   type CodigoDeErroDeCartao,
 } from "../acervo-cliente/validacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
+import { irParaRota } from "./navegacao";
 import {
   useNavegarSemProtecao,
   useProtecaoDeSaida,
@@ -24,10 +25,9 @@ import {
  * (FR-053), mas quem recusa conteúdo continua sendo o `ClienteDoAcervo`, e a
  * mensagem exibida é exatamente a devolvida pela Interface (FR-046).
  *
- * Na edição, um `aviso` declara o alcance da alteração: em quantos Baralhos o
- * Cartão está e que a mudança vale em todos eles (FR-006, FR-146). Cartão
- * inexistente ou de outro Usuário não é encontrado — a página apresenta a
- * mensagem de não encontrado com um caminho de volta para Cartões (FR-156).
+ * Cartão inexistente ou de outro Usuário não é encontrado — a página
+ * apresenta a mensagem de não encontrado (FR-156). Cancelar volta para a
+ * página anterior, de onde quer que o formulário tenha sido aberto.
  *
  * A proteção de saída (FR-148, FR-154) vem de `protecao-de-saida`: com o
  * formulário sujo, sair exige confirmação; com um salvamento em andamento, a
@@ -83,7 +83,6 @@ export function PaginaDoFormularioDeCartao({
   const [carregando, setCarregando] = useState(emEdicao);
   const [naoEncontrado, setNaoEncontrado] = useState(false);
   const [falhaDeCarga, setFalhaDeCarga] = useState<string | null>(null);
-  const [cartao, setCartao] = useState<CartaoListado | null>(null);
 
   const [frente, setFrente] = useState("");
   const [verso, setVerso] = useState("");
@@ -143,7 +142,6 @@ export function PaginaDoFormularioDeCartao({
         return;
       }
 
-      setCartao(encontrado);
       setFrente(encontrado.frente);
       setVerso(encontrado.verso);
       setReferencia({
@@ -218,9 +216,6 @@ export function PaginaDoFormularioDeCartao({
         <p className="aviso aviso--erro" role="alert">
           O Cartão não existe ou não pertence a você.
         </p>
-        <p className="voltar">
-          <a href="#/cartoes">← Voltar para Cartões</a>
-        </p>
       </div>
     );
   }
@@ -234,26 +229,13 @@ export function PaginaDoFormularioDeCartao({
           mensagem={falhaDeCarga}
           aoTentarNovamente={() => window.location.reload()}
         />
-        <p className="voltar">
-          <a href="#/cartoes">← Voltar para Cartões</a>
-        </p>
       </div>
     );
   }
 
   return (
     <div className="pagina">
-      <p className="voltar">
-        <a href="#/cartoes">← Voltar para Cartões</a>
-      </p>
-
       <h1>{emEdicao ? "Editar Cartão" : "Criar cartão"}</h1>
-
-      {emEdicao && cartao !== null && (
-        <aside className="aviso">
-          {descricaoDeAlcanceDeEdicao(cartao.baralhos)}
-        </aside>
-      )}
 
       <div className="cartao">
         <form className="formulario" onSubmit={salvar}>
@@ -329,9 +311,13 @@ export function PaginaDoFormularioDeCartao({
             >
               {salvando ? "Salvando…" : "Salvar"}
             </button>
-            <a className="botao botao--secundario" href="#/cartoes">
+            <button
+              className="botao botao--secundario"
+              type="button"
+              onClick={voltarParaAPaginaAnterior}
+            >
               Cancelar
-            </a>
+            </button>
           </div>
         </form>
       </div>
@@ -365,23 +351,16 @@ function avisoDeLimite(comprimento: number): string | null {
 }
 
 /**
- * Informa o alcance da edição (FR-006, FR-146): em quantos Baralhos o Cartão
- * está e que a alteração vale em todos eles. O texto varia entre singular,
- * plural e nenhum vínculo, e a mudança de nome de qualquer Baralho não
- * interfere neste aviso.
+ * Cancelar volta para a página de onde o formulário foi aberto (Cartões ou um
+ * Baralho). Sem página anterior no histórico — o formulário aberto direto pela
+ * URL —, a volta é para Cartões. A volta passa por `hashchange`, e por isso a
+ * proteção de saída continua valendo com o formulário sujo.
  */
-function descricaoDeAlcanceDeEdicao(baralhos: CartaoListado["baralhos"]): string {
-  const quantidade = baralhos.length;
-
-  if (quantidade === 0) {
-    return "Este Cartão não está vinculado a nenhum Baralho.";
+function voltarParaAPaginaAnterior(): void {
+  if (window.history.length > 1) {
+    window.history.back();
+    return;
   }
 
-  const nomes = baralhos.map((baralho) => baralho.nome).join(", ");
-
-  if (quantidade === 1) {
-    return `Este Cartão está vinculado a 1 Baralho: ${nomes}. A alteração vale nesse Baralho.`;
-  }
-
-  return `Este Cartão está vinculado a ${quantidade} Baralhos: ${nomes}. A alteração vale em todos eles.`;
+  irParaRota("#/cartoes");
 }

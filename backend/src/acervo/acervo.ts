@@ -21,12 +21,7 @@ import type {
   Avaliacao,
   EstadoDoAgendamento,
 } from "../repeticao/algoritmo.ts";
-import {
-  aplicarAvaliacoes,
-  loteDeRevisao,
-  reconstruir,
-  resumoDaRevisao,
-} from "../repeticao/revisao.ts";
+import { aplicarAvaliacoes, reconstruir } from "../repeticao/revisao.ts";
 import {
   validarFrente,
   validarNomeDeBaralho,
@@ -362,26 +357,6 @@ export type ResultadoDeObterRegistro =
   | { ok: true; registro: RegistroDeSessao; baralhoExiste: boolean }
   | { ok: false; erro: "nao_encontrado" | "indisponivel" };
 
-/**
- * Resumo da Revisão do dia exibido em Início (FR-198, FR-199): quantos Cartões
- * vencidos e quantos Cartões novos ainda cabem no limite diário, mais o total
- * que o botão "Revisar" mostra.
- */
-export interface ResumoDaRevisao {
-  vencidos: number;
-  novosHoje: number;
-  total: number;
-}
-
-/**
- * Item do lote da Revisão do dia: o Cartão a estudar e a prévia da próxima
- * revisão para cada um dos quatro níveis de Avaliação (FR-221).
- */
-export interface ItemDoLoteDeRevisao {
-  cartao: Cartao;
-  previa: Record<Avaliacao, string>;
-}
-
 /** Algoritmo oferecido na tela de Preferências: identificador e rótulo (FR-212). */
 export interface OpcaoDeAlgoritmo {
   id: string;
@@ -390,32 +365,13 @@ export interface OpcaoDeAlgoritmo {
 
 /**
  * Preferências de repetição do Usuário como a Interface as devolve: o
- * algoritmo e o limite escolhidos, mais a lista de algoritmos disponíveis para
- * a tela de Preferências (FR-212).
+ * algoritmo escolhido, mais a lista de algoritmos disponíveis para a tela de
+ * Preferências (FR-212).
  */
 export interface PreferenciasDoUsuario {
   algoritmo: string;
-  limiteDeNovosPorDia: number;
   algoritmos: OpcaoDeAlgoritmo[];
 }
-
-/**
- * Resultado de `obterResumoDaRevisao`. `dados_invalidos` quando
- * `inicioDoDia` e `fimDoDia` não formam a janela do dia (ISO-8601, início antes
- * do fim, até 26 h); `indisponivel` quando o armazenamento falhou, sem
- * apresentar uma contagem falsa (FR-198).
- */
-export type ResultadoDoResumoDaRevisao =
-  | { ok: true; resumo: ResumoDaRevisao }
-  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
-
-/**
- * Resultado de `obterLoteDeRevisao`: os Itens do dia com a prévia de cada um,
- * ou a recusa pela janela inválida ou pela falha do armazenamento (FR-201).
- */
-export type ResultadoDoLoteDeRevisao =
-  | { ok: true; itens: ItemDoLoteDeRevisao[] }
-  | { ok: false; erro: "dados_invalidos" | "indisponivel" };
 
 /**
  * Resultado de `obterPrevias`: a prévia por Cartão informado que ainda existe
@@ -604,33 +560,6 @@ export interface Acervo {
   obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
 
   /**
-   * Devolve o Resumo da Revisão do dia (FR-198, FR-199): quantos Agendamentos
-   * estão vencidos até `fimDoDia` e quantos Cartões novos ainda cabem no limite
-   * diário das Preferências do Usuário.
-   *
-   * `inicioDoDia` e `fimDoDia` são instantes ISO-8601 do **navegador** (D3):
-   * precisam ser parseáveis, com o início antes do fim e uma janela de até
-   * 26 h — fora disso, `dados_invalidos`.
-   */
-  obterResumoDaRevisao(
-    inicioDoDia: unknown,
-    fimDoDia: unknown,
-  ): Promise<ResultadoDoResumoDaRevisao>;
-
-  /**
-   * Devolve o lote da Revisão do dia (FR-201, FR-203): os vencidos primeiro,
-   * do mais antigo ao mais novo, depois os novos, cada Cartão no máximo uma vez
-   * e até 20 Itens. Cada Item traz também a prévia da próxima revisão para os
-   * quatro níveis de Avaliação, para os botões da tela (FR-221).
-   *
-   * A janela é validada como em `obterResumoDaRevisao`.
-   */
-  obterLoteDeRevisao(
-    inicioDoDia: unknown,
-    fimDoDia: unknown,
-  ): Promise<ResultadoDoLoteDeRevisao>;
-
-  /**
    * Devolve, para cada Cartão informado que pertence ao Usuário, a prévia da
    * próxima revisão nos quatro níveis de Avaliação (FR-221) — o insumo dos
    * botões do estudo livre.
@@ -748,14 +677,8 @@ const LIMITE_DE_ITENS_REGISTRADOS = 1000;
 /** Rótulo do Baralho derivado na Sessão de Revisão do dia (D5, FR-196). */
 const NOME_DA_REVISAO_DO_DIA = "Revisão do dia";
 
-/** Folga máxima entre os limites do dia informados, em horas (D3, FR-204). */
-const HORAS_MAXIMAS_NA_JANELA_DO_DIA = 26;
-
 /** Quantidade máxima de identificadores numa consulta de prévias (FR-221). */
 const LIMITE_DE_CARTOES_PARA_PREVIA = 200;
-
-/** Maior valor aceito para o limite de Cartões novos por dia (FR-200). */
-const LIMITE_MAXIMO_DE_NOVOS_POR_DIA = 999;
 
 /** Quantas Sessões concluídas Início mostra (FR-169). */
 const LIMITE_DE_SESSOES_RECENTES = 5;
@@ -1008,49 +931,10 @@ function interpretarCartaoIds(valor: unknown): string[] | null {
 }
 
 /**
- * Interpreta os limites do dia da Revisão.
- *
- * Devolve `null` quando algum dos dois não é um instante ISO-8601 completo
- * parseável, quando o fim não é posterior ao início ou quando a janela passa
- * de 26 h — o dia local mais a folga que o fuso do navegador pode impor
- * (D3, FR-204).
- */
-function interpretarJanelaDaRevisao(
-  inicioDoDia: unknown,
-  fimDoDia: unknown,
-): { inicio: Date; fim: Date } | null {
-  if (typeof inicioDoDia !== "string" || !INSTANTE_ISO_8601.test(inicioDoDia)) {
-    return null;
-  }
-
-  if (typeof fimDoDia !== "string" || !INSTANTE_ISO_8601.test(fimDoDia)) {
-    return null;
-  }
-
-  const inicio = new Date(inicioDoDia);
-  const fim = new Date(fimDoDia);
-
-  if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) {
-    return null;
-  }
-
-  const duracao = fim.getTime() - inicio.getTime();
-  const duracaoMaxima =
-    HORAS_MAXIMAS_NA_JANELA_DO_DIA * 60 * 60 * 1000;
-
-  if (duracao <= 0 || duracao > duracaoMaxima) {
-    return null;
-  }
-
-  return { inicio, fim };
-}
-
-/**
  * Interpreta o corpo cru de `salvarPreferencias`.
  *
- * Devolve `null` quando o `algoritmo` não está no registro disponível ou quando
- * `limiteDeNovosPorDia` não é inteiro de 0 a 999 — sendo **0** o "não
- * introduzir Cartões novos" (FR-200, FR-212).
+ * Devolve `null` quando o `algoritmo` não está no registro disponível
+ * (FR-212).
  */
 function interpretarPreferencias(
   valor: unknown,
@@ -1060,22 +944,13 @@ function interpretarPreferencias(
     return null;
   }
 
-  const { algoritmo, limiteDeNovosPorDia } = valor;
+  const { algoritmo } = valor;
 
   if (typeof algoritmo !== "string" || !algoritmos.has(algoritmo)) {
     return null;
   }
 
-  if (
-    typeof limiteDeNovosPorDia !== "number" ||
-    !Number.isInteger(limiteDeNovosPorDia) ||
-    limiteDeNovosPorDia < 0 ||
-    limiteDeNovosPorDia > LIMITE_MAXIMO_DE_NOVOS_POR_DIA
-  ) {
-    return null;
-  }
-
-  return { algoritmo, limiteDeNovosPorDia };
+  return { algoritmo };
 }
 
 /**
@@ -1664,75 +1539,6 @@ export function criarAcervo(
       };
     },
 
-    async obterResumoDaRevisao(inicioDoDia, fimDoDia) {
-      const janela = interpretarJanelaDaRevisao(inicioDoDia, fimDoDia);
-
-      if (janela === null) {
-        return { ok: false, ...DADOS_INVALIDOS };
-      }
-
-      const [cartoes, agendamentos, preferencias] = await Promise.all([
-        armazenamento.listarCartoes(usuarioId),
-        armazenamento.listarAgendamentos(usuarioId),
-        armazenamento.obterPreferencias(usuarioId),
-      ]);
-
-      const contagem = resumoDaRevisao(
-        cartoes,
-        agendamentos,
-        preferencias,
-        janela.inicio,
-        janela.fim,
-      );
-
-      return {
-        ok: true,
-        resumo: {
-          vencidos: contagem.vencidos,
-          novosHoje: contagem.novosHoje,
-          total: contagem.vencidos + contagem.novosHoje,
-        },
-      };
-    },
-
-    async obterLoteDeRevisao(inicioDoDia, fimDoDia) {
-      const janela = interpretarJanelaDaRevisao(inicioDoDia, fimDoDia);
-
-      if (janela === null) {
-        return { ok: false, ...DADOS_INVALIDOS };
-      }
-
-      const [cartoes, agendamentos, preferencias] = await Promise.all([
-        armazenamento.listarCartoes(usuarioId),
-        armazenamento.listarAgendamentos(usuarioId),
-        armazenamento.obterPreferencias(usuarioId),
-      ]);
-
-      const algoritmo = resolverAlgoritmo(preferencias.algoritmo);
-      const porCartao = new Map(
-        agendamentos.map((agendamento) => [agendamento.cartaoId, agendamento]),
-      );
-      const agora = relogio();
-
-      return {
-        ok: true,
-        itens: loteDeRevisao(
-          cartoes,
-          agendamentos,
-          preferencias,
-          janela.inicio,
-          janela.fim,
-        ).map((cartao) => ({
-          cartao,
-          previa: previa(
-            algoritmo,
-            estadoDoAgendamento(porCartao.get(cartao.id) ?? null),
-            agora,
-          ),
-        })),
-      };
-    },
-
     async obterPrevias(cartaoIds) {
       const ids = interpretarCartaoIds(cartaoIds);
 
@@ -1782,7 +1588,6 @@ export function criarAcervo(
         ok: true,
         preferencias: {
           algoritmo: preferencias.algoritmo,
-          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
           algoritmos: opcoesDeAlgoritmo(),
         },
       };
@@ -1838,7 +1643,6 @@ export function criarAcervo(
         ok: true,
         preferencias: {
           algoritmo: preferencias.algoritmo,
-          limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
           algoritmos: opcoesDeAlgoritmo(),
         },
       };

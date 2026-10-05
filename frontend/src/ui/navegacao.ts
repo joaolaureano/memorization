@@ -43,7 +43,6 @@ export type Rota =
   | { nome: "adicionar-cartoes"; id: string }
   | { nome: "estudo"; id: string }
   | { nome: "cadastro" }
-  | { nome: "revisao" }
   | { nome: "preferencias" }
   | { nome: "agenda" }
   | { nome: "nova-rotina" }
@@ -124,12 +123,8 @@ function interpretarCaminho(hash: string): Rota {
           return { nome: "cadastro" };
         }
 
-        // A Revisão do dia (FR-198) e as Preferências (FR-212) são destinos de
-        // primeiro nível, como o Início, os Baralhos e os Cartões.
-        if (primeiro === "revisao") {
-          return { nome: "revisao" };
-        }
-
+        // As Preferências (FR-212) são um destino de primeiro nível, como o
+        // Início, os Baralhos e os Cartões.
         if (primeiro === "preferencias") {
           return { nome: "preferencias" };
         }
@@ -247,9 +242,6 @@ export function hashDaRota(rota: Rota): string {
     case "cadastro":
       return "#/criar-conta";
 
-    case "revisao":
-      return "#/revisao";
-
     case "preferencias":
       return "#/preferencias";
 
@@ -297,8 +289,7 @@ export function hashDaRota(rota: Rota): string {
 /**
  * Qual destino da moldura a rota ativa: Início, Estudo, Cartões, Baralhos,
  * Preferências, ou nenhum quando não há moldura de navegação (Entrar e Criar
- * conta). A Revisão do dia pertence ao Início, que é quem a apresenta
- * (FR-168, FR-198). A área Estudo, o Registro de uma Sessão, as Rotinas de
+ * conta). A área Estudo, o Registro de uma Sessão, as Rotinas de
  * estudo e a Sessão autorizada de um Compromisso pertencem a Estudo, que é
  * quem os apresenta (FR-307, FR-323). Concentrar essa decisão aqui evita que
  * o cabeçalho compare strings soltas para saber o que sublinhar (FR-139,
@@ -309,7 +300,6 @@ export function destinoAtivo(
 ): "inicio" | "estudo" | "baralhos" | "cartoes" | "preferencias" | null {
   switch (rota.nome) {
     case "inicio":
-    case "revisao":
       return "inicio";
 
     case "central-de-estudo":

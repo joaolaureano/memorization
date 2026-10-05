@@ -20,7 +20,6 @@ import {
   removerPastaTemporaria,
   vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
-  INSTANTE_DE_TESTE,
   fixarRelogioDoContexto,
 } from "./servidores-locais";
 import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
@@ -33,15 +32,14 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // (node + SQLite em arquivo) e o frontend real (Vite dev) são iniciados como
 // processos filhos do próprio teste, em portas livres e com um arquivo SQLite
 // temporário exclusivo. Cartões, Baralhos e Vínculos são criados direto pela
-// API; as Sessões — livre e Revisão do dia — são percorridas no Chromium pela
-// tela real, e os Agendamentos resultantes são observados no bloco de revisão
-// de Início, que é a face visível do estado de Agendamento (FR-198, FR-199).
+// API; a Sessão de estudo por Baralho é percorrida no Chromium pela tela real,
+// e o Agendamento resultante é observado pela prévia que a API devolve
+// (`POST /previas`, FR-221).
 //
-// Os cenários cobrem: (1) a Revisão do dia reúne os Cartões novos na ordem de
-// criação e o Resumo conta por nível; (2) o estudo livre por Baralho também
-// alimenta o Agendamento; (3) os números são isolados por Usuário; (4) o
-// atalho de teclado avalia o nível; (5) o bloco de revisão de Início aparece
-// com leituras agregadas e em número fixo numa base grande (SC-087).
+// Os cenários cobrem: (2) o estudo livre por Baralho alimenta o Agendamento;
+// (4) o atalho de teclado avalia o nível; (5) Início monta com leituras
+// agregadas e em número fixo numa base grande (SC-087). A Revisão do dia saiu
+// da aplicação, e com ela os cenários (1) e (3), que a percorriam.
 
 test.setTimeout(240_000);
 
@@ -51,7 +49,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 const NOME_DO_BARALHO = "Inglês";
-/** Um Baralho canônico: três Cartões, para uma Revisão do dia de três Itens. */
+/** Um Baralho canônico de três Cartões. */
 const CARTOES = [
   { frente: "Frente 1", verso: "Verso 1" },
   { frente: "Frente 2", verso: "Verso 2" },
@@ -176,50 +174,35 @@ async function prepararBaralho(
 
 // --- Auxiliares da API ------------------------------------------------------
 
-/** Os limites do dia local do próprio processo do teste (FR-204). */
-function limitesDoDiaLocal(agora: Date): {
-  inicioDoDia: string;
-  fimDoDia: string;
-} {
-  const inicio = new Date(agora);
-
-  inicio.setHours(0, 0, 0, 0);
-
-  const fim = new Date(inicio);
-
-  fim.setDate(fim.getDate() + 1);
-
-  return { inicioDoDia: inicio.toISOString(), fimDoDia: fim.toISOString() };
-}
-
-interface ResumoDaRevisao {
-  vencidos: number;
-  novosHoje: number;
-  total: number;
-}
-
-/** Lê o resumo da Revisão do dia direto da API real (FR-198, FR-199). */
-async function obterResumoDaRevisaoPelaApi(
+/** A prévia de cada Avaliação de um Cartão, lida direto da API real (FR-221). */
+async function obterPreviaPelaApi(
   enderecoDaApi: string,
   credencial: CredencialDeProva,
-): Promise<ResumoDaRevisao> {
-  const { inicioDoDia, fimDoDia } = limitesDoDiaLocal(new Date(INSTANTE_DE_TESTE));
-
-  const resposta = await fetch(
-    `${enderecoDaApi}/revisao?inicioDoDia=${encodeURIComponent(inicioDoDia)}&fimDoDia=${encodeURIComponent(fimDoDia)}`,
-    { headers: cabecalhoDeCredencial(credencial) },
-  );
+  cartaoId: string,
+): Promise<Record<Avaliacao, string>> {
+  const resposta = await fetch(`${enderecoDaApi}/previas`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...cabecalhoDeCredencial(credencial),
+    },
+    body: JSON.stringify({ cartaoIds: [cartaoId] }),
+  });
 
   if (!resposta.ok) {
-    throw new Error(`GET /revisao respondeu ${resposta.status}`);
+    throw new Error(`POST /previas respondeu ${resposta.status}`);
   }
 
-  return (await resposta.json()) as ResumoDaRevisao;
+  const corpo = (await resposta.json()) as {
+    previas: Record<string, Record<Avaliacao, string>>;
+  };
+
+  return corpo.previas[cartaoId];
 }
 
 interface DadosDeRegistroDeProva {
   id: string;
-  origem: "baralho" | "revisao";
+  origem: "baralho";
   baralhoId: string;
   nomeDoBaralho: string;
   itens: {
@@ -252,18 +235,6 @@ async function registrarSessaoPelaApi(
 }
 
 // --- Auxiliares de tela -----------------------------------------------------
-
-/** Navega para Início pela navegação principal e espera a saudação. */
-async function irParaInicio(page: Page, nomeDeUsuario: string): Promise<void> {
-  await page
-    .getByRole("navigation", { name: "Principal" })
-    .getByRole("link", { name: "Início" })
-    .click();
-
-  await expect(
-    page.getByRole("heading", { level: 1, name: `Olá, ${nomeDeUsuario}` }),
-  ).toBeVisible();
-}
 
 /** Abre a tela de estudo de um Baralho e Entra se necessário. */
 async function abrirEstudoDoBaralho(
@@ -333,42 +304,6 @@ async function conferirContagensPorNivel(
       new RegExp(`${nivel}\\D{0,12}${quantidade}(?!\\d)`),
     );
   }
-}
-
-/**
- * O bloco de revisão de Início (FR-198, FR-202, FR-331), com os textos que a
- * tela usa: "Nada para revisar." sem nada e "N Cartões para revisar" com o
- * total elegível (vencidos mais os novos que cabem no limite do dia).
- */
-function blocoDeVencidos(page: Page) {
-  return page.getByText(/Nada para revisar\.|\d+ Cart(?:ão|ões) para revisar/);
-}
-
-/**
- * O total elegível de Início (FR-199, FR-331), com o texto exato que a tela
- * usa: "Nada para revisar.", "1 Cartão para revisar" ou "N Cartões para
- * revisar". Os novos entram na conta, sem aviso próprio.
- */
-function avisoDeNovos(page: Page, quantidade: number) {
-  if (quantidade === 0) {
-    return page.getByText("Nada para revisar.", { exact: true });
-  }
-
-  if (quantidade === 1) {
-    return page.getByText("1 Cartão para revisar", { exact: true });
-  }
-
-  return page.getByText(`${quantidade} Cartões para revisar`, { exact: true });
-}
-
-/**
- * O controle "Revisar" de Início (FR-202): com algo a revisar é um link para
- * #/revisao; sem nada, um botão desabilitado, que não leva a lugar algum.
- */
-function controleDeRevisar(page: Page) {
-  return page
-    .getByRole("link", { name: "Revisar", exact: true })
-    .or(page.getByRole("button", { name: "Revisar", exact: true }));
 }
 
 // --- Semeio da base de desempenho (SC-087) ----------------------------------
@@ -468,115 +403,9 @@ async function semearAcervo(
   );
 }
 
-// --- Cenário 1: a Revisão do dia reúne os Cartões novos ---------------------
-
-test("Revisão do dia reúne os Cartões novos na ordem de criação e o Resumo conta por nível (FR-198, FR-199, FR-201, FR-202, FR-210, FR-215, FR-221, SC-080, SC-089)", async ({ page, browserName }) => {
-  expect(browserName).toBe("chromium");
-
-  const ambiente = await subirAmbiente();
-
-  try {
-    const credencial = await criarUsuarioDeProva(
-      ambiente.enderecoDaApi,
-      "usuario.revisao",
-    );
-    await prepararBaralho(ambiente, credencial, NOME_DO_BARALHO, CARTOES);
-
-    await page.goto(`${ambiente.enderecoDoFrontend}/#/inicio`);
-    await entrarSeNecessario(page, credencial);
-
-    // Três Cartões novos e nenhum vencido (FR-198, FR-199).
-    await expect(blocoDeVencidos(page)).toBeVisible();
-    await expect(avisoDeNovos(page, 3)).toBeVisible();
-
-    expect(
-      await obterResumoDaRevisaoPelaApi(ambiente.enderecoDaApi, credencial),
-    ).toEqual({ vencidos: 0, novosHoje: 3, total: 3 });
-
-    // "Revisar" lança a Revisão do dia com os novos na ordem de criação
-    // (FR-201, FR-202, SC-089): com algo a revisar, é um link para #/revisao.
-    await controleDeRevisar(page).click();
-    // O texto vive no conteúdo principal; restringir ao `main` evita casar
-    // também com a linha do Resumo que repete o nome da Sessão.
-    await expect(
-      page
-        .getByRole("main")
-        .getByText("Revisão do dia", { exact: false })
-        .first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("article", { name: "Item 1 de 3" }),
-    ).toBeVisible();
-
-    const conteudos = page.locator(".cartao-de-estudo .conteudo-do-cartao");
-    const avaliacoesDaSessao: Avaliacao[] = ["errei", "bom", "facil"];
-
-    for (let indice = 0; indice < CARTOES.length; indice += 1) {
-      await expect(
-        page.getByRole("article", {
-          name: `Item ${indice + 1} de ${CARTOES.length}`,
-        }),
-      ).toBeVisible();
-
-      const frente = (await conteudos.first().textContent())?.trim();
-
-      expect(frente, "a Revisão do dia segue a ordem de criação").toBe(
-        CARTOES[indice].frente,
-      );
-
-      await revelarVerso(page);
-      await conferirPreviasDeUmDia(page);
-      await avaliar(page, avaliacoesDaSessao[indice]);
-    }
-
-    // O Resumo nomeia "Revisão do dia" e conta por nível (FR-215, FR-216).
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByRole("main")
-        .getByText("Revisão do dia", { exact: false })
-        .first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Placar da Sessão" }),
-    ).toContainText("67%");
-    await expect(page.getByText("2 de 3 Cartões")).toBeVisible();
-    await conferirContagensPorNivel(page, { Errei: 1, Bom: 1, Fácil: 1 });
-    await expect(
-      page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
-
-    // De volta a Início, os Cartões estudados deixaram de ser novos
-    // (FR-205, FR-206, SC-080).
-    await page
-      .getByRole("link", { name: "Voltar a Início", exact: true })
-      .or(page.getByRole("button", { name: "Voltar a Início", exact: true }))
-      .click();
-    await expect(
-      page.getByRole("heading", {
-        level: 1,
-        name: `Olá, ${credencial.nomeDeUsuario}`,
-      }),
-    ).toBeVisible();
-    await expect(blocoDeVencidos(page)).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Nada para revisar." }),
-    ).toBeVisible();
-    await expect(controleDeRevisar(page)).toBeDisabled();
-
-    expect(
-      await obterResumoDaRevisaoPelaApi(ambiente.enderecoDaApi, credencial),
-    ).toEqual({ vencidos: 0, novosHoje: 0, total: 0 });
-  } finally {
-    await derrubarAmbiente(ambiente);
-  }
-});
-
 // --- Cenário 2: o estudo livre também alimenta o Agendamento ----------------
 
-test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos do dia (FR-192, FR-193, FR-194, FR-205, FR-206, SC-080)", async ({ page, browserName }) => {
+test("Estudo livre por Baralho avalia com os quatro níveis e agenda o Cartão (FR-192, FR-193, FR-194, FR-205, FR-206, SC-080)", async ({ page, browserName }) => {
   expect(browserName).toBe("chromium");
 
   const ambiente = await subirAmbiente();
@@ -590,11 +419,14 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
       CARTOES[0],
     ]);
 
-    await page.goto(`${ambiente.enderecoDoFrontend}/#/inicio`);
-    await entrarSeNecessario(page, credencial);
+    const cartaoId = baralho.cartoes[0].id;
 
-    // O único Cartão do Usuário é novo (FR-199).
-    await expect(avisoDeNovos(page, 1)).toBeVisible();
+    // O Cartão é novo: a prévia de "Bom" é a do primeiro intervalo (FR-221).
+    const previaAntes = await obterPreviaPelaApi(
+      ambiente.enderecoDaApi,
+      credencial,
+      cartaoId,
+    );
 
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
     await iniciarSessaoLivre(page, 1);
@@ -624,110 +456,20 @@ test("Estudo livre por Baralho avalia com os quatro níveis e consome os novos d
     // Sessão?" (FR-163, FR-164).
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
-    // A Avaliação do estudo livre alimentou o Agendamento do Cartão, que deixou
-    // de ser novo hoje (FR-205, FR-206, SC-080).
-    await irParaInicio(page, credencial.nomeDeUsuario);
-    await expect(
-      page.getByRole("heading", { name: "Nada para revisar." }),
-    ).toBeVisible();
-    await expect(controleDeRevisar(page)).toBeDisabled();
-
-    expect(
-      await obterResumoDaRevisaoPelaApi(ambiente.enderecoDaApi, credencial),
-    ).toEqual({ vencidos: 0, novosHoje: 0, total: 0 });
-  } finally {
-    await derrubarAmbiente(ambiente);
-  }
-});
-
-// --- Cenário 3: os números são isolados por Usuário -------------------------
-
-test("Agendamentos, vencidos e novos são isolados por Usuário (FR-219, SC-086)", async ({ browser, browserName }) => {
-  expect(browserName).toBe("chromium");
-
-  const ambiente = await subirAmbiente();
-  const contextoA = await browser.newContext();
-  const contextoB = await browser.newContext();
-
-  await fixarRelogioDoContexto(contextoA);
-  await fixarRelogioDoContexto(contextoB);
-
-  try {
-    const paginaA = await contextoA.newPage();
-    const paginaB = await contextoB.newPage();
-
-    // Usuário A tem três Cartões novos.
-    const credencialA = await criarUsuarioDeProva(
+    // A Avaliação do estudo livre alimentou o Agendamento do Cartão: a próxima
+    // revisão com "Bom" já parte do intervalo avançado (FR-205, FR-206, SC-080).
+    const previaDepois = await obterPreviaPelaApi(
       ambiente.enderecoDaApi,
-      "usuario.a",
-    );
-    await prepararBaralho(ambiente, credencialA, NOME_DO_BARALHO, CARTOES);
-
-    await paginaA.goto(`${ambiente.enderecoDoFrontend}/#/inicio`);
-    await entrarSeNecessario(paginaA, credencialA);
-    await expect(avisoDeNovos(paginaA, 3)).toBeVisible();
-
-    // Usuário B, noutro contexto, não vê nada de A (FR-219, SC-086).
-    const credencialB = await criarUsuarioDeProva(
-      ambiente.enderecoDaApi,
-      "usuario.b",
+      credencial,
+      cartaoId,
     );
 
-    await paginaB.goto(`${ambiente.enderecoDoFrontend}/#/inicio`);
-    await entrarSeNecessario(paginaB, credencialB);
-    await expect(
-      paginaB.getByRole("heading", {
-        level: 1,
-        name: `Olá, ${credencialB.nomeDeUsuario}`,
-      }),
-    ).toBeVisible();
-    await expect(
-      paginaB.getByText("Nada para revisar."),
-    ).toBeVisible();
-
-    expect(
-      await obterResumoDaRevisaoPelaApi(ambiente.enderecoDaApi, credencialB),
-    ).toEqual({ vencidos: 0, novosHoje: 0, total: 0 });
-
-    // A conclui a Revisão do dia inteira. Com três Cartões novos, "Revisar" é
-    // um link para a Revisão (FR-202).
-    await controleDeRevisar(paginaA).click();
-    // A Revisão do dia começa sozinha, sem botão de início: o primeiro Item é
-    // a condição a esperar, e não um tempo.
-    await expect(
-      paginaA.getByRole("article", { name: "Item 1 de 3" }),
-    ).toBeVisible();
-
-    for (let indice = 0; indice < CARTOES.length; indice += 1) {
-      await revelarVerso(paginaA);
-      await avaliar(paginaA, "bom");
-    }
-
-    // Espera o Registro ser confirmado antes de sair da tela do Resumo; com o
-    // envio pendente, "Voltar a Início" abriria "Sair sem registrar a Sessão?"
-    // (FR-163, FR-164).
-    await expect(
-      paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
-
-    await irParaInicio(paginaA, credencialA.nomeDeUsuario);
-    await expect(
-      paginaA.getByRole("heading", { name: "Nada para revisar." }),
-    ).toBeVisible();
-    await expect(controleDeRevisar(paginaA)).toBeDisabled();
-
-    // B continua exatamente como estava.
-    await irParaInicio(paginaB, credencialB.nomeDeUsuario);
-    await expect(paginaB.getByText("Nada para revisar.")).toBeVisible();
-
-    expect(
-      await obterResumoDaRevisaoPelaApi(ambiente.enderecoDaApi, credencialB),
-    ).toEqual({ vencidos: 0, novosHoje: 0, total: 0 });
+    expect(Date.parse(previaDepois.bom)).toBeGreaterThan(
+      Date.parse(previaAntes.bom),
+    );
   } finally {
-    await contextoA.close();
-    await contextoB.close();
     await derrubarAmbiente(ambiente);
   }
 });
@@ -773,9 +515,9 @@ test("Atalho de teclado 3 avalia Bom após a Revelação (FR-192, FR-193, FR-218
   }
 });
 
-// --- Cenário 5: desempenho do bloco de revisão de Início (SC-087) -----------
+// --- Cenário 5: desempenho de Início (SC-087) -------------------------------
 
-test("SC-087: Início monta o bloco de revisão com leituras agregadas e em número fixo, com 2.000 Cartões e 500 Sessões", async ({ page, browserName }) => {
+test("SC-087: Início monta com leituras agregadas e em número fixo, com 2.000 Cartões e 500 Sessões", async ({ page, browserName }) => {
   test.setTimeout(300_000);
 
   expect(browserName).toBe("chromium");
@@ -793,7 +535,9 @@ test("SC-087: Início monta o bloco de revisão com leituras agregadas e em núm
     await entrarSeNecessario(page, credencial);
 
     // Aquecimento: o Vite dev compila a tela de Início na primeira abertura.
-    await expect(page.getByText(/para revisar/i)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Agenda de hoje" }),
+    ).toBeVisible();
 
     await page
       .getByRole("navigation", { name: "Principal" })
@@ -802,7 +546,7 @@ test("SC-087: Início monta o bloco de revisão com leituras agregadas e em núm
     await expect(page).toHaveURL(/#\/cartoes/);
 
     // SC-087, sem relógio: o orçamento de 1 s é consequência de o Início montar
-    // o bloco de revisão com leituras pequenas e em número fixo. A prova é
+    // com leituras pequenas e em número fixo. A prova é
     // estrutural — quais requisições "abrir Início" faz, e quantas — e por isso
     // não varia com a velocidade da máquina.
     const requisicoes: string[] = [];
@@ -819,18 +563,17 @@ test("SC-087: Início monta o bloco de revisão com leituras agregadas e em núm
       .getByRole("navigation", { name: "Principal" })
       .getByRole("link", { name: "Início" })
       .click();
-    await expect(page.getByText(/para revisar/i)).toBeVisible();
     await expect(page.getByText(/Agenda de hoje|Nenhum estudo agendado/).first()).toBeVisible();
 
     // O Início lê um conjunto fixo de recursos agregados (Cartões para saber se
-    // o acervo está vazio, a revisão e a Agenda), e nenhum Cartão ou Sessão é
+    // o acervo está vazio e a Agenda), e nenhum Cartão ou Sessão é
     // lido individualmente — a quantidade de leituras não cresce com o acervo.
     // O Vite dev em `StrictMode` repete cada leitura, por isso a prova compara
     // o conjunto de recursos, e não a contagem.
     expect(
       [...new Set(requisicoes)].sort(),
       `requisições do Início: ${requisicoes.join(", ")}`,
-    ).toEqual(["GET /agenda", "GET /cartoes", "GET /revisao"]);
+    ).toEqual(["GET /agenda", "GET /cartoes"]);
   } finally {
     await derrubarAmbiente(ambiente);
   }

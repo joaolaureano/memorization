@@ -141,8 +141,6 @@ describe("interpretarRota sob a guarda de Credencial", () => {
       id: "s1",
     });
     expect(interpretarRota("#/cartoes/", true)).toEqual({ nome: "cartoes" });
-    expect(interpretarRota("#/revisao", true)).toEqual({ nome: "revisao" });
-    expect(interpretarRota("#/revisao/", true)).toEqual({ nome: "revisao" });
     expect(interpretarRota("#/preferencias", true)).toEqual({
       nome: "preferencias",
     });
@@ -200,9 +198,9 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
     });
   });
 
-  it("reconhece as rotas da Revisão do dia e das Preferências (FR-212)", () => {
-    expect(interpretarRota("#/revisao", true)).toEqual({ nome: "revisao" });
-    expect(interpretarRota("#/revisao/", true)).toEqual({ nome: "revisao" });
+  it("reconhece a rota das Preferências (FR-212)", () => {
+    // A Revisão do dia saiu da aplicação: o antigo hash cai no Início.
+    expect(interpretarRota("#/revisao", true)).toEqual({ nome: "inicio" });
     expect(interpretarRota("#/preferencias", true)).toEqual({
       nome: "preferencias",
     });
@@ -210,7 +208,6 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
       nome: "preferencias",
     });
 
-    expect(hashDaRota({ nome: "revisao" })).toBe("#/revisao");
     expect(hashDaRota({ nome: "preferencias" })).toBe("#/preferencias");
   });
 
@@ -283,7 +280,6 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
 describe("destinoAtivo", () => {
   it("aponta o destino da moldura de cada rota publicada (FR-139, FR-168)", () => {
     expect(destinoAtivo({ nome: "inicio" })).toBe("inicio");
-    expect(destinoAtivo({ nome: "revisao" })).toBe("inicio");
 
     // FR-307, FR-323: a área Estudo, o Registro de uma Sessão e as Rotinas de
     // estudo pertencem a Estudo.
@@ -938,7 +934,11 @@ describe("Aplicacao nas telas de formulário da 012", () => {
     ).toBeInTheDocument();
 
     // Cancelar mantém a tela de origem e o texto digitado (FR-151).
-    fireEvent.click(screen.getByRole("button", { name: /cancelar/i }));
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: /cancelar/i,
+      }),
+    );
 
     expect(screen.queryByText("Descartar as alterações?")).toBeNull();
     expect(

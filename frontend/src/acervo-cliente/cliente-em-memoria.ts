@@ -72,8 +72,6 @@ import type {
   ResultadoDeSalvarRotina,
   ResultadoDeVinculacao,
   ResultadoDoItemRegistrado,
-  ResultadoDoLoteDeRevisao,
-  ResultadoDoResumoDaRevisao,
 } from "./cliente";
 import {
   concluirCompromissoEmMemoria,
@@ -101,9 +99,8 @@ const ALGORITMOS_DISPONIVEIS: OpcaoDeAlgoritmo[] = [
   { id: "sm2", rotulo: "SM-2" },
 ];
 
-/** O algoritmo e o limite padrão quando o Usuário nunca salvou Preferências (D5). */
+/** O algoritmo padrão quando o Usuário nunca salvou Preferências (D5). */
 const ALGORITMO_PADRAO = "sm2";
-const LIMITE_DE_NOVOS_PADRAO = 20;
 
 /**
  * A prévia fixa do stand-in, em dias, por Avaliação. **Não é o SM-2**: é uma
@@ -1098,101 +1095,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     };
   }
 
-  /** O resumo da Revisão do dia (FR-198, FR-199). */
-  async obterResumoDaRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoResumoDaRevisao> {
-    if (this.indisponivel) {
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    }
-
-    const dono = this.dono();
-
-    if (dono === null) {
-      return this.falhaDeNaoAutenticado();
-    }
-
-    const contagem = this.contagemDaRevisao(dono.id, inicioDoDia, fimDoDia);
-
-    return {
-      ok: true,
-      resumo: {
-        vencidos: contagem.vencidos,
-        novosHoje: contagem.novosHoje,
-        total: contagem.vencidos + contagem.novosHoje,
-      },
-    };
-  }
-
-  /**
-   * O lote da Revisão do dia: vencidos por `proximaRevisaoEm` ascendente,
-   * depois os novos na ordem de criação, limitados ao que ainda cabe hoje e a
-   * 20 Itens no total (FR-201, FR-203).
-   */
-  async obterLoteDeRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoLoteDeRevisao> {
-    if (this.indisponivel) {
-      return this.falhaDeIndisponibilidadeDeRevisao();
-    }
-
-    const dono = this.dono();
-
-    if (dono === null) {
-      return this.falhaDeNaoAutenticado();
-    }
-
-    const agora = new Date();
-    const cartoes = this.base.cartoes.filter(
-      (cartao) => cartao.usuarioId === dono.id,
-    );
-    const agendamentos = this.base.agendamentos.filter(
-      (agendamento) => agendamento.usuarioId === dono.id,
-    );
-
-    const porCartao = new Map<string, AgendamentoDoDono>();
-
-    for (const agendamento of agendamentos) {
-      porCartao.set(agendamento.cartaoId, agendamento);
-    }
-
-    const vencidos = cartoes
-      .filter((cartao) => {
-        const agendamento = porCartao.get(cartao.id);
-
-        return (
-          agendamento !== undefined && agendamento.proximaRevisaoEm < fimDoDia
-        );
-      })
-      .sort((a, b) => {
-        const primeiro = porCartao.get(a.id)?.proximaRevisaoEm ?? "";
-        const segundo = porCartao.get(b.id)?.proximaRevisaoEm ?? "";
-
-        if (primeiro === segundo) {
-          return 0;
-        }
-
-        return primeiro < segundo ? -1 : 1;
-      });
-
-    const novos = cartoes
-      .filter((cartao) => !porCartao.has(cartao.id))
-      .slice(
-        0,
-        this.contagemDaRevisao(dono.id, inicioDoDia, fimDoDia).novosHoje,
-      );
-
-    return {
-      ok: true,
-      itens: [...vencidos, ...novos].slice(0, 20).map((cartao) => ({
-        cartao: cartaoSemDono(cartao),
-        previa: previaFixa(agora),
-      })),
-    };
-  }
-
   /**
    * A prévia dos Cartões informados (FR-221). Como a prévia do stand-in é
    * fixa, cada `cartaoId` recebe a mesma tabela — ela não depende do Cartão.
@@ -1238,12 +1140,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 
   /**
-   * Salva as Preferências (FR-200). O limite precisa ser inteiro de 0 a 999 e
-   * o algoritmo precisa existir; qualquer desvio é `dados_invalidos`.
+   * Salva as Preferências (FR-212). O algoritmo precisa existir; qualquer
+   * desvio é `dados_invalidos`.
    */
   async salvarPreferencias(preferencias: {
     algoritmo: string;
-    limiteDeNovosPorDia: number;
   }): Promise<ResultadoDeSalvarPreferencias> {
     if (this.indisponivel) {
       return this.falhaDeIndisponibilidadeDePreferencias();
@@ -1255,12 +1156,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return this.falhaDeNaoAutenticado();
     }
 
-    if (
-      preferencias.algoritmo !== ALGORITMO_PADRAO ||
-      !Number.isInteger(preferencias.limiteDeNovosPorDia) ||
-      preferencias.limiteDeNovosPorDia < 0 ||
-      preferencias.limiteDeNovosPorDia > 999
-    ) {
+    if (preferencias.algoritmo !== ALGORITMO_PADRAO) {
       return {
         ok: false,
         erro: "dados_invalidos",
@@ -1276,11 +1172,9 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       this.base.preferencias.push({
         usuarioId: dono.id,
         algoritmo: preferencias.algoritmo,
-        limiteDeNovosPorDia: preferencias.limiteDeNovosPorDia,
       });
     } else {
       existente.algoritmo = preferencias.algoritmo;
-      existente.limiteDeNovosPorDia = preferencias.limiteDeNovosPorDia;
     }
 
     return { ok: true, preferencias: this.preferenciasDoDono(dono.id) };
@@ -1610,46 +1504,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 
   /**
-   * A contagem do dia (FR-198, FR-199, FR-201): os Agendamentos vencidos até o
-   * fim do dia e quantos Cartões novos ainda cabem no limite, descontados os
-   * já introduzidos hoje.
-   */
-  private contagemDaRevisao(
-    usuarioId: string,
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): { vencidos: number; novosHoje: number } {
-    const agendamentos = this.base.agendamentos.filter(
-      (agendamento) => agendamento.usuarioId === usuarioId,
-    );
-
-    const vencidos = agendamentos.filter(
-      (agendamento) => agendamento.proximaRevisaoEm < fimDoDia,
-    ).length;
-
-    const introduzidosHoje = agendamentos.filter(
-      (agendamento) =>
-        agendamento.criadoEm >= inicioDoDia && agendamento.criadoEm < fimDoDia,
-    ).length;
-
-    const comAgendamento = new Set(
-      agendamentos.map((agendamento) => agendamento.cartaoId),
-    );
-    const semAgendamento = this.base.cartoes.filter(
-      (cartao) =>
-        cartao.usuarioId === usuarioId && !comAgendamento.has(cartao.id),
-    ).length;
-
-    const limite = this.preferenciasDoDono(usuarioId).limiteDeNovosPorDia;
-    const novosHoje = Math.min(
-      semAgendamento,
-      Math.max(0, limite - introduzidosHoje),
-    );
-
-    return { vencidos, novosHoje };
-  }
-
-  /**
    * Aplica as Avaliações do Registro novo aos Agendamentos do dono, na ordem
    * dos Itens: cria o Agendamento na primeira Avaliação e atualiza a próxima
    * revisão nas seguintes (FR-205, FR-210).
@@ -1692,8 +1546,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     return {
       algoritmo: salvas?.algoritmo ?? ALGORITMO_PADRAO,
-      limiteDeNovosPorDia:
-        salvas?.limiteDeNovosPorDia ?? LIMITE_DE_NOVOS_PADRAO,
       algoritmos: ALGORITMOS_DISPONIVEIS.map((opcao) => ({ ...opcao })),
     };
   }
@@ -1925,7 +1777,6 @@ interface AgendamentoDoDono {
 interface PreferenciasDoDono {
   usuarioId: string;
   algoritmo: string;
-  limiteDeNovosPorDia: number;
 }
 
 /** Uma base nova, já com os Usuários que a prova informou. */

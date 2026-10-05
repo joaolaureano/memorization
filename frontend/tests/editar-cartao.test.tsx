@@ -81,16 +81,13 @@ function renderizarEdicao(cliente: ClienteEmMemoria, id: string): void {
 }
 
 describe("edição de Cartão", () => {
-  it("edita um Cartão vinculado a três Baralhos e informa o alcance antes de salvar (FR-005, FR-006, FR-146)", async () => {
+  it("edita um Cartão vinculado a três Baralhos sem aviso de alcance (FR-005, FR-006)", async () => {
     const { cliente, id } = await criarCartaoVinculadoATresBaralhos();
 
     renderizarEdicao(cliente, id);
 
-    expect(
-      await screen.findByText(
-        /vinculado a 3 Baralhos: Inglês, Espanhol, Francês/i,
-      ),
-    ).toBeInTheDocument();
+    await screen.findByDisplayValue("To walk");
+    expect(screen.queryByText(/vinculado a/i)).toBeNull();
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
       target: { value: "To run" },

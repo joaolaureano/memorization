@@ -136,7 +136,6 @@ export function PaginaDeEntrada({
   return (
     <section className="acesso">
       <div className="cartao">
-        <p className="sobretitulo">Bem-vindo</p>
         <h1>Entrar</h1>
 
         {aviso !== null &&

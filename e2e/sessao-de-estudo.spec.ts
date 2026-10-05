@@ -207,13 +207,13 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     ).toBeVisible();
 
     // FR-161, FR-163: a Sessão concluída é registrada no histórico assim que
-    // o Resumo aparece, e a própria tela confirma o Registro confirmado.
+    // o Resumo aparece; a confirmação é só anunciada, sem aviso à vista.
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
     await expect(
       page.getByRole("link", { name: "Ver em Início" }),
-    ).toBeVisible();
+    ).toHaveCount(0);
 
     // Interrupção: inicia outra Sessão e recarrega a página. A Sessão é
     // descartada e a tela volta ao início, sem retomada nem Resumo.

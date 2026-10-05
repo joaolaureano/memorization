@@ -1016,12 +1016,11 @@ export function bateriaDaPorta(
       it("devolve os padrões quando não há linha de Preferências (D5, FR-212)", async () => {
         expect(await armazenamento().obterPreferencias(DONO_UM)).toEqual({
           algoritmo: "sm2",
-          limiteDeNovosPorDia: 20,
         });
       });
 
       it("salva as Preferências e as devolve na releitura (FR-212)", async () => {
-        const preferencias = { algoritmo: "sm2", limiteDeNovosPorDia: 30 };
+        const preferencias = { algoritmo: "falso" };
 
         expect(
           await armazenamento().salvarPreferencias(DONO_UM, preferencias),
@@ -1033,13 +1032,11 @@ export function bateriaDaPorta(
 
       it("as Preferências de um Usuário não alcançam o outro (FR-219)", async () => {
         await armazenamento().salvarPreferencias(DONO_UM, {
-          algoritmo: "sm2",
-          limiteDeNovosPorDia: 5,
+          algoritmo: "falso",
         });
 
         expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
           algoritmo: "sm2",
-          limiteDeNovosPorDia: 20,
         });
       });
 
@@ -1257,7 +1254,7 @@ export function bateriaDaPorta(
           [agendamentoDe("c3")],
         );
 
-        const preferencias = { algoritmo: "sm2", limiteDeNovosPorDia: 7 };
+        const preferencias = { algoritmo: "falso" };
         const reconstruidos = [agendamentoDe("c2", "2026-04-01T00:00:00.000Z")];
 
         expect(
@@ -1274,7 +1271,6 @@ export function bateriaDaPorta(
         /** O outro dono guarda as Preferências padrão e o Agendamento original. */
         expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
           algoritmo: "sm2",
-          limiteDeNovosPorDia: 20,
         });
         expect(await armazenamento().listarAgendamentos(DONO_DOIS)).toEqual([
           agendamentoDe("c3"),
@@ -2058,7 +2054,7 @@ export function bateriaDaPorta(
             await prepararSessao();
             await armazenamento().substituirAgendamentos(
               DONO_UM,
-              { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+              { algoritmo: "falso" },
               [agendamentoDe("c1")],
             );
 
@@ -2078,7 +2074,7 @@ export function bateriaDaPorta(
             expect(gravado).toMatchObject({ ok: true, valor: { novo: true } });
             expect(recebido).toEqual({
               agendamentos: [agendamentoDe("c1")],
-              preferencias: { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+              preferencias: { algoritmo: "falso" },
             });
             expect(
               (await armazenamento().listarAgendamentos(DONO_UM))
@@ -2430,7 +2426,7 @@ export function bateriaDaPorta(
         );
         await armazenamento().substituirAgendamentos(
           dono,
-          { algoritmo: "sm2", limiteDeNovosPorDia: 7 },
+          { algoritmo: "falso" },
           [agendamentoDe(cartaoId)],
         );
         await armazenamento().gravarRotina(dono, {
@@ -2592,8 +2588,7 @@ export function bateriaDaPorta(
           1,
         );
         expect(await armazenamento().obterPreferencias(DONO_DOIS)).toEqual({
-          algoritmo: "sm2",
-          limiteDeNovosPorDia: 7,
+          algoritmo: "falso",
         });
         expect(await armazenamento().obterInicio(DONO_DOIS, "i-dois")).toMatchObject(
           { ok: true },

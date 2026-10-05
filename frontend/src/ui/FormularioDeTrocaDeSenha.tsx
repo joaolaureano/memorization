@@ -170,11 +170,12 @@ export function FormularioDeTrocaDeSenha({
         autoComplete="new-password"
         descritoPor="regras-da-nova-senha"
         referencia={campoDaNovaSenha}
-      />
-      <p id="regras-da-nova-senha" className="ajuda">
-        De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres,
-        qualquer caractere, inclusive espaços.
-      </p>
+      >
+        <p id="regras-da-nova-senha" className="ajuda">
+          De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres:
+          qualquer caractere, inclusive espaços.
+        </p>
+      </CampoDeSenha>
 
       <CampoDeSenha
         id="campo-confirmacao-da-nova-senha"

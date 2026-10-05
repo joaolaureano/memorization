@@ -107,21 +107,12 @@ export function comGuardaDeCredencial(
     obterRegistroDeSessao: async (id: string) =>
       vigiar(await cliente.obterRegistroDeSessao(id)),
 
-    obterResumoDaRevisao: async (inicioDoDia: string, fimDoDia: string) =>
-      vigiar(await cliente.obterResumoDaRevisao(inicioDoDia, fimDoDia)),
-
-    obterLoteDeRevisao: async (inicioDoDia: string, fimDoDia: string) =>
-      vigiar(await cliente.obterLoteDeRevisao(inicioDoDia, fimDoDia)),
-
     obterPrevias: async (cartaoIds: string[]) =>
       vigiar(await cliente.obterPrevias(cartaoIds)),
 
     obterPreferencias: async () => vigiar(await cliente.obterPreferencias()),
 
-    salvarPreferencias: async (preferencias: {
-      algoritmo: string;
-      limiteDeNovosPorDia: number;
-    }) => vigiar(await cliente.salvarPreferencias(preferencias)),
+    salvarPreferencias: async (preferencias: { algoritmo: string }) => vigiar(await cliente.salvarPreferencias(preferencias)),
 
     obterAgenda: async (inicio: string, fuso: string) =>
       vigiar(await cliente.obterAgenda(inicio, fuso)),

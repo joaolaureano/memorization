@@ -17,20 +17,18 @@ import type { Protecao } from "./protecao-de-saida";
  * Tela de Perfil (T1520; specs/015-repeticao-espacada/tasks.md; FR-335).
  *
  * A rota continua sendo `#/preferencias`; o que a tela mostra é o Perfil: a
- * Configuração (o Algoritmo de repetição espaçada e o limite diário de Cartões
- * novos) e, logo abaixo, «Minha conta». Os dois são cartões irmãos dentro de
+ * Configuração (o Algoritmo de repetição espaçada) e, logo abaixo, «Minha
+ * conta». Os dois são cartões irmãos dentro de
  * `.perfil`, separados pela CSS.
  *
- * O Usuário escolhe o Algoritmo de repetição espaçada e o limite diário de
- * Cartões novos, com salvar explícito (FR-212, FR-200). A tela carrega as
+ * O Usuário escolhe o Algoritmo de repetição espaçada, com salvar explícito
+ * (FR-212). A tela carrega as
  * Preferências pela Interface `ClienteDoAcervo` e não reproduz regra de
  * domínio alguma: a lista de algoritmos disponíveis (`algoritmos`) e as
  * mensagens em português vêm do cliente (FR-046, FR-212).
  *
- * O limite é a única regra local: a tela recusa valor não inteiro ou fora de
- * 0 a 999 antes de chamar o cliente, com mensagem e foco no campo (FR-200). A
- * recusa de domínio do servidor (`dados_invalidos`) também devolve o foco ao
- * campo do limite (FR-059).
+ * A recusa de domínio do servidor (`dados_invalidos`) devolve o foco ao campo
+ * do algoritmo (FR-059).
  *
  * A saída é protegida enquanto houver algo a perder (FR-148): com valores
  * divergentes dos carregados, a navegação passa pela confirmação de descarte
@@ -40,21 +38,6 @@ import type { Protecao } from "./protecao-de-saida";
  * permite nova tentativa (FR-155); a falha de carregamento oferece nova
  * tentativa sem impedir o restante da interface (FR-153, FR-156).
  */
-
-/**
- * Extremos do limite diário de Cartões novos (FR-200): inteiro de 0 a 999, com
- * 0 significando não introduzir Cartões novos.
- */
-const LIMITE_MINIMO_DE_NOVOS_POR_DIA = 0;
-const LIMITE_MAXIMO_DE_NOVOS_POR_DIA = 999;
-
-/**
- * Mensagem da recusa local do limite (FR-200). É a única regra que a tela
- * aplica antes de chamar o cliente; a recusa de domínio continua sendo
- * exclusiva do `ClienteDoAcervo`.
- */
-const MENSAGEM_DE_LIMITE_INVALIDO =
-  "Informe um número inteiro entre 0 e 999.";
 
 /** Confirmação de sucesso anunciada na região viva (FR-153, FR-212, FR-335). */
 const MENSAGEM_DE_SUCESSO = "Configuração salva.";
@@ -81,8 +64,6 @@ export function PaginaDePreferencias({
   const [preferencias, setPreferencias] = useState<Preferencias | null>(null);
   const [algoritmo, setAlgoritmo] = useState("");
   const [algoritmoInicial, setAlgoritmoInicial] = useState("");
-  const [limite, setLimite] = useState("");
-  const [limiteInicial, setLimiteInicial] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [falhaDeCarregamento, setFalhaDeCarregamento] = useState<string | null>(
     null,
@@ -92,7 +73,7 @@ export function PaginaDePreferencias({
   const [falha, setFalha] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
 
-  const campoDeLimite = useRef<HTMLInputElement>(null);
+  const campoDeAlgoritmo = useRef<HTMLSelectElement>(null);
 
   // FR-153/FR-156: a carga distingue carregando, falha com nova tentativa e
   // sucesso. `numeroDaTentativa` reexecuta a leitura sem recarregar a página.
@@ -111,8 +92,6 @@ export function PaginaDePreferencias({
         setPreferencias(resultado.preferencias);
         setAlgoritmo(resultado.preferencias.algoritmo);
         setAlgoritmoInicial(resultado.preferencias.algoritmo);
-        setLimite(String(resultado.preferencias.limiteDeNovosPorDia));
-        setLimiteInicial(String(resultado.preferencias.limiteDeNovosPorDia));
       } else {
         setFalhaDeCarregamento(resultado.mensagem);
       }
@@ -128,7 +107,7 @@ export function PaginaDePreferencias({
   const sujo =
     !carregando &&
     falhaDeCarregamento === null &&
-    (algoritmo !== algoritmoInicial || limite !== limiteInicial);
+    algoritmo !== algoritmoInicial;
 
   // FR-153/FR-154 vencem FR-148: enquanto salva, a navegação é bloqueada (e o
   // motivo anunciado); só depois de estabilizar a operação a proteção volta a
@@ -156,21 +135,9 @@ export function PaginaDePreferencias({
     evento.preventDefault();
     setFalha(null);
     setSucesso(null);
-
-    // FR-200: a recusa local do limite ocorre antes de qualquer chamada ao
-    // cliente, com mensagem e foco no campo (FR-059).
-    if (limiteInvalido(limite)) {
-      setFalha(MENSAGEM_DE_LIMITE_INVALIDO);
-      campoDeLimite.current?.focus();
-      return;
-    }
-
     setSalvando(true);
 
-    const resultado = await cliente.salvarPreferencias({
-      algoritmo,
-      limiteDeNovosPorDia: Number(limite),
-    });
+    const resultado = await cliente.salvarPreferencias({ algoritmo });
 
     if (resultado.ok) {
       // FR-153: a navegação/limpeza não pode ser barrada pela proteção de
@@ -180,8 +147,6 @@ export function PaginaDePreferencias({
       setPreferencias(resultado.preferencias);
       setAlgoritmo(resultado.preferencias.algoritmo);
       setAlgoritmoInicial(resultado.preferencias.algoritmo);
-      setLimite(String(resultado.preferencias.limiteDeNovosPorDia));
-      setLimiteInicial(String(resultado.preferencias.limiteDeNovosPorDia));
       setSucesso(MENSAGEM_DE_SUCESSO);
       setSalvando(false);
       return;
@@ -191,7 +156,7 @@ export function PaginaDePreferencias({
     setFalha(resultado.mensagem);
 
     if (resultado.erro === "dados_invalidos") {
-      campoDeLimite.current?.focus();
+      campoDeAlgoritmo.current?.focus();
     }
 
     setSalvando(false);
@@ -236,6 +201,7 @@ export function PaginaDePreferencias({
               </label>
               <select
                 id="campo-algoritmo"
+                ref={campoDeAlgoritmo}
                 value={algoritmo}
                 onChange={(evento) => {
                   setAlgoritmo(evento.target.value);
@@ -248,30 +214,6 @@ export function PaginaDePreferencias({
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="campo">
-              <label className="rotulo" htmlFor="campo-limite">
-                Cartões novos por dia
-              </label>
-              <input
-                id="campo-limite"
-                ref={campoDeLimite}
-                type="number"
-                inputMode="numeric"
-                min={LIMITE_MINIMO_DE_NOVOS_POR_DIA}
-                max={LIMITE_MAXIMO_DE_NOVOS_POR_DIA}
-                step={1}
-                value={limite}
-                onChange={(evento) => {
-                  setLimite(evento.target.value);
-                  setSucesso(null);
-                }}
-                aria-describedby="orientacao-do-limite"
-              />
-              <p id="orientacao-do-limite" className="contador">
-                0 significa não introduzir Cartões novos.
-              </p>
             </div>
 
             {falha !== null && (
@@ -314,25 +256,5 @@ export function PaginaDePreferencias({
           />
         )}
     </div>
-  );
-}
-
-/**
- * Recusa local do limite diário de Cartões novos (FR-200): aceita apenas
- * inteiro de 0 a 999. Campo vazio é recusado, porque a Interface exige um
- * número e não um valor em branco. Esta função não reproduz nenhuma regra do
- * `ClienteDoAcervo`: as demais recusas continuam vindo dele.
- */
-function limiteInvalido(valor: string): boolean {
-  if (valor.trim() === "") {
-    return true;
-  }
-
-  const numero = Number(valor);
-
-  return (
-    !Number.isInteger(numero) ||
-    numero < LIMITE_MINIMO_DE_NOVOS_POR_DIA ||
-    numero > LIMITE_MAXIMO_DE_NOVOS_POR_DIA
   );
 }

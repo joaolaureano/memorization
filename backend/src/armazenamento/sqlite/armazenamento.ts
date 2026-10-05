@@ -98,7 +98,6 @@ const CONFLITO: Desfecho<never> = {
  */
 const PREFERENCIAS_PADRAO: Preferencias = {
   algoritmo: "sm2",
-  limiteDeNovosPorDia: 20,
 };
 
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
@@ -632,7 +631,7 @@ export async function abrirArmazenamentoSqlite(
   );
   /** As Preferências: uma linha por Usuário, ausente quando nunca salvas (D5). */
   const obterPreferenciasDoUsuario = banco.prepare(
-    `SELECT algoritmo, limite_de_novos_por_dia
+    `SELECT algoritmo
        FROM preferencias
       WHERE usuario_id = ?`,
   );
@@ -644,15 +643,13 @@ export async function abrirArmazenamentoSqlite(
       ? PREFERENCIAS_PADRAO
       : {
           algoritmo: linha.algoritmo as string,
-          limiteDeNovosPorDia: Number(linha.limite_de_novos_por_dia),
         };
   }
   const gravarPreferencias = banco.prepare(
-    `INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
-     VALUES (?, ?, ?)
+    `INSERT INTO preferencias (usuario_id, algoritmo)
+     VALUES (?, ?)
      ON CONFLICT (usuario_id) DO UPDATE SET
-       algoritmo               = excluded.algoritmo,
-       limite_de_novos_por_dia = excluded.limite_de_novos_por_dia`,
+       algoritmo = excluded.algoritmo`,
   );
   /**
    * O insumo do replay: só Itens com Avaliação e Cartão de origem, em ordem
@@ -1112,7 +1109,6 @@ export async function abrirArmazenamentoSqlite(
         ? PREFERENCIAS_PADRAO
         : {
             algoritmo: linha.algoritmo as string,
-            limiteDeNovosPorDia: Number(linha.limite_de_novos_por_dia),
           };
     },
 
@@ -1121,7 +1117,6 @@ export async function abrirArmazenamentoSqlite(
         gravarPreferencias.run(
           usuarioId,
           preferencias.algoritmo,
-          preferencias.limiteDeNovosPorDia,
         );
 
         return { ok: true, valor: preferencias };
@@ -1228,7 +1223,6 @@ export async function abrirArmazenamentoSqlite(
           gravarPreferencias.run(
             usuarioId,
             preferencias.algoritmo,
-            preferencias.limiteDeNovosPorDia,
           );
 
           apagarAgendamentos.run(usuarioId);

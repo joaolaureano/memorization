@@ -578,11 +578,11 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
    * responde na suíte local e devolve `404 Route ... not found` na nuvem, porque
    * a Função monta **somente** o que `registrarRotasDaAplicacao` registra — a
    * lista única usada pelo local e pela nuvem. Por isso cada rota nova —
-   * `/revisao`, `/revisao/lote`, `/previas`, `/preferencias` e o `/sessoes`
+   * `/previas`, `/preferencias` e o `/sessoes`
    * estendido — é chamada **pela função da nuvem**, e o `bruto` de cada resposta
    * é conferido: sem isso, o `404` do roteador passaria por acidente.
    */
-  it("roteia a Revisão e as Preferências na função da nuvem, e nunca com 404 de rota", async () => {
+  it("roteia as Prévias e as Preferências na função da nuvem, e nunca com 404 de rota", async () => {
     const nomeDeUsuario = `rev.${randomBytes(3).toString("hex")}`;
     const senha = randomBytes(12).toString("base64url");
     const credencial = credencialDe(nomeDeUsuario, senha);
@@ -612,35 +612,6 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
     expect(baralho.status).toBe(201);
     const baralhoId = (baralho.corpo as { id: string }).id;
 
-    /** A janela do dia é a do navegador, em limites locais (FR-204). */
-    const inicio = new Date();
-    inicio.setHours(0, 0, 0, 0);
-    const fim = new Date(inicio);
-    fim.setDate(fim.getDate() + 1);
-    const consulta =
-      `inicioDoDia=${encodeURIComponent(inicio.toISOString())}` +
-      `&fimDoDia=${encodeURIComponent(fim.toISOString())}`;
-
-    /** `GET /revisao` — o resumo de Início: vencidos e novos de hoje (FR-198, FR-199). */
-    const resumo = await pedir(funcao, "GET", `/revisao?${consulta}`, {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-    });
-
-    expect(resumo.status).toBe(200);
-    expect(resumo.corpo).toMatchObject({ vencidos: 0, novosHoje: 1, total: 1 });
-    expect(resumo.bruto).not.toMatch(/Route .* not found/);
-
-    /** `GET /revisao/lote` — até 20 Cartões, cada um com a prévia dos 4 níveis (FR-201, FR-221). */
-    const lote = await pedir(funcao, "GET", `/revisao/lote?${consulta}`, {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-    });
-
-    expect(lote.status).toBe(200);
-    expect(lote.corpo).toMatchObject({ itens: [{ cartao: { id: cartaoId } }] });
-    expect(lote.bruto).not.toMatch(/Route .* not found/);
-
     /** `POST /previas` — a prévia dos Cartões do estudo livre (FR-221). */
     const previas = await pedir(funcao, "POST", "/previas", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
@@ -661,24 +632,18 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
     });
 
     expect(preferencias.status).toBe(200);
-    expect(preferencias.corpo).toMatchObject({
-      algoritmo: "sm2",
-      limiteDeNovosPorDia: 20,
-    });
+    expect(preferencias.corpo).toMatchObject({ algoritmo: "sm2" });
     expect(preferencias.bruto).not.toMatch(/Route .* not found/);
 
-    /** `PUT /preferencias` — o mesmo corpo do `GET` volta salvo (FR-200, FR-212). */
+    /** `PUT /preferencias` — o mesmo corpo do `GET` volta salvo (FR-212). */
     const salvas = await pedir(funcao, "PUT", "/preferencias", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
-      corpo: { algoritmo: "sm2", limiteDeNovosPorDia: 30 },
+      corpo: { algoritmo: "sm2" },
     });
 
     expect(salvas.status).toBe(200);
-    expect(salvas.corpo).toMatchObject({
-      algoritmo: "sm2",
-      limiteDeNovosPorDia: 30,
-    });
+    expect(salvas.corpo).toMatchObject({ algoritmo: "sm2" });
     expect(salvas.bruto).not.toMatch(/Route .* not found/);
 
     /** `POST /sessoes` — o corpo novo, com `origem` e Itens com `cartaoId`/`avaliacao` (FR-194, FR-196). */
@@ -726,12 +691,6 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
 
     /** Sem Credencial, cada rota nova existe e recusa pela Credencial: `401`, nunca `404` (FR-219). */
     const semCredencial = [
-      await pedir(funcao, "GET", `/revisao?${consulta}`, {
-        segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      }),
-      await pedir(funcao, "GET", `/revisao/lote?${consulta}`, {
-        segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      }),
       await pedir(funcao, "POST", "/previas", {
         segredoDeOrigem: SEGREDO_DE_ORIGEM,
         corpo: { cartaoIds: [] },
@@ -741,7 +700,7 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
       }),
       await pedir(funcao, "PUT", "/preferencias", {
         segredoDeOrigem: SEGREDO_DE_ORIGEM,
-        corpo: { algoritmo: "sm2", limiteDeNovosPorDia: 20 },
+        corpo: { algoritmo: "sm2" },
       }),
       await pedir(funcao, "POST", "/sessoes", {
         segredoDeOrigem: SEGREDO_DE_ORIGEM,

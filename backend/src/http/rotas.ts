@@ -164,17 +164,6 @@ const consultaDaJanela = z.object({
 });
 
 /**
- * Forma da consulta de `GET /revisao` e de `GET /revisao/lote`: os dois limites
- * do dia local do navegador, ambos texto (contrato da `015`, §4). Ausentes,
- * repetidos ou de outro tipo são recusados na borda como `dados_invalidos`; se
- * os textos formam a janela de um dia, quem decide é o `Acervo` (FR-204).
- */
-const consultaDaRevisao = z.object({
-  inicioDoDia: z.string(),
-  fimDoDia: z.string(),
-});
-
-/**
  * Forma do corpo de `POST /previas`: a lista de Cartões cuja prévia o estudo
  * livre quer mostrar (contrato da `015`, §4). O esquema confere apenas a forma;
  * o intervalo de 1 a 200 identificadores não vazios é julgado pelo `Acervo`
@@ -185,14 +174,13 @@ const corpoDePrevias = z.object({
 });
 
 /**
- * Forma do corpo de `PUT /preferencias`: exatamente o algoritmo e o limite de
- * Cartões novos por dia (contrato da `015`, §4). O esquema confere apenas a
- * forma; o algoritmo disponível e o limite inteiro de 0 a 999 são julgados pelo
- * `Acervo` (FR-200, FR-212).
+ * Forma do corpo de `PUT /preferencias`: o algoritmo (contrato da `015`, §4).
+ * O esquema confere apenas a forma; o algoritmo disponível é julgado pelo
+ * `Acervo` (FR-212). Campos a mais, como o antigo limite de Cartões novos por
+ * dia, são ignorados.
  */
 const corpoDePreferencias = z.object({
   algoritmo: z.string(),
-  limiteDeNovosPorDia: z.number(),
 });
 
 /**
@@ -751,16 +739,16 @@ export function registrarRotasDeAgenda(
 }
 
 /**
- * Registra as rotas de Revisão do contrato sobre o `Acervo` de quem Entrou:
- * `GET /revisao?inicioDoDia=<ISO>&fimDoDia=<ISO>`, `GET /revisao/lote` com a
- * mesma consulta e `POST /previas` (contrato da `015`, §4).
+ * Registra a rota de repetição espaçada do contrato sobre o `Acervo` de quem
+ * Entrou: `POST /previas` (contrato da `015`, §4). A Revisão do dia
+ * (`GET /revisao` e `GET /revisao/lote`) saiu da aplicação.
  *
  * Mesma estrutura fina das demais rotas: a Credencial já foi exigida pelo hook
- * `onRequest` (FR-090), o `Acervo` é construído **dentro** de cada handler com o
- * dono decorado na requisição, de modo que a Revisão de um Usuário nunca
+ * `onRequest` (FR-090), o `Acervo` é construído **dentro** do handler com o
+ * dono decorado na requisição, de modo que a prévia de um Usuário nunca
  * alcança os Cartões de outro (FR-219); a forma é validada na borda com Zod, e
- * os limites do dia, o teto de 200 identificadores e a janela válida são
- * julgados exclusivamente pelo `Acervo` (FR-198, FR-201, FR-204, FR-221). A
+ * o teto de 200 identificadores é julgado exclusivamente pelo `Acervo`
+ * (FR-221). A
  * recusa de domínio atravessa com o **mesmo** código da recusa de forma —
  * `dados_invalidos` —, de modo que o cliente tem um só caminho para entrada
  * inválida.
@@ -769,58 +757,6 @@ export function registrarRotasDeRevisao(
   servidor: FastifyInstance,
   acervoDe: AcervoDeUsuario,
 ): void {
-  servidor.get("/revisao", async (requisicao, resposta) => {
-    const consulta = consultaDaRevisao.safeParse(requisicao.query);
-
-    if (!consulta.success) {
-      return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
-    }
-
-    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
-    const resultado = await acervo.obterResumoDaRevisao(
-      consulta.data.inicioDoDia,
-      consulta.data.fimDoDia,
-    );
-
-    if (!resultado.ok) {
-      if (resultado.erro === "dados_invalidos") {
-        return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
-      }
-
-      return resposta
-        .status(INDISPONIVEL)
-        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
-    }
-
-    return resposta.status(200).send(resultado.resumo);
-  });
-
-  servidor.get("/revisao/lote", async (requisicao, resposta) => {
-    const consulta = consultaDaRevisao.safeParse(requisicao.query);
-
-    if (!consulta.success) {
-      return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
-    }
-
-    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
-    const resultado = await acervo.obterLoteDeRevisao(
-      consulta.data.inicioDoDia,
-      consulta.data.fimDoDia,
-    );
-
-    if (!resultado.ok) {
-      if (resultado.erro === "dados_invalidos") {
-        return resposta.status(400).send(DADOS_DA_REVISAO_INVALIDOS);
-      }
-
-      return resposta
-        .status(INDISPONIVEL)
-        .send(INDISPONIVEL_DO_ARMAZENAMENTO);
-    }
-
-    return resposta.status(200).send({ itens: resultado.itens });
-  });
-
   servidor.post("/previas", async (requisicao, resposta) => {
     const corpo = corpoDePrevias.safeParse(requisicao.body);
 

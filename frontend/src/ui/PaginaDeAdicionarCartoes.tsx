@@ -245,7 +245,6 @@ export function PaginaDeAdicionarCartoes({
 
       <div className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Baralho</p>
           <h1>
             {baralhoNaoEncontrado !== null
               ? "Baralho não encontrado"

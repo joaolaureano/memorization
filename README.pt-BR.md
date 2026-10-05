@@ -26,9 +26,9 @@ uma especificação em [`specs/`](specs/).
 | Cartões | Criar, listar, editar e excluir Cartões, com limites de tamanho | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Baralhos | Criar, renomear e excluir Baralhos, e vincular um Cartão a vários Baralhos | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Estudar um Baralho | Cartões em ordem aleatória, revelar o Verso, avaliar a resposta e ver um Resumo ao final | [004](specs/004-sessao-de-estudo/) |
-| Repetição espaçada | SM-2 com Avaliação em quatro níveis; a Revisão do dia reúne os Cartões vencidos e um número limitado de novos; o algoritmo e o limite diário ficam na Configuração do Perfil | [015](specs/015-repeticao-espacada/) |
+| Repetição espaçada | SM-2 com Avaliação em quatro níveis, aplicado a cada Sessão de estudo por Baralho; o algoritmo fica na Configuração do Perfil | [015](specs/015-repeticao-espacada/) |
 | Agenda de estudo | Rotinas semanais por Baralho (por exemplo, «Inglês toda segunda»), os Compromissos de hoje e um calendário da semana com o que foi feito | [016](specs/016-agendamento-de-estudo/) |
-| Início e Estudo | O Início mostra saudação, Revisão do dia e Agenda de hoje em uma coluna; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
+| Início e Estudo | O Início mostra saudação e Agenda de hoje; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Estatísticas e histórico | Itens estudados, Sessões concluídas e Taxa de acerto nos últimos 7 dias, gráfico por dia e o Registro de cada Sessão, com acertos e erros | [013](specs/013-estatisticas-e-historico/) |
 | Interface | Interface navegável no celular e no desktop (360 a 1440 px, zoom de 200%), utilizável por teclado e leitor de tela | [012](specs/012-interface-visual-navegavel/) |
 

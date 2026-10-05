@@ -351,7 +351,7 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
     // O Registro é confirmado no histórico (FR-161, FR-163, FR-164).
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
     // Início deixou de ter ladrilhos, gráfico e lista: guarda só o resumo de
     // sete dias (FR-312, FR-314, FR-315).
@@ -431,7 +431,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     await responderItens(page, ["acertou"]);
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
     await irParaEstudo(page);
     await expect(
@@ -505,7 +505,7 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
     const itens = await responderItens(page, ["acertou"]);
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
     // Guarda o endereço do Registro a partir de Estudo (FR-315).
     await irParaEstudo(page);
@@ -612,7 +612,7 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
     await responderItens(paginaA, ["acertou", "acertou", "errou"]);
     await expect(
       paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
     // As últimas Sessões vivem em Estudo desde a 019 (FR-315).
     await irParaEstudo(paginaA);
@@ -730,7 +730,7 @@ test("Falha ao registrar oferece nova tentativa e não duplica o Registro (FR-16
       .click();
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
-    ).toContainText(/Registrada no seu histórico/);
+    ).toContainText(/Sessão registrada no histórico/);
 
     // Exatamente uma Sessão no Histórico — nada foi duplicado (SC-071).
     await irParaEstudo(page);

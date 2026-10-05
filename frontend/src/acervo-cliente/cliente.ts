@@ -189,8 +189,8 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS =
   "Não foi possível acessar as Preferências. Tente novamente.";
 
 /**
- * Mensagem da recusa `dados_invalidos` ao salvar as Preferências (FR-200): o
- * limite de novos ou o algoritmo informados não respeitam o contrato.
+ * Mensagem da recusa `dados_invalidos` ao salvar as Preferências (FR-212): o
+ * algoritmo informado não respeita o contrato.
  */
 export const MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS =
   "As Preferências informadas não são válidas.";
@@ -624,25 +624,6 @@ export type ResultadoDeObterRegistro =
  */
 export type Previa = Record<Avaliacao, string>;
 
-/**
- * O resumo do bloco de revisão do Início (FR-198, FR-199): quantos Cartões
- * vencem hoje e quantos novos ainda cabem no limite do dia.
- */
-export interface ResumoDaRevisao {
-  vencidos: number;
-  novosHoje: number;
-  total: number;
-}
-
-/**
- * Um Item do lote da Revisão do dia (FR-201, FR-221): o Cartão e a prévia de
- * cada Avaliação, para os botões anunciarem o que acontecerá.
- */
-export interface ItemDoLoteDeRevisao {
-  cartao: Cartao;
-  previa: Previa;
-}
-
 /** Uma opção de algoritmo oferecida pela tela de Preferências (FR-212). */
 export interface OpcaoDeAlgoritmo {
   id: string;
@@ -650,39 +631,13 @@ export interface OpcaoDeAlgoritmo {
 }
 
 /**
- * As Preferências do Usuário (FR-200, FR-212): o algoritmo escolhido, o limite
- * de Cartões novos por dia e a lista de algoritmos disponíveis.
+ * As Preferências do Usuário (FR-212): o algoritmo escolhido e a lista de
+ * algoritmos disponíveis.
  */
 export interface Preferencias {
   algoritmo: string;
-  limiteDeNovosPorDia: number;
   algoritmos: OpcaoDeAlgoritmo[];
 }
-
-/**
- * Resultado de `obterResumoDaRevisao`. A leitura não tem recusa de domínio: as
- * falhas são `indisponivel` e `nao_autenticado`, e nenhum número é entregue
- * sem sucesso.
- */
-export type ResultadoDoResumoDaRevisao =
-  | { ok: true; resumo: ResumoDaRevisao }
-  | {
-      ok: false;
-      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
-      mensagem: string;
-    };
-
-/**
- * Resultado de `obterLoteDeRevisao`. Como toda leitura, não tem recusa de
- * domínio: as falhas são `indisponivel` e `nao_autenticado`.
- */
-export type ResultadoDoLoteDeRevisao =
-  | { ok: true; itens: ItemDoLoteDeRevisao[] }
-  | {
-      ok: false;
-      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
-      mensagem: string;
-    };
 
 /**
  * Resultado de `obterPrevias`. Sem recusa de domínio: as falhas são
@@ -710,7 +665,7 @@ export type ResultadoDePreferencias =
 
 /**
  * Resultado de `salvarPreferencias`. A recusa de domínio é `dados_invalidos`
- * (limite ou algoritmo fora do contrato, FR-200); as falhas de transporte são
+ * (algoritmo fora do contrato, FR-212); as falhas de transporte são
  * `indisponivel` e `nao_autenticado`.
  */
 export type ResultadoDeSalvarPreferencias =
@@ -1147,27 +1102,6 @@ export interface ClienteDoAcervo {
   obterRegistroDeSessao(id: string): Promise<ResultadoDeObterRegistro>;
 
   /**
-   * O resumo da Revisão do dia para o bloco de Início (FR-198, FR-199): os
-   * Cartões vencidos e quantos novos ainda cabem no limite do dia. Os limites
-   * do dia vêm de `limitesDoDia`, no fuso do navegador (FR-204, D3), e são
-   * instantes ISO-8601.
-   */
-  obterResumoDaRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoResumoDaRevisao>;
-
-  /**
-   * O lote da Revisão do dia, já ordenado — vencidos primeiro —, com a prévia
-   * de cada Cartão (FR-201, FR-203, FR-221). A Sessão da revisão usa a lista
-   * como veio, sem embaralhar (FR-201).
-   */
-  obterLoteDeRevisao(
-    inicioDoDia: string,
-    fimDoDia: string,
-  ): Promise<ResultadoDoLoteDeRevisao>;
-
-  /**
    * A prévia dos Cartões informados, para o estudo livre exibir o que cada
    * Avaliação fará (FR-221). Até 200 `cartaoIds` por chamada.
    */
@@ -1180,13 +1114,12 @@ export interface ClienteDoAcervo {
   obterPreferencias(): Promise<ResultadoDePreferencias>;
 
   /**
-   * Salva as Preferências (FR-200, FR-212). Algoritmo diferente do atual
+   * Salva as Preferências (FR-212). Algoritmo diferente do atual
    * dispara a reconstrução dos Agendamentos no servidor (FR-213); a resposta
    * traz as Preferências já salvas.
    */
   salvarPreferencias(preferencias: {
     algoritmo: string;
-    limiteDeNovosPorDia: number;
   }): Promise<ResultadoDeSalvarPreferencias>;
 
   /**

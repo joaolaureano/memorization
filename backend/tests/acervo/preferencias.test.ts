@@ -5,12 +5,26 @@ import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
 } from "../../src/armazenamento/sqlite/armazenamento.ts";
+import type { AlgoritmoDeRepeticao } from "../../src/repeticao/algoritmo.ts";
 import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
+/** Um segundo algoritmo, só para distinguir as Preferências de dois Usuários. */
+const ALGORITMO_FALSO: AlgoritmoDeRepeticao = {
+  id: "falso",
+  versao: 1,
+  rotulo: "Falso",
+  avaliar(_estado, avaliacao, agora) {
+    return {
+      estado: { algoritmo: "falso", versao: 1, dados: { avaliacao } },
+      proximaRevisaoEm: agora,
+    };
+  },
+};
+
 /**
- * T1510 — Preferências de repetição do `Acervo`: os padrões, a validação do
- * limite e do algoritmo, e a troca de algoritmo que dispara a reconstrução
- * (FR-200, FR-212, FR-213, D5).
+ * T1510 — Preferências de repetição do `Acervo`: o padrão, a validação do
+ * algoritmo e a troca de algoritmo que dispara a reconstrução (FR-212, FR-213,
+ * D5).
  */
 
 let aberto: ArmazenamentoSqliteAberto;
@@ -30,12 +44,11 @@ afterEach(async () => {
 });
 
 describe("obterPreferencias — os padrões", () => {
-  it("devolve sm2 e 20 quando não há linha gravada, sem gravar nada (FR-212, D5)", async () => {
+  it("devolve sm2 quando não há linha gravada, sem gravar nada (FR-212, D5)", async () => {
     expect(await acervo.obterPreferencias()).toEqual({
       ok: true,
       preferencias: {
         algoritmo: "sm2",
-        limiteDeNovosPorDia: 20,
         algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
       },
     });
@@ -43,48 +56,36 @@ describe("obterPreferencias — os padrões", () => {
 });
 
 describe("salvarPreferencias — validação", () => {
-  it("aceita o limite inteiro de 0 a 999 e devolve o mesmo formato do GET (FR-200, FR-212)", async () => {
-    for (const limite of [0, 1, 20, 999]) {
-      expect(
-        await acervo.salvarPreferencias({
-          algoritmo: "sm2",
-          limiteDeNovosPorDia: limite,
-        }),
-      ).toEqual({
-        ok: true,
-        preferencias: {
-          algoritmo: "sm2",
-          limiteDeNovosPorDia: limite,
-          algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
-        },
-      });
-    }
+  it("aceita o algoritmo disponível e devolve o mesmo formato do GET (FR-212)", async () => {
+    expect(await acervo.salvarPreferencias({ algoritmo: "sm2" })).toEqual({
+      ok: true,
+      preferencias: {
+        algoritmo: "sm2",
+        algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+      },
+    });
   });
 
-  it("recusa limite fora do intervalo ou não inteiro como dados_invalidos (FR-200)", async () => {
-    for (const limiteDeNovosPorDia of [
-      -1,
-      1000,
-      1.5,
-      "10",
-      null,
-      undefined,
-      Number.NaN,
-    ]) {
-      expect(
-        await acervo.salvarPreferencias({
-          algoritmo: "sm2",
-          limiteDeNovosPorDia,
-        }),
-      ).toEqual({ ok: false, erro: "dados_invalidos" });
-    }
+  it("ignora o antigo limite de Cartões novos por dia, se vier no corpo", async () => {
+    expect(
+      await acervo.salvarPreferencias({
+        algoritmo: "sm2",
+        limiteDeNovosPorDia: 5000,
+      }),
+    ).toEqual({
+      ok: true,
+      preferencias: {
+        algoritmo: "sm2",
+        algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
+      },
+    });
   });
 
   it("recusa algoritmo desconhecido e corpo sem forma como dados_invalidos (FR-191, FR-212)", async () => {
     for (const dados of [
-      { algoritmo: "inexistente", limiteDeNovosPorDia: 20 },
-      { limiteDeNovosPorDia: 20 },
-      { algoritmo: "sm2" },
+      { algoritmo: "inexistente" },
+      { algoritmo: 42 },
+      {},
       null,
       undefined,
       42,
@@ -103,10 +104,7 @@ describe("salvarPreferencias — reconstrução", () => {
   it("não toca nos Agendamentos quando o algoritmo não muda (FR-212, FR-213)", async () => {
     const espiao = vi.spyOn(aberto.armazenamento, "substituirAgendamentos");
 
-    const resultado = await acervo.salvarPreferencias({
-      algoritmo: "sm2",
-      limiteDeNovosPorDia: 5,
-    });
+    const resultado = await acervo.salvarPreferencias({ algoritmo: "sm2" });
 
     expect(resultado.ok).toBe(true);
     expect(espiao).not.toHaveBeenCalled();
@@ -115,24 +113,24 @@ describe("salvarPreferencias — reconstrução", () => {
 
 describe("Preferências entre Usuários", () => {
   it("isola as Preferências de cada Usuário (FR-219)", async () => {
-    const outro = criarAcervo(
-      aberto.armazenamento,
-      await criarDonoDeTeste(aberto.usuarios, "dono-dois", "bruno.souza"),
+    const algoritmos = new Map([["falso", ALGORITMO_FALSO]]);
+    const dono = await criarDonoDeTeste(
+      aberto.usuarios,
+      "dono-dois",
+      "bruno.souza",
     );
+    const comFalso = criarAcervo(aberto.armazenamento, dono, { algoritmos });
 
-    await acervo.salvarPreferencias({
-      algoritmo: "sm2",
-      limiteDeNovosPorDia: 3,
+    await comFalso.salvarPreferencias({ algoritmo: "falso" });
+
+    expect(await comFalso.obterPreferencias()).toMatchObject({
+      ok: true,
+      preferencias: { algoritmo: "falso" },
     });
 
     expect(await acervo.obterPreferencias()).toMatchObject({
       ok: true,
-      preferencias: { limiteDeNovosPorDia: 3 },
-    });
-
-    expect(await outro.obterPreferencias()).toMatchObject({
-      ok: true,
-      preferencias: { limiteDeNovosPorDia: 20 },
+      preferencias: { algoritmo: "sm2" },
     });
   });
 });

@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
@@ -302,7 +302,7 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
     return { cliente, id: cartao.cartao.id };
   }
 
-  it("exibe os valores atuais e o alcance da alteração (FR-005, FR-146)", async () => {
+  it("exibe os valores atuais, sem aviso de alcance (FR-005)", async () => {
     const cliente = clienteDeProva();
     const cartao = await cliente.criarCartao({
       frente: "To walk",
@@ -339,10 +339,8 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
     ).toBeInTheDocument();
     expect(campoDeFrente()).toHaveValue("To walk");
     expect(campoDeVerso()).toHaveValue("Caminhar");
-    expect(
-      screen.getByText(/vinculado a 3 Baralhos: Inglês, Espanhol, Francês/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/vale em todos eles/i)).toBeInTheDocument();
+    // O alcance da alteração não é mais anunciado na edição.
+    expect(screen.queryByText(/vinculado a/i)).toBeNull();
   });
 
   it("edita o Cartão e volta para a lista (FR-005, FR-006)", async () => {
@@ -373,7 +371,51 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
     expect(window.location.hash).toBe("#/cartoes");
   });
 
-  it("Cartão inexistente apresenta não encontrado com volta para Cartões (FR-156)", async () => {
+  it("Cancelar volta para a página anterior", async () => {
+    const { cliente, id } = await clienteComCartao();
+    const voltar = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    vi.spyOn(window.history, "length", "get").mockReturnValue(2);
+
+    try {
+      render(
+        comProtecaoDeSaida(
+          <PaginaDoFormularioDeCartao cliente={cliente} id={id} />,
+          true,
+        ),
+      );
+
+      await screen.findByDisplayValue("To walk");
+
+      expect(screen.queryByRole("link", { name: "Cancelar" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+      expect(voltar).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("Cancelar sem página anterior leva a Cartões", async () => {
+    window.location.hash = "#/cartoes/novo";
+    vi.spyOn(window.history, "length", "get").mockReturnValue(1);
+
+    try {
+      render(
+        comProtecaoDeSaida(
+          <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+          true,
+        ),
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+
+      expect(window.location.hash).toBe("#/cartoes");
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("Cartão inexistente apresenta não encontrado (FR-156)", async () => {
     render(
       comProtecaoDeSaida(
         <PaginaDoFormularioDeCartao cliente={clienteDeProva()} id="inexistente" />,
@@ -387,8 +429,5 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
         name: "Cartão não encontrado",
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "← Voltar para Cartões" }),
-    ).toHaveAttribute("href", "#/cartoes");
   });
 });

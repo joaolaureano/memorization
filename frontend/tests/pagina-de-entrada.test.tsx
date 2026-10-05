@@ -125,10 +125,8 @@ describe("PaginaDeEntrada — campos, acesso e Credencial", () => {
     const campoDoNome = screen.getByLabelText("Nome de usuário");
     const campoDaSenha = screen.getByLabelText("Senha");
 
-    // FR-327: a saudação da tela é «Bem-vindo», sem "de volta".
-    const sobretitulo = screen.getByText("Bem-vindo");
-
-    expect(sobretitulo).toHaveClass("sobretitulo");
+    // A tela não tem sobretítulo: só o título «Entrar».
+    expect(screen.queryByText("Bem-vindo")).toBeNull();
     expect(screen.queryByText("Bem-vindo de volta")).toBeNull();
 
     expect(campoDoNome).toHaveAttribute("autocomplete", "username");

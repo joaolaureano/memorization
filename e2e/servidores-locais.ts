@@ -269,7 +269,7 @@ export async function aguardarApiPronta(
  * a linha de início que ela imprime informa o armazenamento em uso.
  */
 /**
- * O dia e o fuso das provas que dependem de «hoje» (Agenda, Revisão do dia).
+ * O dia e o fuso das provas que dependem de «hoje» (Agenda).
  * O instante cai numa quarta-feira, ao meio-dia no fuso de teste, longe de
  * qualquer virada de dia ou de semana: a prova não varia com o dia em que roda,
  * nem se cruza a meia-noite, e o fuso não é o da máquina.

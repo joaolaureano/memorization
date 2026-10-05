@@ -497,7 +497,7 @@ describe("migração 7 — repetição espaçada", () => {
       aplicarEsquema(banco);
 
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
-      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(9);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(10);
 
       expect(existeTabela(banco, "agendamento")).toBe(true);
       expect(existeTabela(banco, "preferencias")).toBe(true);
@@ -541,7 +541,7 @@ describe("migração 7 — repetição espaçada", () => {
     });
   });
 
-  it("cria o índice de vencimento e recusa Avaliação inválida e limite fora de 0..999 (FR-187, FR-192, FR-200)", () => {
+  it("cria o índice de vencimento e recusa Avaliação inválida (FR-187, FR-192)", () => {
     comBanco((banco) => {
       aplicarEsquema(banco);
 
@@ -556,10 +556,6 @@ describe("migração 7 — repetição espaçada", () => {
       expect(ddlDaTabela(banco, "agendamento")).toMatch(
         /ultima_avaliacao IN/,
       );
-      expect(ddlDaTabela(banco, "preferencias")).toMatch(
-        /limite_de_novos_por_dia BETWEEN 0 AND 999/,
-      );
-
       const dono = gravarDono(banco);
 
       gravarCartao(banco, dono, "c1");
@@ -585,15 +581,6 @@ describe("migração 7 — repetição espaçada", () => {
             "2026-01-01T00:00:00.000Z",
           ),
       ).toThrow();
-
-      /** O limite de Cartões novos é inteiro de 0 a 999 (FR-200). */
-      const gravarPreferencias = banco.prepare(
-        `INSERT INTO preferencias (usuario_id, algoritmo, limite_de_novos_por_dia)
-         VALUES (?, ?, ?)`,
-      );
-
-      expect(() => gravarPreferencias.run(dono, "sm2", 1000)).toThrow();
-      expect(() => gravarPreferencias.run(dono, "sm2", -1)).toThrow();
     });
   });
 });

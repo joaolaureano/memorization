@@ -109,10 +109,10 @@ export function PaginaDoRegistro({
         <>
           <header className="cabecalho-da-pagina resumo__cabecalho">
             <div>
-              <p className="sobretitulo">
+              <h1>Sessão concluída</h1>
+              <p className="texto-secundario">
                 {tituloDaSessao(registro.registro)}
               </p>
-              <h1>Sessão concluída</h1>
             </div>
           </header>
 

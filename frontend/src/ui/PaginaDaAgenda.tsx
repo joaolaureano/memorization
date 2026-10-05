@@ -253,7 +253,6 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
 
       <div className="cabecalho-da-pagina">
         <div>
-          <p className="sobretitulo">Estudo</p>
           <h1>Rotinas de estudo</h1>
         </div>
         <div className="acoes">

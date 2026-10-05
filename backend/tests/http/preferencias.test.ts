@@ -16,7 +16,7 @@ import { registrarRotasDePreferencias } from "../../src/http/rotas.ts";
  * O servidor é montado como na aplicação, com o hook que exige a Credencial, e
  * só as rotas de Preferências entram: o objeto do teste é o algoritmo e o
  * limite de Cartões novos por dia que a tela de Preferências lê e grava
- * (FR-200, FR-212). Toda asserção atravessa `inject`, a mesma superfície que um
+ * (FR-212). Toda asserção atravessa `inject`, a mesma superfície que um
  * cliente HTTP usa.
  */
 
@@ -39,10 +39,9 @@ function pedir(requisicao: InjectOptions) {
   return pedirComCredencial(servidor, contrato.credencial, requisicao);
 }
 
-/** Os padrões do Usuário sem linha de Preferências: SM-2 e 20 novos por dia. */
+/** O padrão do Usuário sem linha de Preferências: SM-2. */
 const PADRAO = {
   algoritmo: "sm2",
-  limiteDeNovosPorDia: 20,
   algoritmos: [{ id: "sm2", rotulo: "SM-2" }],
 };
 
@@ -52,7 +51,7 @@ const DADOS_DAS_PREFERENCIAS_INVALIDOS = {
 };
 
 describe("GET /preferencias — leitura conforme o contrato (FR-212)", () => {
-  it("devolve SM-2 e 20 Cartões novos por dia, com a lista de algoritmos", async () => {
+  it("devolve SM-2 com a lista de algoritmos", async () => {
     const resposta = await pedir({ method: "GET", url: "/preferencias" });
 
     expect(resposta.statusCode).toBe(200);
@@ -69,60 +68,38 @@ describe("GET /preferencias — leitura conforme o contrato (FR-212)", () => {
   });
 });
 
-describe("PUT /preferencias — gravação conforme o contrato (FR-200, FR-212)", () => {
-  it("salva o limite e devolve o mesmo corpo do GET", async () => {
+describe("PUT /preferencias — gravação conforme o contrato (FR-212)", () => {
+  it("salva o algoritmo e devolve o mesmo corpo do GET", async () => {
     const resposta = await pedir({
       method: "PUT",
       url: "/preferencias",
-      payload: { algoritmo: "sm2", limiteDeNovosPorDia: 5 },
+      payload: { algoritmo: "sm2" },
     });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.json()).toEqual({ ...PADRAO, limiteDeNovosPorDia: 5 });
+    expect(resposta.json()).toEqual(PADRAO);
 
     const leitura = await pedir({ method: "GET", url: "/preferencias" });
     expect(leitura.statusCode).toBe(200);
-    expect(leitura.json()).toEqual({ ...PADRAO, limiteDeNovosPorDia: 5 });
+    expect(leitura.json()).toEqual(PADRAO);
   });
 
-  it("aceita 0 como 'não introduzir Cartões novos' (FR-200)", async () => {
-    const resposta = await pedir({
-      method: "PUT",
-      url: "/preferencias",
-      payload: { algoritmo: "sm2", limiteDeNovosPorDia: 0 },
-    });
-
-    expect(resposta.statusCode).toBe(200);
-    expect(resposta.json().limiteDeNovosPorDia).toBe(0);
-  });
-
-  it("recusa limite 1000 com 400 (FR-200)", async () => {
+  it("ignora o antigo limite de Cartões novos por dia, se vier no corpo", async () => {
     const resposta = await pedir({
       method: "PUT",
       url: "/preferencias",
       payload: { algoritmo: "sm2", limiteDeNovosPorDia: 1000 },
     });
 
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual(DADOS_DAS_PREFERENCIAS_INVALIDOS);
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual(PADRAO);
   });
 
-  it("recusa limite negativo com 400 (FR-200)", async () => {
+  it("recusa corpo sem algoritmo com 400 (FR-212)", async () => {
     const resposta = await pedir({
       method: "PUT",
       url: "/preferencias",
-      payload: { algoritmo: "sm2", limiteDeNovosPorDia: -1 },
-    });
-
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual(DADOS_DAS_PREFERENCIAS_INVALIDOS);
-  });
-
-  it("recusa limite não inteiro com 400 (FR-200)", async () => {
-    const resposta = await pedir({
-      method: "PUT",
-      url: "/preferencias",
-      payload: { algoritmo: "sm2", limiteDeNovosPorDia: 1.5 },
+      payload: {},
     });
 
     expect(resposta.statusCode).toBe(400);
@@ -133,7 +110,7 @@ describe("PUT /preferencias — gravação conforme o contrato (FR-200, FR-212)"
     const resposta = await pedir({
       method: "PUT",
       url: "/preferencias",
-      payload: { algoritmo: "desconhecido", limiteDeNovosPorDia: 20 },
+      payload: { algoritmo: "desconhecido" },
     });
 
     expect(resposta.statusCode).toBe(400);
@@ -144,7 +121,7 @@ describe("PUT /preferencias — gravação conforme o contrato (FR-200, FR-212)"
     const resposta = await servidor.inject({
       method: "PUT",
       url: "/preferencias",
-      payload: { algoritmo: "sm2", limiteDeNovosPorDia: 5 },
+      payload: { algoritmo: "sm2" },
     });
 
     expect(resposta.statusCode).toBe(401);

@@ -155,7 +155,7 @@ function rotulosDosDias(): HTMLElement[] {
 }
 
 describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
-  it("aparece depois da Revisão do dia quando não há Rotinas (019, FR-310)", async () => {
+  it("aparece quando não há Rotinas, sem a Revisão do dia (019, FR-310)", async () => {
     const servidor = clienteDeProva();
 
     await abrir(servidor);
@@ -164,12 +164,10 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
       await screen.findByText("Nenhum estudo agendado para hoje"),
     ).toBeInTheDocument();
 
-    const agenda = screen.getByRole("heading", { name: "Agenda de hoje" });
-    const revisao = screen.getByRole("heading", { name: "Revisão do dia" });
-
     expect(
-      revisao.compareDocumentPosition(agenda) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+      screen.getByRole("heading", { name: "Agenda de hoje" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Revisão do dia")).toBeNull();
     // O fuso é usado nas leituras, mas não aparece na tela (FR-334).
     expect(screen.queryByText(/Fuso horário/)).toBeNull();
   });
@@ -294,8 +292,6 @@ describe("bloco da Agenda em Início (FR-227–FR-230, FR-240, FR-241)", () => {
       "href",
       `#/sessoes/${inicio.inicio.id}`,
     );
-    // A Revisão do dia mantém contagem e mensagem próprias (FR-256).
-    expect(screen.getByText("Revisão do dia")).toBeInTheDocument();
   });
 
   it("Baralho excluído deixa o Compromisso indisponível, sem Estudar, com Ajustar rotina (FR-243)", async () => {

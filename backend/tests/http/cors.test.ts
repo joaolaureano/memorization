@@ -389,69 +389,6 @@ describe("CORS para o frontend local", () => {
     expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
-  it("responde ao pré-voo de GET /revisao com 204 e lê o resumo com access-control-allow-origin (FR-198)", async () => {
-    const preVoo = await pedir({
-      method: "OPTIONS",
-      url: "/revisao",
-      headers: {
-        origin: ORIGEM_DO_FRONTEND,
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization",
-      },
-    });
-
-    expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-    expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
-    /** Sem `authorization`, o navegador recusaria o `fetch` com Credencial. */
-    expect(preVoo.headers["access-control-allow-headers"]).toContain(
-      "authorization",
-    );
-
-    const resposta = await pedir({
-      method: "GET",
-      url: "/revisao?inicioDoDia=2026-01-01T00:00:00.000Z&fimDoDia=2026-01-01T23:59:59.999Z",
-    });
-
-    expect(resposta.statusCode).not.toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-  });
-
-  it("responde ao pré-voo de GET /revisao/lote com 204 e lê o lote com access-control-allow-origin (FR-201)", async () => {
-    const preVoo = await pedir({
-      method: "OPTIONS",
-      url: "/revisao/lote",
-      headers: {
-        origin: ORIGEM_DO_FRONTEND,
-        "access-control-request-method": "GET",
-        "access-control-request-headers": "authorization",
-      },
-    });
-
-    expect(preVoo.statusCode).toBe(204);
-    expect(preVoo.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-    expect(preVoo.headers["access-control-allow-methods"]).toContain("GET");
-    expect(preVoo.headers["access-control-allow-headers"]).toContain(
-      "authorization",
-    );
-
-    const resposta = await pedir({
-      method: "GET",
-      url: "/revisao/lote?inicioDoDia=2026-01-01T00:00:00.000Z&fimDoDia=2026-01-01T23:59:59.999Z",
-    });
-
-    expect(resposta.statusCode).not.toBe(404);
-    expect(resposta.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-  });
-
   it("responde ao pré-voo de POST /previas com 204 e lê a resposta com access-control-allow-origin (FR-221)", async () => {
     const preVoo = await pedir({
       method: "OPTIONS",
@@ -536,12 +473,12 @@ describe("CORS para o frontend local", () => {
     /** O `PUT` reenvia as Preferências atuais, para exercitar o caminho de sucesso. */
     const atuais = await pedir({ method: "GET", url: "/preferencias" });
     expect(atuais.statusCode).toBe(200);
-    const { algoritmo, limiteDeNovosPorDia } = atuais.json();
+    const { algoritmo } = atuais.json();
 
     const resposta = await pedir({
       method: "PUT",
       url: "/preferencias",
-      payload: { algoritmo, limiteDeNovosPorDia },
+      payload: { algoritmo },
     });
 
     expect(resposta.statusCode).toBe(200);

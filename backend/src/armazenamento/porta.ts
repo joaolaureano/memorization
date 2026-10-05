@@ -173,17 +173,12 @@ export interface Agendamento {
 
 /**
  * Preferências de repetição espaçada de um Usuário (FR-212). A **ausência de
- * linha** equivale aos padrões — `algoritmo = "sm2"` e `limiteDeNovosPorDia =
- * 20` —, que a Porta sintetiza na leitura, sem gravar linha a priori (D5).
+ * linha** equivale ao padrão — `algoritmo = "sm2"` —, que a Porta sintetiza
+ * na leitura, sem gravar linha a priori (D5).
  */
 export interface Preferencias {
   /** Identificador do algoritmo escolhido; precisa estar em `ALGORITMOS`. */
   readonly algoritmo: string;
-  /**
-   * Inteiro de 0 a 999; **0** significa não introduzir Cartões novos
-   * (FR-200).
-   */
-  readonly limiteDeNovosPorDia: number;
 }
 
 /**
@@ -744,7 +739,7 @@ export interface ArmazenamentoDoAcervo {
   /**
    * Devolve as Preferências de repetição espaçada de `usuarioId` (FR-212).
    * Ausência de linha **não** é `nao_encontrado`: a Porta sintetiza os padrões
-   * (`algoritmo = "sm2"`, `limiteDeNovosPorDia = 20`) e nunca grava linha a
+   * (`algoritmo = "sm2"`) e nunca grava linha a
    * priori (D5).
    */
   obterPreferencias(usuarioId: string): Promise<Preferencias>;
