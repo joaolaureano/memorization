@@ -304,6 +304,40 @@ export type ResultadoDeCriacaoDeBaralho =
     };
 
 /**
+ * O que a tela manda ao salvar uma seleção como Baralho num gesto único
+ * (FR-371): o `id` do Baralho, o nome e os Cartões escolhidos, na ordem em que
+ * foram apresentados. O `id` vem do cliente para que o mesmo envio não duplique
+ * nada (FR-372).
+ */
+export interface DadosDeSelecaoParaBaralho {
+  id: string;
+  nome: string;
+  cartaoIds: readonly string[];
+}
+
+/**
+ * O desfecho de `salvarSelecaoComoBaralho`: o Baralho criado com os Vínculos,
+ * ou a recusa — `cartoes_indisponiveis` devolve os ids que não são mais do dono
+ * (FR-373), `conflito` avisa que o `id` já pertence a outro dono e pede um id
+ * novo (FR-374), e os demais códigos seguem o contrato dos Baralhos (FR-371).
+ */
+export type ResultadoDeSalvarSelecao =
+  | { ok: true; baralho: Baralho }
+  | { ok: false; erro: CodigoDeErroDeBaralho; mensagem: string }
+  | {
+      ok: false;
+      erro: "cartoes_indisponiveis";
+      mensagem: string;
+      cartaoIds: string[];
+    }
+  | { ok: false; erro: "conflito"; mensagem: string }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
  * Resultado de `listarBaralhos`. A listagem não tem recusa de domínio: as
  * falhas são `indisponivel` e `nao_autenticado`, e nenhuma lista é entregue
  * sem sucesso.
@@ -507,7 +541,7 @@ export interface ItemRegistrado {
  */
 export interface RegistroResumido {
   id: string;
-  origem: "baralho" | "revisao";
+  origem: "baralho" | "revisao" | "temporario";
   baralhoId: string;
   nomeDoBaralho: string;
   concluidaEm: string;
@@ -539,7 +573,7 @@ export interface RegistroDeSessao extends RegistroResumido {
 export interface DadosDeRegistro {
   id: string;
   /** Origem da Sessão: estudo livre por Baralho ou Revisão do dia (FR-196). */
-  origem: "baralho" | "revisao";
+  origem: "baralho" | "revisao" | "temporario";
   baralhoId: string;
   nomeDoBaralho: string;
   /**
@@ -1005,6 +1039,18 @@ export interface ClienteDoAcervo {
    * dois Baralhos de mesmo nome são ambos aceitos (FR-012).
    */
   criarBaralho(dados: DadosDeBaralho): Promise<ResultadoDeCriacaoDeBaralho>;
+
+  /**
+   * Salva uma seleção de Cartões como Baralho num gesto único (FR-371): cria o
+   * Baralho e os Vínculos com os Cartões escolhidos, sem passar por
+   * `criarBaralho` seguido de `vincular`. O mesmo `id` reenviado não duplica —
+   * devolve o Baralho já existente (FR-372); `cartoes_indisponiveis` traz, na
+   * ordem recebida, os ids que não são mais do dono (FR-373); `conflito` avisa
+   * que o `id` pertence a outro dono e pede um id novo (FR-374).
+   */
+  salvarSelecaoComoBaralho(
+    dados: DadosDeSelecaoParaBaralho,
+  ): Promise<ResultadoDeSalvarSelecao>;
 
   /**
    * Lista todos os Baralhos existentes, cada um com id, nome, contagem de

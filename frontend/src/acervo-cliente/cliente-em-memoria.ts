@@ -36,6 +36,7 @@ import type {
   DadosDeTrocaDeSenha,
   DadosDeRegistro,
   DadosDeRotina,
+  DadosDeSelecaoParaBaralho,
   DadosDeUsuario,
   OpcaoDeAlgoritmo,
   Preferencias,
@@ -70,6 +71,7 @@ import type {
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeSalvarPreferencias,
   ResultadoDeSalvarRotina,
+  ResultadoDeSalvarSelecao,
   ResultadoDeVinculacao,
   ResultadoDoItemRegistrado,
 } from "./cliente";
@@ -388,6 +390,88 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     };
 
     this.base.baralhos.push(baralho);
+
+    return { ok: true, baralho: baralhoSemDono(baralho) };
+  }
+
+  /**
+   * Cria o Baralho e os Vínculos com os Cartões escolhidos num gesto único
+   * (FR-371). O `id` vem do cliente: o mesmo `id` já usado por um Baralho do
+   * dono devolve esse Baralho sem duplicar nada (FR-372); um `id` de outro dono
+   * é `conflito` (FR-374); e algum Cartão que não seja do dono é
+   * `cartoes_indisponiveis`, com os ids na ordem recebida, sem gravar nada
+   * (FR-373).
+   */
+  async salvarSelecaoComoBaralho(
+    dados: DadosDeSelecaoParaBaralho,
+  ): Promise<ResultadoDeSalvarSelecao> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      };
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const falha = validarNomeDeBaralho(dados.nome);
+
+    if (falha !== null) {
+      return { ok: false, ...falha };
+    }
+
+    const existente = this.base.baralhos.find(
+      (baralho) => baralho.id === dados.id,
+    );
+
+    if (existente !== undefined) {
+      if (existente.usuarioId !== dono.id) {
+        return {
+          ok: false,
+          erro: "conflito",
+          mensagem: "Não foi possível salvar o baralho. Tente novamente.",
+        };
+      }
+
+      return { ok: true, baralho: baralhoSemDono(existente) };
+    }
+
+    const indisponiveis = dados.cartaoIds.filter(
+      (cartaoId) =>
+        !this.base.cartoes.some(
+          (cartao) => cartao.id === cartaoId && cartao.usuarioId === dono.id,
+        ),
+    );
+
+    if (indisponiveis.length > 0) {
+      return {
+        ok: false,
+        erro: "cartoes_indisponiveis",
+        mensagem: "Alguns cartões não estão mais disponíveis.",
+        cartaoIds: indisponiveis,
+      };
+    }
+
+    const baralho: BaralhoDoDono = {
+      id: dados.id,
+      usuarioId: dono.id,
+      nome: dados.nome,
+    };
+
+    this.base.baralhos.push(baralho);
+
+    for (const cartaoId of dados.cartaoIds) {
+      this.base.vinculos.push({
+        usuarioId: dono.id,
+        cartaoId,
+        baralhoId: baralho.id,
+      });
+    }
 
     return { ok: true, baralho: baralhoSemDono(baralho) };
   }
@@ -973,18 +1057,22 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       (item) => resultadoDaAvaliacao(item.avaliacao) === "acertou",
     ).length;
     const ehRevisao = dados.origem === "revisao";
+    const ehTemporario = dados.origem === "temporario";
+    const semBaralho = ehRevisao || ehTemporario;
     const agora = new Date();
 
     const registro: RegistroDaBase = {
       id: dados.id,
       usuarioId: dono.id,
       origem: dados.origem,
-      // Na Revisão do dia, o Baralho é derivado: sem Baralho e com o nome
-      // fixo (FR-196, D5).
-      baralhoId: ehRevisao ? "" : dados.baralhoId,
-      nomeDoBaralho: ehRevisao
-        ? "Revisão do dia"
-        : (inicioDaAgenda?.nomeDoBaralho ?? dados.nomeDoBaralho),
+      // Na Revisão do dia e no Baralho temporário, o Baralho é derivado: sem
+      // Baralho e com o nome fixo (FR-196, D5, FR-369).
+      baralhoId: semBaralho ? "" : dados.baralhoId,
+      nomeDoBaralho: ehTemporario
+        ? "Baralho temporário"
+        : ehRevisao
+          ? "Revisão do dia"
+          : (inicioDaAgenda?.nomeDoBaralho ?? dados.nomeDoBaralho),
       concluidaEm: agora.toISOString(),
       estudados,
       acertos,
@@ -1938,7 +2026,11 @@ function dadosDeRegistroValidos(dados: DadosDeRegistro): boolean {
     return false;
   }
 
-  if (dados.origem !== "baralho" && dados.origem !== "revisao") {
+  if (
+    dados.origem !== "baralho" &&
+    dados.origem !== "revisao" &&
+    dados.origem !== "temporario"
+  ) {
     return false;
   }
 

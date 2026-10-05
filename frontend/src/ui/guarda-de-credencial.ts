@@ -2,6 +2,7 @@ import { NAO_AUTENTICADO } from "../acervo-cliente/cliente";
 import type {
   ClienteDoAcervo,
   DadosDeBaralho,
+  DadosDeSelecaoParaBaralho,
   DadosDeCartao,
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
@@ -73,6 +74,8 @@ export function comGuardaDeCredencial(
 
     criarBaralho: async (dados: DadosDeBaralho) =>
       vigiar(await cliente.criarBaralho(dados)),
+    salvarSelecaoComoBaralho: async (dados: DadosDeSelecaoParaBaralho) =>
+      vigiar(await cliente.salvarSelecaoComoBaralho(dados)),
 
     listarBaralhos: async () => vigiar(await cliente.listarBaralhos()),
 

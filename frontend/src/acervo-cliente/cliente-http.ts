@@ -43,6 +43,7 @@ import type {
   ClienteDoAcervo,
   Credencial,
   DadosDeBaralho,
+  DadosDeSelecaoParaBaralho,
   DadosDeCartao,
   DadosDeInicioDeCompromisso,
   DadosDeRegistro,
@@ -57,6 +58,7 @@ import type {
   RegistroResumido,
   ResultadoDasPrevias,
   ResultadoDeCriacaoDeBaralho,
+  ResultadoDeSalvarSelecao,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
   ResultadoDeDesvinculacao,
@@ -374,6 +376,93 @@ export class ClienteHttp implements ClienteDoAcervo {
 
       if (resposta.status === 400) {
         return this.traduzirRecusaDeBaralho(await resposta.json());
+      }
+
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    } catch {
+      return this.falhaDeIndisponibilidadeDeBaralhos();
+    }
+  }
+
+  /**
+   * Salva uma seleção de cartões como um novo baralho (FR-371–FR-374).
+   *
+   * Envia a seleção para `POST /baralhos/de-selecao` e traduz a resposta em um
+   * resultado de salvamento. Recusas de nome (vazio ou muito longo) são
+   * repassadas como erro de Baralho; cartões indisponíveis e conflitos são
+   * informados à parte para que a interface possa orientar a pessoa.
+   */
+  async salvarSelecaoComoBaralho(
+    dados: DadosDeSelecaoParaBaralho,
+  ): Promise<ResultadoDeSalvarSelecao> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/baralhos/de-selecao`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify({
+          id: dados.id,
+          nome: dados.nome,
+          cartaoIds: dados.cartaoIds,
+        }),
+      });
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      if (resposta.status === 201 || resposta.status === 200) {
+        const baralho = lerBaralho(await resposta.json());
+
+        if (baralho !== null) {
+          return { ok: true, baralho };
+        }
+
+        return this.falhaDeIndisponibilidadeDeBaralhos();
+      }
+
+      if (resposta.status === 400) {
+        return this.traduzirRecusaDeBaralho(await resposta.json());
+      }
+
+      if (resposta.status === 409) {
+        const corpo: unknown = await resposta.json();
+
+        if (typeof corpo === "object" && corpo !== null && "erro" in corpo) {
+          if (corpo.erro === "cartoes_indisponiveis") {
+            const recusa = corpo as {
+              mensagem?: unknown;
+              cartaoIds?: unknown;
+            };
+            const cartaoIds = recusa.cartaoIds;
+
+            if (
+              typeof recusa.mensagem === "string" &&
+              Array.isArray(cartaoIds) &&
+              cartaoIds.every((cartaoId) => typeof cartaoId === "string")
+            ) {
+              return {
+                ok: false,
+                erro: "cartoes_indisponiveis",
+                mensagem: recusa.mensagem,
+                cartaoIds,
+              };
+            }
+          }
+
+          if (corpo.erro === "conflito") {
+            const recusa = corpo as { mensagem?: unknown };
+
+            if (typeof recusa.mensagem === "string") {
+              return {
+                ok: false,
+                erro: "conflito",
+                mensagem: recusa.mensagem,
+              };
+            }
+          }
+        }
+
+        return this.falhaDeIndisponibilidadeDeBaralhos();
       }
 
       return this.falhaDeIndisponibilidadeDeBaralhos();
@@ -1840,7 +1929,9 @@ function lerRegistroResumido(corpo: unknown): RegistroResumido | null {
 
   if (
     typeof campos.id !== "string" ||
-    (campos.origem !== "baralho" && campos.origem !== "revisao") ||
+    (campos.origem !== "baralho" &&
+      campos.origem !== "revisao" &&
+      campos.origem !== "temporario") ||
     typeof campos.baralhoId !== "string" ||
     typeof campos.nomeDoBaralho !== "string" ||
     typeof campos.concluidaEm !== "string" ||

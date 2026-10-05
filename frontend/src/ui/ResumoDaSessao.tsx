@@ -61,7 +61,7 @@ export function ResumoDaSessao({
   children,
 }: {
   itens: readonly ItemDoResumo[];
-  origem?: "baralho" | "revisao";
+  origem?: "baralho" | "revisao" | "temporario";
   children?: ReactNode;
 }) {
   const acertos = itens.filter((item) => item.resultado === "acertou");
