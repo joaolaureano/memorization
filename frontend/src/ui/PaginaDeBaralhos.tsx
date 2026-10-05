@@ -299,7 +299,7 @@ function ItemDeBaralho({
   const temCartoes = baralho.quantidadeDeCartoes > 0;
 
   return (
-    <li className="linha-da-lista">
+    <li className="linha-da-lista linha-da-lista--com-etiqueta">
       <div className="linha-da-lista__texto">
         <p className="linha-da-lista__titulo">{baralho.nome}</p>
         <p className="linha-da-lista__detalhe">

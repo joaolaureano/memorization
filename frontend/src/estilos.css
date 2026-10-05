@@ -1126,6 +1126,37 @@ dialog .acoes {
   }
 }
 
+/* Linhas com a etiqueta de situação (FR-381): etiqueta e ações não cabem ao
+ * lado do texto num telefone — o texto ficaria espremido numa coluna de
+ * poucos caracteres. Até 600px (o mesmo limite da barra inferior), o texto
+ * ocupa a linha e a etiqueta desce com as ações, antes delas, sem truncar nem
+ * criar rolagem horizontal. */
+@media (max-width: 600px) {
+  .linha-da-lista--com-etiqueta {
+    flex-wrap: wrap;
+  }
+
+  .linha-da-lista--com-etiqueta > .linha-da-lista__texto {
+    flex-basis: 100%;
+  }
+
+  .linha-da-lista--com-etiqueta > .linha-da-lista__acoes {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  /* Etiqueta mais longa («Sem cartões») + Revisar + Editar precisam caber
+   * numa só fileira em 360px; o alvo continua com 44px de altura. */
+  .linha-da-lista--com-etiqueta > .linha-da-lista__acoes > .botao {
+    padding-inline: 10px;
+  }
+
+  .linha-da-lista--com-etiqueta .etiqueta {
+    padding-inline: 8px;
+  }
+}
+
 /* O título é texto somente leitura (FR-341, FR-344): sem cor de link. */
 .linha-da-lista__titulo {
   margin: 0;

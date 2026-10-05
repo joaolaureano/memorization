@@ -1,7 +1,7 @@
 # Feature Specification: Revisar Baralhos
 
 **Created**: 2026-10-05
-**Status**: Especificada conforme esclarecimentos do Usuário; implementação em andamento.
+**Status**: Implementada e verificada (ver `research.md`, seção Verificação).
 **Input**: Trocar Estudar por Revisar, iniciar a revisão sem configuração de quantidade, mover Situação da revisão de Cartões para Baralhos e apresentar uma etiqueta à esquerda dos botões de cada Baralho. Escopo confirmado: aplicação, specs e protótipos; execução com subagentes baratos.
 **Depende de**: specs 004, 012, 013, 015, 021, 022 e 023.
 

@@ -333,6 +333,12 @@ test("Pendente abre o modal «Revisar baralho»; a escolha inicia e o Revisado c
       page.getByRole("heading", { level: 1, name: "Sessão concluída" }),
     ).toBeVisible({ timeout: 15_000 });
 
+    // O Registro precisa estar confirmado antes de sair: sair do Resumo antes
+    // disso pede confirmação (FR-164) e a próxima navegação não aconteceria.
+    await expect(
+      page.getByText("Sessão registrada no histórico."),
+    ).toBeVisible({ timeout: 15_000 });
+
     // O encerramento também foi renomeado (spec 024).
     await expect(acionavel(page, "Revisar novamente")).toBeVisible();
 

@@ -190,7 +190,10 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
               situacoesDosBaralhos.get(baralho.id) ?? "sem-cartoes";
 
             return (
-              <li className="linha-da-lista" key={baralho.id}>
+              <li
+                className="linha-da-lista linha-da-lista--com-etiqueta"
+                key={baralho.id}
+              >
                 <div className="linha-da-lista__texto">
                   <p className="linha-da-lista__titulo">{baralho.nome}</p>
                   <p className="linha-da-lista__detalhe">

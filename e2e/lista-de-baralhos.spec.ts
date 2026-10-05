@@ -68,6 +68,14 @@ const ALTURA_DA_VIEWPORT = 844;
 /** Cada linha da lista é fina: no máximo 72px de altura (FR-144). */
 const ALTURA_MAXIMA_DA_LINHA = 72;
 
+/**
+ * Spec 024, FR-381: até 600px a etiqueta de situação desce com as ações para
+ * uma segunda linha, antes delas, em vez de espremer o nome; a linha ganha o
+ * texto mais uma fileira de controles de 44px.
+ */
+const LARGURA_MAXIMA_DO_TELEFONE = 600;
+const ALTURA_MAXIMA_DA_LINHA_NO_TELEFONE = 112;
+
 /** Cada controle da linha é um alvo de toque: no mínimo 44px (FR-144). */
 const ALTURA_MINIMA_DO_ALVO = 44;
 
@@ -77,8 +85,13 @@ const CONTROLES_POR_LINHA = 2;
 /** O bloco do nome fica a no máximo 4px do centro vertical da linha (FR-144). */
 const TOLERANCIA_DE_CENTRALIZACAO = 4;
 
-/** Na primeira tela do telefone, ao menos seis linhas inteiras (SC-079). */
-const LINHAS_NA_PRIMEIRA_TELA = 6;
+/**
+ * Na primeira tela do telefone, ao menos duas linhas inteiras. Eram seis com a
+ * linha de uma fileira (SC-079); a spec 024 (FR-381) admite que etiqueta e
+ * ações desçam para uma segunda fileira e acrescenta o filtro de Situação ao
+ * painel, de modo que a primeira tela comporta menos linhas.
+ */
+const LINHAS_NA_PRIMEIRA_TELA = 2;
 
 test.setTimeout(180_000);
 
@@ -187,7 +200,9 @@ for (const largura of LARGURAS) {
         }
 
         expect(alturasDasLinhas[indice]).toBeLessThanOrEqual(
-          ALTURA_MAXIMA_DA_LINHA,
+          largura <= LARGURA_MAXIMA_DO_TELEFONE
+            ? ALTURA_MAXIMA_DA_LINHA_NO_TELEFONE
+            : ALTURA_MAXIMA_DA_LINHA,
         );
       }
 
@@ -270,7 +285,11 @@ for (const largura of LARGURAS) {
           return Math.abs(centroDoNome - centroDaLinha);
         });
 
-        expect(desvioDoNome).toBeLessThanOrEqual(TOLERANCIA_DE_CENTRALIZACAO);
+        // No telefone o texto ocupa a primeira linha e as ações a segunda
+        // (FR-381): o centramento vertical vale só para a linha única.
+        if (largura > LARGURA_MAXIMA_DO_TELEFONE) {
+          expect(desvioDoNome).toBeLessThanOrEqual(TOLERANCIA_DE_CENTRALIZACAO);
+        }
       }
 
       // Nenhuma rolagem horizontal na largura testada (FR-144, SC-079).
@@ -281,7 +300,7 @@ for (const largura of LARGURAS) {
 
       expect(medidas.conteudo).toBeLessThanOrEqual(medidas.visivel);
 
-      // No telefone estreito, ao menos seis linhas cabem inteiras na primeira
+      // No telefone estreito, ao menos duas linhas cabem inteiras na primeira
       // tela — é o que a linha fina compra (SC-079).
       if (largura === 390) {
         await page.evaluate(() => window.scrollTo(0, 0));

@@ -267,11 +267,10 @@ test("percurso integrado: agendar, estudar pelo Compromisso, concluir e reencont
       pagina.getByText("0 de 1 estudo concluído"),
     ).toBeVisible();
 
-    // Revisar pelo Compromisso: a Sessão começa direto, com 2 dos 3 Cartões —
-    // a Agenda já resolve o conjunto e não passa pelo modal (spec 024).
-    await pagina.getByRole("button", { name: "Revisar Inglês" }).click();
+    // Estudar pelo Compromisso: a Sessão começa direto, com 2 dos 3 Cartões.
+    await pagina.getByRole("button", { name: "Estudar Inglês" }).click();
     await expect(
-      pagina.getByRole("heading", { level: 1, name: "Revisar Inglês" }),
+      pagina.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
     ).toBeVisible();
     await expect(pagina.getByLabel("Item 1 de 2")).toBeVisible();
 
@@ -378,9 +377,9 @@ test("interromper a Sessão da Agenda e recarregar não registram nada nem concl
 
     const pagina = await abrirComoUsuario(browser, ambiente, bia);
 
-    await pagina.getByRole("button", { name: "Revisar Francês" }).click();
+    await pagina.getByRole("button", { name: "Estudar Francês" }).click();
     await expect(
-      pagina.getByRole("heading", { level: 1, name: "Revisar Francês" }),
+      pagina.getByRole("heading", { level: 1, name: "Estudar Francês" }),
     ).toBeVisible();
 
     // Recarregar abandona a Sessão e volta a Início, com o Compromisso pendente.
@@ -391,7 +390,7 @@ test("interromper a Sessão da Agenda e recarregar não registram nada nem concl
     await expect(pagina).toHaveURL(/#\/inicio$/);
 
     // Interromper pela interface, com a confirmação.
-    await pagina.getByRole("button", { name: "Revisar Francês" }).click();
+    await pagina.getByRole("button", { name: "Estudar Francês" }).click();
     await pagina.getByRole("button", { name: "Interromper" }).click();
     await pagina
       .getByRole("dialog")
