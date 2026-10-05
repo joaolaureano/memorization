@@ -37,7 +37,7 @@ Sem tarefas: nenhuma dependência nova.
 
 **Goal**: salvar a seleção como Baralho. **Independent Test**: salvar com nome válido cria um único Baralho com os mesmos Cartões.
 
-- [ ] T2311 [US3] SalvarSelecaoComoBaralho.tsx, integrado ao Resumo temporário, conforme contracts/ui.md: nome com contador; contagem a vincular; id estável por percurso; erros de nome; falha com nova tentativa; indisponíveis com «Retirar indisponíveis»; Cancelar; sucesso com «Baralho salvo.» e «Abrir baralho»; focos. Provas pelo DOM. FR-370–FR-374, SC-146, SC-147.
+- [X] T2311 [US3] SalvarSelecaoComoBaralho.tsx, integrado ao Resumo temporário, conforme contracts/ui.md: nome com contador; contagem a vincular; id estável por percurso; erros de nome; falha com nova tentativa; indisponíveis com «Retirar indisponíveis»; Cancelar; sucesso com «Baralho salvo.» e «Abrir baralho»; focos. Provas pelo DOM. FR-370–FR-374, SC-146, SC-147.
 
 ## Phase 6: Polish & Cross-Cutting
 

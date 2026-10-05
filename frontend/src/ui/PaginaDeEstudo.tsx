@@ -22,7 +22,8 @@ import type {
   EstadoDaSessaoConcluida,
 } from "../sessao-de-estudo/sessao-de-estudo";
 import { ResumoDaSessao } from "./ResumoDaSessao";
-import type { Cartao } from "../acervo-cliente/cliente";
+import type { Baralho, Cartao } from "../acervo-cliente/cliente";
+import { SalvarSelecaoComoBaralho } from "./SalvarSelecaoComoBaralho";
 import type { ItemDoResumo } from "./ResumoDaSessao";
 import { irParaRota } from "./navegacao";
 import { useAcaoProtegida, useProtecaoDeSaida } from "./protecao-de-saida";
@@ -167,6 +168,26 @@ export function PaginaDeEstudo({
   const quantidadeRef = useRef<HTMLInputElement>(null);
   const conteinerDaSessao = useRef<HTMLDivElement>(null);
   const idDoRegistroDeSessao = useRef<string | null>(null);
+  const [salvandoComoBaralho, setSalvandoComoBaralho] = useState(false);
+  const [baralhoSalvo, setBaralhoSalvo] = useState<Baralho | null>(null);
+  const botaoDeSalvarRef = useRef<HTMLButtonElement>(null);
+  const linkDoBaralhoSalvoRef = useRef<HTMLAnchorElement>(null);
+  const focoAoVoltarAoResumo = useRef<"salvar" | "abrir" | null>(null);
+
+  // FR-370, FR-373 — Cancelar volta o foco a «Salvar como baralho»; o
+  // sucesso o leva a «Abrir baralho».
+  useEffect(() => {
+    if (salvandoComoBaralho) {
+      return;
+    }
+    const alvo = focoAoVoltarAoResumo.current;
+    if (alvo === "salvar") {
+      botaoDeSalvarRef.current?.focus();
+    } else if (alvo === "abrir") {
+      linkDoBaralhoSalvoRef.current?.focus();
+    }
+    focoAoVoltarAoResumo.current = null;
+  }, [salvandoComoBaralho]);
 
   useEffect(() => {
     let ativo = true;
@@ -752,6 +773,25 @@ export function PaginaDeEstudo({
   }
 
   if (estado.concluida) {
+    if (selecaoTemporaria !== undefined && salvandoComoBaralho) {
+      // FR-371–FR-374: «Salvar como baralho» substitui o Resumo na mesma rota.
+      return (
+        <SalvarSelecaoComoBaralho
+          cliente={cliente}
+          cartaoIds={selecaoTemporaria.map((cartao) => cartao.id)}
+          aoSalvar={(baralho) => {
+            focoAoVoltarAoResumo.current = "abrir";
+            setBaralhoSalvo(baralho);
+            setSalvandoComoBaralho(false);
+          }}
+          aoCancelar={() => {
+            focoAoVoltarAoResumo.current = "salvar";
+            setSalvandoComoBaralho(false);
+          }}
+        />
+      );
+    }
+
     return (
       <div className="pilha">
         <header className="cabecalho-da-pagina resumo__cabecalho">
@@ -810,18 +850,33 @@ export function PaginaDeEstudo({
 
           {ehTemporario ? (
             <div className="acoes resumo__acoes">
-              <button
-                className="botao botao--primario"
-                type="button"
-                disabled={situacaoDoRegistro.estado !== "registrada"}
-                aria-describedby={
-                  situacaoDoRegistro.estado !== "registrada"
-                    ? "motivo-de-salvar-como-baralho"
-                    : undefined
-                }
-              >
-                Salvar como baralho
-              </button>
+              {baralhoSalvo !== null ? (
+                <>
+                  <p className="aviso aviso--sucesso">Baralho salvo.</p>
+                  <a
+                    ref={linkDoBaralhoSalvoRef}
+                    className="botao botao--primario"
+                    href={`#/baralhos/${encodeURIComponent(baralhoSalvo.id)}`}
+                  >
+                    Abrir baralho
+                  </a>
+                </>
+              ) : (
+                <button
+                  ref={botaoDeSalvarRef}
+                  className="botao botao--primario"
+                  type="button"
+                  disabled={situacaoDoRegistro.estado !== "registrada"}
+                  onClick={() => setSalvandoComoBaralho(true)}
+                  aria-describedby={
+                    situacaoDoRegistro.estado !== "registrada"
+                      ? "motivo-de-salvar-como-baralho"
+                      : undefined
+                  }
+                >
+                  Salvar como baralho
+                </button>
+              )}
               <a
                 className="botao botao--secundario"
                 href="#/baralhos"
