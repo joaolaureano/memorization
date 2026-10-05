@@ -33,8 +33,8 @@ Sem tarefas: nenhuma dependência, configuração ou migração nova.
 **Goal**: critérios preservados em falha e exclusão, anúncio sem mover o foco. **Independent Test**: falha → Tentar novamente; excluir com filtros ativos; uso por teclado.
 
 - [X] T2206 [US3] Em frontend/src/ui/PaginaDeCartoes.tsx: Tentar novamente preserva os critérios; excluir com filtros ativos mantém os critérios e atualiza a contagem; o foco segue indo ao título da página, como já fazia; digitar na busca não move o foco. Provas em frontend/tests/pagina-de-cartoes.test.tsx. FR-357, FR-358, SC-141.
-- [ ] T2207 [US3] E2E com API real em e2e/busca-e-filtros.spec.ts: Baralhos (`algebra`), Cartões (Verso, combinação, Sem baralho, situação Novos/Em dia depois de estudar, Limpar filtros, sem resultados) e isolamento entre dois Usuários. SC-138, SC-139, SC-140, FR-359.
-- [ ] T2208 [US3] Responsividade e teclado em e2e/busca-e-filtros-responsividade.spec.ts: 360, 390, 768 e 1440 px e zoom de 200%, sem rolagem horizontal, alvos de 44 px, busca, filtros e Limpar só por teclado, contagem anunciada sem tirar o foco da busca. SC-142, FR-358.
+- [X] T2207 [US3] E2E com API real em e2e/busca-e-filtros.spec.ts: Baralhos (`algebra`), Cartões (Verso, combinação, Sem baralho, situação Novos/Em dia depois de estudar, Limpar filtros, sem resultados) e isolamento entre dois Usuários. SC-138, SC-139, SC-140, FR-359.
+- [X] T2208 [US3] Responsividade e teclado em e2e/busca-e-filtros-responsividade.spec.ts: 360, 390, 768 e 1440 px e zoom de 200%, sem rolagem horizontal, alvos de 44 px, busca, filtros e Limpar só por teclado, contagem anunciada sem tirar o foco da busca. SC-142, FR-358.
 
 ## Phase 6: Polish & Cross-Cutting
 
