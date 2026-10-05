@@ -17,6 +17,10 @@ Revise nesta branch a implementação de “Revisar” baralhos e as mudanças r
 3. Confira consistência entre aplicação, testes E2E, protótipos em `design/` e documentação. Procure regressões nos filtros e nos fluxos de sessão existentes.
 4. Rode as verificações aplicáveis e registre os comandos e resultados. Se encontrar problemas, corrija-os nesta branch quando forem claros e cobertos pelo escopo; caso contrário, deixe achados concretos com arquivo e linha.
 
+## Estado das verificações
+
+Os verificadores dos protótipos passaram pela checagem de sintaxe e por um smoke test de 39 afirmações; o script Playwright do protótipo ainda precisa ser executado. A coleta dos testes E2E identificou 94 testes, mas a suíte não foi executada. Os testes e a compilação da aplicação também não têm resultado registrado: a tarefa delegada encerrou por conflito de escopo ao detectar alterações concorrentes na mesma árvore de trabalho antes de executar as verificações. A lista de tarefas em `specs/024-revisar-baralhos/tasks.md` ainda está aberta; revise e atualize-a conforme os resultados.
+
 ## Ao concluir
 
 Depois de terminar a revisão e registrar os resultados na branch, **apague este próprio arquivo `handoff.md` e inclua essa remoção no commit final da tarefa**. Não encerre a revisão deixando este arquivo na branch.
