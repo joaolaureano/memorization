@@ -116,7 +116,7 @@ export function PaginaDeBaralhos({
             Escolha o que você quer memorizar hoje.
           </p>
         </div>
-        <div className="acoes">
+        <div className="acoes acoes--criacao">
           <a className="botao botao--primario" href="#/baralhos/novo">
             Criar baralho
           </a>
