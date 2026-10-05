@@ -947,3 +947,62 @@ describe("Aplicacao nas telas de formulário da 012", () => {
     expect(screen.getByLabelText("Frente")).toHaveValue("To walk");
   });
 });
+
+describe("Baralho temporário — rotas (023)", () => {
+  it("interpreta #/baralhos/temporario como seleção temporária", () => {
+    expect(interpretarRota("#/baralhos/temporario", true)).toEqual({
+      nome: "selecao-temporaria",
+    });
+    expect(interpretarRota("#/baralhos/temporario/", true)).toEqual({
+      nome: "selecao-temporaria",
+    });
+  });
+
+  it("interpreta #/baralhos/temporario/estudo como estudo temporário", () => {
+    expect(interpretarRota("#/baralhos/temporario/estudo", true)).toEqual({
+      nome: "estudo-temporario",
+    });
+  });
+
+  it("recusa outras ações sobre o baralho temporário", () => {
+    expect(interpretarRota("#/baralhos/temporario/editar", true)).toEqual({
+      nome: "inicio",
+    });
+  });
+
+  it("preserva as rotas reservadas e de baralho existentes", () => {
+    expect(interpretarRota("#/baralhos/novo", true)).toEqual({
+      nome: "novo-baralho",
+    });
+    expect(interpretarRota("#/baralhos/b1", true)).toEqual({
+      nome: "baralho",
+      id: "b1",
+    });
+  });
+
+  it("exige Credencial para entrar nas rotas do baralho temporário", () => {
+    expect(interpretarRota("#/baralhos/temporario", false)).toEqual({
+      nome: "entrar",
+    });
+  });
+
+  it("faz ida e volta em hashDaRota", () => {
+    expect(hashDaRota({ nome: "selecao-temporaria" })).toBe(
+      "#/baralhos/temporario",
+    );
+    expect(interpretarRota("#/baralhos/temporario", true)).toEqual({
+      nome: "selecao-temporaria",
+    });
+    expect(hashDaRota({ nome: "estudo-temporario" })).toBe(
+      "#/baralhos/temporario/estudo",
+    );
+    expect(interpretarRota("#/baralhos/temporario/estudo", true)).toEqual({
+      nome: "estudo-temporario",
+    });
+  });
+
+  it("destino ativo das duas rotas é baralhos", () => {
+    expect(destinoAtivo({ nome: "selecao-temporaria" })).toBe("baralhos");
+    expect(destinoAtivo({ nome: "estudo-temporario" })).toBe("baralhos");
+  });
+});

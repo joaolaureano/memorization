@@ -107,6 +107,31 @@ describe("PaginaDeBaralhos", () => {
     await screen.findByText(/ainda não há Baralhos/i);
   });
 
+  it("oferece Criar baralho temporário depois de Criar baralho, como ação secundária (FR-360)", async () => {
+    renderizarPaginaDeBaralhos();
+
+    const criarBaralho = await screen.findByRole("link", {
+      name: "Criar baralho",
+    });
+    const criarTemporario = screen.getByRole("link", {
+      name: "Criar baralho temporário",
+    });
+
+    expect(criarTemporario).toHaveAttribute("href", "#/baralhos/temporario");
+    expect(criarTemporario).toHaveClass("botao--secundario");
+    expect(criarBaralho).toBeInTheDocument();
+
+    const cabecalho = criarTemporario.closest("header");
+    expect(cabecalho).not.toBeNull();
+    expect(
+      within(cabecalho as HTMLElement)
+        .getAllByRole("link")
+        .map((l) => l.textContent),
+    ).toEqual(["Criar baralho", "Criar baralho temporário"]);
+
+    await screen.findByText(/ainda não há Baralhos/i);
+  });
+
   it("o estado vazio orienta a primeira ação com o mesmo acesso à criação (FR-153)", async () => {
     renderizarPaginaDeBaralhos();
 

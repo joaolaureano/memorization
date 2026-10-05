@@ -15,8 +15,9 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * A tela é exercitada pela superfície da Seam `ClienteDoAcervo` com o
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
- * 1. A ordem de tabulação segue a disposição visual — Criar baralho, Buscar
- *    baralhos, Limpar filtros e, então, o Estudar e o Editar de cada Baralho;
+ * 1. A ordem de tabulação segue a disposição visual — Criar baralho, Criar
+ *    baralho temporário, Buscar baralhos, Limpar filtros e, então, o Estudar
+ *    e o Editar de cada Baralho;
  *    o nome não recebe foco (spec 021: FR-340, FR-341, FR-346; spec 022:
  *    FR-354, FR-355) —, com o elemento focado conferido a cada passo por
  *    `document.activeElement`.
@@ -101,7 +102,7 @@ async function semearBaralho(
 }
 
 describe("PaginaDeBaralhos por teclado", () => {
-  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Buscar → Limpar filtros → Estudar → Editar (FR-340, FR-346)", async () => {
+  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Criar baralho temporário → Buscar → Limpar filtros → Estudar → Editar (FR-340, FR-346, FR-360)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
 
@@ -111,6 +112,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     const controles = controlesInterativos();
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
+      screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
       screen.getByRole("link", { name: "Estudar Inglês" }),
@@ -139,13 +141,15 @@ describe("PaginaDeBaralhos por teclado", () => {
     expect(controles).not.toContain(botaoDeEstudo);
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
+      screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
       screen.getByRole("link", { name: "Editar Alemão" }),
     ]);
 
     // O Estudar desabilitado não entra na ordem: o Tab passa por Criar
-    // baralho, Buscar baralhos e Limpar filtros e segue para Editar.
+    // baralho, Criar baralho temporário, Buscar baralhos e Limpar filtros e
+    // segue para Editar.
     for (const controle of controles) {
       apertarTab();
       expect(document.activeElement).toBe(controle);
@@ -159,11 +163,13 @@ describe("PaginaDeBaralhos por teclado", () => {
     render(<PaginaDeBaralhos cliente={cliente} />);
     await screen.findByRole("alert");
 
-    // Além do cabeçalho (Criar baralho) e dos controles de busca (Buscar
-    // baralhos e Limpar filtros), a nova tentativa é a única ação.
+    // Além do cabeçalho (Criar baralho e Criar baralho temporário) e dos
+    // controles de busca (Buscar baralhos e Limpar filtros), a nova tentativa
+    // é a única ação.
     const controles = controlesInterativos();
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
+      screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
       screen.getByRole("button", { name: "Tentar novamente" }),
@@ -175,7 +181,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     }
 
     cliente.restaurarDisponibilidade();
-    apertarEnter(controles[3]);
+    apertarEnter(controles[4]);
 
     expect(
       await screen.findByText(/ainda não há Baralhos/i),

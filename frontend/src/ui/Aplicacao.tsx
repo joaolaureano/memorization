@@ -710,6 +710,13 @@ function TelaDaRota({
     case "estudo":
       return <PaginaDeEstudo cliente={cliente} id={rota.id} />;
 
+    case "selecao-temporaria":
+    case "estudo-temporario":
+      // FR-366: a Sessão do baralho temporário só existe enquanto a seleção
+      // capturada está na memória da casca; sem ela, a pessoa volta para
+      // Baralhos. A montagem ganha tela própria na T2308.
+      return <VoltarParaBaralhos />;
+
     case "cartoes":
       return <PaginaDeCartoes cliente={cliente} />;
 
@@ -753,4 +760,17 @@ function VoltarParaInicio() {
   }, []);
 
   return <p className="carregando">Voltando para Início…</p>;
+}
+
+/**
+ * A Sessão do baralho temporário sem seleção na memória — depois de
+ * recarregar — não tem o que apresentar: nada é registrado e a pessoa volta
+ * para Baralhos (FR-366).
+ */
+function VoltarParaBaralhos() {
+  useEffect(() => {
+    window.location.replace("#/baralhos");
+  }, []);
+
+  return <p className="carregando">Voltando para Baralhos…</p>;
 }

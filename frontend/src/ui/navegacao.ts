@@ -42,6 +42,8 @@ export type Rota =
   | { nome: "editar-baralho"; id: string }
   | { nome: "adicionar-cartoes"; id: string }
   | { nome: "estudo"; id: string }
+  | { nome: "selecao-temporaria" }
+  | { nome: "estudo-temporario" }
   | { nome: "cadastro" }
   | { nome: "preferencias" }
   | { nome: "agenda" }
@@ -149,6 +151,10 @@ function interpretarCaminho(hash: string): Rota {
         const [colecao, segundo] = segmentos;
 
         if (colecao === "baralhos") {
+          if (segundo === "temporario") {
+            // FR-360: "temporario" é palavra reservada, como "novo".
+            return { nome: "selecao-temporaria" };
+          }
           return segundo === "novo"
             ? { nome: "novo-baralho" }
             : { nome: "baralho", id: decodificar(segundo) };
@@ -182,6 +188,12 @@ function interpretarCaminho(hash: string): Rota {
         const [colecao, id, acao] = segmentos;
 
         if (colecao === "baralhos") {
+          if (id === "temporario") {
+            // FR-366: a Sessão do baralho temporário vive só na memória da casca.
+            return acao === "estudo"
+              ? { nome: "estudo-temporario" }
+              : { nome: "inicio" };
+          }
           if (acao === "editar") {
             return { nome: "editar-baralho", id: decodificar(id) };
           }
@@ -283,6 +295,10 @@ export function hashDaRota(rota: Rota): string {
 
     case "estudo":
       return `#/baralhos/${encodeURIComponent(rota.id)}/estudo`;
+    case "selecao-temporaria":
+      return "#/baralhos/temporario";
+    case "estudo-temporario":
+      return "#/baralhos/temporario/estudo";
   }
 }
 
@@ -321,6 +337,8 @@ export function destinoAtivo(
     case "editar-baralho":
     case "adicionar-cartoes":
     case "estudo":
+    case "selecao-temporaria":
+    case "estudo-temporario":
       return "baralhos";
 
     case "preferencias":

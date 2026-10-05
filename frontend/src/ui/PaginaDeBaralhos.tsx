@@ -116,9 +116,17 @@ export function PaginaDeBaralhos({
             Escolha o que você quer memorizar hoje.
           </p>
         </div>
-        <a className="botao botao--primario" href="#/baralhos/novo">
-          Criar baralho
-        </a>
+        <div className="acoes">
+          <a className="botao botao--primario" href="#/baralhos/novo">
+            Criar baralho
+          </a>
+          <a
+            className="botao botao--secundario"
+            href="#/baralhos/temporario"
+          >
+            Criar baralho temporário
+          </a>
+        </div>
       </header>
 
       <section className="filtros filtros--busca-unica" aria-label="Busca e filtros">
