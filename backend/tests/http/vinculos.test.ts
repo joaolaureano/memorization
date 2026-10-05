@@ -209,7 +209,9 @@ describe("DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}", () => {
       url: "/cartoes",
     });
 
-    expect(cartoes.json()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(cartoes.json()).toEqual([
+      { ...cartao, baralhos: [], proximaRevisaoEm: null },
+    ]);
   });
 
   it("recusa Vínculo inexistente com 404 e mensagem em português", async () => {

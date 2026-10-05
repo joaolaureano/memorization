@@ -111,7 +111,9 @@ describe("DELETE /baralhos/{id} — exclusão conforme o contrato", () => {
     expect(baralhos.json()).toEqual([]);
 
     const cartoes = await pedir({ method: "GET", url: "/cartoes" });
-    expect(cartoes.json()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(cartoes.json()).toEqual([
+      { ...cartao, baralhos: [], proximaRevisaoEm: null },
+    ]);
   });
 
   it("recusa Baralho inexistente com 404 e mensagem em português", async () => {

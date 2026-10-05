@@ -119,6 +119,6 @@ describe("criarCartao — criação pela Interface", () => {
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
     });
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
   });
 });

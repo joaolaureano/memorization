@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -95,8 +97,8 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(listados).toHaveLength(2);
     expect(listados).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [] },
-        { ...segundo, baralhos: [] },
+        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
+        { ...segundo, baralhos: [], proximaRevisaoEm: null },
       ]),
     );
   });
@@ -129,9 +131,9 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(listados).toHaveLength(3);
     expect(listados).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [] },
-        { ...segundo, baralhos: [] },
-        { ...terceiro, baralhos: [] },
+        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
+        { ...segundo, baralhos: [], proximaRevisaoEm: null },
+        { ...terceiro, baralhos: [], proximaRevisaoEm: null },
       ]),
     );
   });
@@ -167,7 +169,97 @@ describe("listarCartoes — leitura pela Interface", () => {
     await criarBaralho("Inglês");
 
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [] },
+      { ...cartao, baralhos: [], proximaRevisaoEm: null },
     ]);
+  });
+});
+
+describe("listarCartoes — próxima revisão (022)", () => {
+  it("devolve proximaRevisaoEm null para Cartão sem Agendamento (FR-352)", async () => {
+    const cartao = await criar(FRENTE_REPETIDA, VERSO_UM);
+
+    expect(await acervo.listarCartoes()).toEqual([
+      { ...cartao, baralhos: [], proximaRevisaoEm: null },
+    ]);
+  });
+
+  it("devolve a próxima revisão do Agendamento depois de estudar o Cartão (FR-352)", async () => {
+    const estudado = await criar(FRENTE_REPETIDA, VERSO_UM);
+    const naoEstudado = await criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
+    const baralho = await criarBaralho("Inglês");
+
+    const resultado = await acervo.registrarSessao({
+      id: randomUUID(),
+      origem: "baralho",
+      baralhoId: baralho.id,
+      nomeDoBaralho: baralho.nome,
+      itens: [
+        {
+          frente: estudado.frente,
+          verso: estudado.verso,
+          cartaoId: estudado.id,
+          avaliacao: "bom",
+        },
+      ],
+    });
+
+    expect(resultado.ok).toBe(true);
+
+    const listados = await acervo.listarCartoes();
+    const comRevisao = listados.find((cartao) => cartao.id === estudado.id);
+    const semRevisao = listados.find((cartao) => cartao.id === naoEstudado.id);
+
+    expect(typeof comRevisao?.proximaRevisaoEm).toBe("string");
+    expect(
+      Number.isNaN(Date.parse(comRevisao?.proximaRevisaoEm ?? "")),
+    ).toBe(false);
+    expect(semRevisao?.proximaRevisaoEm).toBeNull();
+  });
+
+  it("não expõe Agendamentos de outro Usuário (FR-359)", async () => {
+    const cartaoDoPrimeiro = await criar(FRENTE_REPETIDA, VERSO_UM);
+
+    const donoDois = await criarDonoDeTeste(
+      aberto.usuarios,
+      "dono-dois",
+      "bruno.souza",
+    );
+    const acervoDoDonoDois = criarAcervo(aberto.armazenamento, donoDois);
+
+    const cartaoDoDonoDois = cartaoDo(
+      await acervoDoDonoDois.criarCartao({
+        frente: OUTRA_FRENTE,
+        verso: VERSO_DA_OUTRA_FRENTE,
+      }),
+    );
+    const baralhoDoDonoDois = baralhoDo(
+      await acervoDoDonoDois.criarBaralho({ nome: "Inglês" }),
+    );
+
+    const resultado = await acervoDoDonoDois.registrarSessao({
+      id: randomUUID(),
+      origem: "baralho",
+      baralhoId: baralhoDoDonoDois.id,
+      nomeDoBaralho: baralhoDoDonoDois.nome,
+      itens: [
+        {
+          frente: cartaoDoDonoDois.frente,
+          verso: cartaoDoDonoDois.verso,
+          cartaoId: cartaoDoDonoDois.id,
+          avaliacao: "bom",
+        },
+      ],
+    });
+
+    expect(resultado.ok).toBe(true);
+
+    const listados = await acervo.listarCartoes();
+
+    expect(listados).toEqual([
+      { ...cartaoDoPrimeiro, baralhos: [], proximaRevisaoEm: null },
+    ]);
+    expect(listados.map((cartao) => cartao.id)).not.toContain(
+      cartaoDoDonoDois.id,
+    );
   });
 });

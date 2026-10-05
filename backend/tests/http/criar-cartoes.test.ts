@@ -112,7 +112,9 @@ describe("POST /cartoes — criação conforme o contrato", () => {
     });
 
     const leitura = await pedir({ method: "GET", url: "/cartoes" });
-    expect(leitura.json()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(leitura.json()).toEqual([
+      { ...cartao, baralhos: [], proximaRevisaoEm: null },
+    ]);
   });
 
   it("recusa Frente vazia com 400, código frente_vazia e mensagem em português (FR-002)", async () => {

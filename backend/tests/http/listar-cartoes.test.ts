@@ -89,8 +89,8 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
     expect(resposta.statusCode).toBe(200);
     expect(resposta.json()).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [] },
-        { ...segundo, baralhos: [] },
+        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
+        { ...segundo, baralhos: [], proximaRevisaoEm: null },
       ]),
     );
   });
@@ -105,6 +105,7 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
       frente: string;
       verso: string;
       baralhos: unknown[];
+      proximaRevisaoEm: string | null;
     }[];
 
     expect(listados).toHaveLength(2);
@@ -113,11 +114,23 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
         "baralhos",
         "frente",
         "id",
+        "proximaRevisaoEm",
         "verso",
       ]);
       expect(cartao.id).toEqual(expect.any(String));
       expect(cartao.frente).toBe(FRENTE_REPETIDA);
       expect(cartao.baralhos).toEqual([]);
     }
+  });
+
+  it("traz proximaRevisaoEm null para Cartão nunca estudado (contrato da 022, FR-352)", async () => {
+    await criar(FRENTE_REPETIDA, VERSO_UM);
+
+    const resposta = await pedir({ method: "GET", url: "/cartoes" });
+
+    expect(resposta.statusCode).toBe(200);
+    const [cartao] = resposta.json();
+    expect(cartao.proximaRevisaoEm).toBeNull();
+    expect(cartao).toHaveProperty("proximaRevisaoEm", null);
   });
 });

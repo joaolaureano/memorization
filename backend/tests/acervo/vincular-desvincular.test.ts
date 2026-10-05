@@ -94,7 +94,7 @@ describe("vincular — criação de Vínculo pela Interface", () => {
       },
     ]);
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [baralho] },
+      { ...cartao, baralhos: [baralho], proximaRevisaoEm: null },
     ]);
   });
 
@@ -174,7 +174,7 @@ describe("desvincular — remoção de Vínculo pela Interface", () => {
       ok: true,
     });
 
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
     expect(await acervo.listarBaralhos()).toEqual([
       {
         id: baralho.id,
@@ -210,6 +210,6 @@ describe("desvincular — remoção de Vínculo pela Interface", () => {
 
     expect(listado.elegivel).toBe(false);
     expect(listado.quantidadeDeCartoes).toBe(0);
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
   });
 });

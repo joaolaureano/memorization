@@ -92,8 +92,8 @@ describe("excluirBaralho — exclusão pela Interface", () => {
     expect(await acervo.listarBaralhos()).toEqual([]);
     expect(await acervo.listarCartoes()).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [] },
-        { ...segundo, baralhos: [] },
+        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
+        { ...segundo, baralhos: [], proximaRevisaoEm: null },
       ]),
     );
   });
@@ -109,7 +109,7 @@ describe("excluirBaralho — exclusão pela Interface", () => {
     expect(await acervo.excluirBaralho(excluido.id)).toEqual({ ok: true });
 
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [preservado] },
+      { ...cartao, baralhos: [preservado], proximaRevisaoEm: null },
     ]);
     expect(await acervo.listarBaralhos()).toEqual([
       {

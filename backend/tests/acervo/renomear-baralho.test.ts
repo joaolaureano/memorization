@@ -120,7 +120,7 @@ describe("renomearBaralho — edição pela Interface", () => {
       },
     ]);
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [{ id: baralho.id, nome: NOME_EDITADO }] },
+      { ...cartao, baralhos: [{ id: baralho.id, nome: NOME_EDITADO }], proximaRevisaoEm: null },
     ]);
   });
 

@@ -97,6 +97,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
         frente: FRENTE_EDITADA,
         verso: VERSO_EDITADO,
         baralhos: [],
+        proximaRevisaoEm: null,
       },
     ]);
   });
@@ -150,6 +151,7 @@ describe("PUT /cartoes/{id} — edição conforme o contrato", () => {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
         baralhos: [],
+        proximaRevisaoEm: null,
       },
     ]);
   });

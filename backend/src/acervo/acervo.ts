@@ -143,12 +143,18 @@ export type ResultadoDeCriacaoDeBaralho =
 
 /**
  * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
- * está vinculado. O Cartão sem nenhum Baralho devolve `baralhos: []` — estado
- * legítimo, e não ausência de campo. `criarCartao` continua devolvendo apenas
- * `Cartao`, sem carregar campos que a criação não exige.
+ * está vinculado e a próxima revisão do seu Agendamento. O Cartão sem nenhum
+ * Baralho devolve `baralhos: []` — estado legítimo, e não ausência de campo.
+ * `criarCartao` continua devolvendo apenas `Cartao`, sem carregar campos que a
+ * criação não exige.
  */
 export interface CartaoListado extends Cartao {
   baralhos: Baralho[];
+  /**
+   * ISO-8601 da próxima revisão do Agendamento do Cartão, ou `null` sem
+   * Agendamento (FR-352); só Agendamentos do dono (FR-359).
+   */
+  proximaRevisaoEm: string | null;
 }
 
 /**
@@ -1214,13 +1220,28 @@ export function criarAcervo(
     async listarCartoes() {
       const cartoes: CartaoListado[] = (
         await armazenamento.listarCartoes(usuarioId)
-      ).map((cartao) => ({ ...cartao, baralhos: [] }));
+      ).map((cartao) => ({ ...cartao, baralhos: [], proximaRevisaoEm: null }));
+
+      /**
+       * Os Agendamentos do dono são lidos UMA única vez e indexados por Cartão:
+       * a próxima revisão de cada Cartão vem do seu Agendamento, e o Cartão sem
+       * Agendamento permanece com `null` (FR-352, FR-359).
+       */
+      const proximaPorCartao = new Map(
+        (await armazenamento.listarAgendamentos(usuarioId)).map(
+          (agendamento) => [
+            agendamento.cartaoId,
+            agendamento.proximaRevisaoEm,
+          ],
+        ),
+      );
 
       for (const cartao of cartoes) {
         cartao.baralhos = await armazenamento.listarBaralhosDoCartao(
           usuarioId,
           cartao.id,
         );
+        cartao.proximaRevisaoEm = proximaPorCartao.get(cartao.id) ?? null;
       }
 
       return cartoes;

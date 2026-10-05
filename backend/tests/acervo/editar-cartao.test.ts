@@ -100,7 +100,7 @@ describe("editarCartao — edição pela Interface", () => {
     });
 
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, frente: FRENTE_EDITADA, verso: VERSO_EDITADO, baralhos: [] },
+      { ...cartao, frente: FRENTE_EDITADA, verso: VERSO_EDITADO, baralhos: [], proximaRevisaoEm: null },
     ]);
   });
 
@@ -154,6 +154,7 @@ describe("editarCartao — edição pela Interface", () => {
         frente: FRENTE_EDITADA,
         verso: VERSO_EDITADO,
         baralhos: expect.arrayContaining(baralhos),
+        proximaRevisaoEm: null,
       },
     ]);
   });
@@ -172,7 +173,7 @@ describe("editarCartao — edição pela Interface", () => {
       mensagem: "A frente do cartão não pode ficar vazia.",
     });
 
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
   });
 
   it("trata Frente composta só de espaços como vazia", async () => {
@@ -205,7 +206,7 @@ describe("editarCartao — edição pela Interface", () => {
         "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
     });
 
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
   });
 
   it("recusa Verso acima de 1000 caracteres na edição e não altera o Cartão (SC-016)", async () => {
@@ -223,7 +224,7 @@ describe("editarCartao — edição pela Interface", () => {
         "O verso do cartão deve ter no máximo 1000 caracteres; o informado tem 1001.",
     });
 
-    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [] }]);
+    expect(await acervo.listarCartoes()).toEqual([{ ...cartao, baralhos: [], proximaRevisaoEm: null }]);
   });
 
   it("recusa Cartão inexistente como nao_encontrado", async () => {
