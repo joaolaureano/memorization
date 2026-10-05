@@ -157,8 +157,8 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
     // Reabrir a UI: a Credencial não sobreviveu ao recarregamento, então
     // Entrar é exigido de novo (FR-089, SC-031); os dois Baralhos persistem,
     // cada um com o mesmo nome e a elegibilidade derivada comunicada pelo
-    // próprio controle Estudar — link quando há Cartões, botão desabilitado
-    // descrito pelo estado do Baralho quando não há (FR-144).
+    // próprio controle Revisar — link quando há Cartões, botão desabilitado
+    // descrito pelo estado do Baralho quando não há (FR-144; spec 024).
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
     await entrarSeNecessario(page);
 
@@ -175,7 +175,7 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
 
     // Spec 021 (FR-340, FR-341): a linha é fina — o nome é texto somente
     // leitura, e o detalhe abre por "Editar"; a contagem fica logo abaixo; a elegibilidade se comunica só pelo controle
-    // Estudar. Não há linha de status, eyebrow nem "Ver baralho".
+    // Revisar. Não há linha de status, eyebrow nem "Ver baralho".
     for (const item of [itens.nth(0), itens.nth(1)]) {
       await expect(
         item.getByText(NOME_DO_BARALHO, { exact: true }),
@@ -188,15 +188,16 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
       ).toBeVisible();
       await expect(item).toContainText("0 Cartões");
 
-      // Sem Cartões, Estudar é um botão desabilitado — não um link — descrito
-      // pelo motivo em texto, nunca só pela cor.
-      const estudar = item.getByRole("button", {
-        name: `Estudar ${NOME_DO_BARALHO}`,
+      // Sem Cartões, Revisar é um botão desabilitado — não um link — descrito
+      // pelo motivo em texto, nunca só pela cor (spec 024: revisa no lugar de
+      // estudar; o motivo, em qualquer das duas redações).
+      const revisar = item.getByRole("button", {
+        name: `Revisar ${NOME_DO_BARALHO}`,
       });
 
-      await expect(estudar).toBeDisabled();
-      await expect(estudar).toHaveAccessibleDescription(
-        /Sem Cartões para estudar/,
+      await expect(revisar).toBeDisabled();
+      await expect(revisar).toHaveAccessibleDescription(
+        /Sem Cartões para (estudar|revisar)/,
       );
     }
 

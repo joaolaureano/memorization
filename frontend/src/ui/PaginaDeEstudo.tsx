@@ -1,18 +1,29 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import type {
+  KeyboardEvent as KeyboardEventDeReact,
+  MouseEvent as MouseEventDeReact,
+} from "react";
 
 import type {
   Avaliacao,
   BaralhoComCartoes,
+  CartaoListado,
   ClienteDoAcervo,
   DadosDeRegistro,
   InicioDeCompromisso,
   Previa,
   ResultadoDasPrevias,
 } from "../acervo-cliente/cliente";
+import {
+  cartoesDoBaralho,
+  cartoesPendentes,
+  situacaoDoBaralho,
+  type SituacaoDoBaralho,
+} from "../acervo-cliente/busca-no-acervo";
 import { nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../revisao/dia";
 import { AleatoriedadeReal } from "../sessao-de-estudo/aleatoriedade";
 import type { Aleatoriedade } from "../sessao-de-estudo/aleatoriedade";
+import { LIMITE_DA_SELECAO } from "../sessao-de-estudo/selecao-temporaria";
 import {
   MENSAGEM_DE_BARALHO_INELEGIVEL,
   SessaoDeEstudo,
@@ -44,19 +55,40 @@ import type { Protecao } from "./protecao-de-saida";
  * A ordem dos Itens usa `AleatoriedadeReal` em produção; testes injetam o
  * Adapter determinístico pela propriedade opcional `aleatoriedade`.
  *
- * A tela reúne as três fases — Configuração, Sessão e Resumo — na mesma rota
- * `#/baralhos/:id/estudo` (FR-149). Sair antes de concluir perde trabalho, e
- * por isso a página registra `useProtecaoDeSaida` (FR-150, FR-151): tanto a
- * quantidade já alterada quanto a Sessão em andamento pedem confirmação antes
- * de qualquer navegação, e o botão "Interromper" passa pela mesma confirmação,
- * via `useAcaoProtegida`. O Resumo apresenta o percentual e as contagens
- * derivadas dos Itens (FR-152, FR-174, SC-067, SC-073).
+ * A tela reúne as fases — preparação, Sessão e Resumo — na mesma rota
+ * `#/baralhos/:id/estudo` (FR-149). Não há mais formulário de quantidade
+ * (FR-383): a preparação é a leitura do acervo, a modal de escolha (quando o
+ * Baralho está pendente) ou o início direto (quando está revisado). Sair antes
+ * de concluir perde trabalho, e por isso a página registra
+ * `useProtecaoDeSaida` (FR-150, FR-151): a Sessão em andamento pede
+ * confirmação antes de qualquer navegação, e o botão "Interromper" passa pela
+ * mesma confirmação, via `useAcaoProtegida`. O Resumo apresenta o percentual e
+ * as contagens derivadas dos Itens (FR-152, FR-174, SC-067, SC-073).
  *
  * Concluída a Sessão, a página a registra no histórico (FR-161, FR-163) com um
  * `id` gerado uma única vez por Sessão concluída: uma nova tentativa reenvia o
  * mesmo `id` e não duplica o Registro. Sessão interrompida nunca é registrada
  * (FR-162) e, enquanto o Registro não estiver confirmado, sair do Resumo pede
  * confirmação (FR-164).
+ *
+ * A partir da 024 (FR-378–FR-387, SC-151–SC-154), a rota do Baralho deixa de
+ * pedir quantidade: ao abrir, a página carrega `obterBaralho` **e**
+ * `listarCartoes` — os Agendamentos decidem a situação (FR-385) —, cruza os
+ * Vínculos com `cartoesDoBaralho` e classifica o conjunto com `agora`
+ * injetado. Pendente abre a modal acessível intitulada "Revisar baralho", com
+ * "Só pendentes" e "Todos os cartões", cada ação com a sua contagem em texto
+ * separado, e "Cancelar" com o foco inicial (FR-383, FR-387); a escolha
+ * inicia direto o conjunto embaralhado, sem configuração de quantidade.
+ * Revisado inicia todos em um clique, sem modal (FR-384). Conjuntos acima do
+ * limite de registro desabilitam **apenas** a opção excedente na modal, com o
+ * motivo e a orientação de usar um Baralho menor ou a seleção temporária, sem
+ * truncar (FR-386). Uma falha na leitura das datas mostra a falha com "Tentar
+ * novamente" e nunca vira um "Revisado" falso (FR-385, SC-151). "Revisar
+ * novamente" relê os dados atuais e aplica a mesma decisão entre modal e
+ * início direto (FR-385). A seleção temporária continua iniciando todos os
+ * escolhidos sem modal (FR-384), e a Agenda preserva a seleção do
+ * Compromisso — o título "Estudar" da Sessão da Agenda e as ações da Agenda
+ * não mudam de nome (FR-378).
  *
  * A partir da 015, cada Item é avaliado em **quatro níveis** — Errei, Difícil,
  * Bom e Fácil —, e os quatro botões só aparecem depois da Revelação, no lugar
@@ -114,7 +146,7 @@ interface PropriedadesDaPaginaDeEstudo {
   selecaoTemporaria?: readonly Cartao[];
 }
 
-type AlvoDeFoco = "frente" | "verso" | "resumo" | "quantidade";
+type AlvoDeFoco = "frente" | "verso" | "resumo";
 
 /**
  * A situação do Registro da Sessão no histórico (FR-161, FR-163 a FR-165): o
@@ -148,7 +180,21 @@ export function PaginaDeEstudo({
     null,
   );
 
-  const [quantidade, setQuantidade] = useState("");
+  /**
+   * Os Cartões vinculados ao Baralho da rota, com os Agendamentos, e a
+   * situação do conjunto derivada deles (FR-379, FR-385). Vivem em estado
+   * porque a modal de escolha trabalha sobre os dados carregados para aquele
+   * início; uma nova revisão relê tudo.
+   */
+  const [cartoesVinculados, setCartoesVinculados] = useState<
+    readonly CartaoListado[] | null
+  >(null);
+  const [situacaoDoConjunto, setSituacaoDoConjunto] =
+    useState<SituacaoDoBaralho | null>(null);
+  /** A modal "Revisar baralho" está pedindo a escolha do conjunto (FR-383). */
+  const [escolhaPedida, setEscolhaPedida] = useState(false);
+  /** Relê o Baralho e os Agendamentos: nova tentativa e «Revisar novamente». */
+  const [tentativa, setTentativa] = useState(0);
   const [falhaDeInicio, setFalhaDeInicio] = useState<string | null>(null);
   const [sessao, setSessao] = useState<SessaoDeEstudo | null>(null);
   const [estado, setEstado] = useState<EstadoDaSessao | null>(null);
@@ -165,7 +211,6 @@ export function PaginaDeEstudo({
   const frenteRef = useRef<HTMLHeadingElement>(null);
   const versoRef = useRef<HTMLHeadingElement>(null);
   const resumoRef = useRef<HTMLHeadingElement>(null);
-  const quantidadeRef = useRef<HTMLInputElement>(null);
   const conteinerDaSessao = useRef<HTMLDivElement>(null);
   const idDoRegistroDeSessao = useRef<string | null>(null);
   const [salvandoComoBaralho, setSalvandoComoBaralho] = useState(false);
@@ -196,7 +241,9 @@ export function PaginaDeEstudo({
     setFalhaDeCarregamento(null);
     setBaralhoNaoEncontrado(null);
     setBaralho(null);
-    setQuantidade("");
+    setCartoesVinculados(null);
+    setSituacaoDoConjunto(null);
+    setEscolhaPedida(false);
     setFalhaDeInicio(null);
     setSessao(null);
     setEstado(null);
@@ -279,28 +326,62 @@ export function PaginaDeEstudo({
       return;
     }
 
-    void cliente.obterBaralho(id).then((resultado) => {
-      if (!ativo) {
-        return;
-      }
-
-      if (!resultado.ok) {
-        if (resultado.erro === "nao_encontrado") {
-          setBaralhoNaoEncontrado(resultado.mensagem);
-        } else {
-          setFalhaDeCarregamento(resultado.mensagem);
+    void Promise.all([cliente.obterBaralho(id), cliente.listarCartoes()]).then(
+      ([resultadoDeBaralho, resultadoDeCartoes]) => {
+        if (!ativo) {
+          return;
         }
-      } else {
-        setBaralho(resultado.baralho);
-      }
 
-      setCarregando(false);
-    });
+        if (!resultadoDeBaralho.ok) {
+          if (resultadoDeBaralho.erro === "nao_encontrado") {
+            setBaralhoNaoEncontrado(resultadoDeBaralho.mensagem);
+          } else {
+            setFalhaDeCarregamento(resultadoDeBaralho.mensagem);
+          }
+          setCarregando(false);
+          return;
+        }
+
+        if (!resultadoDeCartoes.ok) {
+          // FR-385: sem os Agendamentos não há classificação confiável — a
+          // falha é recuperável («Tentar novamente») e nunca vira "Revisado".
+          setBaralho(resultadoDeBaralho.baralho);
+          setFalhaDeCarregamento(resultadoDeCartoes.mensagem);
+          setCarregando(false);
+          return;
+        }
+
+        const vinculados = cartoesDoBaralho(resultadoDeCartoes.cartoes, id);
+        const situacao = situacaoDoBaralho(
+          vinculados.map((cartao) => cartao.proximaRevisaoEm),
+          new Date(),
+        );
+
+        setBaralho(resultadoDeBaralho.baralho);
+        setCartoesVinculados(vinculados);
+        setSituacaoDoConjunto(situacao);
+        setCarregando(false);
+
+        if (vinculados.length === 0) {
+          // FR-386: um conjunto vazio não inicia Sessão vazia; a tela mostra
+          // o estado «Sem cartões» com o motivo.
+          return;
+        }
+
+        if (situacao === "revisado") {
+          // FR-384: um Baralho Revisado inicia todos imediatamente, sem modal.
+          iniciarComCartoes(vinculados);
+        } else {
+          // FR-383: um Baralho pendente pede a escolha do conjunto na modal.
+          setEscolhaPedida(true);
+        }
+      },
+    );
 
     return () => {
       ativo = false;
     };
-  }, [cliente, id, inicioDaAgenda, selecaoTemporaria]);
+  }, [cliente, id, inicioDaAgenda, selecaoTemporaria, tentativa]);
 
   // Movimentação de foco que reage a uma mudança de fase precisa ser um efeito
   // de layout: `useEffect` roda depois da pintura, então por um instante o foco
@@ -327,8 +408,6 @@ export function PaginaDeEstudo({
       versoRef.current?.focus({ preventScroll: true });
     } else if (alvo === "resumo") {
       resumoRef.current?.focus();
-    } else {
-      quantidadeRef.current?.focus();
     }
   }, [estado]);
 
@@ -390,11 +469,6 @@ export function PaginaDeEstudo({
     estado !== null &&
     estado.concluida &&
     situacaoDoRegistro.estado !== "registrada";
-  const emConfiguracaoComMudanca =
-    sessao === null &&
-    estado === null &&
-    baralho !== null &&
-    quantidade !== "";
   const protecaoDeSaida: Protecao | null = emAndamento
     ? {
         tipo: "descarte",
@@ -410,14 +484,7 @@ export function PaginaDeEstudo({
           descricao: "Esta Sessão não ficará no seu histórico.",
           rotuloDeConfirmacao: "Sair sem registrar",
         }
-      : emConfiguracaoComMudanca
-        ? {
-            tipo: "descarte",
-            titulo: "Descartar a configuração?",
-            descricao: "A quantidade escolhida será perdida.",
-            rotuloDeConfirmacao: "Descartar",
-          }
-        : null;
+      : null;
 
   useProtecaoDeSaida(protecaoDeSaida);
   const protegerAcao = useAcaoProtegida();
@@ -430,7 +497,6 @@ export function PaginaDeEstudo({
   function interromper(): void {
     setSessao(null);
     setEstado(null);
-    setQuantidade("");
     setAnuncio(null);
     setSituacaoDoRegistro({ estado: "ocioso" });
     setPrevias({});
@@ -469,39 +535,38 @@ export function PaginaDeEstudo({
     irParaRota(`#/baralhos/${id}`);
   }
 
-  function estudarNovamente(): void {
-    alvoDeFoco.current = "quantidade";
-    setSessao(null);
-    setEstado(null);
-    setQuantidade("");
+  /**
+   * Inicia a Sessão de revisão com o conjunto já decidido (FR-383, FR-384).
+   *
+   * É o único caminho de início do Baralho: a modal («Só pendentes» ou
+   * «Todos os cartões») e o início direto de um Baralho Revisado chegam aqui
+   * com os Cartões carregados — embaralhados pela própria Sessão, sem
+   * quantidade. Um conjunto acima do limite de registro é recusado com o
+   * motivo e a orientação, sem truncar (FR-386); um conjunto vazio não inicia
+   * Sessão vazia (a tela já o impede antes). O aviso de limite da própria
+   * Sessão é exibido na tela (FR-149) e o anúncio é distinto para não
+   * duplicar o mesmo texto na página.
+   */
+  function iniciarComCartoes(cartoesDaSessao: readonly CartaoListado[]): void {
+    setEscolhaPedida(false);
     setFalhaDeInicio(null);
-    setAnuncio(null);
     setSituacaoDoRegistro({ estado: "ocioso" });
-    setPrevias({});
     idDoRegistroDeSessao.current = null;
-  }
 
-  function iniciarSessao(evento: FormEvent<HTMLFormElement>): void {
-    evento.preventDefault();
-
-    if (baralho === null) {
+    if (cartoesDaSessao.length > LIMITE_DA_SELECAO) {
+      setFalhaDeInicio(motivoDoLimiteExcedido(cartoesDaSessao.length));
       return;
     }
 
-    setFalhaDeInicio(null);
-    setSituacaoDoRegistro({ estado: "ocioso" });
-    idDoRegistroDeSessao.current = null;
-
     const resultado = SessaoDeEstudo.iniciar(
       id,
-      Number(quantidade),
-      baralho.cartoes,
+      cartoesDaSessao.length,
+      cartoesDaSessao,
       aleatoriedadeDaSessao,
     );
 
     if (!resultado.ok) {
       setFalhaDeInicio(resultado.mensagem);
-      quantidadeRef.current?.focus();
       return;
     }
 
@@ -512,13 +577,66 @@ export function PaginaDeEstudo({
     setEstado(estadoInicial);
     carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
     alvoDeFoco.current = "frente";
-    // O aviso de limite é exibido na própria tela (FR-149); o anúncio é
-    // distinto para não duplicar o mesmo texto na página.
     anunciar(
       `Sessão iniciada com ${estadoInicial.total} ${
         estadoInicial.total === 1 ? "Item" : "Itens"
       }.`,
     );
+  }
+
+  /**
+   * A escolha da modal (FR-383): «Só pendentes» inclui os Cartões novos ou
+   * vencidos; «Todos os cartões» usa o conjunto carregado para este início.
+   * Um conjunto pendente vazio não inicia Sessão vazia (FR-386).
+   */
+  function escolherConjuntoDaRevisao(chave: ChaveDaRevisao): void {
+    if (cartoesVinculados === null) {
+      return;
+    }
+
+    const conjunto =
+      chave === "pendentes"
+        ? cartoesPendentes(cartoesVinculados, new Date())
+        : cartoesVinculados;
+
+    if (conjunto.length === 0) {
+      return;
+    }
+
+    iniciarComCartoes(conjunto);
+  }
+
+  /**
+   * Cancela a modal sem iniciar Sessão (FR-383, FR-387): fecha e volta ao
+   * detalhe do Baralho, o destino do «Voltar para o Baralho» desta rota.
+   */
+  function cancelarEscolha(): void {
+    setEscolhaPedida(false);
+    sairDaPagina();
+  }
+
+  /**
+   * Relê o Baralho e os Agendamentos (FR-385): é o «Tentar novamente» da
+   * falha de leitura.
+   */
+  function recarregar(): void {
+    setTentativa((atual) => atual + 1);
+  }
+
+  /**
+   * «Revisar novamente» (FR-378, FR-385): relê os dados atuais e aplica a
+   * mesma decisão entre modal e início direto — a classificação nunca fica
+   * velha.
+   */
+  function revisarNovamente(): void {
+    setSessao(null);
+    setEstado(null);
+    setAnuncio(null);
+    setSituacaoDoRegistro({ estado: "ocioso" });
+    setPrevias({});
+    idDoRegistroDeSessao.current = null;
+    alvoDeFoco.current = null;
+    recarregar();
   }
 
   function revelar(): void {
@@ -642,7 +760,7 @@ export function PaginaDeEstudo({
             <span aria-hidden="true">←</span> Voltar para o Baralho
           </a>
         </p>
-        <h1>Estudar Baralho</h1>
+        <h1>{inicioDaAgenda === undefined ? "Revisar" : "Estudar"} Baralho</h1>
         <p className="carregando">Carregando Baralho…</p>
       </div>
     );
@@ -672,7 +790,7 @@ export function PaginaDeEstudo({
             <span aria-hidden="true">←</span> Voltar para o Baralho
           </a>
         </p>
-        <h1>Estudar Baralho</h1>
+        <h1>{inicioDaAgenda === undefined ? "Revisar" : "Estudar"} Baralho</h1>
         <p
           className="erro"
           role="alert"
@@ -680,6 +798,18 @@ export function PaginaDeEstudo({
         >
           {falhaDeCarregamento}
         </p>
+        {inicioDaAgenda === undefined &&
+          selecaoTemporaria === undefined && (
+            <div className="acoes">
+              <button
+                type="button"
+                className="botao botao--primario"
+                onClick={recarregar}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
       </div>
     );
   }
@@ -704,13 +834,17 @@ export function PaginaDeEstudo({
       ? `A Rotina pede ${inicioDaAgenda.quantidadeSolicitada} Cartões, mas este Baralho tem ${inicioDaAgenda.cartoes.length}. A Sessão terá ${inicioDaAgenda.cartoes.length} ${inicioDaAgenda.cartoes.length === 1 ? "Item" : "Itens"}.`
       : null;
 
-  if (!baralho.elegivel) {
+  if (!baralho.elegivel || situacaoDoConjunto === "sem-cartoes") {
+    // FR-380, FR-386: um Baralho vazio mostra «Sem cartões» como situação
+    // neutra, e um conjunto vazio não inicia Sessão vazia.
     return (
       <div className="pilha">
         {linkDeVoltar}
         <header className="cabecalho-da-pagina">
           <div>
-            <h1>Estudar {baralho.nome}</h1>
+            <h1>
+              {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+            </h1>
           </div>
         </header>
         <section className="estado-vazio">
@@ -721,53 +855,36 @@ export function PaginaDeEstudo({
   }
 
   if (sessao === null || estado === null) {
+    // A preparação da revisão (FR-383): a modal pede a escolha do conjunto
+    // quando o Baralho está pendente; um Baralho revisado já iniciou direto e
+    // não passa por aqui. `falhaDeInicio` cobre a recusa por limite (FR-386).
     return (
       <div className="pilha">
         {linkDeVoltar}
         <header className="cabecalho-da-pagina">
           <div>
-            <h1>Estudar {baralho.nome}</h1>
+            <h1>
+              {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+            </h1>
           </div>
         </header>
 
-        <form className="cartao pilha" onSubmit={iniciarSessao} noValidate>
-          <div className="campo">
-            <label className="rotulo" htmlFor="campo-quantidade">
-              Quantidade de Cartões
-            </label>
-            <input
-              id="campo-quantidade"
-              ref={quantidadeRef}
-              type="number"
-              inputMode="numeric"
-              value={quantidade}
-              onChange={(evento) => setQuantidade(evento.target.value)}
-              aria-describedby="quantidade-disponivel"
-            />
-            <p id="quantidade-disponivel" className="ajuda">
-              Este Baralho tem {baralho.cartoes.length}{" "}
-              {baralho.cartoes.length === 1
-                ? "Cartão vinculado."
-                : "Cartões vinculados."}
-            </p>
-          </div>
+        {falhaDeInicio !== null && (
+          <p
+            className="erro"
+            role="alert"
+            aria-label="Falha ao iniciar a Sessão"
+          >
+            {falhaDeInicio}
+          </p>
+        )}
 
-          {falhaDeInicio !== null && (
-            <p
-              className="erro"
-              role="alert"
-              aria-label="Falha ao iniciar a Sessão"
-            >
-              {falhaDeInicio}
-            </p>
-          )}
-
-          <div className="acoes">
-            <button className="botao botao--primario" type="submit">
-              Iniciar Sessão
-            </button>
-          </div>
-        </form>
+        <DialogoDaEscolhaDaRevisao
+          aberto={escolhaPedida}
+          opcoes={opcoesDaEscolhaDaRevisao(cartoesVinculados ?? [])}
+          aoEscolher={escolherConjuntoDaRevisao}
+          aoCancelar={cancelarEscolha}
+        />
       </div>
     );
   }
@@ -899,9 +1016,9 @@ export function PaginaDeEstudo({
               <button
                 className="botao botao--primario"
                 type="button"
-                onClick={estudarNovamente}
+                onClick={revisarNovamente}
               >
-                Estudar novamente
+                Revisar novamente
               </button>
             )}
             <a
@@ -942,7 +1059,9 @@ export function PaginaDeEstudo({
 
       <header className="cabecalho-da-pagina">
         <div>
-          <h1>Estudar {baralho.nome}</h1>
+          <h1>
+            {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+          </h1>
         </div>
       </header>
 
@@ -1142,4 +1261,195 @@ async function carregarTodasAsPrevias(
   }
 
   return { ok: true, previas };
+}
+
+/** A chave das ações da modal de escolha (FR-383). */
+type ChaveDaRevisao = "pendentes" | "todos";
+
+/** Uma ação da modal de escolha: a contagem e o motivo da recusa (FR-383, FR-386). */
+interface OpcaoDaEscolhaDaRevisao {
+  chave: ChaveDaRevisao;
+  rotulo: string;
+  contagem: string;
+  motivoDesabilitado: string | null;
+}
+
+/**
+ * As duas ações da modal com as contagens e os motivos (FR-383, FR-386).
+ *
+ * «Só pendentes» conta os Cartões novos ou vencidos — nunca mais que o
+ * conjunto —; «Todos os cartões» conta o conjunto carregado inteiro. Uma ação
+ * acima do limite de registro fica desabilitada com o motivo e a orientação,
+ * sem truncar e sem desabilitar a outra; um conjunto pendente vazio também
+ * não inicia Sessão vazia.
+ */
+function opcoesDaEscolhaDaRevisao(
+  vinculados: readonly CartaoListado[],
+): OpcaoDaEscolhaDaRevisao[] {
+  const pendentes = cartoesPendentes(vinculados, new Date());
+
+  return [
+    {
+      chave: "pendentes",
+      rotulo: "Só pendentes",
+      contagem: contagemDeCartoesPendentes(pendentes.length),
+      motivoDesabilitado:
+        pendentes.length === 0
+          ? "Não há Cartões pendentes neste Baralho."
+          : motivoDeLimite(pendentes.length),
+    },
+    {
+      chave: "todos",
+      rotulo: "Todos os cartões",
+      contagem: contagemDeCartoesNoBaralho(vinculados.length),
+      motivoDesabilitado: motivoDeLimite(vinculados.length),
+    },
+  ];
+}
+
+/** A mensagem da recusa por limite, com o motivo e a orientação (FR-386). */
+function motivoDoLimiteExcedido(quantidade: number): string {
+  return (
+    `O conjunto tem ${quantidade} Cartões e excede o limite de ` +
+    `${LIMITE_DA_SELECAO.toLocaleString("pt-BR")} por Sessão. ` +
+    "Use um Baralho menor ou a seleção temporária."
+  );
+}
+
+/** O motivo da recusa por limite; `null` quando o conjunto cabe (FR-386). */
+function motivoDeLimite(quantidade: number): string | null {
+  if (quantidade <= LIMITE_DA_SELECAO) {
+    return null;
+  }
+
+  return motivoDoLimiteExcedido(quantidade);
+}
+
+/** «1 Cartão pendente» ou «N Cartões pendentes» (FR-383). */
+function contagemDeCartoesPendentes(quantidade: number): string {
+  return quantidade === 1
+    ? "1 Cartão pendente"
+    : `${quantidade} Cartões pendentes`;
+}
+
+/** «1 Cartão no Baralho» ou «N Cartões no Baralho» (FR-383). */
+function contagemDeCartoesNoBaralho(quantidade: number): string {
+  return quantidade === 1
+    ? "1 Cartão no Baralho"
+    : `${quantidade} Cartões no Baralho`;
+}
+
+/**
+ * A modal de escolha da revisão (FR-383, FR-386, FR-387).
+ *
+ * Usa o `<dialog>` nativo com `showModal()` — o próprio elemento prende a
+ * navegação por Tab e trata Escape como cancelamento — e cai para o atributo
+ * `open` quando o jsdom não implementa `showModal`/`close`, como em
+ * `DialogoDeConfirmacao`. Só existe no DOM enquanto está aberta: as ações não
+ * aparecem na página antes da escolha.
+ *
+ * O foco inicial vai para "Cancelar" — a ação sem consequência —, para que
+ * ninguém inicie uma Sessão por engano ao percorrer o diálogo por teclado
+ * (FR-387). Cada ação tem o nome acessível exato («Só pendentes», «Todos os
+ * cartões») e a contagem, com o motivo quando desabilitada, em texto
+ * separado, referenciado por `aria-describedby` — a contagem não polui o nome
+ * do botão. Escape e o clique no pano de fundo cancelam sem iniciar.
+ */
+function DialogoDaEscolhaDaRevisao({
+  aberto,
+  opcoes,
+  aoEscolher,
+  aoCancelar,
+}: {
+  aberto: boolean;
+  opcoes: readonly OpcaoDaEscolhaDaRevisao[];
+  aoEscolher: (chave: ChaveDaRevisao) => void;
+  aoCancelar: () => void;
+}) {
+  const id = useId();
+  const tituloId = `${id}-titulo`;
+  const dialogo = useRef<HTMLDialogElement>(null);
+  const botaoDeCancelamento = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    const elemento = dialogo.current;
+
+    if (elemento === null || !aberto) {
+      return;
+    }
+
+    if (!elemento.open) {
+      if (typeof elemento.showModal === "function") {
+        elemento.showModal();
+      } else {
+        elemento.setAttribute("open", "");
+      }
+    }
+
+    botaoDeCancelamento.current?.focus();
+  }, [aberto]);
+
+  if (!aberto) {
+    return null;
+  }
+
+  function aoTeclar(evento: KeyboardEventDeReact<HTMLDialogElement>): void {
+    if (evento.key === "Escape") {
+      evento.preventDefault();
+      aoCancelar();
+    }
+  }
+
+  function aoClicarNoFundo(evento: MouseEventDeReact<HTMLDialogElement>): void {
+    if (evento.target === evento.currentTarget) {
+      aoCancelar();
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialogo}
+      aria-labelledby={tituloId}
+      onKeyDown={aoTeclar}
+      onClick={aoClicarNoFundo}
+    >
+      <h2 id={tituloId} className="titulo-do-dialogo">
+        Revisar baralho
+      </h2>
+      <p className="descricao-do-dialogo">
+        Escolha o conjunto que você quer revisar agora.
+      </p>
+      <ul className="opcoes-da-revisao">
+        {opcoes.map((opcao) => {
+          const ajudaId = `${id}-ajuda-${opcao.chave}`;
+          const desabilitada = opcao.motivoDesabilitado !== null;
+
+          return (
+            <li key={opcao.chave}>
+              <button
+                type="button"
+                className="botao botao--primario"
+                disabled={desabilitada}
+                aria-describedby={ajudaId}
+                onClick={() => aoEscolher(opcao.chave)}
+              >
+                {opcao.rotulo}
+              </button>
+              <p id={ajudaId} className="ajuda">
+                {opcao.contagem}
+                {opcao.motivoDesabilitado === null
+                  ? ""
+                  : ` ${opcao.motivoDesabilitado}`}
+              </p>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="acoes-do-dialogo">
+        <button ref={botaoDeCancelamento} type="button" onClick={aoCancelar}>
+          Cancelar
+        </button>
+      </div>
+    </dialog>
+  );
 }

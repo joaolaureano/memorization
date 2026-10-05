@@ -1,5 +1,7 @@
 # Decisões — Busca e filtros no acervo
 
+> A regra vigente de situação por Baralho e ação Revisar está na spec 024. As entradas abaixo preservam o histórico da 022.
+
 ## 2026-10-05 — Escopo documental aprovado
 
 ### Contexto e autorização

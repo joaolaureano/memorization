@@ -19,28 +19,37 @@ import {
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
-// T308 — prova E2E real da Sessão de estudo
-// (FR-029, FR-037, FR-039, SC-004, SC-008, SC-010;
-// specs/004-sessao-de-estudo/tasks.md).
+// T308 — prova E2E real da Sessão de revisão
+// (FR-029, FR-037, FR-039, SC-004, SC-008;
+// specs/004-sessao-de-estudo/tasks.md; spec 024).
 //
 // Nenhuma rede é interceptada e nenhum dado é fabricado: a API real
 // (node + SQLite em arquivo) e o frontend real (Vite dev) são iniciados como
 // processos filhos do próprio teste, em portas livres e com um arquivo SQLite
 // temporário exclusivo. Cartões, Baralho e Vínculos são criados direto pela
 // API; a Sessão inteira — início, Revelação, Resultado e Resumo — é percorrida
-// no Chromium pela tela real. Por fim, uma nova Sessão iniciada é interrompida
-// com `page.reload()`: a tela volta ao início, sem retomada nem Resumo
-// persistido (FR-038, FR-039).
+// no Chromium pela tela real.
+//
+// Na spec 024 o formulário de início (Quantidade de Cartões + Iniciar Sessão)
+// saiu: um Baralho Pendente (Cartões novos) abre o modal "Revisar baralho" com
+// "Só pendentes"/"Todos os cartões"/"Cancelar" e a escolha começa a Sessão; um
+// Baralho Revisado (todos os Cartões no futuro) começa direto, sem modal.
+// Depois de uma Sessão concluída, os Cartões novos ficam agendados para o dia
+// seguinte — o Baralho vira Revisado, o que prova o início direto.
+//
+// Por fim, uma nova Sessão iniciada é interrompida com `page.reload()`: a
+// Credencial e o andamento somem e o novo início recomeça no Item 1, sem
+// retomada nem Resumo persistido (FR-038, FR-039).
 //
 // O teste aguarda a prontidão de cada processo antes de usá-lo e encerra
 // ambos no `finally`, inclusive quando a prova falha no meio.
 
-const QUANTIDADE_DE_CARTOES = 5;
+const QUANTIDADE_DE_CARTOES = 3;
 const NOME_DO_BARALHO = "Inglês";
 
 test.setTimeout(120_000);
 
-test("Sessão de estudo real encerra no Resumo e a interrupção descarta o andamento (FR-029, FR-037, FR-039, SC-004, SC-008, SC-010)", async ({ page, browserName }) => {
+test("Sessão de revisão real encerra no Resumo e a interrupção descarta o andamento (FR-029, FR-037, FR-039, SC-004, SC-008; spec 024)", async ({ page, browserName }) => {
   // Navegador real: Chromium, sem DOM simulado.
   expect(browserName).toBe("chromium");
 
@@ -76,8 +85,8 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     // Baralho e os Cartões da Sessão são dele (FR-090, FR-092).
     await criarUsuarioDeProva(enderecoDaApi);
 
-    // Prepara o acervo direto pela API: um Baralho com cinco Cartões
-    // vinculados — o cenário canônico da Sessão.
+    // Prepara o acervo direto pela API: um Baralho com três Cartões novos
+    // vinculados — Pendente, portanto com o modal de início (spec 024).
     const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
       nome: NOME_DO_BARALHO,
     });
@@ -98,38 +107,46 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
     expect(baralhoPreparado.elegivel).toBe(true);
     expect(baralhoPreparado.cartoes).toHaveLength(QUANTIDADE_DE_CARTOES);
 
-    // A tela real de Sessão comunica a quantidade disponível, depois de Entrar
-    // (FR-097).
+    // A tela real de revisão, depois de Entrar (FR-097). O formulário antigo
+    // de início não existe mais (spec 024).
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
     await entrarSeNecessario(page);
 
+    await expect(page.getByLabel("Quantidade de Cartões")).toHaveCount(0);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
+      page.getByRole("button", { name: "Iniciar Sessão" }),
+    ).toHaveCount(0);
+
+    // Baralho Pendente: o modal decide o conjunto antes de começar.
+    const modalDeRevisao = page.getByRole("dialog");
+
+    await expect(modalDeRevisao).toBeVisible();
+    await expect(modalDeRevisao.getByText("Revisar baralho")).toBeVisible();
+    await expect(
+      modalDeRevisao.getByRole("button", { name: "Só pendentes", exact: true }),
     ).toBeVisible();
-    await expect(page.getByLabel("Quantidade de Cartões")).toBeVisible();
     await expect(
-      page.getByText("Este Baralho tem 5 Cartões vinculados."),
+      modalDeRevisao.getByRole("button", {
+        name: "Todos os cartões",
+        exact: true,
+      }),
     ).toBeVisible();
 
-    // SC-010: pedir mais do que o disponível inicia mesmo assim e avisa antes
-    // do primeiro Item quantos Itens a Sessão terá.
-    await page.getByLabel("Quantidade de Cartões").fill("50");
-    await page.getByRole("button", { name: "Iniciar Sessão" }).click();
+    await modalDeRevisao
+      .getByRole("button", { name: "Todos os cartões", exact: true })
+      .click();
 
     await expect(
-      page.getByRole("article", { name: "Item 1 de 5" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
-        "Você pediu 50 Cartões, mas este Baralho tem 5. A Sessão terá 5 Itens.",
-      ),
+      page.getByRole("article", { name: "Item 1 de 3" }),
     ).toBeVisible();
 
     // Interromper pede confirmação (spec 012): "Cancelar" mantém a Sessão no
     // Item atual e "Interromper" a descarta, devolvendo ao Baralho sem Resumo.
     await page.getByRole("button", { name: "Interromper" }).click();
 
-    const dialogoDeInterrupcao = page.getByRole("dialog");
+    const dialogoDeInterrupcao = page
+      .getByRole("dialog")
+      .filter({ hasText: "Interromper a Sessão?" });
 
     await expect(
       dialogoDeInterrupcao.getByText("Interromper a Sessão?"),
@@ -139,7 +156,7 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       .getByRole("button", { name: "Cancelar" })
       .click();
     await expect(
-      page.getByRole("article", { name: "Item 1 de 5" }),
+      page.getByRole("article", { name: "Item 1 de 3" }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
@@ -150,15 +167,14 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
 
-    // Agora, a Sessão que percorre três Itens até o Resumo.
-    await page.getByRole("link", { name: "Estudar este Baralho" }).click();
+    // Agora, a Sessão que percorre três Itens até o Resumo — desta vez
+    // escolhendo "Só pendentes" no modal (os Cartões continuam novos).
+    await page.getByRole("link", { name: "Revisar este Baralho" }).click();
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
-    ).toBeVisible();
-
-    await page.getByLabel("Quantidade de Cartões").fill("3");
-    await page.getByRole("button", { name: "Iniciar Sessão" }).click();
+    await expect(modalDeRevisao).toBeVisible();
+    await modalDeRevisao
+      .getByRole("button", { name: "Só pendentes", exact: true })
+      .click();
 
     await expect(
       page.getByRole("article", { name: "Item 1 de 3" }),
@@ -222,28 +238,26 @@ test("Sessão de estudo real encerra no Resumo e a interrupção descarta o anda
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Estudar este Baralho" }).click();
-    await page.getByLabel("Quantidade de Cartões").fill("3");
-    await page.getByRole("button", { name: "Iniciar Sessão" }).click();
+    // A Sessão concluída agendou os Cartões novos para o dia seguinte: o
+    // Baralho virou Revisado e começa todos direto, sem modal (spec 024).
+    await page.getByRole("link", { name: "Revisar este Baralho" }).click();
 
     await expect(
       page.getByRole("article", { name: "Item 1 de 3" }),
     ).toBeVisible();
+    await expect(modalDeRevisao).toHaveCount(0);
 
     await page.reload();
 
-    // Recarregar descarta a Credencial, e a Sessão em andamento com ela; a
-    // tela de estudo volta ao início depois de Entrar de novo (FR-089,
-    // SC-031).
+    // Recarregar descarta a Credencial, e o andamento da Sessão com ela; com
+    // a Credencial nova o início recomeça no Item 1, sem retomada (FR-089,
+    // SC-031; spec 024).
     await entrarSeNecessario(page);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Estudar Inglês" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Quantidade de Cartões")).toBeVisible();
-    await expect(
       page.getByRole("article", { name: "Item 1 de 3" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
+    await expect(modalDeRevisao).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Sessão concluída" }),
     ).toHaveCount(0);

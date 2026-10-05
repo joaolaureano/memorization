@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cartoesDoBaralho,
+  cartoesPendentes,
+  classificarBaralhos,
   filtrarBaralhos,
+  filtrarBaralhosPorSituacao,
   filtrarCartoes,
+  rotuloDaSituacaoDoBaralho,
   situacaoDaRevisao,
+  situacaoDoBaralho,
 } from "../src/acervo-cliente/busca-no-acervo";
 import type {
   BaralhoPesquisavel,
   CartaoPesquisavel,
   CriteriosDeCartoes,
+  SituacaoDoBaralho,
 } from "../src/acervo-cliente/busca-no-acervo";
 
 /** O instante fixo dos testes: 5 de outubro de 2026, 9h locais. */
@@ -21,7 +28,6 @@ function criterios(
   return {
     consulta: "",
     baralho: "todos",
-    situacao: "todos",
     ...parcial,
   };
 }
@@ -76,35 +82,22 @@ describe("filtrarCartoes", () => {
     ];
 
     expect(
-      filtrarCartoes(cartoes, criterios({ consulta: "paris" }), AGORA),
+      filtrarCartoes(cartoes, criterios({ consulta: "paris" })),
     ).toEqual([cartoes[0]]);
   });
 
-  it("combina texto, baralho e situação por interseção, devolvendo só o Cartão que satisfaz os três (FR-353)", () => {
-    const pendente = new Date(2026, 9, 4, 15, 0).toISOString();
-    const futura = new Date(2026, 9, 6, 0, 30).toISOString();
-    const satisfaz = cartao(
-      "c1",
-      "Matriz identidade",
-      "Álgebra",
-      ["b1"],
-      pendente,
-    );
+  it("combina texto e baralho por interseção, devolvendo só o Cartão que satisfaz os dois (FR-353, FR-382)", () => {
+    const satisfaz = cartao("c1", "Matriz identidade", "Álgebra", ["b1"]);
     const cartoes = [
       satisfaz,
-      cartao("c2", "Matriz identidade", "Álgebra", ["b2"], pendente),
-      cartao("c3", "Matriz identidade", "Álgebra", ["b1"], futura),
-      cartao("c4", "Determinante", "Cálculo", ["b1"], pendente),
+      cartao("c2", "Matriz identidade", "Álgebra", ["b2"]),
+      cartao("c3", "Determinante", "Cálculo", ["b1"]),
+      cartao("c4", "Determinante", "Matriz", ["b2"]),
     ];
 
     const resultado = filtrarCartoes(
       cartoes,
-      criterios({
-        consulta: "matriz",
-        baralho: "b1",
-        situacao: "revisao-pendente",
-      }),
-      AGORA,
+      criterios({ consulta: "matriz", baralho: "b1" }),
     );
 
     expect(resultado).toEqual([satisfaz]);
@@ -113,16 +106,8 @@ describe("filtrarCartoes", () => {
   it("devolve o Cartão em dois Baralhos uma única vez, ao filtrar por qualquer um deles (FR-351)", () => {
     const compartilhado = cartao("c1", "Frente", "Verso", ["b1", "b2"]);
 
-    const porB1 = filtrarCartoes(
-      [compartilhado],
-      criterios({ baralho: "b1" }),
-      AGORA,
-    );
-    const porB2 = filtrarCartoes(
-      [compartilhado],
-      criterios({ baralho: "b2" }),
-      AGORA,
-    );
+    const porB1 = filtrarCartoes([compartilhado], criterios({ baralho: "b1" }));
+    const porB2 = filtrarCartoes([compartilhado], criterios({ baralho: "b2" }));
 
     expect(porB1).toEqual([compartilhado]);
     expect(porB2).toEqual([compartilhado]);
@@ -134,11 +119,7 @@ describe("filtrarCartoes", () => {
     const vinculado = cartao("c2", "Vinculado", "Com Baralho", ["b1"]);
 
     expect(
-      filtrarCartoes(
-        [solto, vinculado],
-        criterios({ baralho: "sem-baralho" }),
-        AGORA,
-      ),
+      filtrarCartoes([solto, vinculado], criterios({ baralho: "sem-baralho" })),
     ).toEqual([solto]);
   });
 
@@ -149,7 +130,6 @@ describe("filtrarCartoes", () => {
     const resultado = filtrarCartoes(
       [primeiro, segundo],
       criterios({ consulta: "mesma frente" }),
-      AGORA,
     );
 
     expect(resultado).toHaveLength(2);
@@ -166,7 +146,6 @@ describe("filtrarCartoes", () => {
     const ordem = filtrarCartoes(
       cartoes,
       criterios({ consulta: "conceito" }),
-      AGORA,
     ).map((c) => c.id);
 
     expect(ordem).toEqual(["c3", "c1", "c2"]);
@@ -200,5 +179,179 @@ describe("situacaoDaRevisao", () => {
     expect(situacaoDaRevisao("nem parece uma data", AGORA)).toBe(
       "revisao-pendente",
     );
+  });
+});
+
+/** As datas de prova, relativas ao dia local de AGORA (FR-379). */
+const ONTEM = new Date(2026, 9, 4, 15, 0).toISOString();
+const HOJE_MAIS_TARDE = new Date(2026, 9, 5, 23, 0).toISOString();
+const AMANHA = new Date(2026, 9, 6, 0, 30).toISOString();
+
+describe("situacaoDoBaralho", () => {
+  it("classifica o conjunto sem Cartões como sem-cartoes, nunca como revisado (FR-380, SC-151)", () => {
+    expect(situacaoDoBaralho([], AGORA)).toBe("sem-cartoes");
+  });
+
+  it("um Cartão novo deixa o Baralho pendente (FR-379)", () => {
+    expect(situacaoDoBaralho([null, AMANHA], AGORA)).toBe("pendente");
+  });
+
+  it("um Cartão com a revisão de ontem deixa o Baralho pendente (FR-379, SC-151)", () => {
+    expect(situacaoDoBaralho([ONTEM, AMANHA], AGORA)).toBe("pendente");
+  });
+
+  it("um Cartão com a revisão de hoje, mesmo mais tarde, deixa o Baralho pendente (FR-379, SC-151)", () => {
+    expect(situacaoDoBaralho([HOJE_MAIS_TARDE], AGORA)).toBe("pendente");
+  });
+
+  it("só o conjunto não vazio com todos os Cartões no futuro é revisado (FR-379, SC-151)", () => {
+    expect(situacaoDoBaralho([AMANHA], AGORA)).toBe("revisado");
+  });
+
+  it("uma data ilegível conta como pendente e nunca produz um revisado falso (FR-387, SC-151)", () => {
+    expect(situacaoDoBaralho([AMANHA, "nem parece uma data"], AGORA)).toBe(
+      "pendente",
+    );
+  });
+});
+
+describe("classificarBaralhos", () => {
+  it("devolve uma entrada para todo Baralho, com sem-cartoes para o vazio (FR-380, SC-151)", () => {
+    const situacoes = classificarBaralhos(
+      [{ id: "vazio" }, { id: "em-dia" }],
+      [cartao("c1", "Frente", "Verso", ["em-dia"], AMANHA)],
+      AGORA,
+    );
+
+    expect(situacoes.get("vazio")).toBe("sem-cartoes");
+    expect(situacoes.get("em-dia")).toBe("revisado");
+    expect(situacoes.size).toBe(2);
+  });
+
+  it("classifica cada Baralho pelas datas dos seus Cartões, inclusive novos, de ontem, de hoje e de amanhã (FR-379, SC-151)", () => {
+    const situacoes = classificarBaralhos(
+      [{ id: "b-novo" }, { id: "b-ontem" }, { id: "b-hoje" }, { id: "b-amanha" }],
+      [
+        cartao("c1", "Novo", "Verso", ["b-novo"], null),
+        cartao("c2", "Ontem", "Verso", ["b-ontem"], ONTEM),
+        cartao("c3", "Hoje", "Verso", ["b-hoje"], HOJE_MAIS_TARDE),
+        cartao("c4", "Amanhã", "Verso", ["b-amanha"], AMANHA),
+      ],
+      AGORA,
+    );
+
+    expect(situacoes.get("b-novo")).toBe("pendente");
+    expect(situacoes.get("b-ontem")).toBe("pendente");
+    expect(situacoes.get("b-hoje")).toBe("pendente");
+    expect(situacoes.get("b-amanha")).toBe("revisado");
+  });
+
+  it("um Cartão compartilhado entre dois Baralhos conta nos dois (FR-379)", () => {
+    const compartilhado = cartao("c1", "Frente", "Verso", ["b1", "b2"], ONTEM);
+    const futuros = [
+      cartao("c2", "Frente 2", "Verso 2", ["b2"], AMANHA),
+    ];
+
+    const situacoes = classificarBaralhos(
+      [{ id: "b1" }, { id: "b2" }],
+      [compartilhado, ...futuros],
+      AGORA,
+    );
+
+    expect(situacoes.get("b1")).toBe("pendente");
+    expect(situacoes.get("b2")).toBe("pendente");
+  });
+});
+
+describe("filtrarBaralhosPorSituacao", () => {
+  const baralhos: BaralhoPesquisavel[] = [
+    { id: "b1", nome: "Pendente" },
+    { id: "b2", nome: "Revisado" },
+    { id: "b3", nome: "Vazio" },
+  ];
+  const situacoes = new Map<string, SituacaoDoBaralho>([
+    ["b1", "pendente"],
+    ["b2", "revisado"],
+    ["b3", "sem-cartoes"],
+  ]);
+
+  it("Todos devolve a lista inteira, inclusive os Baralhos vazios (FR-381)", () => {
+    expect(filtrarBaralhosPorSituacao(baralhos, situacoes, "todos")).toEqual(
+      baralhos,
+    );
+  });
+
+  it("Pendente devolve só os pendentes, excluindo revisados e vazios (FR-380, FR-381)", () => {
+    expect(
+      filtrarBaralhosPorSituacao(baralhos, situacoes, "pendente"),
+    ).toEqual([baralhos[0]]);
+  });
+
+  it("Revisado devolve só os revisados, excluindo vazios (FR-380, FR-381)", () => {
+    expect(
+      filtrarBaralhosPorSituacao(baralhos, situacoes, "revisado"),
+    ).toEqual([baralhos[1]]);
+  });
+
+  it("preserva a ordem recebida e trata um Baralho fora do mapa como vazio (FR-381)", () => {
+    const comDesconhecido = [...baralhos, { id: "b4", nome: "Desconhecido" }];
+
+    expect(
+      filtrarBaralhosPorSituacao(comDesconhecido, situacoes, "todos").map(
+        (baralho) => baralho.id,
+      ),
+    ).toEqual(["b1", "b2", "b3", "b4"]);
+    expect(
+      filtrarBaralhosPorSituacao(comDesconhecido, situacoes, "revisado").map(
+        (baralho) => baralho.id,
+      ),
+    ).toEqual(["b2"]);
+  });
+});
+
+describe("cartoesDoBaralho", () => {
+  it("devolve os Cartões vinculados na ordem recebida, sem duplicar o compartilhado (FR-384)", () => {
+    const cartoes = [
+      cartao("c1", "Um", "Verso", ["b1"]),
+      cartao("c2", "Dois", "Verso", ["b1", "b2"]),
+      cartao("c3", "Três", "Verso", ["b2"]),
+    ];
+
+    expect(cartoesDoBaralho(cartoes, "b1").map((c) => c.id)).toEqual([
+      "c1",
+      "c2",
+    ]);
+    expect(cartoesDoBaralho(cartoes, "b2").map((c) => c.id)).toEqual([
+      "c2",
+      "c3",
+    ]);
+    expect(cartoesDoBaralho(cartoes, "b3")).toEqual([]);
+  });
+});
+
+describe("cartoesPendentes", () => {
+  it("inclui novos, vencidos e datas ilegíveis, e exclui os em dia (FR-383, SC-152)", () => {
+    const cartoes = [
+      cartao("novo", "Novo", "Verso", ["b1"], null),
+      cartao("ontem", "Ontem", "Verso", ["b1"], ONTEM),
+      cartao("hoje", "Hoje", "Verso", ["b1"], HOJE_MAIS_TARDE),
+      cartao("ilegivel", "Ilegível", "Verso", ["b1"], "nem parece uma data"),
+      cartao("amanha", "Amanhã", "Verso", ["b1"], AMANHA),
+    ];
+
+    expect(cartoesPendentes(cartoes, AGORA).map((c) => c.id)).toEqual([
+      "novo",
+      "ontem",
+      "hoje",
+      "ilegivel",
+    ]);
+  });
+});
+
+describe("rotuloDaSituacaoDoBaralho", () => {
+  it('rotula as três situações: "Sem cartões", "Pendente" e "Revisado" (FR-380, SC-152)', () => {
+    expect(rotuloDaSituacaoDoBaralho("sem-cartoes")).toBe("Sem cartões");
+    expect(rotuloDaSituacaoDoBaralho("pendente")).toBe("Pendente");
+    expect(rotuloDaSituacaoDoBaralho("revisado")).toBe("Revisado");
   });
 });

@@ -20,23 +20,35 @@
     <button class="botao-de-saida" data-preview="Sair">Sair</button>
   </header>
   <main class="aplicacao" id="main">
-    <header class="cabecalho-da-pagina">
-      <div><h1 id="titulo">Baralhos</h1><p class="texto-secundario" id="descricao"></p></div>
-      <button class="botao botao--primario" id="criar">Criar baralho</button>
-    </header>
-    <section class="filtros" aria-label="Busca e filtros">
-      <div class="campo busca"><label class="rotulo" for="busca" id="rotulo-busca">Buscar baralhos</label><input type="search" id="busca" placeholder="Digite o nome do baralho" autocomplete="off"></div>
-      <div class="campo" id="campo-baralho" hidden><label class="rotulo" for="baralho">Baralho</label><select id="baralho"><option value="todos">Todos</option><option value="sem">Sem baralho</option></select></div>
-      <div class="campo" id="campo-situacao" hidden><label class="rotulo" for="situacao">Situação da revisão</label><select id="situacao"><option value="todos">Todos</option><option value="novos">Novos</option><option value="pendente">Revisão pendente</option><option value="em-dia">Em dia</option></select></div>
-    </section>
-    <div class="resultado-cabecalho"><p id="contagem" role="status" aria-live="polite" aria-atomic="true"></p><button id="limpar" class="botao botao--secundario">Limpar filtros</button></div>
-    <div id="resultados"></div>
+    <div id="visao-lista">
+      <header class="cabecalho-da-pagina">
+        <div><h1 id="titulo" tabindex="-1">Baralhos</h1><p class="texto-secundario" id="descricao"></p></div>
+        <button class="botao botao--primario" id="criar">Criar baralho</button>
+      </header>
+      <section class="filtros" aria-label="Busca e filtros">
+        <div class="campo busca"><label class="rotulo" for="busca" id="rotulo-busca">Buscar baralhos</label><input type="search" id="busca" placeholder="Digite o nome do baralho" autocomplete="off"></div>
+        <div class="campo" id="campo-baralho" hidden><label class="rotulo" for="baralho">Baralho</label><select id="baralho"><option value="todos">Todos</option><option value="sem">Sem baralho</option></select></div>
+        <div class="campo" id="campo-situacao" hidden><label class="rotulo" for="situacao">Situação da revisão</label><select id="situacao"><option value="todos">Todos</option><option value="pendente">Pendente</option><option value="revisado">Revisado</option></select></div>
+      </section>
+      <div class="resultado-cabecalho"><p id="contagem" role="status" aria-live="polite" aria-atomic="true"></p><button id="limpar" class="botao botao--secundario">Limpar filtros</button></div>
+      <div id="resultados"></div>
+    </div>
+    <div id="visao-revisao" hidden></div>
   </main>
   <aside class="galeria" aria-label="Controles do protótipo">
-    <p><strong>Protótipo · Spec 022</strong><br>Dados fictícios. As alterações duram apenas nesta aba.</p>
+    <p><strong>Protótipo · Specs 022 e 024</strong><br>Dados fictícios. As alterações duram apenas nesta aba; a revisão é simulada e não calcula SM-2.</p>
     <div class="controles-galeria"><label for="cenario">Cenário de revisão</label><select id="cenario"><option value="normal">Lista preenchida</option><option value="sem-resultados">Busca sem resultados</option><option value="vazio">Acervo vazio</option><option value="carregando">Carregamento</option><option value="falha">Falha de leitura</option></select><button id="reiniciar">Reiniciar exemplos</button></div>
   </aside>
   <dialog id="dialogo" aria-labelledby="dialogo-titulo"><h2 id="dialogo-titulo"></h2><p id="dialogo-texto"></p><div class="acoes"><button id="cancelar">Fechar</button><button id="confirmar" class="botao botao--perigo" hidden>Excluir cartão</button></div></dialog>
+  <dialog id="dialogo-revisao" aria-labelledby="revisao-titulo" aria-describedby="revisao-nome">
+    <h2 id="revisao-titulo">Revisar baralho</h2>
+    <p id="revisao-nome"></p>
+    <div class="bf-escolhas">
+      <button id="revisar-pendentes" class="botao botao--secundario" aria-label="Só pendentes" aria-describedby="contagem-pendentes">Só pendentes<small class="bf-contagem" id="contagem-pendentes"></small></button>
+      <button id="revisar-todas" class="botao botao--secundario" aria-label="Todos os cartões" aria-describedby="contagem-todas">Todos os cartões<small class="bf-contagem" id="contagem-todas"></small></button>
+    </div>
+    <div class="acoes"><button id="cancelar-revisao">Cancelar</button></div>
+  </dialog>
   <script src="app.js"></script>
 </body>
 </html>

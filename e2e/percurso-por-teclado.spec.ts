@@ -31,14 +31,14 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // Ao final, as telas percorridas — o Resumo, as Preferências e a Revisão do
 // dia — não podem apresentar rolagem horizontal (`scrollWidth <=
 // clientWidth`) em nenhuma das larguras (FR-159, SC-088).
+//
+// A spec 024 tirou o formulário de início (Quantidade de Cartões + Iniciar
+// Sessão): com o único Cartão novo, o Baralho está Pendente e o início passa
+// pelo modal "Revisar baralho", também operado só com o teclado.
 
 const NOME_DO_BARALHO = "Inglês";
 const FRENTE_DO_CARTAO = "Pão";
 const VERSO_DO_CARTAO = "Bread";
-
-/** Modificador de "selecionar tudo" conforme a plataforma da execução. */
-const MODIFICADOR_DE_SELECAO =
-  process.platform === "darwin" ? "Meta" : "Control";
 
 /** As duas larguras exigidas: telefone estreito e desktop largo. */
 const CENARIOS = [
@@ -49,7 +49,7 @@ const CENARIOS = [
 test.setTimeout(180_000);
 
 for (const cenario of CENARIOS) {
-  test(`Percurso completo por teclado cria acervo e estuda até o Resumo em 100% (${cenario.rotulo}) (SC-062, FR-158, FR-159)`, async ({ page, browserName }) => {
+  test(`Percurso completo por teclado cria acervo e revisa até o Resumo em 100% (${cenario.rotulo}) (SC-062, FR-158, FR-159)`, async ({ page, browserName }) => {
     // Navegador real: Chromium, sem DOM simulado.
     expect(browserName).toBe("chromium");
 
@@ -250,26 +250,18 @@ async function percursoPorTeclado(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();
 
-  await acionarPorTab(page, acionavel(page, "Estudar este Baralho"));
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: `Estudar ${NOME_DO_BARALHO}`,
-      exact: true,
-    }),
-  ).toBeVisible();
+  await acionarPorTab(page, acionavel(page, "Revisar este Baralho"));
 
-  // Quantidade 1 — seleciona o conteúdo atual do campo e o substitui.
-  const campoQuantidade = page.getByLabel("Quantidade de Cartões", {
-    exact: true,
-  });
-  await focarPorTab(page, campoQuantidade);
-  await page.keyboard.press(`${MODIFICADOR_DE_SELECAO}+A`);
-  await page.keyboard.type("1");
+  // O único Cartão é novo: o Baralho está Pendente e o modal decide a Sessão.
+  // Sem toque no mouse — o foco entra no modal e Tab alcança "Só pendentes"
+  // (spec 024).
+  const modalDeRevisao = page.getByRole("dialog");
+
+  await expect(modalDeRevisao.getByText("Revisar baralho")).toBeVisible();
 
   await acionarPorTab(
     page,
-    page.getByRole("button", { name: "Iniciar Sessão", exact: true }),
+    modalDeRevisao.getByRole("button", { name: "Só pendentes", exact: true }),
   );
   await expect(
     page.getByRole("article", { name: "Item 1 de 1" }),

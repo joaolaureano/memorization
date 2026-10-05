@@ -1036,6 +1036,26 @@ dialog .acoes {
   margin-top: 20px;
 }
 
+/* Ações da modal de escolha da revisão (FR-383): cada opção ocupa a linha,
+ * com a contagem logo abaixo, e o alvo de 44px preservado (FR-387). */
+.opcoes-da-revisao {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.opcoes-da-revisao .botao {
+  width: 100%;
+  min-height: 44px;
+}
+
+.opcoes-da-revisao .ajuda {
+  margin: 4px 0 0;
+}
+
 /* ---------------------------------------------------------------------------
  * Utilitários
  * ------------------------------------------------------------------------- */
@@ -1126,8 +1146,41 @@ dialog .acoes {
 .linha-da-lista__acoes {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/* A etiqueta textual da situação da revisão (FR-381): legível sem depender
+ * só da cor, com o texto Pendente, Revisado ou Sem cartões sempre visível.
+ * Fica antes das ações, na ordem de leitura, e pode quebrar linha com elas
+ * em telas estreitas, sem truncar. */
+.etiqueta {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.etiqueta--pendente {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.etiqueta--revisado {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.etiqueta--sem-cartoes {
+  color: var(--muted);
 }
 
 /* Botões compactos, mas com o alvo mínimo de 44px (FR-346), para que a linha

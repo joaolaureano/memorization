@@ -38,12 +38,13 @@ import type { ProcessoIniciado } from "./servidores-locais";
 /** O nome no limite do comprimento aceito: exatamente quarenta caracteres. */
 const NOME_LONGO = "Baralho com o nome bem comprido possível";
 
-/** O Baralho sem Cartões: é ele que prova o "Estudar" desabilitado. */
+/** O Baralho sem Cartões: é ele que prova o "Revisar" desabilitado. */
 const NOME_SEM_CARTOES = "Alemão";
 
 // Os dez Baralhos do acervo e a quantidade de Cartões de cada um. Um deles
 // (NOME_SEM_CARTOES) fica sem nenhum Cartão, de propósito; os demais recebem
-// de um a três, para que as duas formas do controle "Estudar" apareçam.
+// de um a três, para que as duas formas do controle "Revisar" apareçam
+// (spec 024: a ação de estudo passou a se chamar "Revisar").
 const BARALHOS = [
   { nome: "Inglês", cartoes: 3 },
   { nome: "Espanhol", cartoes: 2 },
@@ -70,7 +71,7 @@ const ALTURA_MAXIMA_DA_LINHA = 72;
 /** Cada controle da linha é um alvo de toque: no mínimo 44px (FR-144). */
 const ALTURA_MINIMA_DO_ALVO = 44;
 
-/** Cada linha traz exatamente dois controles: "Estudar" e "Editar" (spec 021, FR-340). */
+/** Cada linha traz exatamente dois controles: "Revisar" e "Editar" (spec 021, FR-340; spec 024). */
 const CONTROLES_POR_LINHA = 2;
 
 /** O bloco do nome fica a no máximo 4px do centro vertical da linha (FR-144). */
@@ -232,8 +233,9 @@ for (const largura of LARGURAS) {
         medidaDaLinhaDoNomeLongo.visivel,
       );
 
-      // Cada linha traz exatamente dois controles — "Estudar" e "Editar" —, e
-      // ambos são alvos de toque de no mínimo 44px (spec 021: FR-340, FR-346).
+      // Cada linha traz exatamente dois controles — "Revisar" e "Editar" —, e
+      // ambos são alvos de toque de no mínimo 44px (spec 021: FR-340, FR-346;
+      // spec 024: a etiqueta de situação é texto, não um controle).
       for (let indice = 0; indice < QUANTIDADE_DE_BARALHOS; indice += 1) {
         const linha = linhas.nth(indice);
         const controles = linha.locator("a, button");
@@ -300,8 +302,9 @@ for (const largura of LARGURAS) {
       }
 
       // O Baralho sem Cartões continua na lista, com o nome em texto e Editar
-      // disponível, mas o "Estudar" é um botão desabilitado, e o motivo é a
-      // descrição acessível (spec 021: FR-341, FR-343).
+      // disponível, mas o "Revisar" é um botão desabilitado, e o motivo é a
+      // descrição acessível (spec 021: FR-341, FR-343; spec 024: o motivo, em
+      // qualquer das duas redações possíveis para a ação renomeada).
       await expect(
         page.getByText(NOME_SEM_CARTOES, { exact: true }),
       ).toBeVisible();
@@ -312,19 +315,19 @@ for (const largura of LARGURAS) {
         }),
       ).toBeVisible();
 
-      const estudarSemCartoes = page.getByRole("button", {
-        name: `Estudar ${NOME_SEM_CARTOES}`,
+      const revisarSemCartoes = page.getByRole("button", {
+        name: `Revisar ${NOME_SEM_CARTOES}`,
         exact: true,
       });
 
-      await expect(estudarSemCartoes).toBeDisabled();
-      await expect(estudarSemCartoes).toHaveAccessibleDescription(
-        /Sem Cartões para estudar\./,
+      await expect(revisarSemCartoes).toBeDisabled();
+      await expect(revisarSemCartoes).toHaveAccessibleDescription(
+        /Sem Cartões para (estudar|revisar)\./,
       );
 
-      // Um Baralho com Cartões, ao contrário, oferece "Estudar" como link.
+      // Um Baralho com Cartões, ao contrário, oferece "Revisar" como link.
       await expect(
-        page.getByRole("link", { name: `Estudar ${NOME_LONGO}`, exact: true }),
+        page.getByRole("link", { name: `Revisar ${NOME_LONGO}`, exact: true }),
       ).toBeVisible();
 
       // "Editar" é o caminho para o detalhe — o mesmo destino que o antigo
@@ -350,7 +353,7 @@ for (const largura of LARGURAS) {
 /**
  * Cria os dez Baralhos do acervo direto pela API, cada um com a quantidade de
  * Cartões definida em `BARALHOS`. O Baralho sem Cartões fica sem nenhum, de
- * propósito: é ele que prova o "Estudar" desabilitado (FR-144).
+ * propósito: é ele que prova o "Revisar" desabilitado (FR-144; spec 024).
  */
 async function semearBaralhos(enderecoDaApi: string): Promise<void> {
   let numeroDoCartao = 0;

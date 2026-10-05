@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import {
   entrarPelaUi,
@@ -11,9 +11,14 @@ import {
 // Exercita o frontend React real servido pelo Vite dev (segundo webServer do
 // harness), não uma cópia HTML da tela: `src/main.tsx` monta as páginas de
 // Cartões e de Baralhos com o `ClienteHttp`, e o Playwright intercepta apenas
-// o transporte — GET /cartoes responde 6 Cartões (os 3 primeiros no Baralho
-// "Inglês cotidiano") e GET /baralhos responde 2 Baralhos. Nenhum DOM da tela
-// é reproduzido aqui.
+// o transporte — GET /cartoes responde 6 Cartões (c01–c03 no Baralho "Inglês
+// cotidiano", c04 em "Álgebra linear" já agendado para o futuro e c05/c06 sem
+// Baralho) e GET /baralhos responde 3 Baralhos. Nenhum DOM da tela é
+// reproduzido aqui.
+//
+// Na spec 024 o filtro "Situação da revisão" saiu da tela de Cartões (que
+// mantém busca e Baralho) e passou para a lista de Baralhos, alimentado pelo
+// cruzamento entre GET /baralhos e GET /cartoes — por isso os dois mocks.
 //
 // Cada caso abre o próprio contexto porque viewport e `deviceScaleFactor`
 // (o zoom de 200%) são fixados na criação do contexto. As provas são: os
@@ -32,7 +37,8 @@ const CASOS = [
   { nome: 'zoom de 200%', viewport: { width: 720, height: 900 }, escala: 2 },
 ];
 
-/** 6 Cartões determinísticos: os 3 primeiros no Baralho "Inglês cotidiano". */
+/** 6 Cartões determinísticos: c01–c03 em "Inglês cotidiano" e c04 em
+ * "Álgebra linear" (spec 024); c05/c06 ficam sem Baralho. */
 function cartoesInterceptados(): Array<{
   id: string;
   frente: string;
@@ -47,13 +53,22 @@ function cartoesInterceptados(): Array<{
       id: `c${numero}`,
       frente: `Frente do Cartão ${numero}`,
       verso: `Verso do Cartão ${numero}`,
-      baralhos: indice < 3 ? [{ id: 'b1', nome: 'Inglês cotidiano' }] : [],
-      proximaRevisaoEm: null,
+      baralhos:
+        indice < 3
+          ? [{ id: 'b1', nome: 'Inglês cotidiano' }]
+          : indice === 3
+            ? [{ id: 'b2', nome: 'Álgebra linear' }]
+            : [],
+      // c01–c03 novos (Pendente); c04 agendado para o futuro (Revisado).
+      proximaRevisaoEm: indice === 3 ? '2099-01-01T12:00:00.000Z' : null,
     };
   });
 }
 
-/** Os 2 Baralhos do seletor de filtro da tela de Cartões (spec 022). */
+/** Os Baralhos do seletor de filtro da tela de Cartões e da lista de
+ * Baralhos (specs 022 e 024): "Inglês cotidiano" sai Pendente (Cartões novos
+ * interceptados), "Álgebra linear" sai Revisado (único Cartão no futuro) e
+ * "Vazio" sai "Sem cartões" (nenhum Cartão aponta para ele). */
 const BARALHOS = [
   {
     id: 'b1',
@@ -64,6 +79,12 @@ const BARALHOS = [
   {
     id: 'b2',
     nome: 'Álgebra linear',
+    quantidadeDeCartoes: 1,
+    elegivel: true,
+  },
+  {
+    id: 'b3',
+    nome: 'Vazio',
     quantidadeDeCartoes: 0,
     elegivel: false,
   },
@@ -80,6 +101,13 @@ async function exigirCaixa(locator: Locator) {
   }
 
   return caixa;
+}
+
+/** Item da lista de Baralhos cujo nome é exatamente `nome` (spec 024). */
+function itemDeBaralho(page: Page, nome: string) {
+  return page
+    .getByRole('listitem')
+    .filter({ has: page.getByText(nome, { exact: true }) });
 }
 
 for (const caso of CASOS) {
@@ -144,9 +172,6 @@ for (const caso of CASOS) {
         name: 'Buscar cartões',
       });
       const filtroDeBaralho = page.getByRole('combobox', { name: 'Baralho' });
-      const filtroDeSituacao = page.getByRole('combobox', {
-        name: 'Situação da revisão',
-      });
       const limparFiltros = page
         .getByRole('button', { name: 'Limpar filtros' })
         .first();
@@ -155,11 +180,16 @@ for (const caso of CASOS) {
       });
 
       // 1. A tela carrega com a lista inteira, sem estourar a largura da
-      // janela, e busca e filtros têm alvo de toque (44 px).
+      // janela, e busca e filtros têm alvo de toque (44 px). A situação da
+      // revisão não é mais um filtro desta tela (spec 024).
       await expect(page.getByText('6 resultados')).toBeVisible();
       expect(await semRolagemHorizontal()).toBe(true);
 
-      const alvosDeToque = [buscaDeCartoes, filtroDeBaralho, filtroDeSituacao];
+      await expect(
+        page.getByRole('combobox', { name: 'Situação da revisão' }),
+      ).toHaveCount(0);
+
+      const alvosDeToque = [buscaDeCartoes, filtroDeBaralho];
 
       for (const alvo of alvosDeToque) {
         const caixa = await exigirCaixa(alvo);
@@ -172,8 +202,8 @@ for (const caso of CASOS) {
       expect(caixaDeLimparFiltros.height).toBeGreaterThanOrEqual(44);
       expect(caixaDeLimparFiltros.width).toBeGreaterThanOrEqual(44);
 
-      // 2. Teclado: digitar filtra sem tirar o foco, Tab percorre Baralho,
-      // Situação e Limpar filtros; Enter limpa e devolve o foco à busca.
+      // 2. Teclado: digitar filtra sem tirar o foco, Tab percorre Baralho e
+      // Limpar filtros; Enter limpa e devolve o foco à busca.
       await buscaDeCartoes.focus();
       await page.keyboard.type('03');
 
@@ -182,9 +212,6 @@ for (const caso of CASOS) {
 
       await page.keyboard.press('Tab');
       await expect(filtroDeBaralho).toBeFocused();
-
-      await page.keyboard.press('Tab');
-      await expect(filtroDeSituacao).toBeFocused();
 
       await page.keyboard.press('Tab');
       await expect(limparFiltros).toBeFocused();
@@ -201,22 +228,59 @@ for (const caso of CASOS) {
       await expect(contagem).toContainText('3 resultados');
       expect(await semRolagemHorizontal()).toBe(true);
 
-      // 4. Baralhos: a mesma busca responde na tela de Baralhos, que a
-      // sessão já aberta alcança sem recarregar o documento.
+      // 4. Baralhos: a mesma busca responde na tela de Baralhos, que a sessão
+      // já aberta alcança sem recarregar o documento. Aqui também vivem a
+      // etiqueta e o filtro de situação da revisão (spec 024), derivados do
+      // cruzamento entre GET /baralhos e GET /cartoes.
       await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos`);
 
-      await expect(page.getByText('2 resultados')).toBeVisible();
+      await expect(page.getByText('3 resultados')).toBeVisible();
 
       const buscaDeBaralhos = page.getByRole('searchbox', {
         name: 'Buscar baralhos',
       });
+      const filtroDeSituacao = page.getByRole('combobox', {
+        name: 'Situação da revisão',
+      });
       const caixaDaBuscaDeBaralhos = await exigirCaixa(buscaDeBaralhos);
+      const caixaDoFiltroDeSituacao = await exigirCaixa(filtroDeSituacao);
 
       expect(caixaDaBuscaDeBaralhos.height).toBeGreaterThanOrEqual(44);
+      expect(caixaDoFiltroDeSituacao.height).toBeGreaterThanOrEqual(44);
+
+      const linhaDoIngles = itemDeBaralho(page, 'Inglês cotidiano');
+      const linhaDaAlgebra = itemDeBaralho(page, 'Álgebra linear');
+      const linhaVazia = itemDeBaralho(page, 'Vazio');
+
+      await expect(
+        linhaDoIngles.getByText('Pendente', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        linhaDaAlgebra.getByText('Revisado', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        linhaVazia.getByText('Sem cartões', { exact: true }),
+      ).toBeVisible();
 
       await buscaDeBaralhos.fill('algebra');
 
       await expect(page.getByText('1 resultado')).toBeVisible();
+      expect(await semRolagemHorizontal()).toBe(true);
+
+      await buscaDeBaralhos.fill('');
+
+      await expect(page.getByText('3 resultados')).toBeVisible();
+
+      await filtroDeSituacao.selectOption({ label: 'Pendente' });
+      await expect(page.getByText('1 resultado')).toBeVisible();
+      await expect(linhaDoIngles).toBeVisible();
+
+      await filtroDeSituacao.selectOption({ label: 'Revisado' });
+      await expect(page.getByText('1 resultado')).toBeVisible();
+      await expect(linhaDaAlgebra).toBeVisible();
+
+      await filtroDeSituacao.selectOption({ label: 'Todos' });
+      await expect(page.getByText('3 resultados')).toBeVisible();
       expect(await semRolagemHorizontal()).toBe(true);
     } finally {
       await contexto.close();

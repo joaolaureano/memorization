@@ -5,29 +5,38 @@ import {
   prepararEntradaInterceptada,
 } from './servidores-locais';
 
-// T307 — Sessão de estudo utilizável em largura de telefone e em português
-// (FR-042, FR-046; specs/004-sessao-de-estudo/tasks.md).
+// T307 — Sessão de estudo (agora "Revisar") utilizável em largura de telefone
+// e em português (FR-042, FR-046; specs/004-sessao-de-estudo/tasks.md; spec 024).
 //
 // Exercita o frontend React real servido pelo Vite dev (webServer do harness),
 // não uma cópia HTML da tela: `src/main.tsx` monta `Aplicacao` com o
 // `ClienteHttp`, e o Playwright intercepta apenas o transporte — o
-// GET /baralhos/b1 devolve o Baralho elegível com três Cartões vinculados.
+// GET /baralhos/b1 devolve o Baralho elegível com dois Cartões vinculados
+// (ambos novos, ou seja, Pendentes) e o GET /cartoes corrobora a situação.
 // Nenhum DOM da tela é reproduzido aqui.
 //
-// Provas: sem rolagem horizontal em viewport de telefone no início, depois da
-// Revelação e depois do Resultado; e os controles canônicos — Iniciar Sessão,
-// Revelar verso, Errei, Difícil, Bom, Fácil e Interromper — permanecem
-// visíveis e em português (FR-193, SC-088). O "Interromper" abre a confirmação
-// "Interromper a Sessão?", também em português, e "Cancelar" mantém o Item em
-// curso (FR-046).
+// Na spec 024 o formulário de início (Quantidade de Cartões + Iniciar Sessão)
+// saiu: no lugar, o Baralho Pendente abre o modal "Revisar baralho" e o botão
+// "Só pendentes" começa a Sessão com todos os Cartões pendentes.
+//
+// Provas: sem rolagem horizontal em viewport de telefone com o modal aberto e
+// depois da Revelação e do Resultado; e os controles canônicos — Revelar
+// verso, Errei, Difícil, Bom, Fácil e Interromper — permanecem visíveis e em
+// português (FR-193, SC-088). O "Interromper" abre a confirmação "Interromper
+// a Sessão?", também em português, e "Cancelar" mantém o Item em curso
+// (FR-046).
 
 const PORTA_DO_FRONTEND = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
 const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
 
 const CARTOES = [
-  { id: 'c1', frente: 'To walk', verso: 'Caminhar' },
-  { id: 'c2', frente: 'Frente longa '.repeat(76), verso: 'Verso longo '.repeat(83) },
-  { id: 'c3', frente: 'Outra frente '.repeat(76), verso: 'Outro verso '.repeat(83) },
+  { id: 'c1', frente: 'To walk', verso: 'Caminhar', proximaRevisaoEm: null },
+  {
+    id: 'c2',
+    frente: 'Frente longa '.repeat(76),
+    verso: 'Verso longo '.repeat(83),
+    proximaRevisaoEm: null,
+  },
 ];
 
 test.use({
@@ -60,6 +69,26 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
     await rota.fallback();
   });
 
+  // A situação do Baralho é derivada do GET /cartoes (spec 024); os dois
+  // Cartões novos o deixam Pendente.
+  await page.route(/\/cartoes$/, async (rota) => {
+    if (rota.request().method() === 'GET') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          CARTOES.map((cartao) => ({
+            ...cartao,
+            baralhos: [{ id: 'b1', nome: 'Inglês' }],
+          })),
+        ),
+      });
+      return;
+    }
+
+    await rota.fallback();
+  });
+
   // A prova entra antes de medir: sem Credencial, a única tela é "Entrar"
   // (FR-097, FR-090).
   const credencial = await prepararEntradaInterceptada(page);
@@ -67,15 +96,25 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1/estudo`);
   await entrarPelaUi(page, credencial);
 
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Estudar Inglês' }),
-  ).toBeVisible();
-  await expect(page.getByLabel('Quantidade de Cartões')).toBeVisible();
-  await expect(
-    page.getByText('Este Baralho tem 3 Cartões vinculados.'),
-  ).toBeVisible();
+  // O formulário antigo de início não existe mais (spec 024).
+  await expect(page.getByLabel('Quantidade de Cartões')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Iniciar Sessão' }),
+  ).toHaveCount(0);
+
+  // Baralho Pendente: o modal decide entre pendentes e todos.
+  const modal = page.getByRole('dialog');
+
+  await expect(modal).toBeVisible();
+  await expect(modal.getByText('Revisar baralho')).toBeVisible();
+  await expect(
+    modal.getByRole('button', { name: 'Só pendentes', exact: true }),
+  ).toBeVisible();
+  await expect(
+    modal.getByRole('button', { name: 'Todos os cartões', exact: true }),
+  ).toBeVisible();
+  await expect(
+    modal.getByRole('button', { name: 'Cancelar', exact: true }),
   ).toBeVisible();
 
   /** Largura do conteúdo além da janela: 0 quando não há rolagem horizontal. */
@@ -87,11 +126,10 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
         raiz.clientWidth;
     });
 
-  // Sem rolagem horizontal já na tela de início.
+  // Sem rolagem horizontal já com o modal aberto.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);
 
-  await page.getByLabel('Quantidade de Cartões').fill('2');
-  await page.getByRole('button', { name: 'Iniciar Sessão' }).click();
+  await modal.getByRole('button', { name: 'Só pendentes', exact: true }).click();
 
   await expect(
     page.getByRole("article", { name: "Item 1 de 2" }),

@@ -18,18 +18,20 @@ Também há capturas em 360 e 768 px na mesma pasta. A galeria ao final do prot�
 
 ## 1. Baralhos
 
-Cabeçalho Baralhos → Criar Baralho (primário) / Criar baralho temporário (secundário escuro) → busca e lista existentes.
+Cabeçalho Baralhos → Criar Baralho (primário) / Criar baralho temporário (secundário escuro) → busca pelo nome e Situação da revisão → lista com etiqueta antes de Revisar / Editar.
 
 Os botões ficam lado a lado no desktop, na ordem indicada. No celular podem quebrar linha sem truncar os textos. Criar baralho temporário abre uma seleção vazia; não exige nome e não adiciona item à lista de Baralhos.
 
+Revisar um Baralho pendente abre uma modal pequena com Só pendentes, Todos os cartões e Cancelar. Revisado inicia todos embaralhados diretamente. Revisar uma seleção temporária também inicia todos diretamente; não há campo de quantidade. Regras da spec 024.
+
 ## 2. Criar baralho temporário
 
-Voltar para Baralhos → Criar baralho temporário → “Escolha o conteúdo para esta Sessão. Você poderá salvar o baralho ao terminar.”
+Criar baralho temporário → “Escolha o conteúdo para esta Sessão. Você poderá salvar o baralho ao terminar.”
 
-- Adicionar baralhos: busca por nome → nome e contagem → Adicionar cartões.
-- Adicionar cartões: busca na Frente/Verso → Baralho / Situação da revisão → Frente → Adicionar.
+- Adicionar baralhos: busca por nome / Situação da revisão → nome, contagem e etiqueta → Adicionar cartões.
+- Adicionar cartões: busca na Frente/Verso → Baralho → Frente → Adicionar.
 - Seleção do estudo: N Cartões únicos → Frente de cada Cartão / Remover → Limpar seleção.
-- “Todos os cartões selecionados serão estudados em ordem aleatória.” → Estudar / Cancelar. Não há campo de quantidade ou ordem. Seleção vazia ou acima de 1.000 Cartões comunica por que não pode iniciar.
+- “Todos os cartões selecionados serão estudados em ordem aleatória.” → Revisar / Cancelar. Não há campo de quantidade ou ordem. Seleção vazia ou acima de 1.000 Cartões comunica por que não pode iniciar.
 
 No celular, seletores e seleção ficam em uma coluna. No desktop, as áreas de fontes e seleção podem ficar lado a lado. Os critérios não escondem Cartões já selecionados.
 
@@ -41,9 +43,9 @@ Interromper usa a confirmação de descarte vigente. Todos os selecionados são 
 
 ## 4. Resumo
 
-Estudo com baralho temporário → Sessão concluída → placar e grupos de resultados existentes → Salvar como baralho / Voltar para Baralhos.
+Sessão concluída → Estudo com baralho temporário (texto secundário abaixo do título) → placar e grupos de resultados existentes → Salvar como baralho / Voltar para Baralhos.
 
-Registro pendente: mensagem de salvamento do Histórico; Salvar como baralho indisponível com motivo. Falha: Tentar registrar novamente, preservando o Resumo.
+Confirmação de registro apenas anunciada ao leitor de tela. Registro pendente: mensagem de salvamento do Histórico; Salvar como baralho indisponível com motivo. Falha: Tentar registrar novamente, preservando o Resumo.
 
 ## 5. Salvar como baralho
 

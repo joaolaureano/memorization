@@ -213,11 +213,11 @@ test("Temporário: A + B + C4 rendem «4 Cartões», o estudo vira Baralho salvo
 
     await expect(selecaoDoEstudo(page)).toContainText("4 Cartões");
 
-    await page.getByRole("button", { name: "Estudar", exact: true }).click();
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
 
     await expect(page).toHaveURL(/#\/baralhos\/temporario\/estudo$/);
     await expect(
-      page.getByRole("heading", { name: "Estudar baralho temporário" }),
+      page.getByRole("heading", { name: "Revisar baralho temporário" }),
     ).toBeVisible();
 
     const vistas: string[] = [];
@@ -307,7 +307,7 @@ test("Temporário sem salvar: nenhum Baralho novo e o Histórico registra (SC-14
     await page.getByRole("button", { name: "Adicionar Inglês", exact: true }).click();
     await expect(selecaoDoEstudo(page)).toContainText("2 Cartões");
 
-    await page.getByRole("button", { name: "Estudar", exact: true }).click();
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
     await expect(page).toHaveURL(/#\/baralhos\/temporario\/estudo$/);
 
     for (let indice = 1; indice <= 2; indice++) {
@@ -372,7 +372,7 @@ test("Temporário: Cartão excluído avisa e sai com «Retirar indisponíveis» 
 
     expect([200, 204]).toContain(status);
 
-    await page.getByRole("button", { name: "Estudar", exact: true }).click();
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
     await expect(
       page.getByText("1 Cartão não está mais disponível.").first(),
     ).toBeVisible();
@@ -380,7 +380,7 @@ test("Temporário: Cartão excluído avisa e sai com «Retirar indisponíveis» 
     await page
       .getByRole("button", { name: "Retirar indisponíveis", exact: true })
       .click();
-    await page.getByRole("button", { name: "Estudar", exact: true }).click();
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
 
     await expect(page).toHaveURL(/#\/baralhos\/temporario\/estudo$/);
     await expect(page.getByRole("article", { name: "Item 1 de 1" })).toBeVisible();

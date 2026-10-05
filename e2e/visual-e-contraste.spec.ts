@@ -533,19 +533,27 @@ async function visitarAsTelas(
   await irParaTela(pagina, "#/preferencias", "Perfil");
   await conferirTela(pagina, cenario, "Perfil");
 
-  // Estudo — configuração.
-  await irParaTela(
+  // Revisão — modal de início (spec 024): o Baralho está Pendente (Cartões
+  // novos), então o primeiro contato da rota de revisão é o modal.
+  await irParaRota(
     pagina,
     `#/baralhos/${ambiente.idDoBaralhoComCartoes}/estudo`,
-    `Estudar ${NOME_DO_BARALHO_COM_CARTOES}`,
   );
-  await conferirTela(pagina, cenario, "Estudo (configuração)");
 
-  // Sessão com o Verso revelado: um único Item basta para chegar ao Resumo.
-  await pagina.getByLabel("Quantidade de Cartões").fill("1");
-  await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
+  const modalDeRevisao = pagina.getByRole("dialog");
+
+  await expect(modalDeRevisao).toBeVisible({ timeout: ESPERA_DA_TELA });
+  await expect(modalDeRevisao.getByText("Revisar baralho")).toBeVisible();
+  await conferirTela(pagina, cenario, "Modal Revisar baralho");
+
+  await modalDeRevisao
+    .getByRole("button", { name: "Só pendentes", exact: true })
+    .click();
+
+  // Sessão: os três Cartões novos formam a Sessão; com o Verso revelado já dá
+  // para auditar a Tela.
   await expect(
-    pagina.getByRole("article", { name: "Item 1 de 1" }),
+    pagina.getByRole("article", { name: "Item 1 de 3" }),
   ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
@@ -555,8 +563,16 @@ async function visitarAsTelas(
   });
   await conferirTela(pagina, cenario, "Sessão (Verso revelado)");
 
-  // Resumo: "Bom" encerra a Sessão e apresenta o balanço (FR-193, SC-088).
-  await pagina.getByRole("button", { name: /^Bom/ }).click();
+  // Resumo: avaliar os três Itens com "Bom" encerra a Sessão e apresenta o
+  // balanço (FR-193, SC-088).
+  for (let item = 1; item <= 3; item += 1) {
+    if (item > 1) {
+      await pagina.getByRole("button", { name: "Revelar verso" }).click();
+    }
+
+    await pagina.getByRole("button", { name: /^Bom/ }).click();
+  }
+
   await expect(
     pagina.getByRole("heading", { name: "Sessão concluída" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
@@ -569,38 +585,48 @@ async function visitarAsTelas(
     pagina.getByRole("status", { name: "Situação do registro da Sessão" }),
   ).toContainText(/Sessão registrada no histórico/, { timeout: ESPERA_DA_TELA });
 
-  // Segunda Sessão, agora com um acerto e um erro: é ela que sustenta o
-  // Registro com os dois grupos de Itens preenchidos (FR-176, FR-178).
+  // Segunda Sessão, agora com acertos e um erro: é ela que sustenta o Registro
+  // com os dois grupos de Itens preenchidos (FR-176, FR-178).
+  //
+  // A primeira Sessão agendou os três Cartões novos para o dia seguinte: o
+  // Baralho virou Revisado e começa todos direto, sem modal (spec 024).
   //
   // A rota de estudo ainda é a atual (o Resumo da primeira Sessão): reatribuir
   // o mesmo fragmento não dispara `hashchange`, e a Tela continuaria no Resumo.
-  // Passar por outra rota antes garante a chegada à configuração.
+  // Passar por outra rota antes garante a chegada ao novo início.
   await irParaTela(pagina, "#/baralhos", "Baralhos");
-  await irParaTela(
+  await irParaRota(
     pagina,
     `#/baralhos/${ambiente.idDoBaralhoComCartoes}/estudo`,
-    `Estudar ${NOME_DO_BARALHO_COM_CARTOES}`,
   );
-  await pagina.getByLabel("Quantidade de Cartões").fill("2");
-  await pagina.getByRole("button", { name: "Iniciar Sessão" }).click();
+
   await expect(
-    pagina.getByRole("article", { name: "Item 1 de 2" }),
+    pagina.getByRole("article", { name: "Item 1 de 3" }),
   ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
+  await expect(modalDeRevisao).toHaveCount(0);
+
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
   await pagina.getByRole("button", { name: /^Bom/ }).click();
   await expect(
-    pagina.getByRole("article", { name: "Item 2 de 2" }),
+    pagina.getByRole("article", { name: "Item 2 de 3" }),
   ).toBeVisible({
     timeout: ESPERA_DA_TELA,
   });
   await pagina.getByRole("button", { name: "Revelar verso" }).click();
   await pagina.getByRole("button", { name: /^Errei/ }).click();
   await expect(
+    pagina.getByRole("article", { name: "Item 3 de 3" }),
+  ).toBeVisible({
+    timeout: ESPERA_DA_TELA,
+  });
+  await pagina.getByRole("button", { name: "Revelar verso" }).click();
+  await pagina.getByRole("button", { name: /^Bom/ }).click();
+  await expect(
     pagina.getByRole("heading", { name: "Sessão concluída" }),
   ).toBeVisible({ timeout: ESPERA_DA_TELA });
-  await conferirTela(pagina, cenario, "Resumo da Sessão (acerto e erro)");
+  await conferirTela(pagina, cenario, "Resumo da Sessão (acertos e erro)");
 
   await expect(
     pagina.getByRole("status", { name: "Situação do registro da Sessão" }),

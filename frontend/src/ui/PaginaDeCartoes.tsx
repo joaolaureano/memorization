@@ -8,7 +8,6 @@ import type {
 import {
   filtrarCartoes,
   type FiltroDeBaralho,
-  type FiltroDeSituacao,
 } from "../acervo-cliente/busca-no-acervo";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
@@ -38,6 +37,10 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * Os nomes acessíveis das ações incorporam a Frente do Cartão ("Editar
  * <Frente>", "Excluir <Frente>") para que cada item seja inequívoco para
  * leitores de tela e para as provas (FR-155).
+ *
+ * Desde a 024 (FR-382, SC-150), a Situação da revisão não filtra mais os
+ * Cartões: ela pertence aos Baralhos e às suas listas. Aqui restam a busca
+ * por Frente/Verso e o filtro de Baralho.
  */
 
 interface PropriedadesDaPaginaDeCartoes {
@@ -58,8 +61,6 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   const [consulta, setConsulta] = useState("");
   const [filtroDeBaralho, setFiltroDeBaralho] =
     useState<FiltroDeBaralho>("todos");
-  const [filtroDeSituacao, setFiltroDeSituacao] =
-    useState<FiltroDeSituacao>("todos");
   const campoDeBusca = useRef<HTMLInputElement>(null);
 
   const [cartaoParaExcluir, setCartaoParaExcluir] =
@@ -188,7 +189,6 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   function limparFiltros(): void {
     setConsulta("");
     setFiltroDeBaralho("todos");
-    setFiltroDeSituacao("todos");
     campoDeBusca.current?.focus();
   }
 
@@ -265,11 +265,10 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     };
   }
 
-  const cartoesFiltrados = filtrarCartoes(
-    cartoes,
-    { consulta, baralho: filtroDeBaralho, situacao: filtroDeSituacao },
-    new Date(),
-  );
+  const cartoesFiltrados = filtrarCartoes(cartoes, {
+    consulta,
+    baralho: filtroDeBaralho,
+  });
   const listaCarregada = !carregando && falhaDeListagem === null;
 
   return (
@@ -319,23 +318,6 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
                 {baralho.nome}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="campo">
-          <label className="rotulo" htmlFor="filtro-de-situacao">
-            Situação da revisão
-          </label>
-          <select
-            id="filtro-de-situacao"
-            value={filtroDeSituacao}
-            onChange={(evento) =>
-              setFiltroDeSituacao(evento.target.value as FiltroDeSituacao)
-            }
-          >
-            <option value="todos">Todos</option>
-            <option value="novos">Novos</option>
-            <option value="revisao-pendente">Revisão pendente</option>
-            <option value="em-dia">Em dia</option>
           </select>
         </div>
       </section>

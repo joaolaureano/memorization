@@ -127,7 +127,7 @@ describe("páginas de Vínculo para leitor de tela", () => {
     expect(anuncio).toHaveAttribute("aria-atomic", "true");
     expect(anuncio).toHaveTextContent(/Cartão removido deste Baralho\./);
     expect(anuncio).toHaveTextContent(
-      /O Baralho ficou sem Cartões; Estudar está indisponível\./,
+      /O Baralho ficou sem Cartões; Revisar está indisponível\./,
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

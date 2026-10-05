@@ -1,5 +1,7 @@
 # Feature Specification: Busca e filtros no acervo
 
+> Atualização de 2026-10-05: [024 — Revisar Baralhos](../024-revisar-baralhos/spec.md) supersede os trechos relativos à Situação da revisão nos Cartões e ao início de Estudar. A situação passa aos Baralhos, com etiquetas Pendente/Revisado e ação Revisar. O restante desta especificação permanece vigente.
+
 **Created**: 2026-10-05
 **Status**: Implementada (2026-10-05), seguindo os protótipos de `design/busca-e-filtros/`.
 **Input**: Busca nas listas de Baralhos e Cartões, com filtros de Cartões por Baralho e situação da revisão. Estudar permanece livre; revisão pendente é um filtro opcional. Criar somente a documentação.

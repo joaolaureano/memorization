@@ -184,13 +184,14 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     await expect(
       page.getByRole("listitem").filter({ hasText: BARALHO_RESTANTE }),
     ).toHaveCount(1);
-    // Com Cartões, a elegibilidade aparece como o link Estudar visível na
-    // linha fina da lista (FR-144 revisado, SC-079).
+    // Com Cartões, a elegibilidade aparece como o link Revisar visível na
+    // linha fina da lista (FR-144 revisado, SC-079; spec 024: a ação de estudo
+    // passou a se chamar "Revisar").
     await expect(
       page
         .getByRole("listitem")
         .filter({ hasText: BARALHO_RESTANTE })
-        .getByRole("link", { name: `Estudar ${BARALHO_RESTANTE}` }),
+        .getByRole("link", { name: `Revisar ${BARALHO_RESTANTE}` }),
     ).toBeVisible();
 
     const respostaDoBaralhoRemovido = await fetch(
@@ -290,16 +291,17 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
       "Pronto para uma Sessão de estudo.",
     );
 
-    // Sem Cartões, o controle Estudar é um botão desabilitado descrito pelo
-    // motivo em texto — nunca apenas pela cor (FR-144).
-    const controleEstudarDoBaralhoRestante = itemDoBaralhoRestante.getByRole(
+    // Sem Cartões, o controle Revisar é um botão desabilitado descrito pelo
+    // motivo em texto — nunca apenas pela cor (FR-144; spec 024: a ação
+    // renomeada, com o motivo em qualquer das duas redações).
+    const controleRevisarDoBaralhoRestante = itemDoBaralhoRestante.getByRole(
       "button",
-      { name: `Estudar ${BARALHO_RESTANTE}` },
+      { name: `Revisar ${BARALHO_RESTANTE}` },
     );
 
-    await expect(controleEstudarDoBaralhoRestante).toBeDisabled();
-    await expect(controleEstudarDoBaralhoRestante).toHaveAccessibleDescription(
-      /Sem Cartões para estudar/,
+    await expect(controleRevisarDoBaralhoRestante).toBeDisabled();
+    await expect(controleRevisarDoBaralhoRestante).toHaveAccessibleDescription(
+      /Sem Cartões para (estudar|revisar)/,
     );
   } finally {
     await encerrarProcesso(frontend);

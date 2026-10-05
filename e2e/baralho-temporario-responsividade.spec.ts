@@ -255,7 +255,7 @@ test.describe.serial("Responsividade do Baralho temporário", () => {
       for (const nome of [
         "Adicionar baralhos",
         "Adicionar cartões",
-        "Estudar",
+        "Revisar",
         "Cancelar",
         "Limpar seleção",
       ]) {
@@ -274,10 +274,10 @@ test.describe.serial("Responsividade do Baralho temporário", () => {
       }
 
       // 2. Sessão: «Revelar verso» e os 4 botões de Avaliação também cabem.
-      await page.getByRole("button", { name: "Estudar", exact: true }).click();
+      await page.getByRole("button", { name: "Revisar", exact: true }).click();
       await expect(page).toHaveURL(/#\/baralhos\/temporario\/estudo$/);
       await expect(
-        page.getByRole("heading", { name: "Estudar baralho temporário" }),
+        page.getByRole("heading", { name: "Revisar baralho temporário" }),
       ).toBeVisible();
 
       expect(await semRolagemHorizontal(page)).toBe(true);
@@ -349,11 +349,11 @@ test.describe.serial("Responsividade do Baralho temporário", () => {
     await page.keyboard.press("Enter");
     await expect(selecaoDoEstudo(page)).toContainText("2 Cartões");
 
-    expect(await tabularAte(page, "Estudar")).toBe(true);
+    expect(await tabularAte(page, "Revisar")).toBe(true);
 
     await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("heading", { level: 1, name: "Estudar baralho temporário" }),
+      page.getByRole("heading", { level: 1, name: "Revisar baralho temporário" }),
     ).toBeVisible();
   });
 

@@ -111,12 +111,12 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos/b1`);
 
   // O detalhe do Baralho carrega com os Cartões vinculados; com Cartões, o
-  // Baralho é elegível e a primeira ação, "Estudar este Baralho", está
-  // disponível.
+  // Baralho é elegível e a primeira ação, "Revisar este Baralho" (spec 024),
+  // está disponível.
   await expect(
     page.getByRole('heading', { level: 1, name: 'Inglês' }),
   ).toBeVisible();
-  await expect(page.getByText('Estudar este Baralho')).toBeVisible();
+  await expect(page.getByText('Revisar este Baralho')).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Cartões do Baralho' }),
   ).toBeVisible();

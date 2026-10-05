@@ -24,8 +24,9 @@ import {
  * FR-153, FR-156).
  *
  * É a página `#/baralhos/<id>`: mostra o Baralho, a contagem de Cartões, o
- * caminho para Estudar e a lista dos Cartões vinculados, com a remoção de cada
- * Vínculo (FR-145, FR-147). As operações que esta tela antes acumulava —
+ * caminho para Revisar (a ação da spec 024, FR-378) e a lista dos Cartões
+ * vinculados, com a remoção de cada Vínculo (FR-145, FR-147). As operações que
+ * esta tela antes acumulava —
  * renomear e vincular Cartões existentes — passaram a viver nas suas próprias
  * páginas (`#/baralhos/<id>/editar` e `#/baralhos/<id>/adicionar`), e por isso
  * a tela consome apenas `obterBaralho(id)`, que já traz os Cartões vinculados e
@@ -221,7 +222,7 @@ export function PaginaDoBaralho({
     const mensagens = ["Cartão removido deste Baralho."];
 
     if (eraElegivel && !releitura.baralho.elegivel) {
-      mensagens.push("O Baralho ficou sem Cartões; Estudar está indisponível.");
+      mensagens.push("O Baralho ficou sem Cartões; Revisar está indisponível.");
     }
 
     setBaralho(releitura.baralho);
@@ -307,7 +308,7 @@ export function PaginaDoBaralho({
           // FR-145 (revisado), SC-078: todas as ações sobre o Baralho ficam
           // reunidas no topo da página, logo abaixo do título e antes da lista
           // de Cartões — alcançáveis sem rolar a lista e precedendo os Cartões
-          // na ordem de leitura e de Tab. Sem Cartões, Estudar não leva a lugar
+          // na ordem de leitura e de Tab. Sem Cartões, Revisar não leva a lugar
           // nenhum: o botão fica desabilitado e a explicação vem ao lado.
           <div className="acoes">
             {quantidadeDeCartoes === 0 ? (
@@ -316,9 +317,9 @@ export function PaginaDoBaralho({
                   type="button"
                   className="botao botao--primario"
                   disabled
-                  aria-describedby="motivo-para-nao-estudar"
+                  aria-describedby="motivo-para-nao-revisar"
                 >
-                  Estudar este Baralho
+                  Revisar este Baralho
                 </button>
               </>
             ) : (
@@ -326,7 +327,7 @@ export function PaginaDoBaralho({
                 className="botao botao--primario"
                 href={`#/baralhos/${id}/estudo`}
               >
-                Estudar este Baralho
+                Revisar este Baralho
               </a>
             )}
             <a
@@ -355,8 +356,8 @@ export function PaginaDoBaralho({
         )}
 
         {baralho !== null && quantidadeDeCartoes === 0 && (
-          <p id="motivo-para-nao-estudar" className="ajuda">
-            Adicione Cartões ao Baralho para poder estudar.
+          <p id="motivo-para-nao-revisar" className="ajuda">
+            Adicione Cartões ao Baralho para poder revisar.
           </p>
         )}
       </div>

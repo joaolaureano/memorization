@@ -1,5 +1,7 @@
 # Feature Specification: Baralho temporário para um estudo
 
+> Atualização de 2026-10-05: [024 — Revisar Baralhos](../024-revisar-baralhos/spec.md) supersede o rótulo Estudar e a posição do filtro Situação da revisão na montagem. A ação passa a Revisar, a situação pertence às fontes de Baralhos e a seleção temporária continua iniciando todos os selecionados diretamente.
+
 **Created**: 2026-10-05
 **Status**: Implementada (2026-10-05), seguindo os protótipos de `design/baralho-temporario/` com os esclarecimentos da sessão de 2026-10-05.
 **Input**: Permitir reunir vários Baralhos e Cartões individuais para um estudo e, ao final, salvar a seleção como um Baralho, se o Usuário desejar. Estudar é o fluxo único de exercício e revisão; o Usuário escolhe o conteúdo e pode estudá-lo novamente quando quiser.

@@ -192,8 +192,9 @@ describe("PaginaDeCartoes — busca e filtros (022)", () => {
   }
 
   /**
-   * Acervo de prova com datas relativas a hoje: a Situação da revisão depende
-   * do dia em que a prova roda.
+   * Acervo de prova com datas relativas a hoje: os Agendamentos continuam no
+   * payload, mas a página Cartões não os usa para filtrar desde a 024
+   * (FR-382, SC-150) — são dados realistas de transporte.
    */
   function dadosDeProva(): {
     cartoes: CartaoListado[];
@@ -340,41 +341,25 @@ describe("PaginaDeCartoes — busca e filtros (022)", () => {
     expect(screen.queryByText("Where is the station?")).toBeNull();
   });
 
-  it("filtra pela Situação da revisão: novos, pendentes e em dia (FR-352)", async () => {
+  it("não oferece o filtro de Situação da revisão — só busca e Baralho (FR-382, SC-150)", async () => {
     render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
 
     await screen.findByText("How are you?");
 
-    const seletor = screen.getByRole("combobox", {
-      name: "Situação da revisão",
-    });
-
-    fireEvent.change(seletor, { target: { value: "novos" } });
-
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
-    expect(screen.getByText("Where is the station?")).toBeInTheDocument();
-    expect(screen.getByText("O que é osmose?")).toBeInTheDocument();
-    expect(screen.queryByText("How are you?")).toBeNull();
     expect(
-      screen.queryByText("Qual é a função das mitocôndrias?"),
+      screen.queryByRole("combobox", { name: "Situação da revisão" }),
     ).toBeNull();
-
-    fireEvent.change(seletor, { target: { value: "revisao-pendente" } });
-
-    expect(screen.getAllByRole("listitem")).toHaveLength(1);
-    expect(screen.getByText("How are you?")).toBeInTheDocument();
-    expect(screen.queryByText("Where is the station?")).toBeNull();
-
-    fireEvent.change(seletor, { target: { value: "em-dia" } });
-
-    expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(
-      screen.getByText("Qual é a função das mitocôndrias?"),
+      screen.getByRole("searchbox", { name: "Buscar cartões" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("How are you?")).toBeNull();
+    expect(
+      screen.getByRole("combobox", { name: "Baralho" }),
+    ).toBeInTheDocument();
+    // A lista continua completa: os Agendamentos não escondem nenhum Cartão.
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
   });
 
-  it("combina busca, Baralho e Situação e conta os resultados (FR-353, FR-355)", async () => {
+  it("combina busca e Baralho e conta os resultados (FR-353, FR-355)", async () => {
     render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
 
     await screen.findByText("Where is the station?");
@@ -383,10 +368,6 @@ describe("PaginaDeCartoes — busca e filtros (022)", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Baralho" }), {
       target: { value: "b1" },
     });
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Situação da revisão" }),
-      { target: { value: "revisao-pendente" } },
-    );
 
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByText("How are you?")).toBeInTheDocument();
@@ -418,9 +399,6 @@ describe("PaginaDeCartoes — busca e filtros (022)", () => {
     expect(screen.getByRole("combobox", { name: "Baralho" })).toHaveValue(
       "todos",
     );
-    expect(
-      screen.getByRole("combobox", { name: "Situação da revisão" }),
-    ).toHaveValue("todos");
     expect(busca).toHaveFocus();
   });
 
@@ -443,19 +421,18 @@ describe("PaginaDeCartoes — busca e filtros (022)", () => {
 
     const busca = campoDeBusca();
     fireEvent.change(busca, { target: { value: "how" } });
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "Situação da revisão" }),
-      { target: { value: "revisao-pendente" } },
-    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Baralho" }), {
+      target: { value: "b1" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
 
     await screen.findByText("How are you?");
 
     expect(busca).toHaveValue("how");
-    expect(
-      screen.getByRole("combobox", { name: "Situação da revisão" }),
-    ).toHaveValue("revisao-pendente");
+    expect(screen.getByRole("combobox", { name: "Baralho" })).toHaveValue(
+      "b1",
+    );
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.queryByText("Where is the station?")).toBeNull();
   });

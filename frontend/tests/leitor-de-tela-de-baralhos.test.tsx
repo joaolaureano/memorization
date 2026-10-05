@@ -15,9 +15,11 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * região ativa por `aria-live`. O carregamento é uma região ativa polida
  * (`role="status"`); a falha é uma região assertiva (`role="alert"`), com a
  * mensagem da Interface e a ação de nova tentativa. Cada Baralho é um item
- * de lista com o nome em texto somente leitura e as ações Estudar e Editar,
- * de nome acessível único (spec 021: FR-340–FR-343), e a elegibilidade se comunica pelo controle Estudar — quando vazio,
- * por um motivo em texto associado ao botão desabilitado.
+ * de lista com o nome em texto somente leitura, a etiqueta textual da
+ * Situação da revisão e as ações Revisar e Editar, de nome acessível único
+ * (spec 021: FR-340–FR-343; spec 024: FR-378–FR-381), e a elegibilidade se
+ * comunica pelo controle Revisar — quando vazio, por um motivo em texto
+ * associado ao botão desabilitado.
  */
 
 /** Cria um Baralho já vinculado aos Cartões informados, pela Interface. */
@@ -97,7 +99,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     await screen.findByText(/ainda não há Baralhos/i);
 
     expect(regiaoDoEstadoVazio()).toHaveTextContent(
-      "Ainda não há Baralhos. Crie o primeiro para começar a estudar.",
+      "Ainda não há Baralhos. Crie o primeiro para começar a revisar.",
     );
     expect(
       within(regiaoDoEstadoVazio()).getByRole("link", { name: "Criar baralho" }),
@@ -128,7 +130,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 
-  it("cada Baralho é um item de lista com nome, contagem e as ações Estudar e Editar (FR-340, FR-343)", async () => {
+  it("cada Baralho é um item de lista com nome, contagem, etiqueta e as ações Revisar e Editar (FR-340, FR-343, FR-381)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
     await semearBaralho(cliente, "Alemão");
@@ -141,8 +143,10 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
 
     expect(itemDeIngles).toHaveRole("listitem");
     expect(within(itemDeIngles).getByText("1 Cartão")).toBeInTheDocument();
+    // Sem Agendamento, a etiqueta textual é «Pendente» — nunca só cor.
+    expect(within(itemDeIngles).getByText("Pendente")).toBeVisible();
     expect(
-      within(itemDeIngles).getByRole("link", { name: "Estudar Inglês" }),
+      within(itemDeIngles).getByRole("link", { name: "Revisar Inglês" }),
     ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/.+\/estudo$/));
     expect(
       within(itemDeIngles).getByRole("link", { name: "Editar Inglês" }),
@@ -152,8 +156,9 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     const itemDeAlemao = itemDoBaralho("Alemão");
 
     expect(within(itemDeAlemao).getByText("0 Cartões")).toBeInTheDocument();
+    expect(within(itemDeAlemao).getByText("Sem cartões")).toBeVisible();
     expect(
-      within(itemDeAlemao).getByRole("button", { name: "Estudar Alemão" }),
+      within(itemDeAlemao).getByRole("button", { name: "Revisar Alemão" }),
     ).toBeDisabled();
     expect(
       within(itemDeAlemao).getByRole("link", { name: "Editar Alemão" }),
@@ -180,7 +185,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     expect(window.location.hash).toBe(hashAntes);
   });
 
-  it("o Estudar desabilitado expõe o motivo em texto e o Editar segue disponível (FR-343)", async () => {
+  it("o Revisar desabilitado expõe o motivo em texto e o Editar segue disponível (FR-343, FR-380)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
@@ -189,13 +194,13 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     await screen.findByRole("listitem");
 
     const item = itemDoBaralho("Alemão");
-    const botaoDeEstudo = within(item).getByRole("button", {
-      name: "Estudar Alemão",
+    const botaoDeRevisao = within(item).getByRole("button", {
+      name: "Revisar Alemão",
     });
 
-    expect(botaoDeEstudo).toBeDisabled();
-    expect(botaoDeEstudo).toHaveAccessibleDescription(
-      "Sem Cartões para estudar.",
+    expect(botaoDeRevisao).toBeDisabled();
+    expect(botaoDeRevisao).toHaveAccessibleDescription(
+      "Sem Cartões para revisar.",
     );
     expect(
       within(item).getByRole("link", { name: "Editar Alemão" }),

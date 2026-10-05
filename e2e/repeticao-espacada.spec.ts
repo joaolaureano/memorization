@@ -40,6 +40,10 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // (4) o atalho de teclado avalia o nível; (5) Início monta com leituras
 // agregadas e em número fixo numa base grande (SC-087). A Revisão do dia saiu
 // da aplicação, e com ela os cenários (1) e (3), que a percorriam.
+//
+// A spec 024 tirou o formulário de início (Quantidade de Cartões + Iniciar
+// Sessão): os Baralhos destes cenários só têm Cartões novos, então estão
+// Pendentes e a Sessão começa pelo modal "Revisar baralho" com "Só pendentes".
 
 test.setTimeout(240_000);
 
@@ -249,10 +253,18 @@ async function abrirEstudoDoBaralho(
   await entrarSeNecessario(page, credencial);
 }
 
-/** Inicia uma Sessão de estudo livre com a quantidade de Cartões pedida. */
-async function iniciarSessaoLivre(page: Page, quantidade: number): Promise<void> {
-  await page.getByLabel("Quantidade de Cartões").fill(String(quantidade));
-  await page.getByRole("button", { name: "Iniciar Sessão" }).click();
+/**
+ * Inicia a Sessão de revisão do Baralho pelo modal "Revisar baralho"
+ * (spec 024): os Baralhos destes cenários têm só Cartões novos, então "Só
+ * pendentes" começa exatamente o conjunto preparado.
+ */
+async function iniciarSessaoDeRevisao(page: Page): Promise<void> {
+  const modalDeRevisao = page.getByRole("dialog");
+
+  await expect(modalDeRevisao).toBeVisible({ timeout: 15_000 });
+  await modalDeRevisao
+    .getByRole("button", { name: "Só pendentes", exact: true })
+    .click();
 }
 
 /** Revela o Verso do Item em estudo (FR-192, FR-193). */
@@ -429,7 +441,7 @@ test("Estudo livre por Baralho avalia com os quatro níveis e agenda o Cartão (
     );
 
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
-    await iniciarSessaoLivre(page, 1);
+    await iniciarSessaoDeRevisao(page);
 
     await expect(
       page.getByRole("article", { name: "Item 1 de 1" }),
@@ -491,7 +503,7 @@ test("Atalho de teclado 3 avalia Bom após a Revelação (FR-192, FR-193, FR-218
     ]);
 
     await abrirEstudoDoBaralho(page, ambiente, baralho.id, credencial);
-    await iniciarSessaoLivre(page, 1);
+    await iniciarSessaoDeRevisao(page);
     await expect(
       page.getByRole("article", { name: "Item 1 de 1" }),
     ).toBeVisible();

@@ -30,10 +30,11 @@ import type { ProcessoIniciado } from "./servidores-locais";
 // quarenta Cartões — são preparados direto pela API, e a tela real de detalhe
 // do Baralho é percorrida no Chromium.
 //
-// SC-078 pede que as quatro ações do Baralho (Estudar, Adicionar, Renomear e
+// SC-078 pede que as quatro ações do Baralho (Revisar, Adicionar, Renomear e
 // Excluir) caibam no primeiro viewport, venham antes da lista de Cartões e
 // sejam alcançadas por teclado antes de qualquer remoção de Vínculo. É o que
 // esta prova confere, nas quatro larguras exigidas e nos três Baralhos.
+// Spec 024: a ação de estudo passou a se chamar "Revisar este Baralho".
 //
 // O teste aguarda a prontidão de cada processo antes de usá-lo e encerra ambos
 // no `finally`, inclusive quando a prova falha no meio.
@@ -45,7 +46,7 @@ const ALTURA = 800;
 
 /** As quatro ações do Baralho, na ordem em que a tela precisa apresentá-las. */
 const ACOES = [
-  "Estudar este Baralho",
+  "Revisar este Baralho",
   "Adicionar cartões existentes",
   "Renomear",
   "Excluir Baralho",
@@ -219,7 +220,7 @@ async function abrirDetalheDoBaralho(
 
 /**
  * A ação do Baralho pelo texto: pode ser um link (Adicionar, Renomear,
- * Estudar), o botão desabilitado de Estudar (Baralho sem Cartões) ou o botão de
+ * Revisar), o botão desabilitado de Revisar (Baralho sem Cartões) ou o botão de
  * Excluir. O filtro sobre `main a, main button` cobre os quatro casos.
  */
 function localizarAcao(page: Page, nome: string): Locator {
@@ -290,7 +291,7 @@ async function conferirOrdemNoDocumento(
 ): Promise<void> {
   const resultado = await page.evaluate((): OrdemNoDocumento => {
     const nomes = [
-      "Estudar este Baralho",
+      "Revisar este Baralho",
       "Adicionar cartões existentes",
       "Renomear",
       "Excluir Baralho",
@@ -396,7 +397,7 @@ interface Foco {
 
 /**
  * FR-145, SC-078: a ordem de foco acompanha a ordem visual — partindo do
- * título da página, o Tab alcança Estudar, Adicionar, Renomear e Excluir antes
+ * título da página, o Tab alcança Revisar, Adicionar, Renomear e Excluir antes
  * de qualquer botão que remove um Vínculo.
  */
 async function conferirOrdemDeFoco(page: Page): Promise<void> {

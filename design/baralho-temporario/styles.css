@@ -1,4 +1,7 @@
 .cabecalho-da-pagina .acoes { flex-wrap: wrap; }
+/* Etiqueta de situação à esquerda das ações (024, FR-381): as ações podem
+ * quebrar dentro da própria linha em qualquer largura, sem truncar rótulos. */
+.linha-da-lista:has(.bf-etiqueta) .linha-da-lista__acoes { flex-wrap: wrap; justify-content: flex-end; }
 .montagem { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start; gap: 24px; }
 .fontes, .selecao { min-width: 0; }
 .selecao { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }

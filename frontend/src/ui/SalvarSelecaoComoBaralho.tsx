@@ -86,7 +86,7 @@ export function SalvarSelecaoComoBaralho({
         <div>
           <h1 tabIndex={-1}>Salvar como baralho</h1>
           <p className="texto-secundario">
-            Guarde esta seleção para estudar novamente.
+            Guarde esta seleção para revisar novamente.
           </p>
         </div>
       </header>

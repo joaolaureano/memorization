@@ -39,10 +39,15 @@ import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 // percorrida no Chromium pela tela real.
 //
 // Os cenários cobrem: (1) a Sessão concluída vira Registro e o Resumo lista
-// Acertos/Erros; (2) a Sessão interrompida não deixa rastro; (3) o Registro
-// preserva os textos e o nome do Baralho mesmo depois de editar e excluir;
-// (4) o Histórico é isolado por Usuário; (5) uma falha ao registrar oferece
-// nova tentativa e não duplica.
+// Acertos/Erros; (2) a Sessão interrompida (ou descartada pela recarga) não
+// deixa rastro; (3) o Registro preserva os textos e o nome do Baralho mesmo
+// depois de editar e excluir; (4) o Histórico é isolado por Usuário; (5) uma
+// falha ao registrar oferece nova tentativa e não duplica.
+//
+// A spec 024 tirou o formulário de início (Quantidade de Cartões + Iniciar
+// Sessão): com os Cartões novos, o Baralho está Pendente e a Sessão começa
+// pelo modal "Revisar baralho" — os cenários escolhem "Só pendentes" ou
+// "Todos os cartões" conforme o conjunto que precisam.
 
 const NOME_DO_BARALHO = "Inglês";
 /** Um Baralho canônico: três Cartões, para uma Sessão de três Itens. */
@@ -155,20 +160,33 @@ async function prepararBaralho(
   return { id: baralho.id, nome: baralho.nome, cartoes: criados };
 }
 
-/** Abre a tela de estudo do Baralho, Entra se preciso e inicia a Sessão. */
+/**
+ * Abre a tela de revisão do Baralho, Entra se preciso e inicia a Sessão pelo
+ * modal "Revisar baralho" (spec 024): "pendentes" usa "Só pendentes" e
+ * "todos" usa "Todos os cartões".
+ */
 async function iniciarSessaoPelaUi(
   page: Page,
   ambiente: Ambiente,
   baralhoId: string,
-  quantidade: number,
+  escolha: "pendentes" | "todos",
   credencial?: CredencialDeProva,
 ): Promise<void> {
   await page.goto(
     `${ambiente.enderecoDoFrontend}/#/baralhos/${baralhoId}/estudo`,
   );
   await entrarSeNecessario(page, credencial);
-  await page.getByLabel("Quantidade de Cartões").fill(String(quantidade));
-  await page.getByRole("button", { name: "Iniciar Sessão" }).click();
+
+  // Sem formulário de início (spec 024): o Baralho Pendente abre o modal.
+  const modalDeRevisao = page.getByRole("dialog");
+
+  await expect(modalDeRevisao).toBeVisible({ timeout: 15_000 });
+  await modalDeRevisao
+    .getByRole("button", {
+      name: escolha === "pendentes" ? "Só pendentes" : "Todos os cartões",
+      exact: true,
+    })
+    .click();
 }
 
 interface ItemEstudado {
@@ -332,7 +350,7 @@ test("Sessão concluída vira Registro e o Resumo lista Acertos e Erros (FR-161,
       CARTOES_DO_BARALHO,
     );
 
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
+    await iniciarSessaoPelaUi(page, ambiente, baralho.id, "pendentes", credencial);
     await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     const itens = await responderItens(page, ["acertou", "acertou", "errou"]);
@@ -419,6 +437,12 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
 
   try {
     const credencial = await criarUsuarioDeProva(ambiente.enderecoDaApi);
+    // A Sessão base (com 1 Cartão) usa um Baralho próprio: sem o campo
+    // Quantidade (spec 024), o Baralho de três Cartões precisa continuar
+    // inteiro — e pendente — para as Sessões interrompida e recarregada.
+    const base = await prepararBaralho(ambiente, credencial, "Base", [
+      CARTOES_DO_BARALHO[0],
+    ]);
     const baralho = await prepararBaralho(
       ambiente,
       credencial,
@@ -427,7 +451,7 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     );
 
     // Base: uma Sessão concluída e registrada.
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 1, credencial);
+    await iniciarSessaoPelaUi(page, ambiente, base.id, "pendentes", credencial);
     await responderItens(page, ["acertou"]);
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
@@ -439,12 +463,16 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     ).toHaveText("1");
 
     // Interromper uma Sessão em andamento (com confirmação) não registra.
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
+    // Aqui a escolha é "Todos os cartões", que com os três Cartões novos dá o
+    // mesmo conjunto da Sessão interrompida.
+    await iniciarSessaoPelaUi(page, ambiente, baralho.id, "todos", credencial);
     await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     await page.getByRole("button", { name: "Interromper" }).click();
 
-    const dialogoDeInterrupcao = page.getByRole("dialog");
+    const dialogoDeInterrupcao = page
+      .getByRole("dialog")
+      .filter({ hasText: "Interromper a Sessão?" });
 
     await expect(
       dialogoDeInterrupcao.getByText("Interromper a Sessão?"),
@@ -463,16 +491,28 @@ test("Sessão interrompida e Sessão recarregada não geram Registro (FR-162, SC
     ).toHaveText("1");
 
     // Recarregar no meio de outra Sessão também descarta, sem registrar.
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
+    await iniciarSessaoPelaUi(page, ambiente, baralho.id, "pendentes", credencial);
     await expect(page.getByRole("article", { name: "Item 1 de 3" })).toBeVisible();
 
     await page.reload();
     await entrarSeNecessario(page, credencial);
 
+    // A recarga descartou a Sessão; os Cartões seguem novos, o Baralho segue
+    // Pendente e o modal reaparece — sem retomar o Item que estava na tela
+    // (spec 024).
+    const modalDeRevisao = page.getByRole("dialog");
+
+    await expect(modalDeRevisao.getByText("Revisar baralho")).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(
-      page.getByRole("heading", { level: 1, name: `Estudar ${NOME_DO_BARALHO}` }),
-    ).toBeVisible();
-    await expect(page.getByRole("article", { name: "Item 1 de 3" })).toHaveCount(0);
+      page.getByRole("article", { name: "Item 1 de 3" }),
+    ).toHaveCount(0);
+
+    // Escape fecha o modal: interromper também *antes* de escolher não
+    // registra Sessão alguma.
+    await page.keyboard.press("Escape");
+    await expect(modalDeRevisao).toHaveCount(0);
 
     await irParaEstudo(page);
     await expect(
@@ -501,7 +541,7 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
     ]);
     const cartaoId = baralho.cartoes[0].id;
 
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 1, credencial);
+    await iniciarSessaoPelaUi(page, ambiente, baralho.id, "pendentes", credencial);
     const itens = await responderItens(page, ["acertou"]);
     await expect(
       page.getByRole("status", { name: "Situação do registro da Sessão" }),
@@ -608,7 +648,7 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
       CARTOES_DO_BARALHO,
     );
 
-    await iniciarSessaoPelaUi(paginaA, ambiente, baralho.id, 3, credencialA);
+    await iniciarSessaoPelaUi(paginaA, ambiente, baralho.id, "pendentes", credencialA);
     await responderItens(paginaA, ["acertou", "acertou", "errou"]);
     await expect(
       paginaA.getByRole("status", { name: "Situação do registro da Sessão" }),
@@ -712,7 +752,7 @@ test("Falha ao registrar oferece nova tentativa e não duplica o Registro (FR-16
       await rota.continue();
     });
 
-    await iniciarSessaoPelaUi(page, ambiente, baralho.id, 3, credencial);
+    await iniciarSessaoPelaUi(page, ambiente, baralho.id, "pendentes", credencial);
     await responderItens(page, ["acertou", "acertou", "errou"]);
 
     // O Resumo continua visível e explica a falha, oferecendo nova tentativa.

@@ -116,13 +116,13 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     ).toBeVisible();
 
     // De volta à lista, o Baralho novo aparece e ainda não é elegível: sem
-    // Cartões vinculados, "Estudar" é um botão desabilitado (spec 012).
+    // Cartões vinculados, "Revisar" é um botão desabilitado (spec 012; spec 024).
     await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
     await expect(
       page.getByRole("link", { name: `Editar ${NOME_DO_BARALHO}`, exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: `Estudar ${NOME_DO_BARALHO}` }),
+      page.getByRole("button", { name: `Revisar ${NOME_DO_BARALHO}` }),
     ).toBeDisabled();
 
     const baralhosCriados = await listarBaralhosPelaApi(enderecoDaApi);
@@ -169,10 +169,10 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
     ).toHaveCount(0);
 
     // O Vínculo é o que torna o Baralho elegível para estudo (spec 012): a
-    // lista passa a oferecer "Estudar" como link.
+    // lista passa a oferecer "Revisar" como link (spec 024).
     await abrirRotaAutenticada(page, enderecoDoFrontend, "#/baralhos");
     await expect(
-      page.getByRole("link", { name: `Estudar ${NOME_DO_BARALHO}` }),
+      page.getByRole("link", { name: `Revisar ${NOME_DO_BARALHO}` }),
     ).toBeVisible();
 
     // O Cartão vinculado aparece na seção "Cartões do Baralho" do detalhe.
@@ -245,7 +245,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
 
     // O Baralho continua elegível para estudo: o Vínculo persistiu.
     await expect(
-      page.getByRole("link", { name: `Estudar ${NOME_DO_BARALHO}` }),
+      page.getByRole("link", { name: `Revisar ${NOME_DO_BARALHO}` }),
     ).toBeVisible();
 
     // O detalhe segue com o Cartão vinculado (mesmo id, mesma Frente e Verso).

@@ -16,12 +16,12 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
  * 1. A ordem de tabulação segue a disposição visual — Criar baralho, Criar
- *    baralho temporário, Buscar baralhos, Limpar filtros e, então, o Estudar
- *    e o Editar de cada Baralho;
+ *    baralho temporário, Buscar baralhos, Situação da revisão, Limpar filtros
+ *    e, então, o Revisar e o Editar de cada Baralho;
  *    o nome não recebe foco (spec 021: FR-340, FR-341, FR-346; spec 022:
- *    FR-354, FR-355) —, com o elemento focado conferido a cada passo por
- *    `document.activeElement`.
- * 2. O Estudar de um Baralho vazio fica fora da ordem de tabulação, por ser um
+ *    FR-354, FR-355; spec 024: FR-381) —, com o elemento focado conferido a
+ *    cada passo por `document.activeElement`.
+ * 2. O Revisar de um Baralho vazio fica fora da ordem de tabulação, por ser um
  *    controle desabilitado, e a falha de listagem deixa a nova tentativa como
  *    única ação além do cabeçalho e dos controles de busca, acionável por
  *    Enter.
@@ -102,7 +102,7 @@ async function semearBaralho(
 }
 
 describe("PaginaDeBaralhos por teclado", () => {
-  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Criar baralho temporário → Buscar → Limpar filtros → Estudar → Editar (FR-340, FR-346, FR-360)", async () => {
+  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Criar baralho temporário → Buscar → Situação da revisão → Limpar filtros → Revisar → Editar (FR-340, FR-346, FR-360, FR-381)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
 
@@ -114,8 +114,9 @@ describe("PaginaDeBaralhos por teclado", () => {
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
-      screen.getByRole("link", { name: "Estudar Inglês" }),
+      screen.getByRole("link", { name: "Revisar Inglês" }),
       screen.getByRole("link", { name: "Editar Inglês" }),
     ]);
 
@@ -125,31 +126,33 @@ describe("PaginaDeBaralhos por teclado", () => {
     }
   });
 
-  it("o Estudar de um Baralho vazio fica fora da ordem de tabulação e o Tab segue para Editar (FR-343, FR-346)", async () => {
+  it("o Revisar de um Baralho vazio fica fora da ordem de tabulação e o Tab segue para Editar (FR-343, FR-346)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
     render(<PaginaDeBaralhos cliente={cliente} />);
     await screen.findByRole("listitem");
 
-    const botaoDeEstudo = screen.getByRole("button", {
-      name: "Estudar Alemão",
+    const botaoDeRevisao = screen.getByRole("button", {
+      name: "Revisar Alemão",
     });
-    expect(botaoDeEstudo).toBeDisabled();
+    expect(botaoDeRevisao).toBeDisabled();
 
     const controles = controlesInterativos();
-    expect(controles).not.toContain(botaoDeEstudo);
+    expect(controles).not.toContain(botaoDeRevisao);
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
       screen.getByRole("link", { name: "Editar Alemão" }),
     ]);
 
-    // O Estudar desabilitado não entra na ordem: o Tab passa por Criar
-    // baralho, Criar baralho temporário, Buscar baralhos e Limpar filtros e
-    // segue para Editar.
+    // O Revisar desabilitado não entra na ordem: o Tab passa por Criar
+    // baralho, Criar baralho temporário, Buscar baralhos, Situação da revisão
+    // e Limpar filtros e segue para Editar. A etiqueta "Sem cartões" é texto,
+    // fora da ordem de tabulação.
     for (const controle of controles) {
       apertarTab();
       expect(document.activeElement).toBe(controle);
@@ -164,13 +167,14 @@ describe("PaginaDeBaralhos por teclado", () => {
     await screen.findByRole("alert");
 
     // Além do cabeçalho (Criar baralho e Criar baralho temporário) e dos
-    // controles de busca (Buscar baralhos e Limpar filtros), a nova tentativa
-    // é a única ação.
+    // controles de busca (Buscar baralhos, Situação da revisão e Limpar
+    // filtros), a nova tentativa é a única ação.
     const controles = controlesInterativos();
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
       screen.getByRole("button", { name: "Limpar filtros" }),
       screen.getByRole("button", { name: "Tentar novamente" }),
     ]);
@@ -181,7 +185,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     }
 
     cliente.restaurarDisponibilidade();
-    apertarEnter(controles[4]);
+    apertarEnter(controles[5]);
 
     expect(
       await screen.findByText(/ainda não há Baralhos/i),

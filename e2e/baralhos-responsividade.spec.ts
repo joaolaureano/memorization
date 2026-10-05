@@ -11,13 +11,15 @@ import {
 // Exercita o frontend React real servido pelo Vite dev (segundo webServer do
 // harness), não uma cópia HTML da tela: `src/main.tsx` monta `Aplicacao` com o
 // `ClienteHttp`, e o Playwright intercepta apenas o transporte — o
-// GET /baralhos responde 10 Baralhos determinísticos. Nenhum DOM da tela é
-// reproduzido aqui.
+// GET /baralhos responde 10 Baralhos determinísticos e o GET /cartoes devolve
+// um acervo vazio (spec 024: a lista de Baralhos lê os Cartões para derivar a
+// situação da revisão de cada Baralho). Nenhum DOM da tela é reproduzido aqui.
 //
 // Provas: sem rolagem horizontal em viewport de telefone (scrollWidth <=
 // clientWidth, no topo e no fim da lista) e um Baralho conhecido é visualmente
 // localizável sem busca ou paginação, com a elegibilidade comunicada pelo
-// controle Estudar desabilitado e por sua descrição acessível (FR-144 revisado).
+// controle Revisar desabilitado e por sua descrição acessível (FR-144 revisado;
+// spec 024).
 
 const PORTA_DO_FRONTEND = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
 const ENDERECO_DO_FRONTEND = `http://127.0.0.1:${PORTA_DO_FRONTEND}`;
@@ -72,6 +74,21 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
     await rota.fallback();
   });
 
+  // Sem Cartões no acervo, todos os Baralhos ficam "Sem cartões" — é a
+  // situação derivada do GET /cartoes (spec 024).
+  await page.route(/\/cartoes$/, async (rota) => {
+    if (rota.request().method() === 'GET') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '[]',
+      });
+      return;
+    }
+
+    await rota.fallback();
+  });
+
   await page.goto(`${ENDERECO_DO_FRONTEND}/#/baralhos`);
   await entrarPelaUi(page, credencial);
 
@@ -104,7 +121,7 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
 
   // A lista é navegável até o fim: a rolagem vertical alcança o último
   // Baralho, e o Baralho conhecido é visualmente localizável sem busca ou
-  // paginação, com o estado comunicado pelo controle Estudar.
+  // paginação, com o estado comunicado pelo controle Revisar.
   const ultimoBaralho = baralhos[QUANTIDADE_DE_BARALHOS - 1];
   const itemConhecido = page
     .getByRole('listitem')
@@ -114,21 +131,24 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
   await expect(itemConhecido).toBeVisible();
 
   // Spec 021 (FR-340, FR-341): cada Baralho é uma linha fina — o nome em
-  // texto somente leitura, a contagem e as ações Estudar → Editar. A antiga linha de status ("Adicione
-  // Cartões para começar a estudar.") não existe mais.
+  // texto somente leitura, a contagem e as ações Revisar → Editar. A antiga linha de status ("Adicione
+  // Cartões para começar a estudar.") não existe mais. Spec 024: a etiqueta
+  // "Sem cartões" também identifica o Baralho vazio.
   await expect(
     itemConhecido.getByRole('link', { name: `Editar ${ultimoBaralho.nome}` }),
   ).toBeVisible();
+  await expect(itemConhecido.getByText('Sem cartões', { exact: true })).toBeVisible();
 
-  // Sem Cartões, Estudar é um botão desabilitado cujo motivo chega pela
-  // descrição acessível "Sem Cartões para estudar." — nunca apenas pela cor.
-  const controlarEstudar = itemConhecido.getByRole('button', {
-    name: `Estudar ${ultimoBaralho.nome}`,
+  // Sem Cartões, Revisar é um botão desabilitado cujo motivo chega pela
+  // descrição acessível — a ação renomeada, com o motivo em qualquer das duas
+  // redações ("estudar"/"revisar") — nunca apenas pela cor.
+  const controlarRevisar = itemConhecido.getByRole('button', {
+    name: `Revisar ${ultimoBaralho.nome}`,
   });
 
-  await expect(controlarEstudar).toBeDisabled();
-  await expect(controlarEstudar).toHaveAccessibleDescription(
-    /Sem Cartões para estudar/,
+  await expect(controlarRevisar).toBeDisabled();
+  await expect(controlarRevisar).toHaveAccessibleDescription(
+    /Sem Cartões para (estudar|revisar)/,
   );
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.

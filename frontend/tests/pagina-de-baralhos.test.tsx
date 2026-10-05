@@ -14,9 +14,14 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * `ClienteDoAcervo`, sem servidor. A criação mora em outra tela: aqui se prova
  * que a lista apenas a alcança por ação da pessoa (FR-140), que cada Baralho
  * aparece como uma linha compacta, com o nome somente leitura, a contagem e
- * as ações Estudar → Editar (spec 021: FR-340–FR-343), que o estado vazio
- * orienta a primeira ação (FR-153) e que a falha de listagem oferece nova
- * tentativa (FR-148).
+ * as ações Revisar → Editar (spec 021: FR-340–FR-343; spec 024: FR-378,
+ * FR-380), que o estado vazio orienta a primeira ação (FR-153) e que a falha
+ * de listagem oferece nova tentativa (FR-148).
+ *
+ * A spec 024 acrescenta a Situação da revisão à lista (FR-379–FR-381,
+ * SC-150–SC-152): a classificação vem dos Agendamentos dos Cartões e a lista
+ * lê os dois recursos; uma falha na leitura das datas é recuperável e nunca
+ * produz um "Revisado" falso (FR-385, SC-151).
  *
  * O acervo é semeado pela própria Interface — `criarBaralho`, `criarCartao` e
  * `vincular` —, nunca por um caminho que a tela ofereça.
@@ -138,7 +143,7 @@ describe("PaginaDeBaralhos", () => {
     await screen.findByText(/ainda não há Baralhos/i);
 
     expect(estadoVazio()).toHaveTextContent(
-      "Ainda não há Baralhos. Crie o primeiro para começar a estudar.",
+      "Ainda não há Baralhos. Crie o primeiro para começar a revisar.",
     );
     expect(
       within(estadoVazio()).getByRole("link", { name: "Criar baralho" }),
@@ -195,36 +200,39 @@ describe("PaginaDeBaralhos", () => {
     ).toBeVisible();
   });
 
-  it("o Estudar de um Baralho com Cartões é um link para a Sessão de estudo (FR-144)", async () => {
+  it("o Revisar de um Baralho com Cartões é um link para a rota de estudo, que não muda de nome (FR-144, FR-378)", async () => {
     const cliente = clienteDeProva();
     const id = await semearBaralho(cliente, "Inglês", ["Hello"]);
 
     renderizarPaginaDeBaralhos(cliente);
 
-    const linkDeEstudo = await screen.findByRole("link", {
-      name: "Estudar Inglês",
+    const linkDeRevisao = await screen.findByRole("link", {
+      name: "Revisar Inglês",
     });
 
-    expect(linkDeEstudo).toHaveAttribute("href", `#/baralhos/${id}/estudo`);
+    expect(linkDeRevisao).toHaveAttribute("href", `#/baralhos/${id}/estudo`);
   });
 
-  it("o Estudar de um Baralho vazio é um botão desabilitado descrito pelo motivo (FR-144)", async () => {
+  it("o Revisar de um Baralho vazio é um botão desabilitado descrito pelo motivo, com a etiqueta Sem cartões (FR-380)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
     renderizarPaginaDeBaralhos(cliente);
 
-    const botaoDeEstudo = await screen.findByRole("button", {
-      name: "Estudar Alemão",
+    const botaoDeRevisao = await screen.findByRole("button", {
+      name: "Revisar Alemão",
     });
 
-    expect(botaoDeEstudo).toBeDisabled();
-    expect(botaoDeEstudo).toHaveAccessibleDescription(
-      "Sem Cartões para estudar.",
+    expect(botaoDeRevisao).toBeDisabled();
+    expect(botaoDeRevisao).toHaveAccessibleDescription(
+      "Sem Cartões para revisar.",
     );
+    expect(
+      within(itemDoBaralho("Alemão")).getByText("Sem cartões"),
+    ).toBeVisible();
   });
 
-  it("cada Baralho tem exatamente dois controles, Estudar e Editar, nessa ordem (FR-340, FR-346)", async () => {
+  it("cada Baralho tem exatamente dois controles, Revisar e Editar, nessa ordem (FR-340, FR-346, FR-378)", async () => {
     const cliente = clienteDeProva();
     const idDeIngles = await semearBaralho(cliente, "Inglês", ["Hello"]);
     const idDeAlemao = await semearBaralho(cliente, "Alemão");
@@ -238,7 +246,7 @@ describe("PaginaDeBaralhos", () => {
     );
 
     expect(controlesDeIngles).toHaveLength(2);
-    expect(controlesDeIngles[0]).toHaveAccessibleName("Estudar Inglês");
+    expect(controlesDeIngles[0]).toHaveAccessibleName("Revisar Inglês");
     expect(controlesDeIngles[0]).toHaveAttribute(
       "href",
       `#/baralhos/${idDeIngles}/estudo`,
@@ -254,7 +262,7 @@ describe("PaginaDeBaralhos", () => {
     );
 
     expect(controlesDeAlemao).toHaveLength(2);
-    expect(controlesDeAlemao[0]).toHaveAccessibleName("Estudar Alemão");
+    expect(controlesDeAlemao[0]).toHaveAccessibleName("Revisar Alemão");
     expect(controlesDeAlemao[0]).toBeDisabled();
     expect(controlesDeAlemao[1]).toHaveAccessibleName("Editar Alemão");
     expect(controlesDeAlemao[1]).toHaveAttribute(
@@ -381,7 +389,7 @@ describe("PaginaDeBaralhos — busca (022)", () => {
     expect(screen.getByRole("status")).toHaveTextContent("2 resultados");
   });
 
-  it("preserva Estudar e Editar com o mesmo destino durante a busca (FR-356)", async () => {
+  it("preserva Revisar e Editar com o mesmo destino durante a busca (FR-356)", async () => {
     const cliente = clienteDeProva();
     const id = await semearBaralho(cliente, "Álgebra linear", ["Fórmula"]);
     await semearBaralho(cliente, "Biologia");
@@ -389,14 +397,14 @@ describe("PaginaDeBaralhos — busca (022)", () => {
     renderizarPaginaDeBaralhos(cliente);
     await screen.findAllByRole("listitem");
 
-    const hrefDeEstudo = within(itemDoBaralho("Álgebra linear"))
-      .getByRole("link", { name: "Estudar Álgebra linear" })
+    const hrefDeRevisao = within(itemDoBaralho("Álgebra linear"))
+      .getByRole("link", { name: "Revisar Álgebra linear" })
       .getAttribute("href");
     const hrefDeEdicao = within(itemDoBaralho("Álgebra linear"))
       .getByRole("link", { name: "Editar Álgebra linear" })
       .getAttribute("href");
 
-    expect(hrefDeEstudo).toBe(`#/baralhos/${id}/estudo`);
+    expect(hrefDeRevisao).toBe(`#/baralhos/${id}/estudo`);
     expect(hrefDeEdicao).toBe(`#/baralhos/${id}`);
 
     fireEvent.change(
@@ -407,9 +415,9 @@ describe("PaginaDeBaralhos — busca (022)", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(
       within(itemDoBaralho("Álgebra linear"))
-        .getByRole("link", { name: "Estudar Álgebra linear" })
+        .getByRole("link", { name: "Revisar Álgebra linear" })
         .getAttribute("href"),
-    ).toBe(hrefDeEstudo);
+    ).toBe(hrefDeRevisao);
     expect(
       within(itemDoBaralho("Álgebra linear"))
         .getByRole("link", { name: "Editar Álgebra linear" })
@@ -426,7 +434,7 @@ describe("PaginaDeBaralhos — busca (022)", () => {
     fireEvent.change(campo, { target: { value: "xyz" } });
 
     expect(estadoVazio()).toHaveTextContent(
-      "Ainda não há Baralhos. Crie o primeiro para começar a estudar.",
+      "Ainda não há Baralhos. Crie o primeiro para começar a revisar.",
     );
     expect(
       within(estadoVazio()).getByRole("link", { name: "Criar baralho" }),
@@ -473,5 +481,155 @@ describe("PaginaDeBaralhos — busca (022)", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Biologia")).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("1 resultado");
+  });
+});
+
+/**
+ * Deixa todos os Cartões do Baralho com a próxima revisão no futuro,
+ * registrando uma Sessão com Avaliação «Bom» (+3 dias) — o caminho real de
+ * Agendamento, sem tocar no estado interno do Adapter.
+ */
+async function agendarTodosParaOFuturo(
+  cliente: ClienteEmMemoria,
+  baralhoId: string,
+  nomeDoBaralho: string,
+): Promise<void> {
+  const listagem = await cliente.listarCartoes();
+
+  if (!listagem.ok) {
+    throw new Error("Cartões de prova não listados.");
+  }
+
+  const vinculados = listagem.cartoes.filter((cartao) =>
+    cartao.baralhos.some((baralho) => baralho.id === baralhoId),
+  );
+
+  const registro = await cliente.registrarSessao({
+    id: crypto.randomUUID(),
+    origem: "baralho",
+    baralhoId,
+    nomeDoBaralho,
+    itens: vinculados.map((cartao) => ({
+      frente: cartao.frente,
+      verso: cartao.verso,
+      cartaoId: cartao.id,
+      avaliacao: "bom" as const,
+    })),
+  });
+
+  if (!registro.ok) {
+    throw new Error("Sessão de prova não registrada.");
+  }
+}
+
+describe("PaginaDeBaralhos — situação da revisão (024)", () => {
+  it("etiqueta Pendente, Revisado e Sem cartões e filtra por Todos, Pendente e Revisado (FR-379–FR-381, SC-150, SC-151)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Novo", ["Ainda não revisto"]);
+    const idRevisado = await semearBaralho(cliente, "Em dia", ["Já revisto"]);
+    await semearBaralho(cliente, "Vazio");
+    await agendarTodosParaOFuturo(cliente, idRevisado, "Em dia");
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    // A etiqueta fica na linha, antes das ações, com o texto da situação.
+    expect(
+      within(itemDoBaralho("Novo")).getByText("Pendente"),
+    ).toBeVisible();
+    expect(
+      within(itemDoBaralho("Em dia")).getByText("Revisado"),
+    ).toBeVisible();
+    expect(
+      within(itemDoBaralho("Vazio")).getByText("Sem cartões"),
+    ).toBeVisible();
+
+    const seletor = screen.getByRole("combobox", {
+      name: "Situação da revisão",
+    });
+    expect(seletor).toHaveValue("todos");
+
+    fireEvent.change(seletor, { target: { value: "pendente" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("Novo")).toBeInTheDocument();
+    expect(screen.queryByText("Em dia")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vazio")).not.toBeInTheDocument();
+
+    fireEvent.change(seletor, { target: { value: "revisado" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("Em dia")).toBeInTheDocument();
+
+    fireEvent.change(seletor, { target: { value: "todos" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("combina a busca por nome com o filtro de Situação (FR-381)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Álgebra", ["Ainda não revisto"]);
+    await semearBaralho(cliente, "Biologia", ["Ainda não revisto"]);
+
+    renderizarPaginaDeBaralhos(cliente);
+    await screen.findAllByRole("listitem");
+
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+      { target: { value: "pendente" } },
+    );
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+      { target: { value: "alge" } },
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("Álgebra")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 resultado");
+
+    // Limpar filtros restaura a busca e a Situação, devolvendo o foco.
+    fireEvent.click(screen.getByRole("button", { name: "Limpar filtros" }));
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+    ).toHaveValue("todos");
+    expect(
+      screen.getByRole("searchbox", { name: "Buscar baralhos" }),
+    ).toHaveFocus();
+  });
+
+  it("falha na leitura dos Agendamentos mostra a falha com Tentar novamente e nunca classifica como Revisado (FR-385, SC-151)", async () => {
+    const cliente = clienteDeProva();
+    await semearBaralho(cliente, "Novo", ["Ainda não revisto"]);
+
+    const listarCartoesOriginal = cliente.listarCartoes.bind(cliente);
+    cliente.listarCartoes = async () => ({
+      ok: false,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+    });
+
+    renderizarPaginaDeBaralhos(cliente);
+
+    // A lista nem aparece com uma classificação arriscada: a falha é
+    // recuperável e a retentativa relê os dois recursos.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+    );
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".etiqueta")).toHaveLength(0);
+
+    cliente.listarCartoes = listarCartoesOriginal;
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await screen.findAllByRole("listitem");
+
+    // Sem Agendamento, a classificação correta é Pendente — nunca Revisado.
+    expect(
+      within(itemDoBaralho("Novo")).getByText("Pendente"),
+    ).toBeVisible();
+    expect(
+      within(itemDoBaralho("Novo")).queryByText("Revisado"),
+    ).not.toBeInTheDocument();
   });
 });

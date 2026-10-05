@@ -1,5 +1,7 @@
 # Decisões — Baralho temporário
 
+> A alteração posterior de nomenclatura e filtros está registrada na spec 024. As decisões anteriores abaixo são preservadas como histórico.
+
 ## 2026-10-05 — Primeira especificação
 
 ### Pedido e limites

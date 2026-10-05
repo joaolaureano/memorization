@@ -4,15 +4,15 @@ O Usuário solicitou protótipos das duas telas após a criação da especifica�
 
 ## Baralhos
 
-Cabeçalho existente com Criar baralho → busca pelo nome → contagem e Limpar filtros → lista compacta com nome, quantidade e Estudar → Editar.
+Atualizado pela spec 024: cabeçalho com Criar baralho → busca pelo nome e Situação da revisão (Todos/Pendente/Revisado) → contagem e Limpar filtros → lista compacta com nome, quantidade, etiqueta à esquerda e Revisar → Editar. Baralho vazio mostra Sem cartões.
 
 ![Baralhos no desktop](../../design/busca-e-filtros/capturas/baralhos-1440.png)
 
 ## Cartões
 
-Cabeçalho existente com Criar cartão → busca na Frente ou no Verso → seletor de Baralho → seletor de situação → contagem e Limpar filtros → lista compacta com Frente e Excluir → Editar.
+Cabeçalho existente com Criar cartão → busca na Frente ou no Verso → seletor de Baralho → contagem e Limpar filtros → lista compacta com Frente e Excluir → Editar.
 
-No desktop, os três controles ficam na mesma linha. No celular, ficam empilhados com rótulos visíveis. Resultados mantêm Verso e vínculos fora da linha, como na spec 021.
+No desktop, os dois controles ficam na mesma linha. No celular, ficam empilhados com rótulos visíveis. Resultados mantêm Verso e vínculos fora da linha, como na spec 021.
 
 ![Cartões no desktop](../../design/busca-e-filtros/capturas/cartoes-1440.png)
 

@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import type { BaralhoListado, CartaoListado } from "../acervo-cliente/cliente";
 import {
+  classificarBaralhos,
   filtrarBaralhos,
+  filtrarBaralhosPorSituacao,
   filtrarCartoes,
+  rotuloDaSituacaoDoBaralho,
   type FiltroDeBaralho,
-  type FiltroDeSituacao,
+  type FiltroDeSituacaoDoBaralho,
 } from "../acervo-cliente/busca-no-acervo";
 import {
   cartoesAusentes,
@@ -19,9 +22,13 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * Baralho ou Cartões individuais, vinculados ou não. Exibe apenas
  * conteúdo do próprio Usuário.
  *
- * Busca e filtros (FR-362): busca por nome nos Baralhos e por
- * Frente/Verso nos Cartões. Usa os filtros por Baralho e situação da
- * 022. Os filtros afetam somente o que é exibido; nunca a seleção.
+ * Busca e filtros (FR-362, FR-382): busca por nome nos Baralhos e por
+ * Frente/Verso nos Cartões. Na fonte Adicionar baralhos há o filtro de
+ * Situação da revisão e as etiquetas Pendente/Revisado/Sem cartões; a
+ * fonte de Cartões individuais conserva apenas a busca e o filtro de
+ * Baralho — a Situação saiu de lá (FR-382, SC-150). Os filtros afetam
+ * somente o que é exibido; nunca a seleção, e adicionar um Baralho
+ * continua incluindo todos os Cartões dele.
  *
  * Seleção explícita (FR-363): adicionar um Baralho copia a composição
  * daquele momento, sem criar Vínculo vivo.
@@ -54,7 +61,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   const [filtroDeBaralho, setFiltroDeBaralho] =
     useState<FiltroDeBaralho>("todos");
   const [filtroDeSituacao, setFiltroDeSituacao] =
-    useState<FiltroDeSituacao>("todos");
+    useState<FiltroDeSituacaoDoBaralho>("todos");
 
   /**
    * Mapa id do Baralho → ids dos Cartões que pertencem a ele, na ordem do
@@ -72,23 +79,33 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
     return mapa;
   }, [cartoes]);
 
+  /**
+   * A situação da revisão de cada Baralho, derivada dos Agendamentos
+   * carregados (FR-379, FR-382). O `agora` é lido uma vez por cálculo;
+   * um Baralho ausente do mapa é o caso vazio.
+   */
+  const situacoesDosBaralhos = useMemo(
+    () => classificarBaralhos(baralhos, cartoes, new Date()),
+    [baralhos, cartoes],
+  );
+
   const baralhosFiltrados = useMemo(
-    () => filtrarBaralhos(baralhos, consultaDeBaralhos),
-    [baralhos, consultaDeBaralhos],
+    () =>
+      filtrarBaralhosPorSituacao(
+        filtrarBaralhos(baralhos, consultaDeBaralhos),
+        situacoesDosBaralhos,
+        filtroDeSituacao,
+      ),
+    [baralhos, consultaDeBaralhos, situacoesDosBaralhos, filtroDeSituacao],
   );
 
   const cartoesFiltrados = useMemo(
     () =>
-      filtrarCartoes(
-        cartoes,
-        {
-          consulta: consultaDeCartoes,
-          baralho: filtroDeBaralho,
-          situacao: filtroDeSituacao,
-        },
-        new Date(),
-      ),
-    [cartoes, consultaDeCartoes, filtroDeBaralho, filtroDeSituacao],
+      filtrarCartoes(cartoes, {
+        consulta: consultaDeCartoes,
+        baralho: filtroDeBaralho,
+      }),
+    [cartoes, consultaDeCartoes, filtroDeBaralho],
   );
 
   const quantidadeDeResultados =
@@ -103,11 +120,11 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   function limparFiltrosDaFonteAtiva() {
     if (fonte === "baralhos") {
       setConsultaDeBaralhos("");
+      setFiltroDeSituacao("todos");
       return;
     }
     setConsultaDeCartoes("");
     setFiltroDeBaralho("todos");
-    setFiltroDeSituacao("todos");
   }
 
   function montarConteudo() {
@@ -168,11 +185,9 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
               ids.length > 0 &&
               cartoesAusentes(selecao, ids).length > 0;
             const rotulo =
-              ids.length === 0
-                ? "Sem cartões"
-                : podeAdicionar
-                  ? "Adicionar"
-                  : "Adicionado";
+              ids.length > 0 && !podeAdicionar ? "Adicionado" : "Adicionar";
+            const situacao =
+              situacoesDosBaralhos.get(baralho.id) ?? "sem-cartoes";
 
             return (
               <li className="linha-da-lista" key={baralho.id}>
@@ -183,6 +198,9 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                   </p>
                 </div>
                 <div className="linha-da-lista__acoes">
+                  <span className={`etiqueta etiqueta--${situacao}`}>
+                    {rotuloDaSituacaoDoBaralho(situacao)}
+                  </span>
                   <button
                     type="button"
                     className={
@@ -263,19 +281,42 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
 
       <div className="filtros-montagem">
         {fonte === "baralhos" ? (
-          <div className="campo">
-            <label className="rotulo" htmlFor="busca-de-baralhos-da-montagem">
-              Buscar baralhos
-            </label>
-            <input
-              id="busca-de-baralhos-da-montagem"
-              type="search"
-              autoComplete="off"
-              placeholder="Digite o nome do baralho"
-              value={consultaDeBaralhos}
-              onChange={(evento) => setConsultaDeBaralhos(evento.target.value)}
-            />
-          </div>
+          <>
+            <div className="campo">
+              <label className="rotulo" htmlFor="busca-de-baralhos-da-montagem">
+                Buscar baralhos
+              </label>
+              <input
+                id="busca-de-baralhos-da-montagem"
+                type="search"
+                autoComplete="off"
+                placeholder="Digite o nome do baralho"
+                value={consultaDeBaralhos}
+                onChange={(evento) => setConsultaDeBaralhos(evento.target.value)}
+              />
+            </div>
+            <div className="campo">
+              <label
+                className="rotulo"
+                htmlFor="filtro-de-situacao-da-montagem"
+              >
+                Situação da revisão
+              </label>
+              <select
+                id="filtro-de-situacao-da-montagem"
+                value={filtroDeSituacao}
+                onChange={(evento) =>
+                  setFiltroDeSituacao(
+                    evento.target.value as FiltroDeSituacaoDoBaralho,
+                  )
+                }
+              >
+                <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="revisado">Revisado</option>
+              </select>
+            </div>
+          </>
         ) : (
           <>
             <div className="campo">
@@ -309,26 +350,6 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                     {baralho.nome}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="campo">
-              <label
-                className="rotulo"
-                htmlFor="filtro-de-situacao-da-montagem"
-              >
-                Situação da revisão
-              </label>
-              <select
-                id="filtro-de-situacao-da-montagem"
-                value={filtroDeSituacao}
-                onChange={(evento) =>
-                  setFiltroDeSituacao(evento.target.value as FiltroDeSituacao)
-                }
-              >
-                <option value="todos">Todos</option>
-                <option value="novos">Novos</option>
-                <option value="revisao-pendente">Revisão pendente</option>
-                <option value="em-dia">Em dia</option>
               </select>
             </div>
           </>

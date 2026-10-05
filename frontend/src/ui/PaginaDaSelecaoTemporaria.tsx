@@ -281,7 +281,7 @@ export function PaginaDaSelecaoTemporaria({
               aria-describedby="orientacao-da-selecao"
               onClick={() => void aoTentarEstudar()}
             >
-              Estudar
+              Revisar
             </button>
             <button
               type="button"
@@ -321,14 +321,14 @@ function textoDeIndisponiveis(n: number): string {
     : `${n} Cartões não estão mais disponíveis.`;
 }
 
-/** Orientação da seleção exibida junto ao botão Estudar. */
+/** Orientação da seleção exibida junto ao botão Revisar. */
 function orientacao(situacao: Situacao): string {
   switch (situacao) {
     case "vazia":
-      return "Adicione pelo menos um cartão para estudar.";
+      return "Adicione pelo menos um cartão para revisar.";
     case "acima-do-limite":
       return "Reduza a seleção para no máximo 1.000 cartões.";
     default:
-      return "Todos os cartões selecionados serão estudados em ordem aleatória.";
+      return "Todos os cartões selecionados serão revisados em ordem aleatória.";
   }
 }

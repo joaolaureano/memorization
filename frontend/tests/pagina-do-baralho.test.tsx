@@ -14,10 +14,10 @@ import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
  *
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. As asserções cobrem a apresentação do
- * Baralho e da contagem, o caminho para Estudar (primeiro e desabilitado sem
- * Cartões), a remoção de um Cartão **sem** diálogo de confirmação (FR-147,
- * FR-066), o Baralho inexistente e a falha de gravação que não some com o
- * Vínculo confirmado (FR-044, FR-045, SC-012).
+ * Baralho e da contagem, o caminho para Revisar (primeiro e desabilitado sem
+ * Cartões — a ação da spec 024, FR-378), a remoção de um Cartão **sem**
+ * diálogo de confirmação (FR-147, FR-066), o Baralho inexistente e a falha de
+ * gravação que não some com o Vínculo confirmado (FR-044, FR-045, SC-012).
  */
 
 interface AcervoDeTeste {
@@ -154,7 +154,7 @@ function apertarTabAPartirDe(origem: HTMLElement): void {
 }
 
 describe("PaginaDoBaralho", () => {
-  it("apresenta o Baralho, a contagem e o caminho para Estudar (FR-145)", async () => {
+  it("apresenta o Baralho, a contagem e o caminho para Revisar (FR-145, FR-378)", async () => {
     const { cliente, idDoBaralho, idDoPrimeiroCartao } =
       await criarAcervoDeTeste();
     await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
@@ -166,14 +166,14 @@ describe("PaginaDoBaralho", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Estudar este Baralho" }),
+      screen.getByRole("link", { name: "Revisar este Baralho" }),
     ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
     expect(
       screen.queryByRole("link", { name: "← Voltar para Baralhos" }),
     ).toBeNull();
   });
 
-  it("sem Cartões, Estudar fica desabilitado com a explicação e o vazio oferece adicionar (FR-145, FR-153)", async () => {
+  it("sem Cartões, Revisar fica desabilitado com a explicação e o vazio oferece adicionar (FR-145, FR-153, FR-378)", async () => {
     const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
@@ -185,10 +185,10 @@ describe("PaginaDoBaralho", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Inglês" });
 
-    const estudar = screen.getByRole("button", { name: "Estudar este Baralho" });
-    expect(estudar).toBeDisabled();
-    expect(estudar).toHaveAccessibleDescription(
-      "Adicione Cartões ao Baralho para poder estudar.",
+    const revisar = screen.getByRole("button", { name: "Revisar este Baralho" });
+    expect(revisar).toBeDisabled();
+    expect(revisar).toHaveAccessibleDescription(
+      "Adicione Cartões ao Baralho para poder revisar.",
     );
     expect(
       screen.getByText("Este Baralho ainda não tem Cartões."),
@@ -275,10 +275,10 @@ describe("PaginaDoBaralho", () => {
     ).not.toBeInTheDocument();
     expect(within(secao("Cartões do Baralho")).getAllByRole("listitem"))
       .toHaveLength(1);
-    // A elegibilidade é comunicada apenas pelo estado de "Estudar este
+    // A elegibilidade é comunicada apenas pelo estado de "Revisar este
     // Baralho": com o Vínculo confirmado, o caminho continua disponível.
     expect(
-      screen.getByRole("link", { name: "Estudar este Baralho" }),
+      screen.getByRole("link", { name: "Revisar este Baralho" }),
     ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
     expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
   });
@@ -300,7 +300,7 @@ describe("PaginaDoBaralho", () => {
     ).toBeInTheDocument();
   });
 
-  it("as quatro ações do Baralho aparecem antes da lista, na ordem Estudar, Adicionar, Renomear e Excluir (FR-145 revisado, SC-078)", async () => {
+  it("as quatro ações do Baralho aparecem antes da lista, na ordem Revisar, Adicionar, Renomear e Excluir (FR-145 revisado, SC-078)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoDeTesteComTresCartoes();
 
     renderizar(cliente, idDoBaralho);
@@ -308,7 +308,7 @@ describe("PaginaDoBaralho", () => {
     await screen.findByRole("heading", { level: 1, name: "Inglês" });
 
     const acoes = [
-      screen.getByRole("link", { name: "Estudar este Baralho" }),
+      screen.getByRole("link", { name: "Revisar este Baralho" }),
       screen.getByRole("link", { name: "Adicionar cartões existentes" }),
       screen.getByRole("link", { name: "Renomear" }),
       screen.getByRole("button", { name: "Excluir Baralho" }),
@@ -337,7 +337,7 @@ describe("PaginaDoBaralho", () => {
       }
     }
 
-    // E, entre si, na ordem visual: Estudar, Adicionar, Renomear e Excluir.
+    // E, entre si, na ordem visual: Revisar, Adicionar, Renomear e Excluir.
     for (let indice = 1; indice < acoes.length; indice += 1) {
       expect(
         acoes[indice - 1].compareDocumentPosition(acoes[indice]) &
@@ -355,7 +355,7 @@ describe("PaginaDoBaralho", () => {
       level: 1,
       name: "Inglês",
     });
-    const estudar = screen.getByRole("link", { name: "Estudar este Baralho" });
+    const revisar = screen.getByRole("link", { name: "Revisar este Baralho" });
     const adicionar = screen.getByRole("link", {
       name: "Adicionar cartões existentes",
     });
@@ -363,7 +363,7 @@ describe("PaginaDoBaralho", () => {
     const excluir = screen.getByRole("button", { name: "Excluir Baralho" });
 
     apertarTabAPartirDe(titulo);
-    expect(document.activeElement).toBe(estudar);
+    expect(document.activeElement).toBe(revisar);
 
     apertarTab();
     expect(document.activeElement).toBe(adicionar);
