@@ -292,6 +292,25 @@ describe("UltimasSessoes", () => {
     expect(screen.getByRole("link", { name: /Revisão do dia/ })).toBeTruthy();
   });
 
+  it("chama de 'Estudo com baralho temporário' a Sessão do baralho temporário (FR-376)", () => {
+    render(
+      <UltimasSessoes
+        recentes={[
+          registroDeProva("sessao-1", { estudados: 2, acertos: 1 }, {
+            origem: "temporario",
+          }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Estudo com baralho temporário/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Estudo com baralho temporário/ }),
+    ).toBeInTheDocument();
+  });
+
   it("mostra o instante cru quando a data não é legível", () => {
     render(
       <UltimasSessoes

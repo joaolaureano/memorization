@@ -104,6 +104,14 @@ const REGISTRO_DA_REVISAO: RegistroDeSessao = {
   ],
 };
 
+/** Um Registro do baralho temporário (FR-376). */
+const REGISTRO_TEMPORARIO: RegistroDeSessao = {
+  ...REGISTRO_DA_REVISAO,
+  id: "sessao-3",
+  origem: "temporario",
+  nomeDoBaralho: "Baralho temporário",
+};
+
 describe("PaginaDoRegistro", () => {
   it("mostra a Sessão, o Baralho vivo e o resumo dos acertos", async () => {
     const idsPedidos: string[] = [];
@@ -148,6 +156,31 @@ describe("PaginaDoRegistro", () => {
     expect(screen.queryByRole("link", { name: "Ver baralho" })).toBeNull();
     // O que foi estudado continua à vista (FR-166).
     expect(screen.getByText("Inglês")).toBeTruthy();
+  });
+
+  it("mostra 'Estudo com baralho temporário' sem selo nem link para Baralho (FR-376)", async () => {
+    render(
+      <PaginaDoRegistro
+        cliente={clienteComRegistro(async () => ({
+          ok: true,
+          registro: REGISTRO_TEMPORARIO,
+          baralhoExiste: false,
+        }))}
+        id="sessao-3"
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Sessão concluída" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Estudo com baralho temporário"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Baralho excluído")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Ver baralho" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Baralho temporário")).not.toBeInTheDocument();
   });
 
   it("mostra 'Revisão do dia' sem selo nem link para Baralho (FR-215)", async () => {

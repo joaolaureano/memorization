@@ -401,11 +401,16 @@ function totalDeItens(registros: RegistroResumido[]): number {
   return registros.reduce((total, registro) => total + registro.estudados, 0);
 }
 
-/** O nome da Sessão: o Baralho, ou a Revisão do dia quando foi ela (FR-315). */
+/**
+ * O nome da Sessão: o Baralho, a Revisão do dia quando foi ela (FR-315) ou o
+ * estudo com baralho temporário (FR-376).
+ */
 function tituloDaSessao(registro: RegistroResumido): string {
   return registro.origem === "revisao"
     ? "Revisão do dia"
-    : registro.nomeDoBaralho;
+    : registro.origem === "temporario"
+      ? "Estudo com baralho temporário"
+      : registro.nomeDoBaralho;
 }
 
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-315). */

@@ -26,6 +26,10 @@ import { ResumoDaSessao } from "./ResumoDaSessao";
  * Registros de estudo livre e os anteriores à 015 seguem exatamente como antes
  * (FR-178, FR-197, FR-214).
  *
+ * O estudo com baralho temporário também não pertence a Baralho: salvar a
+ * seleção como Baralho depois não renomeia nem reclassifica o Registro
+ * (FR-376).
+ *
  * Um Registro inexistente — ou de outro Usuário, que o isolamento por
  * Credencial não devolve (FR-092) — não se apresenta como tela vazia: diz que
  * não o encontrou e oferece a volta para Estudo (FR-179, FR-323). A falha de
@@ -145,15 +149,21 @@ export function PaginaDoRegistro({
 /** O nome próprio da Revisão do dia, exibido no lugar do Baralho (FR-215). */
 const TITULO_DA_REVISAO = "Revisão do dia";
 
+/** O nome do estudo com baralho temporário (FR-376). */
+const TITULO_DO_TEMPORARIO = "Estudo com baralho temporário";
+
 /**
- * O título do Registro: o nome do Baralho no estudo livre ou o nome próprio da
- * Revisão do dia (FR-215). Registros anteriores à 015 são de estudo livre e
- * seguem trazendo o nome do Baralho (FR-197).
+ * O título do Registro: o nome do Baralho no estudo livre, o nome próprio da
+ * Revisão do dia (FR-215) ou o do estudo com baralho temporário (FR-376).
+ * Registros anteriores à 015 são de estudo livre e seguem trazendo o nome do
+ * Baralho (FR-197).
  */
 function tituloDaSessao(registro: RegistroDeSessao): string {
   return registro.origem === "revisao"
     ? TITULO_DA_REVISAO
-    : registro.nomeDoBaralho;
+    : registro.origem === "temporario"
+      ? TITULO_DO_TEMPORARIO
+      : registro.nomeDoBaralho;
 }
 
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-177). */
