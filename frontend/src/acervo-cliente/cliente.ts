@@ -40,13 +40,18 @@ export interface Cartao {
 
 /**
  * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
- * está vinculado (FR-003). O Cartão sem nenhum Baralho devolve `baralhos: []`
- * — estado legítimo, e não ausência de campo. `criarCartao` e `editarCartao`
- * continuam devolvendo apenas `Cartao`, sem carregar campos que a escrita não
- * exige.
+ * está vinculado (FR-003) e a próxima revisão do seu Agendamento (FR-352). O
+ * Cartão sem nenhum Baralho devolve `baralhos: []` — estado legítimo, e não
+ * ausência de campo. `criarCartao` e `editarCartao` continuam devolvendo
+ * apenas `Cartao`, sem carregar campos que a escrita não exige.
  */
 export interface CartaoListado extends Cartao {
   baralhos: Baralho[];
+  /**
+   * ISO-8601 da próxima revisão do Agendamento do Cartão, ou `null` quando o
+   * Cartão não tem Agendamento (FR-352).
+   */
+  proximaRevisaoEm: string | null;
 }
 
 /**

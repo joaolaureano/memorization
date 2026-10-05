@@ -372,6 +372,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
           .map((cartao) => ({
             ...cartaoPublicado(cartao),
             baralhos: baralhosDoCartao(donoId, cartao.id),
+            proximaRevisaoEm: null,
           })),
       );
     }
@@ -699,7 +700,7 @@ function executarBateriaDoContrato(
 
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...criacao.cartao, baralhos: [] }],
+        cartoes: [{ ...criacao.cartao, baralhos: [], proximaRevisaoEm: null }],
       });
     });
 
@@ -731,8 +732,8 @@ function executarBateriaDoContrato(
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
         cartoes: expect.arrayContaining([
-          { ...primeiro.cartao, baralhos: [] },
-          { ...segundo.cartao, baralhos: [] },
+          { ...primeiro.cartao, baralhos: [], proximaRevisaoEm: null },
+          { ...segundo.cartao, baralhos: [], proximaRevisaoEm: null },
         ]),
       });
     });
@@ -757,6 +758,7 @@ function executarBateriaDoContrato(
           "baralhos",
           "frente",
           "id",
+          "proximaRevisaoEm",
           "verso",
         ]);
         expect(cartao.id).toEqual(expect.any(String));
@@ -788,7 +790,7 @@ function executarBateriaDoContrato(
       ]);
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...criacao.cartao, baralhos: [] }],
+        cartoes: [{ ...criacao.cartao, baralhos: [], proximaRevisaoEm: null }],
       });
     });
 
@@ -1274,8 +1276,9 @@ function executarBateriaDeVinculos(
           {
             ...cartao.cartao,
             baralhos: [primeiroBaralho.baralho, segundoBaralho.baralho],
+            proximaRevisaoEm: null,
           },
-          { ...cartaoSemBaralho.cartao, baralhos: [] },
+          { ...cartaoSemBaralho.cartao, baralhos: [], proximaRevisaoEm: null },
         ],
       });
     });
@@ -1368,7 +1371,7 @@ function executarBateriaDeVinculos(
       });
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
       });
       expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
         ok: true,
@@ -1463,6 +1466,7 @@ function executarBateriaDeEdicao(
             frente: "To run",
             verso: "Correr",
             baralhos: [],
+            proximaRevisaoEm: null,
           },
         ],
       });
@@ -1520,7 +1524,7 @@ function executarBateriaDeEdicao(
       });
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
       });
     });
 
@@ -1724,8 +1728,8 @@ function executarBateriaDeExclusao(
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
         cartoes: expect.arrayContaining([
-          { ...primeiroCartao.cartao, baralhos: [] },
-          { ...segundoCartao.cartao, baralhos: [] },
+          { ...primeiroCartao.cartao, baralhos: [], proximaRevisaoEm: null },
+          { ...segundoCartao.cartao, baralhos: [], proximaRevisaoEm: null },
         ]),
       });
     });
@@ -1747,7 +1751,7 @@ function executarBateriaDeExclusao(
 
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [] }],
+        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
       });
     });
 
@@ -2229,6 +2233,7 @@ function executarBateriaDeEntrada(
             frente: FRENTE_VALIDA,
             verso: VERSO_VALIDO,
             baralhos: [],
+            proximaRevisaoEm: null,
           },
         ],
       });
@@ -2392,6 +2397,7 @@ function executarBateriaDeEntrada(
             frente: FRENTE_VALIDA,
             verso: VERSO_VALIDO,
             baralhos: [{ id: baralho.baralho.id, nome: NOME_VALIDO }],
+            proximaRevisaoEm: null,
           },
         ],
       });
@@ -2869,6 +2875,69 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
     });
     expect(await cliente.listarCartoes()).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+    });
+  });
+
+  it("trata como indisponivel o Cartão listado sem proximaRevisaoEm (contrato da 022, FR-044)", async () => {
+    const cliente = clienteHttpCom(async () =>
+      respostaDeTeste(200, [
+        {
+          id: "c1",
+          frente: "To walk",
+          verso: "Caminhar",
+          baralhos: [],
+        },
+      ]),
+    );
+
+    expect(await cliente.listarCartoes()).toEqual({
+      ok: false,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+    });
+  });
+
+  it("aceita proximaRevisaoEm como texto ISO ou null e o devolve como veio (contrato da 022, FR-352)", async () => {
+    const cartoes = [
+      {
+        id: "c1",
+        frente: "To walk",
+        verso: "Caminhar",
+        baralhos: [],
+        proximaRevisaoEm: "2026-10-04T15:00:00.000Z",
+      },
+      {
+        id: "c2",
+        frente: "To read",
+        verso: "Ler",
+        baralhos: [],
+        proximaRevisaoEm: null,
+      },
+    ];
+
+    const cliente = clienteHttpCom(async () => respostaDeTeste(200, cartoes));
+
+    expect(await cliente.listarCartoes()).toEqual({
+      ok: true,
+      cartoes,
+    });
+
+    const clienteComPrazoInvalido = clienteHttpCom(async () =>
+      respostaDeTeste(200, [
+        {
+          id: "c3",
+          frente: "To write",
+          verso: "Escrever",
+          baralhos: [],
+          proximaRevisaoEm: 42,
+        },
+      ]),
+    );
+
+    expect(await clienteComPrazoInvalido.listarCartoes()).toEqual({
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE,

@@ -353,6 +353,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         .map((cartao) => ({
           ...cartaoSemDono(cartao),
           baralhos: this.baralhosDoCartao(dono.id, cartao.id),
+          proximaRevisaoEm: this.proximaRevisaoDoCartao(dono.id, cartao.id),
         })),
     };
   }
@@ -1672,6 +1673,21 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       )
       .filter((baralho): baralho is BaralhoDoDono => baralho !== undefined)
       .map((baralho) => baralhoSemDono(baralho));
+  }
+
+  /**
+   * A próxima revisão do Agendamento do dono para aquele Cartão, em ISO-8601,
+   * ou `null` quando não há Agendamento (FR-352).
+   */
+  private proximaRevisaoDoCartao(
+    usuarioId: string,
+    cartaoId: string,
+  ): string | null {
+    const agendamento = this.base.agendamentos.find(
+      (item) => item.usuarioId === usuarioId && item.cartaoId === cartaoId,
+    );
+
+    return agendamento?.proximaRevisaoEm ?? null;
   }
 
   private removerVinculosDoCartao(usuarioId: string, cartaoId: string): void {

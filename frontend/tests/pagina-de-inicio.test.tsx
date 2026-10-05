@@ -43,6 +43,7 @@ function cartaoDeProva(id: string): CartaoListado {
     frente: `Frente ${id}`,
     verso: `Verso ${id}`,
     baralhos: [],
+    proximaRevisaoEm: null,
   };
 }
 

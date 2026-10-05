@@ -1658,7 +1658,11 @@ function lerCartaoListado(corpo: unknown): CartaoListado | null {
 
   const campos = corpo as Record<string, unknown>;
 
-  if (!Array.isArray(campos.baralhos)) {
+  if (
+    !Array.isArray(campos.baralhos) ||
+    (campos.proximaRevisaoEm !== null &&
+      typeof campos.proximaRevisaoEm !== "string")
+  ) {
     return null;
   }
 
@@ -1674,7 +1678,7 @@ function lerCartaoListado(corpo: unknown): CartaoListado | null {
     baralhos.push(baralho);
   }
 
-  return { ...cartao, baralhos };
+  return { ...cartao, baralhos, proximaRevisaoEm: campos.proximaRevisaoEm };
 }
 
 function lerListaDeCartoesListados(corpo: unknown): CartaoListado[] | null {
