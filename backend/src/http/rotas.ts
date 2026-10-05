@@ -51,6 +51,43 @@ const corpoDeCartao = z.object({
 });
 
 /**
+ * FR-371 — forma do corpo de `POST /baralhos/de-selecao`: o `id` é o UUID
+ * gerado pelo cliente uma vez por tentativa de salvar, `nome` segue as regras
+ * de Baralho e `cartaoIds` é a seleção enviada. A validação semântica (UUID,
+ * limites de `cartaoIds`, nome aparado) é do `Acervo`; aqui só a forma.
+ */
+const corpoDeSelecaoParaBaralho = z.object({
+  id: z.string(),
+  nome: z.string(),
+  cartaoIds: z.array(z.string()),
+});
+
+/**
+ * FR-374 — resposta de forma inválida ou de dados recusados pelo `Acervo`.
+ * Única mensagem em português para os dois casos, sem detalhar o motivo.
+ */
+const DADOS_DA_SELECAO_INVALIDOS = {
+  erro: "dados_invalidos",
+  mensagem: "Os dados da seleção são inválidos.",
+};
+
+/**
+ * FR-374 — mensagem do 409 de Cartões que não existem ou não são do Usuário.
+ * A lista de ids acompanha a resposta e nunca revela dados alheios.
+ */
+const CARTOES_INDISPONIVEIS_MENSAGEM =
+  "Alguns cartões não estão mais disponíveis.";
+
+/**
+ * FR-374 — resposta do 409 de colisão de `id` com outro Usuário; nada foi
+ * gravado e a mesma tentativa pode ser repetida.
+ */
+const CONFLITO_DE_BARALHO = {
+  erro: "conflito",
+  mensagem: "Não foi possível salvar o baralho. Tente novamente.",
+};
+
+/**
  * Forma do corpo de `POST /baralhos` e `PUT /baralhos/{id}`: exatamente o
  * nome, texto (FR-010). O esquema **não é estrito**: propriedade extra é
  * descartada na borda e nunca alcança o `Acervo` nem as leituras — a
@@ -394,6 +431,55 @@ export function registrarRotasDeBaralhos(
     }
 
     return resposta.status(201).send(resultado.baralho);
+  });
+
+  /**
+   * FR-371 a FR-374 — `POST /baralhos/de-selecao`: cria, num gesto único, um
+   * Baralho com Vínculos para os Cartões informados. O `id` enviado pelo
+   * cliente torna o reenvio idempotente: o mesmo `id` devolve `200` com o mesmo
+   * Baralho e nada é gravado de novo; um `id` novo devolve `201`. Corpo fora da
+   * forma, nome inválido e dados recusados são `400`; Cartões indisponíveis e
+   * colisão de `id` são `409`; falha do armazenamento é a indisponibilidade
+   * vigente, sem gravação parcial.
+   */
+  servidor.post("/baralhos/de-selecao", async (requisicao, resposta) => {
+    const corpo = corpoDeSelecaoParaBaralho.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(DADOS_DA_SELECAO_INVALIDOS);
+    }
+
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const resultado = await acervo.salvarSelecaoComoBaralho(corpo.data);
+
+    if (!resultado.ok) {
+      if (resultado.erro === "indisponivel") {
+        return responderIndisponivel(resposta, resultado);
+      }
+
+      if (resultado.erro === "cartoes_indisponiveis") {
+        return resposta.status(409).send({
+          erro: resultado.erro,
+          mensagem: CARTOES_INDISPONIVEIS_MENSAGEM,
+          cartaoIds: resultado.cartaoIds,
+        });
+      }
+
+      if (resultado.erro === "conflito") {
+        return resposta.status(409).send(CONFLITO_DE_BARALHO);
+      }
+
+      if (resultado.erro === "dados_invalidos") {
+        return resposta.status(400).send(DADOS_DA_SELECAO_INVALIDOS);
+      }
+
+      return resposta.status(400).send({
+        erro: resultado.erro,
+        mensagem: resultado.mensagem,
+      });
+    }
+
+    return resposta.status(resultado.novo ? 201 : 200).send(resultado.baralho);
   });
 
   servidor.get("/baralhos", async (requisicao) =>

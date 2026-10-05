@@ -142,6 +142,51 @@ export type ResultadoDeCriacaoDeBaralho =
     };
 
 /**
+ * Dados brutos recebidos por `salvarSelecaoComoBaralho` para criar um Baralho
+ * a partir de uma seleção de Cartões (FR-371–FR-374).
+ *
+ * - `id`: UUID gerado pelo cliente **uma vez por tentativa de salvar** e
+ *   reenviado em novas tentativas; é o que torna o gesto idempotente.
+ * - `nome`: regras vigentes de Baralho (não vazio após aparar, até 100
+ *   caracteres); nomes repetidos são permitidos.
+ * - `cartaoIds`: de 1 a 1.000 strings não vazias e sem repetição.
+ *
+ * Os campos são `unknown` de propósito: a validação da forma é
+ * responsabilidade do Acervo, não do chamador.
+ */
+export interface DadosDeSelecaoParaBaralho {
+  id: unknown;
+  nome: unknown;
+  cartaoIds: unknown;
+}
+
+/**
+ * Resultado de `salvarSelecaoComoBaralho` (FR-371–FR-374).
+ *
+ * - `{ ok: true, baralho, novo }`: `novo` é `true` quando o Baralho e os
+ *   Vínculos foram gravados agora; `false` no reenvio do mesmo `id` pelo mesmo
+ *   Usuário, sem gravar nada de novo (FR-372).
+ * - `{ ok: false, erro: CodigoDeErroDeBaralho, mensagem }`: nome inválido, com
+ *   as mensagens de Baralho vigentes.
+ * - `{ ok: false, erro: "dados_invalidos" }`: corpo fora da forma — `id` que
+ *   não é UUID, `nome` que não é string, `cartaoIds` vazio, repetido, não-lista
+ *   ou com mais de 1.000 ids (FR-373).
+ * - `{ ok: false, erro: "cartoes_indisponiveis", cartaoIds }`: algum Cartão não
+ *   existe ou é de outro Usuário; nada é gravado e a lista devolve apenas os
+ *   ids enviados pelo cliente (FR-374).
+ * - `{ ok: false, erro: "conflito" }`: o `id` já pertence a outro Usuário.
+ * - `{ ok: false, erro: "indisponivel", mensagem }`: falha do armazenamento;
+ *   nada é gravado parcialmente.
+ */
+export type ResultadoDeSalvarSelecao =
+  | { ok: true; baralho: Baralho; novo: boolean }
+  | { ok: false; erro: CodigoDeErroDeBaralho; mensagem: string }
+  | { ok: false; erro: "dados_invalidos" }
+  | { ok: false; erro: "cartoes_indisponiveis"; cartaoIds: string[] }
+  | { ok: false; erro: "conflito" }
+  | { ok: false; erro: "indisponivel"; mensagem: string };
+
+/**
  * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
  * está vinculado e a próxima revisão do seu Agendamento. O Cartão sem nenhum
  * Baralho devolve `baralhos: []` — estado legítimo, e não ausência de campo.
@@ -442,6 +487,21 @@ export interface Acervo {
    * dois Baralhos de mesmo nome são ambos aceitos (FR-012).
    */
   criarBaralho(dados: DadosDeBaralho): Promise<ResultadoDeCriacaoDeBaralho>;
+
+  /**
+   * Salva uma seleção de Cartões como um Baralho novo, num gesto único
+   * (FR-371–FR-374).
+   *
+   * Baralho e Vínculos são gravados numa única transação: ou tudo, ou nada.
+   * O `id` é o UUID da tentativa de salvar: reenviá-lo devolve o mesmo Baralho
+   * com `novo: false`, sem duplicar nada (FR-372). Seleção fora da forma
+   * devolve `dados_invalidos` (FR-373); Cartão inexistente ou alheio devolve
+   * `cartoes_indisponiveis` com os ids enviados, sem gravar nada e sem alterar
+   * Cartões, Vínculos anteriores ou Agendamentos (FR-374).
+   */
+  salvarSelecaoComoBaralho(
+    dados: DadosDeSelecaoParaBaralho,
+  ): Promise<ResultadoDeSalvarSelecao>;
 
   /**
    * Lista todos os Cartões existentes, cada um com sua Frente, seu Verso e
@@ -920,6 +980,43 @@ function interpretarJanela(desde: unknown, agora: Date): string | null {
 }
 
 /**
+ * Interpreta `cartaoIds` de uma seleção: lista de 1 a
+ * `LIMITE_DE_ITENS_REGISTRADOS` strings que sobram não vazias depois de
+ * `trim()`, sem repetição. Devolve os ids aparados, na ordem recebida, ou
+ * `null` quando a forma não é aceita (não-lista, vazia, grande demais, item
+ * não-string, item vazio ou id repetido) — FR-373.
+ */
+function interpretarCartaoIdsDaSelecao(valor: unknown): string[] | null {
+  if (!Array.isArray(valor)) {
+    return null;
+  }
+
+  if (valor.length === 0 || valor.length > LIMITE_DE_ITENS_REGISTRADOS) {
+    return null;
+  }
+
+  const vistos = new Set<string>();
+  const cartaoIds: string[] = [];
+
+  for (const item of valor) {
+    if (typeof item !== "string") {
+      return null;
+    }
+
+    const cartaoId = item.trim();
+
+    if (cartaoId.length === 0 || vistos.has(cartaoId)) {
+      return null;
+    }
+
+    vistos.add(cartaoId);
+    cartaoIds.push(cartaoId);
+  }
+
+  return cartaoIds;
+}
+
+/**
  * Interpreta a lista crua de identificadores de Cartão de `obterPrevias`.
  *
  * Devolve `null` quando não é uma lista de 1 a 200 strings não vazias
@@ -1227,6 +1324,58 @@ export function criarAcervo(
       }
 
       return { ok: true, baralho: gravado.valor };
+    },
+
+    async salvarSelecaoComoBaralho(dados) {
+      const { id, nome, cartaoIds } = dados;
+
+      if (typeof id !== "string" || !IDENTIFICADOR_UNICO_UNIVERSAL.test(id)) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      if (typeof nome !== "string") {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const falhaNoNome = validarNomeDeBaralho(nome);
+
+      if (falhaNoNome !== null) {
+        return { ok: false, ...falhaNoNome };
+      }
+
+      const cartoesDaSelecao = interpretarCartaoIdsDaSelecao(cartaoIds);
+
+      if (cartoesDaSelecao === null) {
+        return { ok: false, ...DADOS_INVALIDOS };
+      }
+
+      const resultado = await armazenamento.inserirBaralhoComVinculos(
+        usuarioId,
+        { id, nome },
+        cartoesDaSelecao,
+      );
+
+      if (resultado.ok) {
+        return {
+          ok: true,
+          baralho: resultado.valor.baralho,
+          novo: resultado.valor.novo,
+        };
+      }
+
+      if (resultado.erro === "cartoes_indisponiveis") {
+        return {
+          ok: false,
+          erro: "cartoes_indisponiveis",
+          cartaoIds: resultado.cartaoIds,
+        };
+      }
+
+      if (resultado.erro === "conflito") {
+        return { ok: false, erro: "conflito" };
+      }
+
+      return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
     },
 
     async listarCartoes() {

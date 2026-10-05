@@ -389,6 +389,23 @@ describe("CORS para o frontend local", () => {
     expect(resposta.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
+  it("responde 204 ao pré-voo de POST /baralhos/de-selecao liberando a origem do frontend", async () => {
+    const resposta = await pedir({
+      method: "OPTIONS",
+      url: "/baralhos/de-selecao",
+      headers: {
+        origin: ORIGEM_DO_FRONTEND,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization, content-type",
+      },
+    });
+
+    expect(resposta.statusCode).toBe(204);
+    expect(resposta.headers["access-control-allow-origin"]).toBe(
+      ORIGEM_DO_FRONTEND,
+    );
+  });
+
   it("responde ao pré-voo de POST /previas com 204 e lê a resposta com access-control-allow-origin (FR-221)", async () => {
     const preVoo = await pedir({
       method: "OPTIONS",
