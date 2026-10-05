@@ -74,3 +74,7 @@ MVP: T2203 + T2204 (busca de Baralhos). Em seguida, o contrato (T2201–T2202) e
 | FR-358 | T2204, T2206, T2208 | testes de página, busca-e-filtros-responsividade.spec.ts |
 | FR-359 | T2201, T2202, T2207 | testes de backend, busca-e-filtros.spec.ts |
 | SC-138–SC-142 | T2207, T2208 | e2e |
+
+## Phase 7: Convergence
+
+- [X] T2211 CRITICAL: refazer pela via delegada as duas edições de prova escritas diretamente pelo Arquiteto (fixture `proximaRevisaoEm: null` em frontend/tests/pagina-de-inicio.test.tsx; regiões `status` vazias na falha em frontend/tests/leitor-de-tela.test.tsx) per Constitution XI (contradicts)

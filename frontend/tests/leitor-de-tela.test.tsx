@@ -128,8 +128,7 @@ describe("PaginaDeCartoes para leitor de tela", () => {
     expect(alerta).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE);
     expect(alerta).not.toHaveAttribute("aria-live");
     expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeInTheDocument();
-    // A faixa de contagem da busca (spec 022) é `role="status"`, mas fica
-    // vazia na falha: nenhum anúncio polido compete com o alerta.
+    // A faixa de contagem (role="status") existe sempre, mas deve ficar vazia durante a falha para não competir com o alerta.
     for (const regiao of screen.queryAllByRole("status")) {
       expect(regiao).toBeEmptyDOMElement();
     }
