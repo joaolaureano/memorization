@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { CartaoListado, ClienteDoAcervo } from "../acervo-cliente/cliente";
+import type {
+  BaralhoListado,
+  CartaoListado,
+  ClienteDoAcervo,
+} from "../acervo-cliente/cliente";
+import {
+  filtrarCartoes,
+  type FiltroDeBaralho,
+  type FiltroDeSituacao,
+} from "../acervo-cliente/busca-no-acervo";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
@@ -39,6 +48,19 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   const [cartoes, setCartoes] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [falhaDeListagem, setFalhaDeListagem] = useState<string | null>(null);
+  const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
+
+  /**
+   * Os critérios de busca vivem enquanto a página está montada: recarregar a
+   * lista ou excluir um Cartão não os zera. Só "Limpar filtros" os apaga
+   * (FR-354, FR-357).
+   */
+  const [consulta, setConsulta] = useState("");
+  const [filtroDeBaralho, setFiltroDeBaralho] =
+    useState<FiltroDeBaralho>("todos");
+  const [filtroDeSituacao, setFiltroDeSituacao] =
+    useState<FiltroDeSituacao>("todos");
+  const campoDeBusca = useRef<HTMLInputElement>(null);
 
   const [cartaoParaExcluir, setCartaoParaExcluir] =
     useState<CartaoListado | null>(null);
@@ -66,15 +88,29 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   useEffect(() => {
     let ativo = true;
 
-    void cliente.listarCartoes().then((resultado) => {
+    void Promise.all([
+      cliente.listarCartoes(),
+      cliente.listarBaralhos(),
+    ]).then(([resultadoDeCartoes, resultadoDeBaralhos]) => {
       if (!ativo) {
         return;
       }
 
-      if (resultado.ok) {
-        setCartoes(resultado.cartoes);
-      } else {
-        setFalhaDeListagem(resultado.mensagem);
+      if (resultadoDeCartoes.ok) {
+        setCartoes(resultadoDeCartoes.cartoes);
+      }
+
+      if (resultadoDeBaralhos.ok) {
+        setBaralhos(resultadoDeBaralhos.baralhos);
+        setFiltroDeBaralho((atual) =>
+          filtroDeBaralhoValido(atual, resultadoDeBaralhos.baralhos),
+        );
+      }
+
+      if (!resultadoDeCartoes.ok) {
+        setFalhaDeListagem(resultadoDeCartoes.mensagem);
+      } else if (!resultadoDeBaralhos.ok) {
+        setFalhaDeListagem(resultadoDeBaralhos.mensagem);
       }
 
       setCarregando(false);
@@ -109,24 +145,51 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
   }, [cartaoParaExcluir, focoAposExclusao]);
 
   /**
-   * Relê a lista pela Interface (FR-044, FR-153).
+   * Relê Cartões e Baralhos pela Interface (FR-044, FR-153).
    *
    * A releitura também é o caminho de "Tentar novamente" na falha: nenhuma
    * mensagem é inventada, e a lista volta a retratar o acervo autoritativo.
+   * Os critérios de busca já escolhidos são preservados (FR-357), exceto um
+   * filtro de Baralho que tenha deixado de existir.
    */
   async function carregarCartoes(): Promise<void> {
     setCarregando(true);
     setFalhaDeListagem(null);
 
-    const resultado = await cliente.listarCartoes();
+    const [resultadoDeCartoes, resultadoDeBaralhos] = await Promise.all([
+      cliente.listarCartoes(),
+      cliente.listarBaralhos(),
+    ]);
 
-    if (resultado.ok) {
-      setCartoes(resultado.cartoes);
-    } else {
-      setFalhaDeListagem(resultado.mensagem);
+    if (resultadoDeCartoes.ok) {
+      setCartoes(resultadoDeCartoes.cartoes);
+    }
+
+    if (resultadoDeBaralhos.ok) {
+      setBaralhos(resultadoDeBaralhos.baralhos);
+      setFiltroDeBaralho((atual) =>
+        filtroDeBaralhoValido(atual, resultadoDeBaralhos.baralhos),
+      );
+    }
+
+    if (!resultadoDeCartoes.ok) {
+      setFalhaDeListagem(resultadoDeCartoes.mensagem);
+    } else if (!resultadoDeBaralhos.ok) {
+      setFalhaDeListagem(resultadoDeBaralhos.mensagem);
     }
 
     setCarregando(false);
+  }
+
+  /**
+   * Apaga todos os critérios de busca e devolve o foco ao campo de consulta
+   * (FR-354).
+   */
+  function limparFiltros(): void {
+    setConsulta("");
+    setFiltroDeBaralho("todos");
+    setFiltroDeSituacao("todos");
+    campoDeBusca.current?.focus();
   }
 
   function abrirExclusao(cartao: CartaoListado): void {
@@ -202,6 +265,13 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     };
   }
 
+  const cartoesFiltrados = filtrarCartoes(
+    cartoes,
+    { consulta, baralho: filtroDeBaralho, situacao: filtroDeSituacao },
+    new Date(),
+  );
+  const listaCarregada = !carregando && falhaDeListagem === null;
+
   return (
     <div className="pagina">
       <header className="cabecalho-da-pagina">
@@ -217,6 +287,71 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
           Criar cartão
         </a>
       </header>
+
+      <section className="filtros" aria-label="Busca e filtros">
+        <div className="campo">
+          <label className="rotulo" htmlFor="busca-de-cartoes">
+            Buscar cartões
+          </label>
+          <input
+            id="busca-de-cartoes"
+            type="search"
+            autoComplete="off"
+            placeholder="Buscar na frente ou no verso"
+            value={consulta}
+            onChange={(evento) => setConsulta(evento.target.value)}
+            ref={campoDeBusca}
+          />
+        </div>
+        <div className="campo">
+          <label className="rotulo" htmlFor="filtro-de-baralho">
+            Baralho
+          </label>
+          <select
+            id="filtro-de-baralho"
+            value={filtroDeBaralho}
+            onChange={(evento) => setFiltroDeBaralho(evento.target.value)}
+          >
+            <option value="todos">Todos</option>
+            <option value="sem-baralho">Sem baralho</option>
+            {baralhos.map((baralho) => (
+              <option key={baralho.id} value={baralho.id}>
+                {baralho.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="campo">
+          <label className="rotulo" htmlFor="filtro-de-situacao">
+            Situação da revisão
+          </label>
+          <select
+            id="filtro-de-situacao"
+            value={filtroDeSituacao}
+            onChange={(evento) =>
+              setFiltroDeSituacao(evento.target.value as FiltroDeSituacao)
+            }
+          >
+            <option value="todos">Todos</option>
+            <option value="novos">Novos</option>
+            <option value="revisao-pendente">Revisão pendente</option>
+            <option value="em-dia">Em dia</option>
+          </select>
+        </div>
+      </section>
+
+      <div className="resultado-cabecalho">
+        <p role="status" aria-live="polite" aria-atomic="true">
+          {listaCarregada ? contagemDeResultados(cartoesFiltrados.length) : null}
+        </p>
+        <button
+          type="button"
+          className="botao botao--secundario"
+          onClick={limparFiltros}
+        >
+          Limpar filtros
+        </button>
+      </div>
 
       {anuncio !== null && (
         <p
@@ -269,9 +404,21 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
             }
           />
         </div>
+      ) : cartoesFiltrados.length === 0 ? (
+        <div className="estado-vazio">
+          <h2>Nenhum resultado encontrado</h2>
+          <p>Altere a busca ou limpe os filtros para ver o acervo.</p>
+          <button
+            type="button"
+            className="botao botao--secundario"
+            onClick={limparFiltros}
+          >
+            Limpar filtros
+          </button>
+        </div>
       ) : (
         <ul className="lista lista--compacta">
-          {cartoes.map((cartao) => (
+          {cartoesFiltrados.map((cartao) => (
             <li key={cartao.id} className="linha-da-lista">
               <div className="linha-da-lista__texto">
                 <p className="linha-da-lista__titulo">{cartao.frente}</p>
@@ -314,6 +461,29 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
       )}
     </div>
   );
+}
+
+/**
+ * Descreve a quantidade de resultados em linguagem corrente (FR-354).
+ */
+function contagemDeResultados(quantidade: number): string {
+  return quantidade === 1 ? "1 resultado" : `${quantidade} resultados`;
+}
+
+/**
+ * Mantém o filtro de Baralho coerente com o acervo (FR-357): "todos" e
+ * "sem-baralho" são sempre válidos; um identificador inexistente volta a
+ * "todos".
+ */
+function filtroDeBaralhoValido(
+  atual: FiltroDeBaralho,
+  baralhos: readonly BaralhoListado[],
+): FiltroDeBaralho {
+  if (atual === "todos" || atual === "sem-baralho") {
+    return atual;
+  }
+
+  return baralhos.some((baralho) => baralho.id === atual) ? atual : "todos";
 }
 
 /**

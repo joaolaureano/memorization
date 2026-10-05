@@ -74,7 +74,7 @@ Contrato de UI em [contracts/ui.md](contracts/ui.md), derivado do protótipo:
 - **Cartões** (`PaginaDeCartoes.tsx`): painel com «Buscar cartões», «Baralho» e «Situação da revisão»; mesma faixa de contagem. As opções de Baralho vêm de `listarBaralhos`, para incluir Baralhos sem Cartões, e são lidas junto com a lista. A falha de qualquer das duas leituras é falha da página, com nova tentativa que preserva os critérios.
 - Estados: carregando e falha (sem contagem), acervo vazio (estado existente), «Nenhum resultado encontrado» com Limpar filtros e lista. Limpar filtros devolve o foco à busca.
 - A contagem fica numa região `role="status"` com `aria-live="polite"`; o foco nunca sai da busca ao digitar.
-- Exclusão de Cartão: mantém diálogo e anúncio. Os critérios permanecem, a contagem é atualizada e o foco vai ao próximo botão Excluir visível ou ao título da página.
+- Exclusão de Cartão: mantém diálogo e anúncio. Os critérios permanecem, a contagem é atualizada e o foco vai ao título da página, como já fazia antes desta feature.
 - CSS: `.filtros` e `.resultado-cabecalho` entram em `estilos.css`, com as mesmas regras do protótipo. As regras próprias da galeria do protótipo não entram.
 
 ### Testes

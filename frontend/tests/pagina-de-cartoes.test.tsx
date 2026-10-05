@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
+import {
+  INDISPONIVEL,
+  MENSAGEM_DE_INDISPONIBILIDADE,
+  type BaralhoListado,
+  type CartaoListado,
+  type ClienteDoAcervo,
+} from "../src/acervo-cliente/cliente";
 import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
 
@@ -145,5 +151,353 @@ describe("PaginaDeCartoes", () => {
 
     expect(await screen.findByText(/ainda não há Cartões/i)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("PaginaDeCartoes — busca e filtros (022)", () => {
+  /**
+   * Duplo local da Seam `ClienteDoAcervo`: devolve os dados informados, simula
+   * indisponibilidade nas primeiras `vezes` chamadas de `listarCartoes` e
+   * remove do acervo o Cartão excluído (FR-044).
+   */
+  function clienteFalso(
+    dados: { cartoes: CartaoListado[]; baralhos: BaralhoListado[] },
+    opcoes: { falharCartoes?: { vezes: number } } = {},
+  ): ClienteDoAcervo {
+    let falhasRestantes = opcoes.falharCartoes?.vezes ?? 0;
+
+    return {
+      async listarCartoes() {
+        if (falhasRestantes > 0) {
+          falhasRestantes -= 1;
+
+          return {
+            ok: false,
+            erro: INDISPONIVEL,
+            mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+          };
+        }
+
+        return { ok: true, cartoes: [...dados.cartoes] };
+      },
+      async listarBaralhos() {
+        return { ok: true, baralhos: dados.baralhos };
+      },
+      async excluirCartao(id: string) {
+        dados.cartoes = dados.cartoes.filter((cartao) => cartao.id !== id);
+
+        return { ok: true };
+      },
+    } as unknown as ClienteDoAcervo;
+  }
+
+  /**
+   * Acervo de prova com datas relativas a hoje: a Situação da revisão depende
+   * do dia em que a prova roda.
+   */
+  function dadosDeProva(): {
+    cartoes: CartaoListado[];
+    baralhos: BaralhoListado[];
+  } {
+    const hoje = new Date();
+    const ontem = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth(),
+      hoje.getDate() - 1,
+      12,
+    ).toISOString();
+    const amanha = new Date(
+      hoje.getFullYear(),
+      hoje.getMonth(),
+      hoje.getDate() + 1,
+      12,
+    ).toISOString();
+
+    const ingles = { id: "b1", nome: "Inglês cotidiano" };
+    const viagens = { id: "b2", nome: "Viagens" };
+
+    const cartoes: CartaoListado[] = [
+      {
+        id: "c1",
+        frente: "How are you?",
+        verso: "Como você está?",
+        baralhos: [ingles, viagens],
+        proximaRevisaoEm: ontem,
+      },
+      {
+        id: "c2",
+        frente: "Where is the station?",
+        verso: "Onde fica a estação?",
+        baralhos: [ingles],
+        proximaRevisaoEm: null,
+      },
+      {
+        id: "c3",
+        frente: "Qual é a função das mitocôndrias?",
+        verso: "Produzir ATP pela respiração celular.",
+        baralhos: [],
+        proximaRevisaoEm: amanha,
+      },
+      {
+        id: "c4",
+        frente: "O que é osmose?",
+        verso: "Passagem de água pela membrana celular.",
+        baralhos: [],
+        proximaRevisaoEm: null,
+      },
+    ];
+
+    const baralhos: BaralhoListado[] = [
+      {
+        id: "b1",
+        nome: "Inglês cotidiano",
+        quantidadeDeCartoes: 2,
+        elegivel: true,
+      },
+      { id: "b2", nome: "Viagens", quantidadeDeCartoes: 1, elegivel: true },
+      { id: "b3", nome: "Biologia", quantidadeDeCartoes: 0, elegivel: false },
+    ];
+
+    return { cartoes, baralhos };
+  }
+
+  function campoDeBusca(): HTMLElement {
+    return screen.getByRole("searchbox", { name: "Buscar cartões" });
+  }
+
+  it("busca no Verso encontra o Cartão e mostra só a Frente (FR-349)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    fireEvent.change(campoDeBusca(), { target: { value: "atp" } });
+
+    const itens = screen.getAllByRole("listitem");
+    expect(itens).toHaveLength(1);
+    expect(
+      within(itens[0]).getByText("Qual é a função das mitocôndrias?"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Produzir ATP pela respiração celular."),
+    ).toBeNull();
+    expect(screen.queryByText("How are you?")).toBeNull();
+  });
+
+  it("oferece as opções do seletor Baralho na ordem esperada (FR-351)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    const seletor = screen.getByRole("combobox", { name: "Baralho" });
+    const opcoes = within(seletor)
+      .getAllByRole("option")
+      .map((opcao) => opcao.textContent);
+
+    expect(opcoes).toEqual([
+      "Todos",
+      "Sem baralho",
+      "Inglês cotidiano",
+      "Viagens",
+      "Biologia",
+    ]);
+  });
+
+  it("filtra por Baralho sem repetir o Cartão de dois Baralhos (FR-351)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    const seletor = screen.getByRole("combobox", { name: "Baralho" });
+
+    fireEvent.change(seletor, { target: { value: "b2" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("How are you?")).toBeInTheDocument();
+    expect(screen.queryByText("Where is the station?")).toBeNull();
+
+    fireEvent.change(seletor, { target: { value: "b1" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryAllByText("How are you?")).toHaveLength(1);
+    expect(screen.getByText("Where is the station?")).toBeInTheDocument();
+  });
+
+  it("filtra pelos Cartões sem Baralho (FR-351)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Baralho" }), {
+      target: { value: "sem-baralho" },
+    });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(
+      screen.getByText("Qual é a função das mitocôndrias?"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("O que é osmose?")).toBeInTheDocument();
+    expect(screen.queryByText("How are you?")).toBeNull();
+    expect(screen.queryByText("Where is the station?")).toBeNull();
+  });
+
+  it("filtra pela Situação da revisão: novos, pendentes e em dia (FR-352)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    const seletor = screen.getByRole("combobox", {
+      name: "Situação da revisão",
+    });
+
+    fireEvent.change(seletor, { target: { value: "novos" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("Where is the station?")).toBeInTheDocument();
+    expect(screen.getByText("O que é osmose?")).toBeInTheDocument();
+    expect(screen.queryByText("How are you?")).toBeNull();
+    expect(
+      screen.queryByText("Qual é a função das mitocôndrias?"),
+    ).toBeNull();
+
+    fireEvent.change(seletor, { target: { value: "revisao-pendente" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("How are you?")).toBeInTheDocument();
+    expect(screen.queryByText("Where is the station?")).toBeNull();
+
+    fireEvent.change(seletor, { target: { value: "em-dia" } });
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      screen.getByText("Qual é a função das mitocôndrias?"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("How are you?")).toBeNull();
+  });
+
+  it("combina busca, Baralho e Situação e conta os resultados (FR-353, FR-355)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("Where is the station?");
+
+    fireEvent.change(campoDeBusca(), { target: { value: "how" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Baralho" }), {
+      target: { value: "b1" },
+    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+      { target: { value: "revisao-pendente" } },
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("How are you?")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 resultado");
+  });
+
+  it("sem resultados, limpa os filtros pelo próprio estado vazio (FR-354)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    const busca = campoDeBusca();
+    fireEvent.change(busca, { target: { value: "xyz" } });
+
+    const estadoVazio = screen
+      .getByRole("heading", { name: "Nenhum resultado encontrado" })
+      .closest("div");
+
+    if (estadoVazio === null) {
+      throw new Error("o estado vazio deveria conter o heading");
+    }
+
+    fireEvent.click(
+      within(estadoVazio).getByRole("button", { name: "Limpar filtros" }),
+    );
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+    expect(busca).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Baralho" })).toHaveValue(
+      "todos",
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+    ).toHaveValue("todos");
+    expect(busca).toHaveFocus();
+  });
+
+  it("falha e nova tentativa preservam os critérios já escolhidos (FR-357)", async () => {
+    render(
+      <PaginaDeCartoes
+        cliente={clienteFalso(dadosDeProva(), { falharCartoes: { vezes: 1 } })}
+      />,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      MENSAGEM_DE_INDISPONIBILIDADE,
+    );
+
+    const regioes = screen.getAllByRole("status");
+    expect(regioes.length).toBeGreaterThan(0);
+    for (const regiao of regioes) {
+      expect(regiao).toBeEmptyDOMElement();
+    }
+
+    const busca = campoDeBusca();
+    fireEvent.change(busca, { target: { value: "how" } });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+      { target: { value: "revisao-pendente" } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    await screen.findByText("How are you?");
+
+    expect(busca).toHaveValue("how");
+    expect(
+      screen.getByRole("combobox", { name: "Situação da revisão" }),
+    ).toHaveValue("revisao-pendente");
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.queryByText("Where is the station?")).toBeNull();
+  });
+
+  it("exclui com filtros ativos e mantém o filtro de Baralho (FR-357)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Baralho" }), {
+      target: { value: "b1" },
+    });
+    expect(screen.getByText("2 resultados")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Excluir Where is the station?" }),
+    );
+
+    const dialogo = screen.getByRole("dialog");
+    fireEvent.click(
+      within(dialogo).getByRole("button", { name: "Excluir Cartão" }),
+    );
+
+    expect(await screen.findByText("1 resultado")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Baralho" })).toHaveValue("b1");
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("How are you?")).toBeInTheDocument();
+    expect(screen.queryByText("Where is the station?")).toBeNull();
+  });
+
+  it("digitar não move o foco do campo de busca (FR-358)", async () => {
+    render(<PaginaDeCartoes cliente={clienteFalso(dadosDeProva())} />);
+
+    await screen.findByText("How are you?");
+
+    const busca = campoDeBusca();
+    busca.focus();
+    expect(busca).toHaveFocus();
+
+    fireEvent.change(busca, { target: { value: "how" } });
+
+    expect(busca).toHaveFocus();
+    expect(busca).toHaveValue("how");
   });
 });

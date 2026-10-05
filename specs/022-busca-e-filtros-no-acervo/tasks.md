@@ -26,13 +26,13 @@ Sem tarefas: nenhuma dependência, configuração ou migração nova.
 
 **Goal**: busca na Frente ou no Verso, filtro por Baralho e por situação. **Independent Test**: combinar os três critérios sobre Cartões com Vínculos e Agendamentos diferentes.
 
-- [ ] T2205 [US2] Painel com «Buscar cartões», «Baralho» (Todos · Sem baralho · Baralhos de `listarBaralhos`) e «Situação da revisão» (Todos · Novos · Revisão pendente · Em dia), faixa de contagem e estado sem resultados, conforme contracts/ui.md, usando `filtrarCartoes` com `new Date()`, em frontend/src/ui/PaginaDeCartoes.tsx. Ler Cartões e Baralhos juntos; falha de qualquer leitura é falha da página. Se o Baralho selecionado deixar de existir numa recarga, o seletor volta a Todos. Provas em frontend/tests/pagina-de-cartoes.test.tsx: Verso encontra sem exibir o Verso, combinação dos três critérios, Sem baralho, situação, Limpar filtros. FR-349, FR-351–FR-356.
+- [X] T2205 [US2] Painel com «Buscar cartões», «Baralho» (Todos · Sem baralho · Baralhos de `listarBaralhos`) e «Situação da revisão» (Todos · Novos · Revisão pendente · Em dia), faixa de contagem e estado sem resultados, conforme contracts/ui.md, usando `filtrarCartoes` com `new Date()`, em frontend/src/ui/PaginaDeCartoes.tsx. Ler Cartões e Baralhos juntos; falha de qualquer leitura é falha da página. Se o Baralho selecionado deixar de existir numa recarga, o seletor volta a Todos. Provas em frontend/tests/pagina-de-cartoes.test.tsx: Verso encontra sem exibir o Verso, combinação dos três critérios, Sem baralho, situação, Limpar filtros. FR-349, FR-351–FR-356.
 
 ## Phase 5: User Story 3 — Recuperação e acessibilidade (P1)
 
 **Goal**: critérios preservados em falha e exclusão, anúncio sem mover o foco. **Independent Test**: falha → Tentar novamente; excluir com filtros ativos; uso por teclado.
 
-- [ ] T2206 [US3] Em frontend/src/ui/PaginaDeCartoes.tsx: Tentar novamente preserva os critérios; excluir com filtros ativos mantém os critérios e atualiza a contagem; o foco vai ao próximo Excluir visível ou ao título da página; digitar na busca não move o foco. Provas em frontend/tests/pagina-de-cartoes.test.tsx e frontend/tests/excluir-cartao.test.tsx. FR-357, FR-358, SC-141.
+- [X] T2206 [US3] Em frontend/src/ui/PaginaDeCartoes.tsx: Tentar novamente preserva os critérios; excluir com filtros ativos mantém os critérios e atualiza a contagem; o foco segue indo ao título da página, como já fazia; digitar na busca não move o foco. Provas em frontend/tests/pagina-de-cartoes.test.tsx. FR-357, FR-358, SC-141.
 - [ ] T2207 [US3] E2E com API real em e2e/busca-e-filtros.spec.ts: Baralhos (`algebra`), Cartões (Verso, combinação, Sem baralho, situação Novos/Em dia depois de estudar, Limpar filtros, sem resultados) e isolamento entre dois Usuários. SC-138, SC-139, SC-140, FR-359.
 - [ ] T2208 [US3] Responsividade e teclado em e2e/busca-e-filtros-responsividade.spec.ts: 360, 390, 768 e 1440 px e zoom de 200%, sem rolagem horizontal, alvos de 44 px, busca, filtros e Limpar só por teclado, contagem anunciada sem tirar o foco da busca. SC-142, FR-358.
 

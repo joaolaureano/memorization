@@ -75,3 +75,7 @@ Criado `checklists/ux.md` com 16 itens de qualidade dos requisitos (UX, estados,
 ### Analyze
 
 Sem CRITICAL. Foram dois achados de cobertura, corrigidos em `tasks.md`. O primeiro: registros com a mesma Frente continuam distintos, e agora há prova em T2203. O segundo: Estudar mantém o destino durante a busca, com prova em T2204. O item documental superado do checklist de requisitos já estava registrado acima. Portão liberado para `implement`.
+
+### Implementação — foco após excluir (T2206)
+
+O plano previa levar o foco ao próximo botão Excluir visível. Durante a implementação, constatou-se que a página já levava o foco ao título da página após a exclusão (spec 021). FR-357 pede preservar o tratamento acessível de foco existente, e não alterá-lo. Por isso a regra existente foi mantida e o plano e as tarefas foram corrigidos. A delegação da página inteira passou de 120 s e voltou fragmentada. Ela foi refeita em dois pedidos menores, com pares OLD/NEW.
