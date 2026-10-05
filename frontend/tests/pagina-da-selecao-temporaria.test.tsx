@@ -112,7 +112,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     window.location.hash = "#/baralhos/temporario";
   });
 
-  it("abre com foco no título, seleção vazia, «0 Cartões» e Estudar desabilitado com a orientação (FR-365, FR-377)", async () => {
+  it("abre com foco no título, seleção vazia, «0 Cartões» e Revisar desabilitado com a orientação (FR-365, FR-377)", async () => {
     const cliente = clienteDeProva();
     await semear(cliente);
     renderizar(cliente);
@@ -139,9 +139,9 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText("Adicione pelo menos um cartão para estudar."),
+      screen.getByText("Adicione pelo menos um cartão para revisar."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Estudar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Revisar" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Cancelar" }),
     ).toBeInTheDocument();
@@ -245,19 +245,59 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
 
     fireEvent.change(busca, { target: { value: "" } });
 
+    // A fonte Cartões tem busca e Baralho — o filtro de Situação da revisão
+    // mora só na fonte Baralhos (FR-382, SC-150).
+    expect(
+      screen.queryByRole("combobox", { name: "Situação da revisão" }),
+    ).not.toBeInTheDocument();
+
     const baralho = screen.getByRole("combobox", { name: "Baralho" });
     const opcaoViagem = within(baralho).getByRole("option", {
       name: /Viagem/,
     }) as HTMLOptionElement;
     fireEvent.change(baralho, { target: { value: opcaoViagem.value } });
 
+    // Filtrar não muda a seleção (FR-362).
+    expect(
+      within(regiaoDaSelecao()).getByText("2 Cartões"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remover How are you?" }),
+    ).toBeInTheDocument();
+  });
+
+  it("na fonte Baralhos, o filtro de Situação da revisão existe e filtrar não muda a seleção (FR-381, FR-382)", async () => {
+    const cliente = clienteDeProva();
+    await semear(cliente);
+    renderizar(cliente);
+    await aguardarAcervo();
+
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar Inglês" }));
+    await screen.findByText(
+      "2 Cartões na seleção. Cartões repetidos entram uma só vez.",
+    );
+
+    // O filtro de Situação mora na fonte Baralhos (FR-382).
     const situacao = screen.getByRole("combobox", {
       name: "Situação da revisão",
     });
-    const opcoes = within(situacao).getAllByRole("option");
-    const ultima = opcoes[opcoes.length - 1] as HTMLOptionElement;
-    fireEvent.change(situacao, { target: { value: ultima.value } });
+    expect(
+      within(situacao).getByRole("option", { name: "Todos" }),
+    ).toBeInTheDocument();
+    expect(
+      within(situacao).getByRole("option", { name: "Revisado" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Adicionado Inglês" }),
+    ).toBeDisabled();
 
+    // Sem Baralhos Revisados, filtrar por Revisado esconde todos — e a
+    // seleção continua exatamente igual (FR-362).
+    fireEvent.change(situacao, { target: { value: "revisado" } });
+
+    expect(
+      screen.queryByRole("button", { name: "Adicionado Inglês" }),
+    ).not.toBeInTheDocument();
     expect(
       within(regiaoDaSelecao()).getByText("2 Cartões"),
     ).toBeInTheDocument();
@@ -307,13 +347,13 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     expect(
       within(regiaoDaSelecao()).getByText("Seu estudo começa aqui"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Estudar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Revisar" })).toBeDisabled();
     expect(
       screen.queryByRole("button", { name: "Remover How are you?" }),
     ).not.toBeInTheDocument();
   });
 
-  it("Baralho vazio mostra «0 Cartões · Baralho vazio» e «Sem cartões Vazio» desabilitado (FR-377)", async () => {
+  it("Baralho vazio mostra «0 Cartões · Baralho vazio», a etiqueta «Sem cartões» e «Adicionar Vazio» desabilitado (FR-377, FR-380)", async () => {
     const cliente = clienteDeProva();
     await semear(cliente);
     renderizar(cliente);
@@ -321,12 +361,20 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
 
     expect(screen.getAllByText("2 Cartões")).toHaveLength(2);
     expect(screen.getByText("0 Cartões · Baralho vazio")).toBeInTheDocument();
+
+    const itemVazio = screen.getByText("Vazio").closest("li");
+
+    if (itemVazio === null) {
+      throw new Error("o item do Baralho Vazio deveria existir");
+    }
+
+    expect(within(itemVazio).getByText("Sem cartões")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sem cartões Vazio" }),
+      within(itemVazio).getByRole("button", { name: "Adicionar Vazio" }),
     ).toBeDisabled();
   });
 
-  it("Cartão excluído depois da adição: Estudar não chama aoEstudar, mostra o alerta; «Retirar indisponíveis» deixa a seleção sem ele e então Estudar chama aoEstudar (FR-367)", async () => {
+  it("Cartão excluído depois da adição: Revisar não chama aoEstudar, mostra o alerta; «Retirar indisponíveis» deixa a seleção sem ele e então Revisar chama aoEstudar (FR-367)", async () => {
     const cliente = clienteDeProva();
     const { c1, c2 } = await semear(cliente);
     const aoEstudar = renderizar(cliente);
@@ -341,7 +389,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
       exigirOk(await cliente.excluirCartao(c1));
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Estudar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     await screen.findByText("1 Cartão não está mais disponível.");
     expect(aoEstudar).not.toHaveBeenCalled();
@@ -360,7 +408,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
       screen.queryByRole("button", { name: "Remover How are you?" }),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Estudar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     await waitFor(() => expect(aoEstudar).toHaveBeenCalledTimes(1));
     expect(cartoesEntregues(aoEstudar)).toEqual([
@@ -368,7 +416,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     ]);
   });
 
-  it("Baralho de origem excluído depois da adição não impede: Estudar entrega os 2 Cartões (FR-363)", async () => {
+  it("Baralho de origem excluído depois da adição não impede: Revisar entrega os 2 Cartões (FR-363)", async () => {
     const cliente = clienteDeProva();
     const { a, c1, c2 } = await semear(cliente);
     const aoEstudar = renderizar(cliente);
@@ -383,7 +431,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
       exigirOk(await cliente.excluirBaralho(a));
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Estudar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     await waitFor(() => expect(aoEstudar).toHaveBeenCalledTimes(1));
     expect(cartoesEntregues(aoEstudar)).toEqual([
@@ -395,7 +443,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     );
   });
 
-  it("Estudar entrega os textos atuais depois de editar a Frente, na ordem da seleção (FR-366, FR-367)", async () => {
+  it("Revisar entrega os textos atuais depois de editar a Frente, na ordem da seleção (FR-366, FR-367)", async () => {
     const cliente = clienteDeProva();
     const { c1, c2 } = await semear(cliente);
     const aoEstudar = renderizar(cliente);
@@ -412,7 +460,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
       );
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Estudar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
     await waitFor(() => expect(aoEstudar).toHaveBeenCalledTimes(1));
     expect(cartoesEntregues(aoEstudar)).toEqual([

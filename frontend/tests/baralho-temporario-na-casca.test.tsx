@@ -123,9 +123,9 @@ describe("baralho temporário na casca Aplicacao", () => {
       fireEvent.click(
         await screen.findByRole("button", { name: "Adicionar Inglês" }),
       );
-      fireEvent.click(screen.getByRole("button", { name: "Estudar" }));
+      fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
-      await exigirTituloDaPagina("Estudar baralho temporário");
+      await exigirTituloDaPagina("Revisar baralho temporário");
       await waitFor(() => {
         expect(window.location.hash).toBe("#/baralhos/temporario/estudo");
       });

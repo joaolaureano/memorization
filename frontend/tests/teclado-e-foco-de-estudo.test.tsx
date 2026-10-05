@@ -20,6 +20,10 @@ import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
  * A 015 substitui Acertei/Errei pelas quatro Avaliações (FR-192), então a
  * ordem de tabulação depois da Revelação inclui o texto rolável do Verso,
  * Errei, Difícil, Bom e Fácil; a Sessão é percorrida escolhendo "Bom".
+ *
+ * A 024 substitui a configuração de quantidade pela modal «Revisar baralho»
+ * (FR-383, FR-387): o Tab fica preso ao diálogo, que abre com o foco em
+ * Cancelar; a Sessão começa pela escolha «Todos os cartões».
  */
 
 const SELETOR_DE_CONTROLES_INTERATIVOS = [
@@ -39,10 +43,20 @@ function controlesInterativos(): HTMLElement[] {
 
 /**
  * Aperta Tab como um navegador: dispara o evento de teclado no elemento focado
- * e avança o foco ao próximo controle na ordem de tabulação.
+ * e avança o foco ao próximo controle na ordem de tabulação. Com uma modal
+ * `<dialog>` aberta, o foco fica preso a ela — como o elemento nativo faz —,
+ * então a ordem é a dos controles do diálogo.
  */
 function apertarTab(): void {
-  const controles = controlesInterativos();
+  const dialogo = document.activeElement?.closest("dialog[open]") ?? null;
+  const controles =
+    dialogo === null
+      ? controlesInterativos()
+      : Array.from(
+          dialogo.querySelectorAll<HTMLElement>(
+            SELETOR_DE_CONTROLES_INTERATIVOS,
+          ),
+        );
   const indice = controles.findIndex(
     (controle) => controle === document.activeElement,
   );
@@ -55,15 +69,6 @@ function apertarTab(): void {
 
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Tab" });
   proximo.focus();
-}
-
-/** Digita pelo teclado: um `keydown` por caractere e a atualização do valor. */
-function digitarPeloTeclado(campo: HTMLElement, texto: string): void {
-  for (const caractere of texto) {
-    fireEvent.keyDown(campo, { key: caractere });
-  }
-
-  fireEvent.change(campo, { target: { value: texto } });
 }
 
 /**
@@ -133,27 +138,24 @@ describe("PaginaDeEstudo por teclado", () => {
 
     await screen.findByRole("heading", {
       level: 1,
-      name: "Estudar Inglês",
+      name: "Revisar Inglês",
     });
 
-    const campoDeQuantidade = screen.getByLabelText("Quantidade de Cartões");
-    const botaoDeInicio = screen.getByRole("button", {
-      name: "Iniciar Sessão",
-    });
+    // A modal abre com o foco em Cancelar — a ação sem consequência (FR-387).
+    const cancelar = screen.getByRole("button", { name: "Cancelar" });
+    expect(document.activeElement).toBe(cancelar);
 
-    // Ordem de tabulação na tela de início: voltar, quantidade, iniciar.
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Voltar para o Baralho" }),
+      screen.getByRole("button", { name: "Só pendentes" }),
     );
 
     apertarTab();
-    expect(document.activeElement).toBe(campoDeQuantidade);
-    digitarPeloTeclado(campoDeQuantidade, "2");
-
-    apertarTab();
-    expect(document.activeElement).toBe(botaoDeInicio);
-    apertarEnter(botaoDeInicio);
+    const botaoTodos = screen.getByRole("button", {
+      name: "Todos os cartões",
+    });
+    expect(document.activeElement).toBe(botaoTodos);
+    apertarEnter(botaoTodos);
 
     // Ao iniciar, o foco vai para a Frente recém-apresentada.
     const primeiraFrente = await screen.findByRole("heading", {

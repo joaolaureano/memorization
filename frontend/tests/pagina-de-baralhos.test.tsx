@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
+import {
+  INDISPONIVEL,
+  MENSAGEM_DE_INDISPONIBILIDADE,
+  MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+} from "../src/acervo-cliente/cliente";
 import type { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { clienteDeProva } from "./apoio-de-prova";
 import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
@@ -606,7 +610,8 @@ describe("PaginaDeBaralhos — situação da revisão (024)", () => {
     const listarCartoesOriginal = cliente.listarCartoes.bind(cliente);
     cliente.listarCartoes = async () => ({
       ok: false,
-      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      erro: INDISPONIVEL,
+      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
     });
 
     renderizarPaginaDeBaralhos(cliente);
@@ -614,7 +619,7 @@ describe("PaginaDeBaralhos — situação da revisão (024)", () => {
     // A lista nem aparece com uma classificação arriscada: a falha é
     // recuperável e a retentativa relê os dois recursos.
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
+      MENSAGEM_DE_INDISPONIBILIDADE,
     );
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".etiqueta")).toHaveLength(0);

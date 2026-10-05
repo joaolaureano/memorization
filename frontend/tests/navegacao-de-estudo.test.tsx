@@ -103,7 +103,7 @@ describe("Aplicacao — rota de estudo", () => {
     expect(
       await screen.findByRole("heading", {
         level: 1,
-        name: "Estudar Inglês",
+        name: "Revisar Inglês",
       }),
     ).toBeInTheDocument();
     expect(
@@ -146,13 +146,11 @@ describe("Aplicacao — rota de estudo", () => {
 
     await screen.findByRole("heading", {
       level: 1,
-      name: "Estudar Inglês",
+      name: "Revisar Inglês",
     });
 
-    fireEvent.change(screen.getByLabelText("Quantidade de Cartões"), {
-      target: { value: "1" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar Sessão" }));
+    // Cartões novos estão pendentes: a Sessão começa pela modal (FR-383).
+    fireEvent.click(screen.getByRole("button", { name: "Todos os cartões" }));
 
     await screen.findByRole("article", { name: "Item 1 de 1" });
 
@@ -209,13 +207,11 @@ describe("Aplicacao — rota de estudo", () => {
 
     await screen.findByRole("heading", {
       level: 1,
-      name: "Estudar Inglês",
+      name: "Revisar Inglês",
     });
 
-    fireEvent.change(screen.getByLabelText("Quantidade de Cartões"), {
-      target: { value: "1" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar Sessão" }));
+    // Cartões novos estão pendentes: a Sessão começa pela modal (FR-383).
+    fireEvent.click(screen.getByRole("button", { name: "Todos os cartões" }));
 
     await screen.findByRole("article", { name: "Item 1 de 1" });
 
@@ -236,7 +232,7 @@ describe("Aplicacao — rota de estudo", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("alterar a quantidade e navegar para fora pede confirmação de descarte", async () => {
+  it("a rota pendente abre a modal «Revisar baralho» e Cancelar volta ao detalhe do Baralho (FR-383, FR-387)", async () => {
     const cliente = clienteDeProva();
     const cartao = await cliente.criarCartao({
       frente: "To walk",
@@ -266,19 +262,18 @@ describe("Aplicacao — rota de estudo", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
 
-    await screen.findByRole("heading", {
-      level: 1,
-      name: "Estudar Inglês",
-    });
-
-    fireEvent.change(screen.getByLabelText("Quantidade de Cartões"), {
-      target: { value: "1" },
-    });
-
-    navegarPara("#/baralhos");
-
+    // Sem Agendamento, o conjunto está pendente e a shell mostra a modal.
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveTextContent("Descartar a configuração?");
+    expect(dialogo).toHaveTextContent("Revisar baralho");
+
+    fireEvent.click(
+      within(dialogo).getByRole("button", { name: "Cancelar" }),
+    );
+
+    // Cancelar descarta a escolha e volta ao detalhe do Baralho.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
+    ).toBeInTheDocument();
   });
 });
 

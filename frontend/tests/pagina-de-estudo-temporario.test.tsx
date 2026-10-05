@@ -86,7 +86,7 @@ it(
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Estudar baralho temporário",
+        name: "Revisar baralho temporário",
       }),
     ).toBeInTheDocument();
     expect(
