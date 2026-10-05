@@ -41,7 +41,7 @@ Sem tarefas: nenhuma dependência nova.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T2312 E2E com API real em e2e/baralho-temporario.spec.ts: percurso completo de SC-143 (A, B, C4), Registro no Histórico, salvar com um único Baralho e fontes intactas, sair sem salvar sem Baralho novo, indisponível antes de salvar, isolamento. SC-143–SC-147, SC-149.
+- [X] T2312 E2E com API real em e2e/baralho-temporario.spec.ts: percurso completo de SC-143 (A, B, C4), Registro no Histórico, salvar com um único Baralho e fontes intactas, sair sem salvar sem Baralho novo, indisponível antes de salvar, isolamento. SC-143–SC-147, SC-149.
 - [ ] T2313 Responsividade e teclado em e2e/baralho-temporario-responsividade.spec.ts: montagem, Sessão, Resumo e Salvar em 360, 390, 768 e 1440 px e zoom de 200%, sem rolagem horizontal, alvos de 44 px, percurso por teclado. SC-148, FR-377.
 - [ ] T2314 Ajustar provas e2e existentes afetadas, atualizar os READMEs, rodar `npm run verificar:ci` e registrar em research.md.
 
