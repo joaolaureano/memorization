@@ -25,6 +25,7 @@ uma especificação em [`specs/`](specs/).
 | Perfil | Consultar Nome de usuário, configurar o estudo, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
 | Cartões | Criar, listar, editar e excluir Cartões, com limites de tamanho | [001](specs/001-criar-cartao/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
 | Baralhos | Criar, renomear e excluir Baralhos, e vincular um Cartão a vários Baralhos | [002](specs/002-criar-baralho/), [003](specs/003-vincular-cartao-baralho/), [005](specs/005-editar-cartao-e-baralho/), [006](specs/006-excluir-cartao-e-baralho/) |
+| Busca e filtros | Busca de Baralhos pelo nome e de Cartões pela Frente ou pelo Verso; filtro de Cartões por Baralho (ou sem Baralho) e por situação da revisão: Novos, Revisão pendente ou Em dia | [022](specs/022-busca-e-filtros-no-acervo/) |
 | Estudar um Baralho | Cartões em ordem aleatória, revelar o Verso, avaliar a resposta e ver um Resumo ao final | [004](specs/004-sessao-de-estudo/) |
 | Repetição espaçada | SM-2 com Avaliação em quatro níveis, aplicado a cada Sessão de estudo por Baralho; o algoritmo fica na Configuração do Perfil | [015](specs/015-repeticao-espacada/) |
 | Agenda de estudo | Rotinas semanais por Baralho (por exemplo, «Inglês toda segunda»), os Compromissos de hoje e um calendário da semana com o que foi feito | [016](specs/016-agendamento-de-estudo/) |

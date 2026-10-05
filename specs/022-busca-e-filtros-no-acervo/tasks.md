@@ -39,7 +39,7 @@ Sem tarefas: nenhuma dependência, configuração ou migração nova.
 ## Phase 6: Polish & Cross-Cutting
 
 - [X] T2209 Ajustar provas e2e existentes que dependam da estrutura das páginas de Baralhos e Cartões (e2e/lista-de-baralhos.spec.ts, e2e/cartoes-responsividade.spec.ts, e2e/baralhos-responsividade.spec.ts e outras que falharem), sem afrouxar asserções.
-- [ ] T2210 Verificação final: `npm run verificar:ci`; atualizar README.md e README.pt-BR.md (tabela de capacidades) e registrar o resultado em research.md.
+- [X] T2210 Verificação final: `npm run verificar:ci`; atualizar README.md e README.pt-BR.md (tabela de capacidades) e registrar o resultado em research.md.
 
 ## Dependencies & Execution Order
 

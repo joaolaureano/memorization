@@ -79,3 +79,7 @@ Sem CRITICAL. Foram dois achados de cobertura, corrigidos em `tasks.md`. O prime
 ### Implementação — foco após excluir (T2206)
 
 O plano previa levar o foco ao próximo botão Excluir visível. Durante a implementação, constatou-se que a página já levava o foco ao título da página após a exclusão (spec 021). FR-357 pede preservar o tratamento acessível de foco existente, e não alterá-lo. Por isso a regra existente foi mantida e o plano e as tarefas foram corrigidos. A delegação da página inteira passou de 120 s e voltou fragmentada. Ela foi refeita em dois pedidos menores, com pares OLD/NEW.
+
+### Verificação final (T2210)
+
+`npm run verificar:ci` na raiz do worktree terminou com exit 0. Gitleaks: no leaks found. Backend: 879 testes (SQLite) e 232 (PostgreSQL). Frontend: 815 testes, com lint, typecheck e build. Playwright: 81 cenários, incluindo os 8 novos de T2207 e T2208. As provas sensíveis a datas também passaram em UTC, Pacific/Kiritimati, Pacific/Pago_Pago e America/Los_Angeles. READMEs (inglês e pt-BR) ganharam a linha «Busca e filtros». Todo o código de aplicação foi escrito por workers DeepSeek flash e revisado pelo Arquiteto. Duas saídas foram rejeitadas e refeitas na revisão: uma página inteira devolvida fragmentada e provas com formato de dados inventado.

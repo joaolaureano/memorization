@@ -1,7 +1,7 @@
 # Feature Specification: Busca e filtros no acervo
 
 **Created**: 2026-10-05
-**Status**: Em implementação (2026-10-05), seguindo os protótipos de `design/busca-e-filtros/`.
+**Status**: Implementada (2026-10-05), seguindo os protótipos de `design/busca-e-filtros/`.
 **Input**: Busca nas listas de Baralhos e Cartões, com filtros de Cartões por Baralho e situação da revisão. Estudar permanece livre; revisão pendente é um filtro opcional. Criar somente a documentação.
 **Depende de**: `001-criar-cartao`, `002-criar-baralho`, `003-vincular-cartao-baralho`, `006-excluir-cartao-e-baralho`, `012-interface-visual-navegavel`, `015-repeticao-espacada` e `021-consistencia-baralhos-cartoes`.
 
