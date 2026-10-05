@@ -1,5 +1,7 @@
 # Feature Specification: Sessão de Estudo
 
+> Atualização de 2026-10-05: [024 — Revisar Baralhos](../024-revisar-baralhos/spec.md) supersede FR-027–FR-029 no estudo livre por Baralho iniciado pela interface: a quantidade deixa de ser informada e o conjunto deriva da escolha entre Só pendentes e Todos os cartões (ou de todos, para Baralho Revisado). As quantidades das Rotinas da Agenda, as quatro Avaliações e o Registro permanecem regidos por esta especificação e pelas posteriores.
+
 **Feature Branch**: `004-sessao-de-estudo`
 **Created**: 2026-09-20
 **Status**: Draft

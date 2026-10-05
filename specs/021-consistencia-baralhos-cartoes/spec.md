@@ -1,5 +1,7 @@
 # Feature Specification: Consistência entre Baralhos e Cartões
 
+> Atualização de 2026-10-05: [024 — Revisar Baralhos](../024-revisar-baralhos/spec.md) supersede o rótulo Estudar de FR-340 e FR-343: a ação passa a Revisar, precedida pela etiqueta de situação (Pendente, Revisado ou Sem cartões), e Baralho vazio mantém a ação desabilitada com motivo acessível. O restante desta especificação permanece vigente.
+
 **Created**: 2026-10-04
 **Status**: Especificada conforme plano aprovado; implementação fora desta entrega.
 **Input**: Padronizar as páginas Baralhos e Cartões. Em Baralhos, manter Estudar, adicionar Editar como equivalente ao antigo clique no nome e tornar o nome somente leitura. Em Cartões, apresentar apenas o título e as ações Excluir e Editar. Criar somente a especificação.

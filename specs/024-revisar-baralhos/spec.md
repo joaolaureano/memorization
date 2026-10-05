@@ -78,6 +78,6 @@ Como Usuário, quero escolher o Baralho e entrar na revisão usando todos os Car
 
 ## Revisão de requisitos anteriores e limites
 
-Esta spec supersede apenas os trechos conflitantes das specs 021 (FR-340/343, rótulo Estudar), 022 (FR-352/353/356, filtro de situação nos Cartões e início anterior) e 023 (FR-362/365/368, localização dos filtros e rótulo da ação). As decisões anteriores ficam preservadas no histórico; a regra vigente é a 024.
+Esta spec supersede apenas os trechos conflitantes das specs 021 (FR-340/343, rótulo Estudar), 022 (FR-352/353/356, filtro de situação nos Cartões e início anterior) e 023 (FR-362/365/368, localização dos filtros e rótulo da ação). Também supersede FR-149 da 012 e relaxa SC-079 da 012 até 600 px (até 112 px por linha de Baralho e ao menos 2 linhas inteiras na primeira tela de 390 × 844), consequência do FR-381. As decisões anteriores ficam preservadas no histórico; a regra vigente é a 024.
 
 FR-027–FR-029 da 004 deixam de reger a configuração manual do estudo livre por Baralho na interface: o conjunto deriva da escolha pendentes/todos. Não alterar quantidades das Rotinas da Agenda, semântica das quatro Avaliações, SM-2, retenção do Histórico ou nomes de rotas. Não há novo campo persistido de situação do Baralho.

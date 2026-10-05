@@ -1,5 +1,7 @@
 # Feature Specification: Interface visual e navegável do Memorization
 
+> Atualização de 2026-10-05: [024 — Revisar Baralhos](../024-revisar-baralhos/spec.md) supersede FR-149 (configuração de quantidade antes do estudo por Baralho) e relaxa SC-079 até 600 px: a linha de Baralho passa a ter etiqueta de situação e ações Revisar/Editar, que podem descer para uma segunda fileira (até 112 px por linha) e, em 390 × 844, ao menos 2 Baralhos aparecem inteiros no primeiro viewport. Acima de 600 px o limite de 72 px continua valendo. O restante desta especificação permanece vigente.
+
 **Feature Branch**: `012-interface-visual-navegavel` (identificador da feature; esta etapa não cria nem troca branch)
 
 **Created**: 2026-10-02
