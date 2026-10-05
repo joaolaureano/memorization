@@ -313,14 +313,13 @@ export function PaginaDeAdicionarCartoes({
                 }
               />
             ) : (
-              <ul className="lista">
+              <ul className="lista lista--compacta">
                 {disponiveis.map((cartao) => (
-                  <li key={cartao.id} className="cartao">
-                    <p className="lado-do-cartao">Frente</p>
-                    <p className="conteudo-do-cartao">{cartao.frente}</p>
-                    <p className="lado-do-cartao">Verso</p>
-                    <p className="conteudo-do-cartao">{cartao.verso}</p>
-                    <div className="acoes">
+                  <li key={cartao.id} className="linha-da-lista">
+                    <div className="linha-da-lista__texto">
+                      <p className="linha-da-lista__titulo">{cartao.frente}</p>
+                    </div>
+                    <div className="linha-da-lista__acoes">
                       <button
                         ref={registrarBotao(`vincular:${cartao.id}`)}
                         className="botao botao--primario"

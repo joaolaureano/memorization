@@ -102,14 +102,7 @@ function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
 
 /** A seção cujo título de nível 2 tem o nome informado. */
 function secao(nome: string): HTMLElement {
-  const titulo = screen.getByRole("heading", { level: 2, name: nome });
-  const elemento = titulo.closest("section");
-
-  if (elemento === null) {
-    throw new Error(`Seção ${nome} não encontrada.`);
-  }
-
-  return elemento;
+  return screen.getByRole("region", { name: nome });
 }
 
 const SELETOR_DE_CONTROLES_INTERATIVOS = [
@@ -320,8 +313,7 @@ describe("PaginaDoBaralho", () => {
       screen.getByRole("link", { name: "Renomear" }),
       screen.getByRole("button", { name: "Excluir Baralho" }),
     ];
-    const tituloDosCartoes = screen.getByRole("heading", {
-      level: 2,
+    const tituloDosCartoes = screen.getByRole("region", {
       name: "Cartões do Baralho",
     });
     const botoesDeRemover = screen.getAllByRole("button", {

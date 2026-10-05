@@ -59,7 +59,7 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     { alvo: "titulo" } | { alvo: "botao"; cartaoId: string } | null
   >(null);
 
-  const tituloDaLista = useRef<HTMLHeadingElement>(null);
+  const tituloDaPagina = useRef<HTMLHeadingElement>(null);
   const botoesDeEdicao = useRef(new Map<string, HTMLAnchorElement>());
   const botoesDeExclusao = useRef(new Map<string, HTMLButtonElement>());
 
@@ -100,7 +100,7 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     }
 
     if (focoAposExclusao.alvo === "titulo") {
-      tituloDaLista.current?.focus();
+      tituloDaPagina.current?.focus();
     } else {
       botoesDeExclusao.current.get(focoAposExclusao.cartaoId)?.focus();
     }
@@ -164,7 +164,7 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
       // exclusão. A lista é relida para refletir o acervo autoritativo.
       setCartoes((atuais) => atuais.filter((item) => item.id !== cartao.id));
       // FR-159: com o diálogo ainda aberto o foco seria ignorado; registra o
-      // alvo para o fechamento devolvê-lo ao título da lista.
+      // alvo para o fechamento devolvê-lo ao título da página.
       setFocoAposExclusao({ alvo: "titulo" });
       setCartaoParaExcluir(null);
       setAnuncio("Cartão excluído. Nenhum Baralho foi excluído.");
@@ -206,7 +206,9 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
     <div className="pagina">
       <header className="cabecalho-da-pagina">
         <div>
-          <h1>Cartões</h1>
+          <h1 ref={tituloDaPagina} tabIndex={-1}>
+            Cartões
+          </h1>
           <p className="texto-secundario">
             Perguntas e respostas para construir sua memória.
           </p>
@@ -238,10 +240,6 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
           {falhaDeExclusao}
         </p>
       )}
-
-      <h2 ref={tituloDaLista} tabIndex={-1}>
-        Lista de Cartões
-      </h2>
 
       {carregando ? (
         <EstadoDaCarga estado="carregando" mensagem="Carregando Cartões…" />

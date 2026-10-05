@@ -116,7 +116,7 @@ test('tela de Vínculos permanece utilizável e sem rolagem horizontal em telefo
   ).toBeVisible();
   await expect(page.getByText('Estudar este Baralho')).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Cartões do Baralho' }),
+    page.getByRole('region', { name: 'Cartões do Baralho' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /^Remover .* deste baralho$/ }),

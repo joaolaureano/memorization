@@ -315,9 +315,9 @@ async function conferirOrdemNoDocumento(
       }
     }
 
-    const cabecalho = Array.from(document.querySelectorAll("main h2")).find(
-      (elemento) => texto(elemento) === "Cartões do Baralho",
-    );
+    const cabecalho =
+      document.querySelector('main section[aria-label="Cartões do Baralho"]') ??
+      undefined;
 
     const remover = clicaveis.filter((elemento) => {
       const rotulo = elemento.getAttribute("aria-label") ?? "";
@@ -331,7 +331,7 @@ async function conferirOrdemNoDocumento(
 
     if (cabecalho !== undefined) {
       alvos.push({
-        descricao: 'o título "Cartões do Baralho"',
+        descricao: 'a seção "Cartões do Baralho"',
         elemento: cabecalho,
       });
     }
@@ -373,7 +373,7 @@ async function conferirOrdemNoDocumento(
 
   expect(
     resultado.cabecalhoEncontrado,
-    'o título "Cartões do Baralho" precisa existir',
+    'a seção "Cartões do Baralho" precisa existir',
   ).toBe(true);
 
   expect(resultado.faltando, "as quatro ações precisam existir").toEqual([]);

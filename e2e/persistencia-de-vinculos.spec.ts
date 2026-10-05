@@ -142,7 +142,7 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
       page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Cartões do Baralho" }),
+      page.getByRole("region", { name: "Cartões do Baralho" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
@@ -266,7 +266,6 @@ test("Vínculos criados pela UI persistem após reiniciar API e frontend, e a mi
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
     await expect(itemVinculado).toHaveCount(1);
-    await expect(itemVinculado).toContainText(CARTAO.verso);
 
     const persistido = await obterBaralhoPelaApi(enderecoDaApi, idDoBaralho);
     expect(persistido).toEqual(baralhoVinculado);

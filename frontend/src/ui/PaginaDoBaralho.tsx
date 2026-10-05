@@ -98,7 +98,7 @@ export function PaginaDoBaralho({
   const [focoAposExclusao, setFocoAposExclusao] = useState(false);
 
   const botoes = useRef(new Map<string, HTMLButtonElement>());
-  const tituloDosCartoes = useRef<HTMLHeadingElement>(null);
+  const tituloDaPagina = useRef<HTMLHeadingElement>(null);
   const botaoDeExcluir = useRef<HTMLButtonElement>(null);
   const requisicao = useRef(0);
 
@@ -159,7 +159,7 @@ export function PaginaDoBaralho({
     if (vizinho !== undefined) {
       vizinho.focus();
     } else {
-      tituloDosCartoes.current?.focus();
+      tituloDaPagina.current?.focus();
     }
 
     setFocoAposRemocao(null);
@@ -291,7 +291,7 @@ export function PaginaDoBaralho({
     <div className="pagina">
       <div className="cabecalho-da-pagina">
         <div>
-          <h1>
+          <h1 ref={tituloDaPagina} tabIndex={-1}>
             {baralhoNaoEncontrado !== null
               ? "Baralho não encontrado"
               : (baralho?.nome ?? "Baralho")}
@@ -398,11 +398,7 @@ export function PaginaDoBaralho({
             </p>
           )}
 
-          <section>
-            <h2 ref={tituloDosCartoes} tabIndex={-1}>
-              Cartões do Baralho
-            </h2>
-
+          <section aria-label="Cartões do Baralho">
             {baralho.cartoes.length === 0 ? (
               // FR-153: o Baralho vazio tem a sua própria apresentação, e a
               // ação que o destrava é vincular Cartões existentes.
@@ -410,14 +406,13 @@ export function PaginaDoBaralho({
                 <p>Este Baralho ainda não tem Cartões.</p>
               </div>
             ) : (
-              <ul className="lista">
+              <ul className="lista lista--compacta">
                 {baralho.cartoes.map((cartao) => (
-                  <li key={cartao.id} className="cartao">
-                    <p className="lado-do-cartao">Frente</p>
-                    <p className="conteudo-do-cartao">{cartao.frente}</p>
-                    <p className="lado-do-cartao">Verso</p>
-                    <p className="conteudo-do-cartao">{cartao.verso}</p>
-                    <div className="acoes">
+                  <li key={cartao.id} className="linha-da-lista">
+                    <div className="linha-da-lista__texto">
+                      <p className="linha-da-lista__titulo">{cartao.frente}</p>
+                    </div>
+                    <div className="linha-da-lista__acoes">
                       <button
                         ref={registrarBotao(`remover:${cartao.id}`)}
                         className="botao botao--secundario"
@@ -426,7 +421,7 @@ export function PaginaDoBaralho({
                         aria-label={`Remover ${cartao.frente} deste baralho`}
                         onClick={() => void removerDoBaralho(cartao)}
                       >
-                        Remover deste baralho
+                        Remover
                       </button>
                     </div>
                   </li>
