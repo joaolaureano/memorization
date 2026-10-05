@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
@@ -15,8 +15,8 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * região ativa por `aria-live`. O carregamento é uma região ativa polida
  * (`role="status"`); a falha é uma região assertiva (`role="alert"`), com a
  * mensagem da Interface e a ação de nova tentativa. Cada Baralho é um item
- * de lista cujo nome é o próprio link do detalhe, com ações de nome acessível
- * único, e a elegibilidade se comunica pelo controle Estudar — quando vazio,
+ * de lista com o nome em texto somente leitura e as ações Estudar e Editar,
+ * de nome acessível único (spec 021: FR-340–FR-343), e a elegibilidade se comunica pelo controle Estudar — quando vazio,
  * por um motivo em texto associado ao botão desabilitado.
  */
 
@@ -50,10 +50,9 @@ async function semearBaralho(
   }
 }
 
-/** O item de lista do Baralho de nome informado, pelo link do próprio nome. */
+/** O item de lista do Baralho de nome informado, pelo texto do próprio nome. */
 function itemDoBaralho(nome: string): HTMLElement {
-  const link = screen.getByRole("link", { name: nome });
-  const item = link.closest("li");
+  const item = screen.getByText(nome).closest("li");
 
   if (item === null) {
     throw new Error(`Item do Baralho "${nome}" não encontrado.`);
@@ -124,7 +123,7 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument();
   });
 
-  it("cada Baralho é um item de lista cujo nome abre o detalhe, com ações nomeadas (FR-144)", async () => {
+  it("cada Baralho é um item de lista com nome, contagem e as ações Estudar e Editar (FR-340, FR-343)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
     await semearBaralho(cliente, "Alemão");
@@ -135,24 +134,28 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
 
     const itemDeIngles = itemDoBaralho("Inglês");
 
-    expect(
-      within(itemDeIngles).getByRole("link", { name: "Inglês" }),
-    ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/.+$/));
+    expect(itemDeIngles).toHaveRole("listitem");
+    expect(within(itemDeIngles).getByText("1 Cartão")).toBeInTheDocument();
     expect(
       within(itemDeIngles).getByRole("link", { name: "Estudar Inglês" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/.+\/estudo$/));
+    expect(
+      within(itemDeIngles).getByRole("link", { name: "Editar Inglês" }),
+    ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/[^/]+$/));
+    expect(within(itemDeIngles).getAllByRole("link")).toHaveLength(2);
 
     const itemDeAlemao = itemDoBaralho("Alemão");
 
-    expect(
-      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
-    ).toBeInTheDocument();
+    expect(within(itemDeAlemao).getByText("0 Cartões")).toBeInTheDocument();
     expect(
       within(itemDeAlemao).getByRole("button", { name: "Estudar Alemão" }),
     ).toBeDisabled();
+    expect(
+      within(itemDeAlemao).getByRole("link", { name: "Editar Alemão" }),
+    ).toBeInTheDocument();
   });
 
-  it("o nome acessível do link é só o nome; a contagem é a sua descrição (FR-144)", async () => {
+  it("o nome do Baralho não é link e clicar nele não navega (FR-341)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello", "Goodbye"]);
 
@@ -160,18 +163,19 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
 
     await screen.findByRole("listitem");
 
-    const item = itemDoBaralho("Inglês");
-    const linkDoNome = within(item).getByRole("link", { name: "Inglês" });
+    const nome = within(itemDoBaralho("Inglês")).getByText("Inglês");
 
-    // A contagem está dentro do link e é decoração: não entra no nome.
-    expect(linkDoNome).toHaveAccessibleName("Inglês");
-    expect(linkDoNome).toHaveAccessibleDescription("2 Cartões");
+    expect(screen.queryByRole("link", { name: "Inglês" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Inglês" })).toBeNull();
+    expect(nome).not.toHaveAttribute("tabindex");
+    expect(nome.closest("a")).toBeNull();
 
-    // A linha continua com exatamente dois controles: o nome e o Estudar.
-    expect(within(item).getAllByRole("link")).toHaveLength(2);
+    const hashAntes = window.location.hash;
+    fireEvent.click(nome);
+    expect(window.location.hash).toBe(hashAntes);
   });
 
-  it("o Estudar desabilitado expõe o motivo em texto, não só pela cor (FR-144)", async () => {
+  it("o Estudar desabilitado expõe o motivo em texto e o Editar segue disponível (FR-343)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
@@ -188,6 +192,9 @@ describe("PaginaDeBaralhos para leitor de tela", () => {
     expect(botaoDeEstudo).toHaveAccessibleDescription(
       "Sem Cartões para estudar.",
     );
-    expect(within(item).queryByText(/elegível/i)).not.toBeInTheDocument();
+    expect(
+      within(item).getByRole("link", { name: "Editar Alemão" }),
+    ).toHaveAttribute("href", expect.stringMatching(/^#\/baralhos\/[^/]+$/));
   });
+
 });

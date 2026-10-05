@@ -5,9 +5,9 @@ import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
- * Tela de Cartões — apenas a lista (T1112;
- * specs/012-interface-visual-navegavel/tasks.md; FR-140, FR-141, FR-144,
- * FR-146, FR-147, FR-148, FR-153, FR-154, FR-155, FR-156).
+ * Tela de Cartões — apenas a lista (T1112, T2102; spec 012: FR-140, FR-141,
+ * FR-147, FR-148, FR-153, FR-154, FR-155, FR-156; spec 021: FR-339, FR-344,
+ * FR-345).
  *
  * A criação e a edição saíram desta tela e passaram a ter página própria
  * (`PaginaDoFormularioDeCartao`), alcançável por rota: a criação só acontece
@@ -20,6 +20,11 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * EmMemoria em teste) chega por propriedade. As três cargas — carregando,
  * falha e vazio — são delegadas ao `EstadoDaCarga`, e a falha de transporte
  * preserva o acervo exibido e permite nova tentativa (FR-044, FR-144, FR-153).
+ *
+ * Cada item segue a linha compacta da lista de Baralhos (FR-339) e mostra só
+ * o título — a Frente, somente leitura — com as ações Excluir → Editar à
+ * direita (FR-344). Verso e Vínculos ficam fora da listagem; as consequências
+ * reais continuam declaradas no diálogo de exclusão (FR-345).
  *
  * Os nomes acessíveis das ações incorporam a Frente do Cartão ("Editar
  * <Frente>", "Excluir <Frente>") para que cada item seja inequívoco para
@@ -268,27 +273,13 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
           />
         </div>
       ) : (
-        <ul className="lista">
+        <ul className="lista lista--compacta">
           {cartoes.map((cartao) => (
-            <li key={cartao.id} className="cartao">
-              <p className="lado-do-cartao">Frente</p>
-              <p className="conteudo-do-cartao">{cartao.frente}</p>
-              <p className="lado-do-cartao">Verso</p>
-              <p className="conteudo-do-cartao">{cartao.verso}</p>
-              <p className="baralhos-do-cartao">
-                {cartao.baralhos.length === 0
-                  ? "Em nenhum Baralho"
-                  : cartao.baralhos.map((baralho) => baralho.nome).join(", ")}
-              </p>
-              <div className="acoes">
-                <a
-                  ref={registrarBotaoDeEdicao(cartao.id)}
-                  className="botao botao--secundario"
-                  href={`#/cartoes/${encodeURIComponent(cartao.id)}/editar`}
-                  aria-label={`Editar ${cartao.frente}`}
-                >
-                  Editar
-                </a>
+            <li key={cartao.id} className="linha-da-lista">
+              <div className="linha-da-lista__texto">
+                <p className="linha-da-lista__titulo">{cartao.frente}</p>
+              </div>
+              <div className="linha-da-lista__acoes">
                 <button
                   ref={registrarBotaoDeExclusao(cartao.id)}
                   className="botao botao--perigo"
@@ -298,6 +289,14 @@ export function PaginaDeCartoes({ cliente }: PropriedadesDaPaginaDeCartoes) {
                 >
                   Excluir
                 </button>
+                <a
+                  ref={registrarBotaoDeEdicao(cartao.id)}
+                  className="botao botao--secundario"
+                  href={`#/cartoes/${encodeURIComponent(cartao.id)}/editar`}
+                  aria-label={`Editar ${cartao.frente}`}
+                >
+                  Editar
+                </a>
               </div>
             </li>
           ))}

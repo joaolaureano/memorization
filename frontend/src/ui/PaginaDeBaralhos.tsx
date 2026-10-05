@@ -8,8 +8,8 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
 import { hashDaRota } from "./navegacao";
 
 /**
- * Tela de Baralhos (T1108; spec 012: FR-140, FR-144, FR-148, FR-153; FR-046 e
- * FR-060 herdados de 002/005).
+ * Tela de Baralhos (T2101; spec 021: FR-339–FR-343, FR-346, FR-347; spec 012
+ * herdada em FR-140, FR-148 e FR-153).
  *
  * É **somente a lista**: a criação mora em `PaginaDoFormularioDeBaralho` e
  * começa apenas por ação da pessoa, pelo link "Criar baralho" (FR-140). A tela
@@ -18,19 +18,14 @@ import { hashDaRota } from "./navegacao";
  * regra de domínio: as mensagens exibidas são as que o cliente devolve, em
  * português (FR-046).
  *
- * Carregando, falha e vazio vêm de `EstadoDaCarga` (FR-153), e a falha oferece
- * "Tentar novamente", que relê a lista pela Interface (FR-148).
+ * Carregando, falha e vazio vêm de `EstadoDaCarga` (FR-153, FR-347), e a
+ * falha oferece "Tentar novamente", que relê a lista pela Interface (FR-148).
  *
- * Cada Baralho é uma linha fina (FR-144 revisado, SC-079): o nome é o próprio
- * link do detalhe — sem rótulo de tipo, linha de status ou botão separado —,
- * com a contagem logo abaixo, dentro do mesmo link, e a elegibilidade se
- * comunica pelo controle Estudar: link quando o Baralho tem Cartões, botão
- * desabilitado descrito pelo motivo quando não tem (FR-144).
- *
- * O link do nome envolve o nome e a contagem para que o par fique centralizado
- * na linha sem que a contagem mude o nome acessível: ela é `aria-hidden` e
- * chega à tecnologia assistiva como descrição do link (`aria-describedby`).
- * Assim o nome acessível do link é exatamente o nome do Baralho (FR-144).
+ * Cada Baralho é uma linha compacta no mesmo vocabulário da lista de Cartões
+ * (FR-339): o nome é texto somente leitura — nunca link, sem foco e sem ação
+ * ao clique (FR-341) —, a contagem aparece logo abaixo e as ações ficam à
+ * direita, na ordem Estudar → Editar (FR-340). Editar abre o detalhe do
+ * Baralho, o destino que o antigo clique no nome alcançava (FR-342).
  */
 
 interface PropriedadesDaPaginaDeBaralhos {
@@ -124,59 +119,54 @@ export function PaginaDeBaralhos({
 }
 
 /**
- * Um Baralho na linha compacta da lista (FR-144 revisado, SC-079).
+ * Um Baralho na linha compacta da lista (FR-339–FR-343).
  *
- * O link do detalhe envolve as duas linhas do bloco — o nome e a contagem —
- * de modo que o par fique centralizado verticalmente na linha e o alvo de
- * toque cubra ambos, sem rótulo extra nem `aria-label`. A contagem, porém, é
- * decoração para a tecnologia assistiva (`aria-hidden`): por isso o nome
- * acessível do link continua sendo exatamente o nome do Baralho, e a contagem
- * chega como descrição do link, pelo `aria-describedby`. O controle Estudar
- * mantém um nome acessível único e, quando não há Cartões, é um botão
- * desabilitado descrito pelo motivo em texto — nunca apenas pela cor.
+ * O nome e a contagem são texto (FR-341). Estudar preserva o fluxo anterior —
+ * link quando há Cartões, botão desabilitado descrito pelo motivo em texto,
+ * nunca apenas pela cor, quando não há (FR-343). Editar é o link do detalhe
+ * (FR-342). Os nomes acessíveis das ações incorporam o nome do Baralho, para
+ * que itens homônimos continuem distinguíveis pela posição (FR-346).
  */
 function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
   const motivoSemCartoesId = `motivo-sem-cartoes-${baralho.id}`;
-  const contagemId = `contagem-de-cartoes-${baralho.id}`;
   const temCartoes = baralho.quantidadeDeCartoes > 0;
 
   return (
-    <li className="linha-de-baralho">
-      <div className="linha-de-baralho__texto">
-        <a
-          className="linha-de-baralho__nome"
-          href={hashDaRota({ nome: "baralho", id: baralho.id })}
-          aria-describedby={contagemId}
-        >
-          <span className="linha-de-baralho__nome-texto">{baralho.nome}</span>
-          <span
-            id={contagemId}
-            className="linha-de-baralho__contagem"
-            aria-hidden="true"
+    <li className="linha-da-lista">
+      <div className="linha-da-lista__texto">
+        <p className="linha-da-lista__titulo">{baralho.nome}</p>
+        <p className="linha-da-lista__detalhe">
+          {contagemDeCartoes(baralho.quantidadeDeCartoes)}
+        </p>
+      </div>
+      <div className="linha-da-lista__acoes">
+        {temCartoes ? (
+          <a
+            className="botao botao--secundario"
+            href={hashDaRota({ nome: "estudo", id: baralho.id })}
+            aria-label={`Estudar ${baralho.nome}`}
           >
-            {contagemDeCartoes(baralho.quantidadeDeCartoes)}
-          </span>
+            Estudar
+          </a>
+        ) : (
+          <button
+            type="button"
+            className="botao botao--secundario"
+            disabled
+            aria-describedby={motivoSemCartoesId}
+            aria-label={`Estudar ${baralho.nome}`}
+          >
+            Estudar
+          </button>
+        )}
+        <a
+          className="botao botao--secundario"
+          href={hashDaRota({ nome: "baralho", id: baralho.id })}
+          aria-label={`Editar ${baralho.nome}`}
+        >
+          Editar
         </a>
       </div>
-      {temCartoes ? (
-        <a
-          className="botao botao--secundario"
-          href={hashDaRota({ nome: "estudo", id: baralho.id })}
-          aria-label={`Estudar ${baralho.nome}`}
-        >
-          Estudar
-        </a>
-      ) : (
-        <button
-          type="button"
-          className="botao botao--secundario"
-          disabled
-          aria-describedby={motivoSemCartoesId}
-          aria-label={`Estudar ${baralho.nome}`}
-        >
-          Estudar
-        </button>
-      )}
       {temCartoes ? null : (
         <span id={motivoSemCartoesId} className="visualmente-oculto">
           Sem Cartões para estudar.
@@ -186,7 +176,7 @@ function ItemDeBaralho({ baralho }: { baralho: BaralhoListado }) {
   );
 }
 
-/** Contagem de Cartões do Baralho, com o plural da língua (FR-144). */
+/** Contagem de Cartões do Baralho, com o plural da língua (FR-340). */
 function contagemDeCartoes(quantidade: number): string {
   return `${quantidade} ${quantidade === 1 ? "Cartão" : "Cartões"}`;
 }

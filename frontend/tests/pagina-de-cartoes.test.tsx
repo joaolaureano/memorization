@@ -12,7 +12,7 @@ import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. As asserções cobrem o estado vazio que
  * orienta a primeira ação com um link de criação (FR-043, FR-141), a listagem
- * que indica os Baralhos de cada Cartão (FR-003, FR-004, FR-146), as ações
+ * que mostra só o título de cada Cartão (spec 021: FR-344), as ações
  * únicas por item (FR-147) e as cargas de listagem com nova tentativa
  * (FR-144, FR-153). Criação e edição passaram a ser exercitadas em
  * `formulario-de-cartao.test.tsx`.
@@ -42,7 +42,7 @@ describe("PaginaDeCartoes", () => {
     }
   });
 
-  it("indica os Baralhos de cada Cartão, inclusive quando não há Baralho (FR-003, FR-004)", async () => {
+  it("mostra só a Frente como título, sem Verso nem Vínculos, com Excluir → Editar (FR-344)", async () => {
     const cliente = clienteDeProva();
     const vinculado = await cliente.criarCartao({
       frente: "To walk",
@@ -62,10 +62,35 @@ describe("PaginaDeCartoes", () => {
 
     render(<PaginaDeCartoes cliente={cliente} />);
 
-    expect(await screen.findByText("Inglês")).toBeInTheDocument();
-    expect(screen.getAllByText("Em nenhum Baralho")).toHaveLength(1);
-    expect(screen.getByText("To walk")).toBeInTheDocument();
-    expect(screen.getByText("To run")).toBeInTheDocument();
+    await screen.findByText("To walk");
+    const lista = screen.getByRole("list");
+
+    for (const texto of [
+      "Caminhar",
+      "Correr",
+      "Frente",
+      "Verso",
+      "Em nenhum Baralho",
+      "Inglês",
+    ]) {
+      expect(within(lista).queryByText(texto)).toBeNull();
+    }
+
+    for (const frente of ["To walk", "To run"]) {
+      const item = within(lista).getByText(frente).closest("li");
+
+      if (item === null) {
+        throw new Error("item do Cartão não encontrado");
+      }
+
+      const controles = Array.from(
+        item.querySelectorAll<HTMLElement>("button, a[href]"),
+      );
+
+      expect(controles).toHaveLength(2);
+      expect(controles[0]).toHaveAccessibleName(`Excluir ${frente}`);
+      expect(controles[1]).toHaveAccessibleName(`Editar ${frente}`);
+    }
   });
 
   it("oferece ações de Editar e Excluir por item, com nomes acessíveis únicos (FR-147, FR-155)", async () => {

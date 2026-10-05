@@ -113,12 +113,11 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
   await itemConhecido.scrollIntoViewIfNeeded();
   await expect(itemConhecido).toBeVisible();
 
-  // FR-144 revisado: cada Baralho é uma linha fina — o nome é o próprio link
-  // do detalhe (nome acessível exatamente o nome do Baralho), seguido da
-  // contagem e do controle Estudar. A antiga linha de status ("Adicione
+  // Spec 021 (FR-340, FR-341): cada Baralho é uma linha fina — o nome em
+  // texto somente leitura, a contagem e as ações Estudar → Editar. A antiga linha de status ("Adicione
   // Cartões para começar a estudar.") não existe mais.
   await expect(
-    itemConhecido.getByRole('link', { name: ultimoBaralho.nome }),
+    itemConhecido.getByRole('link', { name: `Editar ${ultimoBaralho.nome}` }),
   ).toBeVisible();
 
   // Sem Cartões, Estudar é um botão desabilitado cujo motivo chega pela

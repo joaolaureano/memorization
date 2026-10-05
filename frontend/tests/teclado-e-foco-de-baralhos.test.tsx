@@ -16,7 +16,8 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
  * 1. A ordem de tabulação segue a disposição visual — Criar baralho, depois o
- *    nome e o Estudar de cada Baralho —, com o elemento focado conferido a
+ *    Estudar e o Editar de cada Baralho; o nome não recebe foco (spec 021:
+ *    FR-340, FR-341, FR-346) —, com o elemento focado conferido a
  *    cada passo por `document.activeElement`.
  * 2. O Estudar de um Baralho vazio fica fora da ordem de tabulação, por ser um
  *    controle desabilitado, e a falha de listagem deixa a nova tentativa como
@@ -98,7 +99,7 @@ async function semearBaralho(
 }
 
 describe("PaginaDeBaralhos por teclado", () => {
-  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → nome → Estudar (FR-144)", async () => {
+  it("percorre a lista apenas por teclado, na ordem visual Criar baralho → Estudar → Editar (FR-340, FR-346)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
 
@@ -106,26 +107,19 @@ describe("PaginaDeBaralhos por teclado", () => {
     await screen.findByRole("listitem");
 
     const controles = controlesInterativos();
-    expect(controles).toHaveLength(3);
-    expect(controles[0]).toBe(
+    expect(controles).toEqual([
       screen.getByRole("link", { name: "Criar baralho" }),
-    );
-    expect(controles[1]).toBe(screen.getByRole("link", { name: "Inglês" }));
-    expect(controles[2]).toBe(
       screen.getByRole("link", { name: "Estudar Inglês" }),
-    );
+      screen.getByRole("link", { name: "Editar Inglês" }),
+    ]);
 
-    apertarTab();
-    expect(document.activeElement).toBe(controles[0]);
-
-    apertarTab();
-    expect(document.activeElement).toBe(controles[1]);
-
-    apertarTab();
-    expect(document.activeElement).toBe(controles[2]);
+    for (const controle of controles) {
+      apertarTab();
+      expect(document.activeElement).toBe(controle);
+    }
   });
 
-  it("o Estudar de um Baralho vazio fica fora da ordem de tabulação (FR-144)", async () => {
+  it("o Estudar de um Baralho vazio fica fora da ordem de tabulação e o Tab segue para Editar (FR-343, FR-346)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Alemão");
 
@@ -135,16 +129,19 @@ describe("PaginaDeBaralhos por teclado", () => {
     const botaoDeEstudo = screen.getByRole("button", {
       name: "Estudar Alemão",
     });
-
     expect(botaoDeEstudo).toBeDisabled();
-    expect(controlesInterativos()).toHaveLength(2);
-    expect(controlesInterativos()).not.toContain(botaoDeEstudo);
 
-    // A ordem visual termina no acesso ao Baralho: nada a focar depois dele.
+    const controles = controlesInterativos();
+    expect(controles).not.toContain(botaoDeEstudo);
+    expect(controles).toEqual([
+      screen.getByRole("link", { name: "Criar baralho" }),
+      screen.getByRole("link", { name: "Editar Alemão" }),
+    ]);
+
     apertarTab();
     apertarTab();
     expect(document.activeElement).toBe(
-      screen.getByRole("link", { name: "Alemão" }),
+      screen.getByRole("link", { name: "Editar Alemão" }),
     );
   });
 

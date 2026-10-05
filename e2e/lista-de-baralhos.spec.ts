@@ -70,7 +70,7 @@ const ALTURA_MAXIMA_DA_LINHA = 72;
 /** Cada controle da linha é um alvo de toque: no mínimo 44px (FR-144). */
 const ALTURA_MINIMA_DO_ALVO = 44;
 
-/** Cada linha traz exatamente dois controles: o nome e "Estudar" (FR-144). */
+/** Cada linha traz exatamente dois controles: "Estudar" e "Editar" (spec 021, FR-340). */
 const CONTROLES_POR_LINHA = 2;
 
 /** O bloco do nome fica a no máximo 4px do centro vertical da linha (FR-144). */
@@ -142,7 +142,7 @@ for (const largura of LARGURAS) {
       const linhas = page
         .getByRole("list")
         .filter({
-          has: page.getByRole("link", { name: NOME_LONGO, exact: true }),
+          has: page.getByText(NOME_LONGO, { exact: true }),
         })
         .getByRole("listitem");
 
@@ -166,7 +166,7 @@ for (const largura of LARGURAS) {
           elementos.findIndex(
             (elemento) =>
               elemento
-                .querySelector(".linha-de-baralho__nome-texto")
+                .querySelector(".linha-da-lista__titulo")
                 ?.textContent?.trim() === nomeLongo,
           ),
         NOME_LONGO,
@@ -192,27 +192,25 @@ for (const largura of LARGURAS) {
 
       // O nome de quarenta caracteres aparece inteiro, sem truncamento por
       // reticências (FR-144, SC-079).
-      const linkDoNomeLongo = page.getByRole("link", {
-        name: NOME_LONGO,
-        exact: true,
+      const tituloDoNomeLongo = page.locator(".linha-da-lista__titulo", {
+        hasText: NOME_LONGO,
       });
 
-      // O nome vive no `.linha-de-baralho__nome-texto`, dentro do link: o
-      // texto do link inteiro também traria a contagem, que é `aria-hidden`
-      // (FR-144).
+      // Spec 021, FR-341: o nome é texto somente leitura, nunca link.
+      await expect(tituloDoNomeLongo).toHaveText(NOME_LONGO);
       await expect(
-        linkDoNomeLongo.locator(".linha-de-baralho__nome-texto"),
-      ).toHaveText(NOME_LONGO);
+        page.getByRole("link", { name: NOME_LONGO, exact: true }),
+      ).toHaveCount(0);
 
-      const textOverflowDoNomeLongo = await linkDoNomeLongo.evaluate(
+      const textOverflowDoNomeLongo = await tituloDoNomeLongo.evaluate(
         (elemento) => getComputedStyle(elemento).textOverflow,
       );
 
       expect(textOverflowDoNomeLongo).not.toBe("ellipsis");
 
-      // O nome de quarenta caracteres cabe inteiro no próprio link: a largura
+      // O nome de quarenta caracteres cabe inteiro no próprio título: a largura
       // do conteúdo não ultrapassa a largura visível, sem corte (SC-079).
-      const medidaDoNomeLongo = await linkDoNomeLongo.evaluate((elemento) => ({
+      const medidaDoNomeLongo = await tituloDoNomeLongo.evaluate((elemento) => ({
         conteudo: elemento.scrollWidth,
         visivel: elemento.clientWidth,
       }));
@@ -234,9 +232,8 @@ for (const largura of LARGURAS) {
         medidaDaLinhaDoNomeLongo.visivel,
       );
 
-      // Cada linha traz exatamente dois controles — o nome, que abre o
-      // detalhe, e "Estudar" —, e ambos são alvos de toque de no mínimo 44px
-      // (FR-144).
+      // Cada linha traz exatamente dois controles — "Estudar" e "Editar" —, e
+      // ambos são alvos de toque de no mínimo 44px (spec 021: FR-340, FR-346).
       for (let indice = 0; indice < QUANTIDADE_DE_BARALHOS; indice += 1) {
         const linha = linhas.nth(indice);
         const controles = linha.locator("a, button");
@@ -251,12 +248,12 @@ for (const largura of LARGURAS) {
           expect(altura).toBeGreaterThanOrEqual(ALTURA_MINIMA_DO_ALVO);
         }
 
-        // O bloco do nome — o link com o nome e a contagem, juntos — fica
-        // verticalmente centrado na linha: o centro do link está a no máximo
-        // 4px do centro da linha (FR-144). Se o bloco do nome não existir, o
-        // desvio infinito reprova a asserção.
+        // O bloco do texto — o nome e a contagem, juntos — fica verticalmente
+        // centrado na linha: o centro do bloco está a no máximo 4px do centro
+        // da linha (FR-144, FR-339). Se o bloco não existir, o desvio infinito
+        // reprova a asserção.
         const desvioDoNome = await linha.evaluate((elemento) => {
-          const nome = elemento.querySelector(".linha-de-baralho__nome");
+          const nome = elemento.querySelector(".linha-da-lista__texto");
 
           if (nome === null) {
             return Number.POSITIVE_INFINITY;
@@ -302,11 +299,17 @@ for (const largura of LARGURAS) {
         expect(inteiras.length).toBeGreaterThanOrEqual(LINHAS_NA_PRIMEIRA_TELA);
       }
 
-      // O Baralho sem Cartões continua na lista, com o nome clicável, mas o
-      // "Estudar" é um botão desabilitado, e o motivo é a descrição acessível
-      // (FR-144).
+      // O Baralho sem Cartões continua na lista, com o nome em texto e Editar
+      // disponível, mas o "Estudar" é um botão desabilitado, e o motivo é a
+      // descrição acessível (spec 021: FR-341, FR-343).
       await expect(
-        page.getByRole("link", { name: NOME_SEM_CARTOES, exact: true }),
+        page.getByText(NOME_SEM_CARTOES, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("link", {
+          name: `Editar ${NOME_SEM_CARTOES}`,
+          exact: true,
+        }),
       ).toBeVisible();
 
       const estudarSemCartoes = page.getByRole("button", {
@@ -324,10 +327,12 @@ for (const largura of LARGURAS) {
         page.getByRole("link", { name: `Estudar ${NOME_LONGO}`, exact: true }),
       ).toBeVisible();
 
-      // O nome é o caminho para o detalhe: clicar no nome do Baralho — e não
-      // mais em "Ver baralho", que deixou de existir — abre o detalhe, cujo
-      // título é o próprio nome (FR-144).
-      await page.getByRole("link", { name: NOME_LONGO, exact: true }).click();
+      // "Editar" é o caminho para o detalhe — o mesmo destino que o antigo
+      // link do nome alcançava —, cujo título é o próprio nome (spec 021,
+      // FR-342).
+      await page
+        .getByRole("link", { name: `Editar ${NOME_LONGO}`, exact: true })
+        .click();
 
       await expect(
         page.getByRole("heading", { level: 1, name: NOME_LONGO, exact: true }),

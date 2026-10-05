@@ -215,7 +215,7 @@ async function percursoPorTeclado(
     page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
   ).toBeVisible();
 
-  await acionarPorTab(page, linkExato(page, NOME_DO_BARALHO));
+  await acionarPorTab(page, linkExato(page, `Editar ${NOME_DO_BARALHO}`));
   await expect(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();
@@ -245,7 +245,7 @@ async function percursoPorTeclado(
   await expect(
     page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
   ).toBeVisible();
-  await acionarPorTab(page, linkExato(page, NOME_DO_BARALHO));
+  await acionarPorTab(page, linkExato(page, `Editar ${NOME_DO_BARALHO}`));
   await expect(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();

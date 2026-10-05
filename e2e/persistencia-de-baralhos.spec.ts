@@ -173,13 +173,18 @@ test("Baralhos criados pela UI persistem após reiniciar API e frontend, e a mig
 
     await expect(itens).toHaveCount(2);
 
-    // FR-144 revisado (SC-079): a linha é fina — o nome é o próprio link do
-    // detalhe, com nome acessível exatamente igual ao nome do Baralho; a
-    // contagem fica logo abaixo; a elegibilidade se comunica só pelo controle
+    // Spec 021 (FR-340, FR-341): a linha é fina — o nome é texto somente
+    // leitura, e o detalhe abre por "Editar"; a contagem fica logo abaixo; a elegibilidade se comunica só pelo controle
     // Estudar. Não há linha de status, eyebrow nem "Ver baralho".
     for (const item of [itens.nth(0), itens.nth(1)]) {
       await expect(
-        item.getByRole("link", { name: NOME_DO_BARALHO, exact: true }),
+        item.getByText(NOME_DO_BARALHO, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        item.getByRole("link", {
+          name: `Editar ${NOME_DO_BARALHO}`,
+          exact: true,
+        }),
       ).toBeVisible();
       await expect(item).toContainText("0 Cartões");
 

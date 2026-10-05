@@ -240,8 +240,8 @@ async function criarCartaoPelaUi(
 }
 
 /**
- * Confere que o Cartão está na lista com exatamente a sua Frente e o seu
- * Verso, e aparece uma única vez.
+ * Confere que o Cartão está na lista uma única vez, com a Frente como título
+ * e sem o Verso (spec 021, FR-344); o Verso persistido é conferido na API.
  */
 async function conferirCartaoNaLista(
   page: Page,
@@ -252,5 +252,5 @@ async function conferirCartaoNaLista(
     .filter({ hasText: cartao.frente });
 
   await expect(item).toHaveCount(1);
-  await expect(item).toContainText(cartao.verso);
+  await expect(item).not.toContainText(cartao.verso);
 }

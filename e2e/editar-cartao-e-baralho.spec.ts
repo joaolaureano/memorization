@@ -99,7 +99,9 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    await expect(itemDoCartao).toContainText(NOME_ORIGINAL_DO_BARALHO);
+    // A lista mostra só a Frente (spec 021, FR-344); o Vínculo e a
+    // propagação do novo nome são conferidos pela API adiante.
+    await expect(itemDoCartao).not.toContainText(NOME_ORIGINAL_DO_BARALHO);
 
     // Renomeia o Baralho pela tela real de detalhe e confere o alcance.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
@@ -153,7 +155,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    await expect(itemAposRenomeacao).toContainText(
+    await expect(itemAposRenomeacao).not.toContainText(
       NOME_RENOMEADO_DO_BARALHO,
     );
 
@@ -186,7 +188,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     ).toBeVisible();
     await expect(
       page.getByRole("listitem").filter({ hasText: "To run" }),
-    ).toContainText("Correr");
+    ).toBeVisible();
 
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
     await entrarSeNecessario(page);
@@ -196,7 +198,8 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       .filter({ hasText: "To run" });
 
     await expect(itemEditado).toHaveCount(1);
-    await expect(itemEditado).toContainText("Correr");
+    // A lista mostra só a Frente (spec 021, FR-344); o Verso é conferido na API.
+    await expect(itemEditado).not.toContainText("Correr");
 
     const cartoesEditados = await listarCartoesComBaralhosPelaApi(
       enderecoDaApi,
@@ -273,7 +276,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     ).toBeVisible();
     await expect(
       page.getByRole("listitem").filter({ hasText: "To jog" }),
-    ).toContainText("Correr");
+    ).toBeVisible();
 
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
     await entrarSeNecessario(page);

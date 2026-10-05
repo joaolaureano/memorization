@@ -116,9 +116,13 @@ test('lista com 50 Cartões permanece utilizável e sem rolagem horizontal em te
 
   await excluirDoCartaoConhecido.scrollIntoViewIfNeeded();
   await expect(excluirDoCartaoConhecido).toBeVisible();
+  // A lista mostra só a Frente como título (spec 021, FR-344).
+  await expect(
+    page.getByText(ultimoCartao.frente, { exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByText(ultimoCartao.verso, { exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
 
   // E continua sem rolagem horizontal com a lista rolada até o fim.
   expect(await medirExcessoDeLargura()).toBeLessThanOrEqual(0);

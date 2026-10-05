@@ -16,8 +16,9 @@
  *             grafico-semanal__trilho, grafico-semanal__barra,
  *             grafico-semanal__valor, grafico-semanal__rotulo,
  *             item-da-lista, item-da-lista__nome, item-da-lista__percentual
- * Baralhos:   lista--compacta, linha-de-baralho, linha-de-baralho__texto,
- *             linha-de-baralho__nome, linha-de-baralho__contagem
+ * Listas:     lista--compacta, linha-da-lista, linha-da-lista__texto,
+ *             linha-da-lista__titulo, linha-da-lista__detalhe,
+ *             linha-da-lista__acoes
  * Utilitários: lista, voltar, visualmente-oculto
  */
 
@@ -1061,9 +1062,10 @@ dialog .acoes {
   gap: 0.75rem;
 }
 
-/* Lista compacta de Baralhos (FR-144 revisado, SC-079): uma única superfície
- * com divisórias, uma linha fina por Baralho — nome (link do detalhe) e
- * contagem à esquerda, Estudar à direita. */
+/* Lista compacta de Baralhos e de Cartões (spec 021: FR-339, FR-346): uma
+ * única superfície com divisórias, uma linha por item — texto à esquerda,
+ * ações à direita. As duas páginas compartilham este vocabulário para que a
+ * tipografia, o espaçamento e os botões não divirjam. */
 .lista--compacta {
   gap: 0;
   background: var(--surface);
@@ -1072,59 +1074,55 @@ dialog .acoes {
   overflow: hidden;
 }
 
-.lista--compacta > .linha-de-baralho + .linha-de-baralho {
+.lista--compacta > .linha-da-lista + .linha-da-lista {
   border-top: 1px solid var(--border);
 }
 
-.linha-de-baralho {
+/* Em telas estreitas ou com zoom de 200%, as ações descem para baixo do
+ * texto em vez de espremê-lo ou provocar rolagem horizontal (FR-346). */
+.linha-da-lista {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   min-width: 0;
-  padding: 4px 16px;
+  padding: 6px 16px;
 }
 
-/* O texto leva a sobra da linha; Estudar fica à direita, sem encolher. */
-.linha-de-baralho__texto {
-  flex: 1 1 auto;
+.linha-da-lista__texto {
+  flex: 1 1 6rem;
   min-width: 0;
 }
 
-/* O nome é o próprio link do detalhe: coluna com alvo de 44px, sem rótulo
- * extra. O nome e a contagem ficam empilhados e colados um no outro, e o par
- * é centralizado na linha — sem afundar no rodapé da linha. A contagem cabe
- * dentro do mesmo bloco, de modo que a linha não passe de 72px com nomes de
- * uma linha; nomes longos continuam quebrando, sem rolagem horizontal. */
-.linha-de-baralho__nome {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-height: 44px;
-  color: var(--accent);
+/* O título é texto somente leitura (FR-341, FR-344): sem cor de link. */
+.linha-da-lista__titulo {
+  margin: 0;
   font-weight: 650;
   font-size: 16px;
   line-height: 1.25;
   overflow-wrap: anywhere;
-  text-decoration: none;
 }
 
-.linha-de-baralho__nome-texto {
-  overflow-wrap: anywhere;
-}
-
-/* A contagem é decoração do link (aria-hidden no markup): retoma o tom
- * secundário e o peso normal que herdaria se estivesse fora dele. */
-.linha-de-baralho__contagem {
-  margin: 0;
+.linha-da-lista__detalhe {
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 0.875rem;
-  font-weight: 400;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.linha-de-baralho > .botao {
-  flex: 0 0 auto;
+.linha-da-lista__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Botões compactos, mas com o alvo mínimo de 44px (FR-346), para que a linha
+ * continue fina e as ações caibam ao lado do texto a partir de 360px. */
+.linha-da-lista__acoes > .botao {
+  min-height: 44px;
+  padding: 8px 14px;
 }
 
 /* Ritmo vertical: o bloco que segue a lista mantém 16px de respiro. */

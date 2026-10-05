@@ -13,8 +13,8 @@ import { PaginaDeBaralhos } from "../src/ui/PaginaDeBaralhos";
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. A criação mora em outra tela: aqui se prova
  * que a lista apenas a alcança por ação da pessoa (FR-140), que cada Baralho
- * aparece como uma linha compacta, com o nome abrindo o detalhe, a contagem e
- * controles de nome acessível único (FR-144, SC-079), que o estado vazio
+ * aparece como uma linha compacta, com o nome somente leitura, a contagem e
+ * as ações Estudar → Editar (spec 021: FR-340–FR-343), que o estado vazio
  * orienta a primeira ação (FR-153) e que a falha de listagem oferece nova
  * tentativa (FR-148).
  *
@@ -63,10 +63,9 @@ function renderizarPaginaDeBaralhos(
   return cliente;
 }
 
-/** O item de lista do Baralho de nome informado, pelo link do próprio nome. */
+/** O item de lista do Baralho de nome informado, pelo texto do próprio nome. */
 function itemDoBaralho(nome: string): HTMLElement {
-  const link = screen.getByRole("link", { name: nome });
-  const item = link.closest("li");
+  const item = screen.getByText(nome).closest("li");
 
   if (item === null) {
     throw new Error(`Item do Baralho "${nome}" não encontrado.`);
@@ -121,7 +120,7 @@ describe("PaginaDeBaralhos", () => {
     ).toHaveAttribute("href", "#/baralhos/novo");
   });
 
-  it("lista cada Baralho em uma linha: o nome abre o detalhe e a contagem acompanha o link (FR-144, SC-079)", async () => {
+  it("lista cada Baralho em uma linha: o nome é texto somente leitura e Editar abre o detalhe (FR-341, FR-342)", async () => {
     const cliente = clienteDeProva();
     const idDeIngles = await semearBaralho(cliente, "Inglês", [
       "Hello",
@@ -133,31 +132,32 @@ describe("PaginaDeBaralhos", () => {
 
     await screen.findAllByRole("listitem");
 
-    const itemDeIngles = itemDoBaralho("Inglês");
-    const nomeDeIngles = within(itemDeIngles).getByRole("link", {
-      name: "Inglês",
-    });
+    for (const [nome, id, contagem] of [
+      ["Inglês", idDeIngles, "2 Cartões"],
+      ["Alemão", idDeAlemao, "0 Cartões"],
+    ] as const) {
+      const item = itemDoBaralho(nome);
+      const nomeDoBaralho = within(item).getByText(nome);
 
-    expect(nomeDeIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
-    expect(itemDeIngles).toHaveTextContent("2 Cartões");
+      expect(screen.queryByRole("link", { name: nome })).toBeNull();
+      expect(screen.queryByRole("button", { name: nome })).toBeNull();
+      expect(nomeDoBaralho).not.toHaveAttribute("tabindex");
+      expect(nomeDoBaralho.closest("a")).toBeNull();
+      expect(within(item).getByText(contagem)).toBeInTheDocument();
 
-    // A contagem acompanha o link do nome, logo abaixo dele.
-    expect(nomeDeIngles).toHaveTextContent("2 Cartões");
-
-    const itemDeAlemao = itemDoBaralho("Alemão");
-
-    expect(
-      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
-    ).toHaveAttribute("href", `#/baralhos/${idDeAlemao}`);
-    expect(itemDeAlemao).toHaveTextContent("0 Cartões");
+      // Editar leva ao mesmo destino que o antigo link do nome (FR-342).
+      expect(
+        within(item).getByRole("link", { name: `Editar ${nome}` }),
+      ).toHaveAttribute("href", `#/baralhos/${id}`);
+    }
 
     // A linha compacta não traz rótulo de tipo nem linha de status.
     expect(screen.queryByText("Baralho")).toBeNull();
-    expect(within(itemDeIngles).queryByText(/pronto para/i)).toBeNull();
-    expect(within(itemDeAlemao).queryByText(/adicione cartões/i)).toBeNull();
+    expect(screen.queryByText(/pronto para/i)).toBeNull();
+    expect(screen.queryByText(/adicione cartões/i)).toBeNull();
   });
 
-  it("pluraliza a contagem de um único Cartão (FR-144)", async () => {
+  it("pluraliza a contagem de um único Cartão em texto visível (FR-340)", async () => {
     const cliente = clienteDeProva();
     await semearBaralho(cliente, "Inglês", ["Hello"]);
 
@@ -165,7 +165,9 @@ describe("PaginaDeBaralhos", () => {
 
     await screen.findByRole("listitem");
 
-    expect(itemDoBaralho("Inglês")).toHaveTextContent("1 Cartão");
+    expect(
+      within(itemDoBaralho("Inglês")).getByText("1 Cartão"),
+    ).toBeVisible();
   });
 
   it("o Estudar de um Baralho com Cartões é um link para a Sessão de estudo (FR-144)", async () => {
@@ -197,52 +199,43 @@ describe("PaginaDeBaralhos", () => {
     );
   });
 
-  it("cada Baralho tem exatamente dois controles, com nomes acessíveis únicos (FR-144, SC-079)", async () => {
+  it("cada Baralho tem exatamente dois controles, Estudar e Editar, nessa ordem (FR-340, FR-346)", async () => {
     const cliente = clienteDeProva();
     const idDeIngles = await semearBaralho(cliente, "Inglês", ["Hello"]);
-    await semearBaralho(cliente, "Alemão");
+    const idDeAlemao = await semearBaralho(cliente, "Alemão");
 
     renderizarPaginaDeBaralhos(cliente);
 
     await screen.findAllByRole("listitem");
 
-    const itemDeIngles = itemDoBaralho("Inglês");
+    const controlesDeIngles = Array.from(
+      itemDoBaralho("Inglês").querySelectorAll<HTMLElement>("button, a[href]"),
+    );
 
-    // Só dois controles: o nome (detalhe) e o Estudar. Nada de "Ver baralho".
-    expect(within(itemDeIngles).getAllByRole("link")).toHaveLength(2);
-    expect(within(itemDeIngles).queryAllByRole("button")).toHaveLength(0);
-
-    const nomeDeIngles = within(itemDeIngles).getByRole("link", {
-      name: "Inglês",
-    });
-    expect(nomeDeIngles).toHaveAttribute("href", `#/baralhos/${idDeIngles}`);
-
-    const estudarIngles = within(itemDeIngles).getByRole("link", {
-      name: "Estudar Inglês",
-    });
-    expect(estudarIngles).toHaveTextContent("Estudar");
-    expect(estudarIngles).toHaveAttribute(
+    expect(controlesDeIngles).toHaveLength(2);
+    expect(controlesDeIngles[0]).toHaveAccessibleName("Estudar Inglês");
+    expect(controlesDeIngles[0]).toHaveAttribute(
       "href",
       `#/baralhos/${idDeIngles}/estudo`,
     );
+    expect(controlesDeIngles[1]).toHaveAccessibleName("Editar Inglês");
+    expect(controlesDeIngles[1]).toHaveAttribute(
+      "href",
+      `#/baralhos/${idDeIngles}`,
+    );
 
-    const itemDeAlemao = itemDoBaralho("Alemão");
+    const controlesDeAlemao = Array.from(
+      itemDoBaralho("Alemão").querySelectorAll<HTMLElement>("button, a[href]"),
+    );
 
-    // O Baralho vazio troca o link por um botão desabilitado, e o nome segue
-    // sendo o único outro controle.
-    expect(within(itemDeAlemao).getAllByRole("link")).toHaveLength(1);
-    expect(
-      within(itemDeAlemao).getByRole("link", { name: "Alemão" }),
-    ).toBeInTheDocument();
-    expect(
-      within(itemDeAlemao).getByRole("button", { name: "Estudar Alemão" }),
-    ).toBeDisabled();
-    expect(
-      screen.queryByRole("link", { name: "Estudar Alemão" }),
-    ).not.toBeInTheDocument();
-
-    // Nenhum nome acessível se repete entre os Baralhos.
-    expect(screen.queryByRole("link", { name: /ver baralho/i })).toBeNull();
+    expect(controlesDeAlemao).toHaveLength(2);
+    expect(controlesDeAlemao[0]).toHaveAccessibleName("Estudar Alemão");
+    expect(controlesDeAlemao[0]).toBeDisabled();
+    expect(controlesDeAlemao[1]).toHaveAccessibleName("Editar Alemão");
+    expect(controlesDeAlemao[1]).toHaveAttribute(
+      "href",
+      `#/baralhos/${idDeAlemao}`,
+    );
   });
 
   it("a falha de listagem traz a mensagem da Interface e relê o acervo na nova tentativa (FR-046, FR-148)", async () => {

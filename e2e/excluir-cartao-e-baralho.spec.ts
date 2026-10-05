@@ -120,8 +120,10 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    await expect(itemDoCartao).toContainText(BARALHO_A_REMOVER);
-    await expect(itemDoCartao).toContainText(BARALHO_RESTANTE);
+    // A lista mostra só a Frente (spec 021, FR-344); os Vínculos aparecem
+    // nas consequências do diálogo de exclusão.
+    await expect(itemDoCartao).not.toContainText(BARALHO_A_REMOVER);
+    await expect(itemDoCartao).not.toContainText(BARALHO_RESTANTE);
 
     await itemDoCartao.getByRole("button", { name: "Excluir" }).click();
 
@@ -224,7 +226,7 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    await expect(itemDoCartaoRestante).toContainText(BARALHO_RESTANTE);
+    await expect(itemDoCartaoRestante).not.toContainText(BARALHO_RESTANTE);
     await expect(itemDoCartaoRestante).not.toContainText(BARALHO_A_REMOVER);
 
     await itemDoCartaoRestante.getByRole("button", { name: "Excluir" }).click();
@@ -269,13 +271,15 @@ test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preser
     await expect(itemDoBaralhoRestante).toHaveCount(1);
     await expect(itemDoBaralhoRestante).toContainText("0 Cartões");
 
-    // Linha fina da lista (FR-144 revisado, SC-079): o nome é o próprio link
-    // do detalhe, com nome acessível exatamente o nome do Baralho. A linha de
-    // status — "Adicione Cartões para começar a estudar." — e o rótulo
-    // "Baralho"/"Ver baralho" não existem mais.
+    // Linha fina da lista (spec 021, FR-341): o nome é texto somente leitura e
+    // o detalhe abre por "Editar". A linha de status — "Adicione Cartões para
+    // começar a estudar." — e o rótulo "Baralho"/"Ver baralho" não existem.
+    await expect(
+      itemDoBaralhoRestante.getByText(BARALHO_RESTANTE, { exact: true }),
+    ).toBeVisible();
     await expect(
       itemDoBaralhoRestante.getByRole("link", {
-        name: BARALHO_RESTANTE,
+        name: `Editar ${BARALHO_RESTANTE}`,
         exact: true,
       }),
     ).toBeVisible();
