@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baralho temporário — Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="../busca-e-filtros/styles.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="moldura">
+    <a href="#baralhos" class="marca" data-action="voltar">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio" data-action="fora">Início</a>
+      <a href="#estudo" data-action="fora">Estudo</a>
+      <a href="#baralhos" data-action="voltar" aria-current="page">Baralhos</a>
+      <a href="#cartoes" data-action="fora">Cartões</a>
+      <a href="#perfil" data-action="fora">Perfil</a>
+    </nav>
+    <button class="botao-de-saida" data-action="fora">Sair</button>
+  </header>
+  <main class="aplicacao" id="tela"></main>
+  <p class="visualmente-oculto" id="anuncio" role="status" aria-live="polite" aria-atomic="true"></p>
+  <aside class="galeria" aria-label="Controles do protótipo">
+    <p><strong>Protótipo · Spec 023</strong><br>Dados fictícios, mantidos apenas nesta aba. Registro e salvamento são simulados.</p>
+    <div class="controles-galeria">
+      <label for="cenario">Cenário de revisão</label>
+      <select id="cenario">
+        <option value="baralhos">Baralhos</option><option value="montagem">Montagem vazia</option>
+        <option value="selecao">Seleção preenchida</option><option value="sessao">Estudo</option>
+        <option value="resumo">Resumo</option><option value="salvar">Salvar como baralho</option>
+        <option value="falha-registro">Falha ao registrar sessão</option><option value="falha-salvar">Falha ao salvar baralho</option>
+        <option value="indisponivel">Cartão indisponível ao salvar</option><option value="falha-carga">Falha ao carregar acervo</option>
+        <option value="vazio">Acervo vazio</option>
+      </select>
+      <button id="abrir-cenario">Abrir cenário</button><button id="reiniciar">Reiniciar exemplos</button>
+    </div>
+  </aside>
+  <dialog id="dialogo" aria-labelledby="dialogo-titulo"><h2 id="dialogo-titulo"></h2><p id="dialogo-texto"></p><div class="acoes"><button id="dialogo-cancelar">Cancelar</button><button id="dialogo-confirmar" class="botao botao--perigo">Descartar</button></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
