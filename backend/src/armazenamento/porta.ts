@@ -121,7 +121,7 @@ export interface RegistroDeSessao {
    * (`"revisao"`) (FR-196). Na Revisão do dia, `baralhoId` vale `""` e
    * `nomeDoBaralho` vale `"Revisão do dia"` — ambos derivados pelo Module (D5).
    */
-  readonly origem: "baralho" | "revisao";
+  readonly origem: "baralho" | "revisao" | "temporario";
   /** ISO-8601 UTC, definido pelo Module na primeira inserção. */
   readonly concluidaEm: string;
   readonly estudados: number;

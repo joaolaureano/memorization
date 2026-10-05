@@ -219,6 +219,30 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
     });
   });
 
+  it("deriva Baralho e nome da Sessão com baralho temporário e agenda o Cartão estudado (FR-369, FR-376)", async () => {
+    const cartao = await criarCartao();
+
+    const registro = await registrar(
+      corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
+        origem: "temporario",
+        baralhoId: "qualquer",
+        nomeDoBaralho: "qualquer",
+      }),
+    );
+
+    expect(registro.origem).toBe("temporario");
+    expect(registro.baralhoId).toBe("");
+    expect(registro.nomeDoBaralho).toBe("Baralho temporário");
+
+    expect(await acervo.obterRegistroDeSessao(registro.id)).toEqual({
+      ok: true,
+      registro,
+      baralhoExiste: false,
+    });
+
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
+  });
+
   it("deriva o Resultado de cada Item da Avaliação (FR-194, FR-195)", async () => {
     const cartao = await criarCartao();
 

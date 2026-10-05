@@ -66,7 +66,7 @@ interface ItemDoRegistroEsperado {
 
 interface RegistroEsperado {
   id: string;
-  origem: "baralho" | "revisao";
+  origem: "baralho" | "revisao" | "temporario";
   baralhoId: string;
   nomeDoBaralho: string;
   concluidaEm: string;
@@ -795,6 +795,40 @@ describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
     expect(registro.origem).toBe("revisao");
     expect(registro.baralhoId).toBe("");
     expect(registro.nomeDoBaralho).toBe("Revisão do dia");
+  });
+
+  it("deriva Baralho vazio e o nome 'Baralho temporário', sem Baralho na leitura e sem duplicar no reenvio (FR-369)", async () => {
+    const corpo = registroCru({
+      origem: "temporario",
+      baralhoId: "ignorado",
+      nomeDoBaralho: "ignorado",
+    });
+
+    const resposta = await postarSessao(corpo);
+    expect(resposta.statusCode).toBe(201);
+
+    const registro = resposta.json() as RegistroEsperado;
+    expect(registro.origem).toBe("temporario");
+    expect(registro.baralhoId).toBe("");
+    expect(registro.nomeDoBaralho).toBe("Baralho temporário");
+
+    const leitura = await pedir({
+      method: "GET",
+      url: `/sessoes/${registro.id}`,
+    });
+
+    expect(leitura.statusCode).toBe(200);
+    expect(leitura.json()).toEqual({
+      registro,
+      baralhoExiste: false,
+    });
+
+    const reenvio = await postarSessao(corpo);
+    expect(reenvio.statusCode).toBe(200);
+    expect(reenvio.json()).toEqual(registro);
+
+    const estatisticas = await lerEstatisticas();
+    expect(estatisticas.json().recentes).toHaveLength(1);
   });
 
   it("a leitura do registro mostra 'Revisão do dia' e nenhum Baralho (FR-215)", async () => {

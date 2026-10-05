@@ -724,7 +724,7 @@ type LinhaDeRegistro = {
   id: string;
   baralhoId: string;
   nomeDoBaralho: string;
-  origem: "baralho" | "revisao";
+  origem: "baralho" | "revisao" | "temporario";
   concluidaEm: Instante;
   estudados: number;
   acertos: number;

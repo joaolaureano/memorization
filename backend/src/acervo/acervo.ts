@@ -273,11 +273,12 @@ export type ResultadoDeExclusaoDeBaralho =
  * Corpo de `POST /sessoes` ainda **cru**: tudo é `unknown`, porque vem da rede
  * e nada garante a forma antes de o `Acervo` validar (FR-161, FR-164).
  *
- * A `origem` diz se a Sessão veio do estudo livre por Baralho (`"baralho"`) ou
- * da Revisão do dia (`"revisao"`); em `"revisao"`, `baralhoId` e
- * `nomeDoBaralho` são ignorados e derivados (D5, FR-196). Cada Item traz a
- * Frente, o Verso, o Cartão de origem e a Avaliação em quatro níveis — o
- * Resultado é **derivado** dela (FR-193, FR-194).
+ * A `origem` diz se a Sessão veio do estudo livre por Baralho (`"baralho"`),
+ * da Revisão do dia (`"revisao"`) ou do estudo temporário (`"temporario"`); em
+ * `"revisao"` e `"temporario"`, `baralhoId` e `nomeDoBaralho` são ignorados e
+ * derivados (D5, FR-196, FR-369). Cada Item traz a Frente, o Verso, o Cartão de
+ * origem e a Avaliação em quatro níveis — o Resultado é **derivado** dela
+ * (FR-193, FR-194).
  *
  * A validação vive aqui, e não na rota: a mesma Interface de domínio serve a
  * qualquer entrada, e o transporte HTTP continua sendo só transporte (FR-046).
@@ -683,6 +684,9 @@ const LIMITE_DE_ITENS_REGISTRADOS = 1000;
 /** Rótulo do Baralho derivado na Sessão de Revisão do dia (D5, FR-196). */
 const NOME_DA_REVISAO_DO_DIA = "Revisão do dia";
 
+/** Rótulo do Baralho derivado na Sessão de estudo temporário (FR-369). */
+const NOME_DO_BARALHO_TEMPORARIO = "Baralho temporário";
+
 /** Quantidade máxima de identificadores numa consulta de prévias (FR-221). */
 const LIMITE_DE_CARTOES_PARA_PREVIA = 200;
 
@@ -793,7 +797,8 @@ function interpretarItem(
  *
  * A `origem` decide o Baralho: em `"revisao"`, `baralhoId` e `nomeDoBaralho`
  * são **derivados** para `""` e `"Revisão do dia"`, ignorando o que o cliente
- * mandar (D5, FR-196); em `"baralho"`, valem as regras da `013` — Baralho
+ * mandar (D5, FR-196); em `"temporario"`, do mesmo modo, para `""` e `"Baralho
+ * temporário"` (FR-369); em `"baralho"`, valem as regras da `013` — Baralho
  * identificado e nome dentro dos limites vigentes. O Baralho **não** precisa
  * existir: o registro guarda o nome como era, e o Baralho pode ter sido
  * excluído antes mesmo de a Sessão ser registrada (FR-165, FR-178).
@@ -811,16 +816,23 @@ function interpretarRegistro(
     return null;
   }
 
-  if (origem !== "baralho" && origem !== "revisao") {
+  if (
+    origem !== "baralho" &&
+    origem !== "revisao" &&
+    origem !== "temporario"
+  ) {
     return null;
   }
 
   let baralhoDoRegistro: string;
   let nomeDoBaralhoDoRegistro: string;
 
-  if (origem === "revisao") {
+  if (origem === "revisao" || origem === "temporario") {
     baralhoDoRegistro = "";
-    nomeDoBaralhoDoRegistro = NOME_DA_REVISAO_DO_DIA;
+    nomeDoBaralhoDoRegistro =
+      origem === "revisao"
+        ? NOME_DA_REVISAO_DO_DIA
+        : NOME_DO_BARALHO_TEMPORARIO;
   } else {
     if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
       return null;
@@ -1530,11 +1542,14 @@ export function criarAcervo(
       }
 
       /**
-       * A Sessão da Revisão do dia não tem Baralho: o registro é devolvido
-       * como está, com `baralhoExiste: false` e sem sequer consultar o Baralho
-       * (D5, FR-215).
+       * A Sessão da Revisão do dia e a do estudo temporário não têm Baralho: o
+       * registro é devolvido como está, com `baralhoExiste: false` e sem sequer
+       * consultar o Baralho (D5, FR-215, FR-376).
        */
-      if (encontrado.valor.origem === "revisao") {
+      if (
+        encontrado.valor.origem === "revisao" ||
+        encontrado.valor.origem === "temporario"
+      ) {
         return {
           ok: true,
           registro: encontrado.valor,
