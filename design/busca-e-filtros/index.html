@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Busca e filtros — Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="moldura">
+    <a class="marca" href="#baralhos">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio" data-preview="Início">Início</a>
+      <a href="#estudo" data-preview="Estudo">Estudo</a>
+      <a href="#baralhos" data-page="baralhos">Baralhos</a>
+      <a href="#cartoes" data-page="cartoes">Cartões</a>
+      <a href="#perfil" data-preview="Perfil">Perfil</a>
+    </nav>
+    <button class="botao-de-saida" data-preview="Sair">Sair</button>
+  </header>
+  <main class="aplicacao" id="main">
+    <header class="cabecalho-da-pagina">
+      <div><h1 id="titulo">Baralhos</h1><p class="texto-secundario" id="descricao"></p></div>
+      <button class="botao botao--primario" id="criar">Criar baralho</button>
+    </header>
+    <section class="filtros" aria-label="Busca e filtros">
+      <div class="campo busca"><label class="rotulo" for="busca" id="rotulo-busca">Buscar baralhos</label><input type="search" id="busca" placeholder="Digite o nome do baralho" autocomplete="off"></div>
+      <div class="campo" id="campo-baralho" hidden><label class="rotulo" for="baralho">Baralho</label><select id="baralho"><option value="todos">Todos</option><option value="sem">Sem baralho</option></select></div>
+      <div class="campo" id="campo-situacao" hidden><label class="rotulo" for="situacao">Situação da revisão</label><select id="situacao"><option value="todos">Todos</option><option value="novos">Novos</option><option value="pendente">Revisão pendente</option><option value="em-dia">Em dia</option></select></div>
+    </section>
+    <div class="resultado-cabecalho"><p id="contagem" role="status" aria-live="polite" aria-atomic="true"></p><button id="limpar" class="botao botao--secundario">Limpar filtros</button></div>
+    <div id="resultados"></div>
+  </main>
+  <aside class="galeria" aria-label="Controles do protótipo">
+    <p><strong>Protótipo · Spec 022</strong><br>Dados fictícios. As alterações duram apenas nesta aba.</p>
+    <div class="controles-galeria"><label for="cenario">Cenário de revisão</label><select id="cenario"><option value="normal">Lista preenchida</option><option value="sem-resultados">Busca sem resultados</option><option value="vazio">Acervo vazio</option><option value="carregando">Carregamento</option><option value="falha">Falha de leitura</option></select><button id="reiniciar">Reiniciar exemplos</button></div>
+  </aside>
+  <dialog id="dialogo" aria-labelledby="dialogo-titulo"><h2 id="dialogo-titulo"></h2><p id="dialogo-texto"></p><div class="acoes"><button id="cancelar">Fechar</button><button id="confirmar" class="botao botao--perigo" hidden>Excluir cartão</button></div></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
