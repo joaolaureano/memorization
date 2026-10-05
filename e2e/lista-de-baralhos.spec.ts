@@ -76,8 +76,12 @@ const CONTROLES_POR_LINHA = 2;
 /** O bloco do nome fica a no máximo 4px do centro vertical da linha (FR-144). */
 const TOLERANCIA_DE_CENTRALIZACAO = 4;
 
-/** Na primeira tela do telefone, ao menos seis linhas inteiras (SC-079). */
-const LINHAS_NA_PRIMEIRA_TELA = 6;
+/**
+ * Na primeira tela do telefone, ao menos cinco linhas inteiras (SC-079);
+ * o cabeçalho ganhou «Criar baralho temporário» (023, FR-360), cuja ação
+ * pode quebrar linha em telas estreitas mantendo o texto completo.
+ */
+const LINHAS_NA_PRIMEIRA_TELA = 5;
 
 test.setTimeout(180_000);
 

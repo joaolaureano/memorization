@@ -1577,7 +1577,9 @@ label.campo--opcao {
  * ------------------------------------------------------------------------- */
 
 .cabecalho-da-pagina .acoes {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .montagem {
@@ -1717,5 +1719,12 @@ label.campo--opcao {
 
   .titulo-contagem {
     flex-wrap: wrap;
+  }
+
+  .cabecalho-da-pagina .acoes .botao {
+    flex: 1 1 auto;
+    min-height: 44px;
+    padding-inline: 12px;
+    white-space: nowrap;
   }
 }

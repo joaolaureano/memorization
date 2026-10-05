@@ -83,10 +83,10 @@ test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em te
     page.getByRole('heading', { level: 1, name: 'Baralhos' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Criar baralho' }),
+    page.getByRole('link', { name: 'Criar baralho', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Criar baralho' }),
+    page.getByRole('link', { name: 'Criar baralho', exact: true }),
   ).toBeEnabled();
   await expect(page.getByRole('listitem')).toHaveCount(QUANTIDADE_DE_BARALHOS);
 

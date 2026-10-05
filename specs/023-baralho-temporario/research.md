@@ -94,3 +94,9 @@ Criado `checklists/ux-e-contrato.md` com 16 itens. Na avaliação do Arquiteto, 
 ### Analyze
 
 Sem CRITICAL. Todos os FRs (FR-360 a FR-377) e SCs (SC-143 a SC-149) têm tarefa e prova. Dois edge cases da spec estavam só implícitos nas provas de T2308 e foram explicitados: Baralho de origem excluído depois da adição e Baralho vazio com «Sem cartões». Portão liberado para `implement`.
+
+## Registro de implementação (2026-10-05)
+
+- T2301–T2314 implementadas por workers DeepSeek flash (Princípio XI), revisadas e verificadas pelo Arquiteto; correções de revisão sempre devolvidas ao worker.
+- Telefone: o cabeçalho de Baralhos mantém as duas ações numa linha quando cabem (`.cabecalho-da-pagina .acoes .botao { flex: 1 1 auto }` até 480 px); em 390 px «Criar baralho temporário» quebra linha, como o FR-360 permite, e a prova do SC-079 (`e2e/lista-de-baralhos.spec.ts`) passa a exigir cinco linhas inteiras na primeira tela, em vez de seis.
+- `npm run verificar:ci` verde: backend 915 (SQLite) + 239 (PostgreSQL), frontend 883, e2e 91.
