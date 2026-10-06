@@ -8,6 +8,13 @@ import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
 
+async function clienteComBaralho() {
+  const cliente = clienteDeProva();
+  const resultado = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!resultado.ok) throw new Error("Baralho de prova não criado");
+  return { cliente, baralhoId: resultado.baralho.id };
+}
+
 /**
  * T011 — Criar Cartão e navegar a lista apenas por teclado, com foco visível
  * (specs/001-criar-cartao/tasks.md, FR-054, FR-055, SC-017).
@@ -124,9 +131,11 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 
 describe("PaginaDoFormularioDeCartao por teclado", () => {
   it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Salvar (FR-054, SC-017)", async () => {
+    const { cliente, baralhoId } = await clienteComBaralho();
+    window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        <PaginaDoFormularioDeCartao cliente={cliente} baralhoId={baralhoId} />,
         true,
       ),
     );
@@ -155,16 +164,17 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
     apertarEnter(botaoDeSalvar);
 
     await waitFor(() => {
-      expect(window.location.hash).toBe("#/cartoes");
+      expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
     });
   });
 
   it.each(CASOS_DE_RECUSA)(
     "numa recusa $descricao, o foco vai ao campo $campo e o conteúdo permanece (FR-055)",
     async (caso) => {
+      const { cliente, baralhoId } = await clienteComBaralho();
       render(
         comProtecaoDeSaida(
-          <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+          <PaginaDoFormularioDeCartao cliente={cliente} baralhoId={baralhoId} />,
           true,
         ),
       );
@@ -196,11 +206,11 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
   );
 
   it("com o transporte indisponível, o foco permanece no botão — nenhum campo precisa de correção (FR-044, FR-055)", async () => {
-    const cliente = clienteDeProva();
+    const { cliente, baralhoId } = await clienteComBaralho();
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        <PaginaDoFormularioDeCartao cliente={cliente} baralhoId={baralhoId} />,
         true,
       ),
     );

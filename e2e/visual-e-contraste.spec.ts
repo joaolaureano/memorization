@@ -7,7 +7,7 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -16,7 +16,6 @@ import {
   obterBaralhoPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type {
   CredencialDeProva,
@@ -219,7 +218,7 @@ async function prepararAmbiente(): Promise<Ambiente> {
     let idDoCartaoEditado = "";
 
     for (let indice = 1; indice <= 3; indice += 1) {
-      const cartao = await criarCartaoPelaApi(enderecoDaApi, {
+      const cartao = await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralhoComCartoes.id, {
         frente: `Frente ${indice}`,
         verso: `Verso ${indice}`,
       });
@@ -228,16 +227,11 @@ async function prepararAmbiente(): Promise<Ambiente> {
         idDoCartaoEditado = cartao.id;
       }
 
-      await vincularCartaoPelaApi(
-        enderecoDaApi,
-        cartao.id,
-        baralhoComCartoes.id,
-      );
     }
 
-    // O quarto Cartão fica sem Vínculo: aparece na lista de Cartões (onde a
-    // Frente longa é auditada) e na Tela de adicionar Cartões existentes.
-    await criarCartaoPelaApi(enderecoDaApi, {
+    // Um Baralho separado exercita a Frente longa dentro do contexto dono.
+    const baralhoLongo = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Frente longa" });
+    await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralhoLongo.id, {
       frente: FRENTE_LONGA,
       verso: "Verso da Frente longa",
     });
@@ -503,29 +497,15 @@ async function visitarAsTelas(
   );
   await conferirTela(pagina, cenario, "Detalhe do Baralho");
 
-  // Adicionar cartões existentes: os Cartões ainda sem Vínculo — entre eles a
-  // Frente longa — são oferecidos por botões "Vincular <Frente>".
-  await irParaRota(
-    pagina,
-    `#/baralhos/${ambiente.idDoBaralhoComCartoes}/adicionar`,
-  );
-  // O nome do `h1` desta Tela não consta dos fatos da spec 013; o botão
-  // "Vincular <Frente>" é o marcador de que ela chegou, com teto explícito.
-  await expect(
-    pagina.getByRole("button", { name: /^Vincular / }).first(),
-  ).toBeVisible({ timeout: ESPERA_DA_TELA });
-  await conferirTela(pagina, cenario, "Adicionar cartões");
-
-  // Cartões: a lista completa, com a Frente longa entre os quatro.
-  await irParaTela(pagina, "#/cartoes", "Cartões");
-
-  // Criar cartão.
-  await irParaTela(pagina, "#/cartoes/novo", "Criar cartão");
-
-  // Editar Cartão.
+  // Criar e editar Cartões dentro do Baralho dono.
   await irParaTela(
     pagina,
-    `#/cartoes/${ambiente.idDoCartaoEditado}/editar`,
+    `#/baralhos/${ambiente.idDoBaralhoComCartoes}/cartoes/novo`,
+    "Criar Cartão",
+  );
+  await irParaTela(
+    pagina,
+    `#/baralhos/${ambiente.idDoBaralhoComCartoes}/cartoes/${ambiente.idDoCartaoEditado}/editar`,
     "Editar Cartão",
   );
 
@@ -923,18 +903,15 @@ async function conferirNavegacaoPrincipal(
   await expect(navegacao).toBeVisible();
 
   if (cenario.largura === 390) {
-    // 019 (FR-307, FR-325): a Navegação "Principal" passou a ter cinco
-    // destinos — Início, Estudo, Baralhos, Cartões e Preferências, nessa ordem
-    // — e os cinco precisam caber no rodapé sem transbordo
-    // (FR-212, SC-076, SC-088).
+    // A navegação principal tem quatro destinos; todos cabem no rodapé sem
+    // transbordo (FR-212, SC-076, SC-088).
     const destinos = navegacao.getByRole("link");
 
-    await expect(destinos).toHaveCount(5);
+    await expect(destinos).toHaveCount(4);
     await expect(destinos.nth(0)).toHaveText("Início");
     await expect(destinos.nth(1)).toHaveText("Estudo");
     await expect(destinos.nth(2)).toHaveText("Baralhos");
-    await expect(destinos.nth(3)).toHaveText("Cartões");
-    await expect(destinos.nth(4)).toHaveText("Perfil");
+    await expect(destinos.nth(3)).toHaveText("Perfil");
 
     const medidasDaNavegacao = await navegacao.evaluate((elemento) => {
       const links = Array.from(elemento.querySelectorAll("a")).map((link) => ({

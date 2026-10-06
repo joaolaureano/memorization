@@ -682,12 +682,12 @@ describe("pacotes e inícios de cada armazenamento", () => {
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
+      "pertencimento",
       "preferencias",
       "registro_de_sessao",
       "rotina_de_estudo",
       "usuario",
       "versao_do_esquema",
-      "vinculo",
     ]);
   }, 60_000);
 
@@ -729,7 +729,18 @@ describe("pacotes e inícios de cada armazenamento", () => {
         "utf8",
       ).toString("base64");
 
-      const resposta = await fetch(`http://127.0.0.1:${porta}/cartoes`, {
+      const baralho = await fetch(`http://127.0.0.1:${porta}/baralhos`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Basic ${credencial}`,
+        },
+        body: JSON.stringify({ nome: "Inglês" }),
+      });
+      expect(baralho.status).toBe(201);
+      const baralhoId = (await baralho.json() as { id: string }).id;
+
+      const resposta = await fetch(`http://127.0.0.1:${porta}/baralhos/${baralhoId}/cartoes`, {
         method: "POST",
         headers: {
           "content-type": "application/json",

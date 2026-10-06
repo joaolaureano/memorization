@@ -9,7 +9,7 @@
 //
 // O ambiente (API + Vite dev) sobe uma vez por arquivo — `describe.serial` —
 // e cada caso abre a própria página para fixar o viewport. O acervo é o mesmo
-// do spec funcional: C1–C3 avulsos e o Baralho «Inglês» com C1 + C2.
+// do spec funcional: o Baralho «Inglês» com C1 + C2 e outro Baralho com C3.
 
 import { join } from "node:path";
 
@@ -20,7 +20,7 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -29,7 +29,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   fixarRelogioDoContexto,
 } from "./servidores-locais";
@@ -52,12 +51,6 @@ interface Ambiente {
   frontend: ProcessoIniciado;
   enderecoDaApi: string;
   enderecoDoFrontend: string;
-}
-
-interface CartaoSemeado {
-  id: string;
-  frente: string;
-  verso: string;
 }
 
 async function subirAmbiente(): Promise<Ambiente> {
@@ -99,41 +92,6 @@ async function derrubarAmbiente(ambiente: Ambiente): Promise<void> {
   await encerrarProcesso(ambiente.frontend);
   await encerrarProcesso(ambiente.api);
   await removerPastaTemporaria(ambiente.pasta);
-}
-
-async function prepararCartao(
-  ambiente: Ambiente,
-  credencial: CredencialDeProva,
-  frente: string,
-  verso: string,
-): Promise<CartaoSemeado> {
-  return criarCartaoPelaApi(
-    ambiente.enderecoDaApi,
-    { frente, verso },
-    credencial,
-  );
-}
-
-async function prepararBaralho(
-  ambiente: Ambiente,
-  credencial: CredencialDeProva,
-  nome: string,
-  cartoes: CartaoSemeado[],
-): Promise<void> {
-  const baralho = await criarBaralhoPelaApi(
-    ambiente.enderecoDaApi,
-    { nome },
-    credencial,
-  );
-
-  for (const cartao of cartoes) {
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      cartao.id,
-      baralho.id,
-      credencial,
-    );
-  }
 }
 
 /** Verdadeiro quando o documento não ultrapassa a largura da janela. */
@@ -231,11 +189,11 @@ test.describe.serial("Responsividade do Baralho temporário", () => {
       "usuario.responsividade",
     );
 
-    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
-    await prepararCartao(ambiente, credencial, FRENTES[2], "Obrigado");
-
-    await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
+    const ingles = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Inglês" }, credencial);
+    const outros = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Outros" }, credencial);
+    await criarCartaoNoBaralhoPelaApi(ambiente.enderecoDaApi, ingles.id, { frente: FRENTES[0], verso: "Como você está?" }, credencial);
+    await criarCartaoNoBaralhoPelaApi(ambiente.enderecoDaApi, ingles.id, { frente: FRENTES[1], verso: "Bom dia" }, credencial);
+    await criarCartaoNoBaralhoPelaApi(ambiente.enderecoDaApi, outros.id, { frente: FRENTES[2], verso: "Obrigado" }, credencial);
   });
 
   test.afterAll(async () => {

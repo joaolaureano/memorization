@@ -76,11 +76,11 @@ function pedir(requisicao: InjectOptions) {
 }
 
 describe("falha do armazenamento — resposta sem detalhe do driver", () => {
-  it("responde 503 na criação de Cartão, com o código estável e a mensagem em português", async () => {
+  it("responde 503 na criação de Baralho, com o código estável e a mensagem em português", async () => {
     const resposta = await pedir({
       method: "POST",
-      url: "/cartoes",
-      payload: { frente: "To walk", verso: "Caminhar" },
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
     });
 
     expect(resposta.statusCode).toBe(503);
@@ -129,14 +129,10 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
       method: "DELETE",
       url: "/baralhos/baralho-inexistente",
     });
-    const criacaoDeVinculo = await pedir({
+    const criacaoDeCartaoNoBaralho = await pedir({
       method: "POST",
-      url: "/baralhos/baralho-inexistente/vinculos",
-      payload: { cartaoId: "cartao-inexistente" },
-    });
-    const remocaoDeVinculo = await pedir({
-      method: "DELETE",
-      url: "/baralhos/baralho-inexistente/vinculos/cartao-inexistente",
+      url: "/baralhos/baralho-inexistente/cartoes",
+      payload: { frente: "To walk", verso: "Caminhar" },
     });
 
     for (const resposta of [
@@ -145,8 +141,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
       exclusaoDeCartao,
       edicaoDeBaralho,
       exclusaoDeBaralho,
-      criacaoDeVinculo,
-      remocaoDeVinculo,
+      criacaoDeCartaoNoBaralho,
     ]) {
       expect(resposta.statusCode).toBe(503);
       expect(resposta.json()).toEqual(INDISPONIVEL);
@@ -156,7 +151,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   it("responde a falha sem texto do driver, caminho de arquivo, URL ou cadeia de conexão", async () => {
     const resposta = await pedir({
       method: "POST",
-      url: "/cartoes",
+      url: "/baralhos/baralho-inexistente/cartoes",
       payload: { frente: "To walk", verso: "Caminhar" },
     });
 
@@ -175,7 +170,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   it("continua recusando a forma inválida na borda, antes do armazenamento", async () => {
     const resposta = await pedir({
       method: "POST",
-      url: "/cartoes",
+      url: "/baralhos/baralho-inexistente/cartoes",
       payload: { verso: "Caminhar" },
     });
 
@@ -198,8 +193,8 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
   it("exige a Credencial antes de alcançar o acervo: sem cabeçalho a resposta é 401", async () => {
     const resposta = await servidor.inject({
       method: "POST",
-      url: "/cartoes",
-      payload: { frente: "To walk", verso: "Caminhar" },
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
     });
 
     expect(resposta.statusCode).toBe(401);

@@ -9,7 +9,7 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -18,7 +18,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   FUSO_DE_TESTE,
   INSTANTE_DE_TESTE,
@@ -135,16 +134,10 @@ async function prepararBaralho(
   const criados: { id: string; frente: string; verso: string }[] = [];
 
   for (const cartao of cartoes) {
-    const criado = await criarCartaoPelaApi(
+    const criado = await criarCartaoNoBaralhoPelaApi(
       enderecoDaApi,
-      cartao,
-      credencial,
-    );
-
-    await vincularCartaoPelaApi(
-      enderecoDaApi,
-      criado.id,
       baralho.id,
+      cartao,
       credencial,
     );
 
@@ -589,15 +582,9 @@ test("Lista de Baralhos e montador têm etiqueta e filtro de situação; Cartõe
     await filtroDeSituacao.selectOption({ label: "Todos" });
     await expect(page.getByRole("listitem")).toHaveCount(3);
 
-    // (F) Cartões: sem o filtro de situação — só a busca e o Baralho.
-    await page.goto(`${ambiente.enderecoDoFrontend}/#/cartoes`);
-    await entrarSeNecessario(page, credencial);
-
-    await expect(page.getByLabel("Situação da revisão")).toHaveCount(0);
-    await expect(
-      page.getByRole("searchbox", { name: "Buscar cartões" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Baralho")).toBeVisible();
+    // Cartões são consultados no detalhe do dono; não existe mais uma lista
+    // global com filtro separado.
+    await expect(page.getByRole("link", { name: "Cartões", exact: true })).toHaveCount(0);
 
     // (F) Montador: a fonte "Baralhos" tem o filtro; o filtro separa os
     // Baralhos por situação. As etiquetas (Pendente/Revisado/Sem cartões) já

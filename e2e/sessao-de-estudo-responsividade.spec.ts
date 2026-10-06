@@ -79,7 +79,7 @@ test(`Sessão ${largura}px permanece utilizável e sem rolagem horizontal em tel
         body: JSON.stringify(
           CARTOES.map((cartao) => ({
             ...cartao,
-            baralhos: [{ id: 'b1', nome: 'Inglês' }],
+            baralho: { id: 'b1', nome: 'Inglês' },
           })),
         ),
       });

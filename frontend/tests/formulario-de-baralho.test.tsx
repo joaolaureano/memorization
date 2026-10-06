@@ -83,13 +83,12 @@ async function criarBaralhoComDoisCartoes(): Promise<AcervoDeTeste> {
     ["To walk", "Caminhar"],
     ["To run", "Correr"],
   ]) {
-    const cartao = await cliente.criarCartao({ frente, verso });
+    const cartao = await cliente.criarCartao(baralho.baralho.id, { frente, verso });
 
     if (!cartao.ok) {
       throw new Error("a criação do Cartão deveria ser aceita");
     }
 
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
   }
 
   return { cliente, idDoBaralho: baralho.baralho.id };

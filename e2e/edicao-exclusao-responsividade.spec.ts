@@ -7,7 +7,7 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -16,7 +16,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
@@ -83,18 +82,17 @@ test("edição e exclusão de Cartão permanecem utilizáveis e sem rolagem hori
 
     // Depois de `008-entrar`, o acervo é por Usuário: a prova cadastra o
     // Usuário de prova e entra antes de operar (FR-090, FR-097).
-    await criarUsuarioDeProva(enderecoDaApi);
-    await criarCartaoPelaApi(enderecoDaApi, CARTAO);
+    const credencial = await criarUsuarioDeProva(enderecoDaApi);
+    const baralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: NOME_DO_BARALHO }, credencial);
+    await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralho.id, CARTAO, credencial);
 
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);
     await expect(page.getByRole("listitem")).toHaveCount(1);
 
     // Na UI da spec 012 editar é navegar: o Cartão traz o link "Editar
     // <Frente>" (aria-label) rumo a #/cartoes/:id/editar.
-    await page
-      .getByRole("link", { name: `Editar ${CARTAO.frente}` })
-      .click();
+    await page.getByRole("listitem").getByRole("link", { name: "Editar", exact: true }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Editar Cartão" }),
     ).toBeVisible();
@@ -102,7 +100,7 @@ test("edição e exclusão de Cartão permanecem utilizáveis e sem rolagem hori
 
     // O formulário não foi alterado, então sair dele não pergunta nada; a
     // exclusão abre o diálogo de confirmação na própria lista.
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await page
       .getByRole("button", { name: `Excluir ${CARTAO.frente}` })
       .click();
@@ -149,12 +147,10 @@ test("renomeação e exclusão de Baralho permanecem utilizáveis e sem rolagem 
 
     await criarUsuarioDeProva(enderecoDaApi);
 
-    const cartao = await criarCartaoPelaApi(enderecoDaApi, CARTAO);
     const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
       nome: NOME_DO_BARALHO,
     });
-
-    await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
+    await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralho.id, CARTAO);
 
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);

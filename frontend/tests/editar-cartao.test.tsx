@@ -22,12 +22,15 @@ import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao
  * a falha de transporte que não conclui a operação nem perde o texto digitado.
  */
 
-async function criarCartaoVinculadoATresBaralhos(): Promise<{
+async function criarCartaoNoBaralho(): Promise<{
   cliente: ClienteEmMemoria;
   id: string;
+  baralhoId: string;
 }> {
   const cliente = clienteDeProva();
-  const cartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("a criação do Baralho deveria ser aceita");
+  const cartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To walk",
     verso: "Caminhar",
   });
@@ -36,32 +39,10 @@ async function criarCartaoVinculadoATresBaralhos(): Promise<{
     throw new Error("a criação do Cartão deveria ser aceita");
   }
 
-  for (const nome of ["Inglês", "Espanhol", "Francês"]) {
-    const baralho = await cliente.criarBaralho({ nome });
-
-    if (!baralho.ok) {
-      throw new Error("a criação do Baralho deveria ser aceita");
-    }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-  }
-
-  return { cliente, id: cartao.cartao.id };
+  return { cliente, id: cartao.cartao.id, baralhoId: baralho.baralho.id };
 }
 
-async function criarCartao(): Promise<{ cliente: ClienteEmMemoria; id: string }> {
-  const cliente = clienteDeProva();
-  const cartao = await cliente.criarCartao({
-    frente: "To walk",
-    verso: "Caminhar",
-  });
-
-  if (!cartao.ok) {
-    throw new Error("a criação do Cartão deveria ser aceita");
-  }
-
-  return { cliente, id: cartao.cartao.id };
-}
+const criarCartao = criarCartaoNoBaralho;
 
 function campoDeFrenteEmEdicao(): HTMLTextAreaElement {
   return screen.getByLabelText("Frente") as HTMLTextAreaElement;
@@ -71,20 +52,20 @@ function campoDeVersoEmEdicao(): HTMLTextAreaElement {
   return screen.getByLabelText("Verso") as HTMLTextAreaElement;
 }
 
-function renderizarEdicao(cliente: ClienteEmMemoria, id: string): void {
+function renderizarEdicao(cliente: ClienteEmMemoria, id: string, baralhoId: string): void {
   render(
     comProtecaoDeSaida(
-      <PaginaDoFormularioDeCartao cliente={cliente} id={id} />,
+      <PaginaDoFormularioDeCartao cliente={cliente} id={id} baralhoId={baralhoId} />,
       true,
     ),
   );
 }
 
 describe("edição de Cartão", () => {
-  it("edita um Cartão vinculado a três Baralhos sem aviso de alcance (FR-005, FR-006)", async () => {
-    const { cliente, id } = await criarCartaoVinculadoATresBaralhos();
+  it("edita um Cartão no seu Baralho sem aviso de alcance (FR-005, FR-006)", async () => {
+    const { cliente, id, baralhoId } = await criarCartaoNoBaralho();
 
-    renderizarEdicao(cliente, id);
+    renderizarEdicao(cliente, id, baralhoId);
 
     await screen.findByDisplayValue("To walk");
     expect(screen.queryByText(/vinculado a/i)).toBeNull();
@@ -102,7 +83,7 @@ describe("edição de Cartão", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
 
     await salvou();
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
 
     // A alteração vale no próprio Cartão e, por isso, em todos os Baralhos
     // a que ele está vinculado — nenhum Vínculo é recriado ou alterado.
@@ -115,23 +96,18 @@ describe("edição de Cartão", () => {
     }
 
     expect(cartoes.cartoes[0].frente).toBe("To run");
-    expect(cartoes.cartoes[0].baralhos).toHaveLength(3);
-
-    for (const baralho of cartoes.cartoes[0].baralhos) {
-      const detalhe = await cliente.obterBaralho(baralho.id);
-
-      expect(detalhe.ok).toBe(true);
-
-      if (detalhe.ok) {
-        expect(detalhe.baralho.cartoes[0].frente).toBe("To run");
-      }
+    expect(cartoes.cartoes[0].baralho.id).toBe(baralhoId);
+    const detalhe = await cliente.obterBaralho(baralhoId);
+    expect(detalhe.ok).toBe(true);
+    if (detalhe.ok) {
+      expect(detalhe.baralho.cartoes[0].frente).toBe("To run");
     }
   });
 
   it("recusa conteúdo vazio na edição, preserva o texto digitado e foca o campo a corrigir (FR-005, FR-055)", async () => {
-    const { cliente, id } = await criarCartao();
+    const { cliente, id, baralhoId } = await criarCartao();
 
-    renderizarEdicao(cliente, id);
+    renderizarEdicao(cliente, id, baralhoId);
     await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
@@ -147,9 +123,9 @@ describe("edição de Cartão", () => {
   });
 
   it("formulário sujo pede confirmação de descarte ao sair (FR-050, FR-148, SC-014)", async () => {
-    const { cliente, id } = await criarCartao();
+    const { cliente, id, baralhoId } = await criarCartao();
 
-    renderizarEdicao(cliente, id);
+    renderizarEdicao(cliente, id, baralhoId);
     await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {
@@ -164,9 +140,9 @@ describe("edição de Cartão", () => {
   });
 
   it("com o cliente indisponível, salvar edição falha e o conteúdo digitado permanece (FR-044, FR-045, SC-012)", async () => {
-    const { cliente, id } = await criarCartao();
+    const { cliente, id, baralhoId } = await criarCartao();
 
-    renderizarEdicao(cliente, id);
+    renderizarEdicao(cliente, id, baralhoId);
     await screen.findByDisplayValue("To walk");
 
     fireEvent.change(campoDeFrenteEmEdicao(), {

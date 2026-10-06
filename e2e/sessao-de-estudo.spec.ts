@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 import {
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -15,7 +15,6 @@ import {
   obterBaralhoPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
@@ -92,12 +91,10 @@ test("Sessão de revisão real encerra no Resumo e a interrupção descarta o an
     });
 
     for (let indice = 1; indice <= QUANTIDADE_DE_CARTOES; indice += 1) {
-      const cartao = await criarCartaoPelaApi(enderecoDaApi, {
+      await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralho.id, {
         frente: `Frente ${indice}`,
         verso: `Verso ${indice}`,
       });
-
-      await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
     }
 
     const baralhoPreparado = await obterBaralhoPelaApi(

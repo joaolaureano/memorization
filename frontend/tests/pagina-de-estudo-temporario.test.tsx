@@ -17,6 +17,8 @@ import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 
 async function criarSelecao(cliente: ClienteEmMemoria): Promise<Cartao[]> {
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("Baralho de prova não criado");
   const definicoes = [
     { frente: "How are you?", verso: "Como você está?" },
     { frente: "Good morning", verso: "Bom dia" },
@@ -24,7 +26,7 @@ async function criarSelecao(cliente: ClienteEmMemoria): Promise<Cartao[]> {
   ];
   const selecao: Cartao[] = [];
   for (const definicao of definicoes) {
-    const resultado = await cliente.criarCartao(definicao);
+    const resultado = await cliente.criarCartao(baralho.baralho.id, definicao);
     if (!resultado.ok) {
       throw new Error("não foi possível criar o Cartão de prova");
     }
@@ -331,4 +333,3 @@ it(
     expect(registroChamado.nomeDoBaralho).toBe(nomeTemporario);
   },
 );
-

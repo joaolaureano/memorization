@@ -19,7 +19,7 @@ type Props = {
  *
  * FR-370: só é oferecido depois que a Sessão foi registrada no histórico.
  * FR-371: o nome obedece às regras de Baralho (vazio/longo bloqueiam).
- * FR-372: cria Vínculos com os Cartões existentes, preservando as origens.
+ * FR-372: cria cópias dos Cartões existentes, preservando as origens.
  * FR-373: gesto único — novas tentativas reenviam o mesmo id de tentativa.
  * FR-374: Cartões indisponíveis bloqueiam o envio até a revisão explícita.
  */
@@ -164,16 +164,16 @@ export function SalvarSelecaoComoBaralho({
   );
 }
 
-/** FR-372: descreve quantos Vínculos serão criados ao salvar a seleção. */
+/** FR-372: descreve quantas cópias serão criadas ao salvar a seleção. */
 function textoDaContagem(quantidade: number): string {
   if (quantidade === 0) {
     return "Não há Cartões disponíveis para salvar.";
   }
   if (quantidade === 1) {
-    return "1 Cartão será vinculado. Os baralhos de origem serão preservados.";
+    return "Será criada 1 cópia de Cartão. Os baralhos de origem serão preservados.";
   }
   return (
-    `${quantidade} Cartões serão vinculados. ` +
+    `Serão criadas ${quantidade} cópias de Cartões. ` +
     "Os baralhos de origem serão preservados."
   );
 }

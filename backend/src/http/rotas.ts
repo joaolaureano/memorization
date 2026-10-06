@@ -99,15 +99,6 @@ const corpoDeBaralho = z.object({
 });
 
 /**
- * Forma do corpo de `POST /baralhos/{baralhoId}/vinculos`: exatamente o id do
- * Cartão a vincular, texto. Forma inválida é recusada na borda; a existência
- * do Cartão e a unicidade do par são julgadas pelo `Acervo`.
- */
-const corpoDeVinculo = z.object({
-  cartaoId: z.string(),
-});
-
-/**
  * Forma do corpo de `POST /usuarios`: exatamente o Nome de usuário e a Senha,
  * ambos texto (FR-071). O esquema **não é estrito**: propriedade extra — e a
  * Confirmação da Senha, que não faz parte deste contrato — é descartada na
@@ -211,6 +202,20 @@ const corpoDePrevias = z.object({
 });
 
 /**
+ * Forma do corpo de `POST /acervo/transicao-cartoes`: a lista de escolhas
+ * para resolver Cartões com múltiplos Baralhos. O esquema confere apenas a
+ * forma; a validação semântica é feita pelo `Acervo`.
+ */
+const corpoDeTransicao = z.object({
+  escolhas: z.array(
+    z.object({
+      cartaoId: z.string(),
+      baralhoId: z.string(),
+    }),
+  ),
+});
+
+/**
  * Forma do corpo de `PUT /preferencias`: o algoritmo (contrato da `015`, §4).
  * O esquema confere apenas a forma; o algoritmo disponível é julgado pelo
  * `Acervo` (FR-212). Campos a mais, como o antigo limite de Cartões novos por
@@ -299,44 +304,20 @@ function responderIndisponivel(
 
 /**
  * Registra as rotas de Cartão do contrato sobre o `Acervo` do Usuário que
- * Entrou: `POST /cartoes`, `GET /cartoes`, `PUT /cartoes/{id}` e
- * `DELETE /cartoes/{id}`. Chamada na inicialização, com o construtor do
- * `Acervo` real, e nos testes de contrato, com o `Acervo` sobre o Adapter do
- * armazenamento local.
+ * Entrou: `GET /cartoes`, `PUT /cartoes/{id}` e `DELETE /cartoes/{id}`.
+ * Chamada na inicialização, com o construtor do `Acervo` real, e nos testes
+ * de contrato, com o `Acervo` sobre o Adapter do armazenamento local.
  *
  * O `Acervo` de quem Entrou é construído **dentro** de cada handler, a partir do
  * dono decorado na requisição pelo hook da Credencial: nenhum `Acervo` é
  * guardado entre requisições, e toda operação é, por construção, restrita ao
- * acervo de quem Entrou (FR-090, FR-092).
+ * acervo de quem Entrou (FR-090, FR-092). Criação de Cartão agora é feita via
+ * `POST /baralhos/{baralhoId}/cartoes` (FR-025).
  */
 export function registrarRotasDeCartoes(
   servidor: FastifyInstance,
   acervoDe: AcervoDeUsuario,
 ): void {
-  servidor.post("/cartoes", async (requisicao, resposta) => {
-    const corpo = corpoDeCartao.safeParse(requisicao.body);
-
-    if (!corpo.success) {
-      return resposta.status(400).send(CORPO_INVALIDO);
-    }
-
-    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
-    const resultado = await acervo.criarCartao(corpo.data);
-
-    if (!resultado.ok) {
-      if (resultado.erro === "indisponivel") {
-        return responderIndisponivel(resposta, resultado);
-      }
-
-      return resposta.status(400).send({
-        erro: resultado.erro,
-        mensagem: resultado.mensagem,
-      });
-    }
-
-    return resposta.status(201).send(resultado.cartao);
-  });
-
   servidor.get("/cartoes", async (requisicao) =>
     acervoDe(requisicao.usuarioQueEntrou.id).listarCartoes(),
   );
@@ -359,6 +340,13 @@ export function registrarRotasDeCartoes(
 
       if (resultado.erro === "nao_encontrado") {
         return resposta.status(404).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      if (resultado.erro === "frente_duplicada") {
+        return resposta.status(409).send({
           erro: resultado.erro,
           mensagem: resultado.mensagem,
         });
@@ -394,16 +382,15 @@ export function registrarRotasDeCartoes(
 }
 
 /**
- * Registra as rotas de Baralho e de Vínculo do contrato sobre o `Acervo` de
- * quem Entrou: `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`,
- * `PUT /baralhos/{id}`, `DELETE /baralhos/{id}`,
- * `POST /baralhos/{baralhoId}/vinculos` e
- * `DELETE /baralhos/{baralhoId}/vinculos/{cartaoId}`. Mesma estrutura fina
- * das rotas de Cartão: o `Acervo` é construído em cada handler, a partir do
+ * Registra as rotas de Baralho do contrato sobre o `Acervo` de quem Entrou:
+ * `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`, `PUT /baralhos/{id}`,
+ * `DELETE /baralhos/{id}` e `POST /baralhos/{baralhoId}/cartoes`. Mesma estrutura
+ * fina das demais rotas: o `Acervo` é construído em cada handler, a partir do
  * dono decorado na requisição pelo hook da Credencial (FR-090, FR-092), a
  * forma é validada na borda, a regra de domínio é julgada exclusivamente pelo
  * `Acervo`, e a recusa de domínio é repassada com o código estável e a
- * mensagem em português devolvidos pela Interface (FR-046).
+ * mensagem em português devolvidos pela Interface (FR-046). Vínculo é agora
+ * criado implicitamente por `criarCartao` dentro de um Baralho (FR-025).
  */
 export function registrarRotasDeBaralhos(
   servidor: FastifyInstance,
@@ -556,57 +543,107 @@ export function registrarRotasDeBaralhos(
     return resposta.status(204).send();
   });
 
+  /**
+   * FR-025 — `POST /baralhos/{baralhoId}/cartoes`: cria um Cartão vinculado a um
+   * Baralho em um gesto único. Frentes duplicadas no mesmo Baralho recebem
+   * numeração automática (ex: "to walk (2)"). Mesma forma de Cartão, mesmo
+   * código `frente_duplicada` quando há colisão.
+   */
   servidor.post(
-    "/baralhos/:baralhoId/vinculos",
+    "/baralhos/:baralhoId/cartoes",
     async (requisicao, resposta) => {
       const { baralhoId } = requisicao.params as { baralhoId: string };
-      const corpo = corpoDeVinculo.safeParse(requisicao.body);
+      const corpo = corpoDeCartao.safeParse(requisicao.body);
 
       if (!corpo.success) {
         return resposta.status(400).send(CORPO_INVALIDO);
       }
 
       const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
-      const resultado = await acervo.vincular(corpo.data.cartaoId, baralhoId);
+      const resultado = await acervo.criarCartao(baralhoId, corpo.data);
 
       if (!resultado.ok) {
         if (resultado.erro === "indisponivel") {
           return responderIndisponivel(resposta, resultado);
         }
 
-        if (resultado.erro === "vinculo_duplicado") {
+        if (resultado.erro === "nao_encontrado") {
+          return resposta.status(404).send({
+            erro: resultado.erro,
+            mensagem: resultado.mensagem,
+          });
+        }
+
+        return resposta.status(400).send({
+          erro: resultado.erro,
+          mensagem: resultado.mensagem,
+        });
+      }
+
+      return resposta.status(201).send(resultado.cartao);
+    },
+  );
+}
+
+/**
+ * Registra as rotas de transição de Cartões do contrato sobre o `Acervo` de
+ * quem Entrou: `GET /acervo/transicao-cartoes` e `POST /acervo/transicao-cartoes`
+ * (FR-397, specs/025-criar-cartoes-baralho/contracts/http.md).
+ *
+ * Mesma estrutura das demais rotas: a Credencial é exigida (FR-090), o `Acervo`
+ * é construído em cada handler com o dono decorado (FR-092), a forma é validada
+ * na borda, e a recusa de domínio é repassada com código estável e mensagem em
+ * português (FR-046).
+ */
+export function registrarRotasDeTransicao(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  servidor.get(
+    "/acervo/transicao-cartoes",
+    async (requisicao, resposta) => {
+      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+      const resultado = await acervo.obterTransicao();
+
+      if (!resultado.ok) {
+        return responderIndisponivel(resposta, resultado);
+      }
+
+      return resposta.status(200).send({
+        cartoes: resultado.cartoes,
+        baralhos: resultado.baralhos,
+      });
+    },
+  );
+
+  servidor.post(
+    "/acervo/transicao-cartoes",
+    async (requisicao, resposta) => {
+      const corpo = corpoDeTransicao.safeParse(requisicao.body);
+
+      if (!corpo.success) {
+        return resposta.status(400).send({
+          erro: "escolhas_invalidas",
+          mensagem: "As escolhas devem ser uma lista válida.",
+        });
+      }
+
+      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+      const resultado = await acervo.concluirTransicao(corpo.data);
+
+      if (!resultado.ok) {
+        if (resultado.erro === "indisponivel") {
+          return responderIndisponivel(resposta, resultado);
+        }
+
+        if (resultado.erro === "conflito") {
           return resposta.status(409).send({
             erro: resultado.erro,
             mensagem: resultado.mensagem,
           });
         }
 
-        return resposta.status(404).send({
-          erro: resultado.erro,
-          mensagem: resultado.mensagem,
-        });
-      }
-
-      return resposta.status(201).send();
-    },
-  );
-
-  servidor.delete(
-    "/baralhos/:baralhoId/vinculos/:cartaoId",
-    async (requisicao, resposta) => {
-      const { baralhoId, cartaoId } = requisicao.params as {
-        baralhoId: string;
-        cartaoId: string;
-      };
-      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
-      const resultado = await acervo.desvincular(cartaoId, baralhoId);
-
-      if (!resultado.ok) {
-        if (resultado.erro === "indisponivel") {
-          return responderIndisponivel(resposta, resultado);
-        }
-
-        return resposta.status(404).send({
+        return resposta.status(400).send({
           erro: resultado.erro,
           mensagem: resultado.mensagem,
         });

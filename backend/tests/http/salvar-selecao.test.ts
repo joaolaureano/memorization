@@ -15,17 +15,17 @@ import {
 } from "../../src/http/rotas.ts";
 
 /**
- * T2304b — contrato HTTP de `POST /baralhos/de-selecao`
- * (specs/023-baralho-temporario/contracts/http.md).
+ * T039 — contrato HTTP de `POST /baralhos/de-selecao`
+ * (specs/025-criar-cartoes-baralho/contracts/http.md).
  *
  * O servidor é montado como na aplicação, com o `Acervo` sobre o Adapter do
  * armazenamento local em memória e o Adapter HTTP registrado sobre a sua
  * Interface; toda asserção atravessa `inject`, a mesma superfície que um
- * cliente HTTP usa. Os Cartões da seleção são criados antes por `POST /cartoes`,
- * de modo que o teste percorre o caminho real do Usuário. O `id` enviado pelo
- * cliente é o que torna o reenvio idempotente — `201` na primeira vez, `200` na
- * seguinte, sempre um único Baralho — e os códigos de erro do contrato são
- * cobertos com as mensagens exatas em português.
+ * cliente HTTP usa. Os Cartões da seleção são criados antes em um Baralho de
+ * origem, de modo que o teste percorre o caminho real do Usuário. O `id`
+ * enviado pelo cliente é o que torna o reenvio idempotente — `201` na primeira
+ * vez, `200` na seguinte, sempre um único Baralho. As cópias têm ids novos e
+ * Frentes numeradas quando repetidas na seleção.
  */
 
 const NOME_VALIDO = "Inglês para a próxima viagem";
@@ -59,14 +59,33 @@ function pedir(requisicao: InjectOptions) {
   return pedirComCredencial(servidor, contrato.credencial, requisicao);
 }
 
-/**
- * Cria um Cartão de apoio por `POST /cartoes` e devolve o seu `id`; o Cartão é
- * o insumo da seleção que será salva como Baralho.
- */
-async function criarCartao(frente: string, verso: string): Promise<string> {
+/** Cria um Baralho de origem; falha se a criação for recusada. */
+async function criarBaralho(): Promise<{ id: string; nome: string }> {
   const resposta = await pedir({
     method: "POST",
-    url: "/cartoes",
+    url: "/baralhos",
+    payload: { nome: "Baralho de Origem" },
+  });
+
+  if (resposta.statusCode !== 201) {
+    throw new Error(`criação de baralho recusada: ${resposta.statusCode}`);
+  }
+
+  return resposta.json() as { id: string; nome: string };
+}
+
+/**
+ * Cria um Cartão no Baralho de origem via `POST /baralhos/{id}/cartoes` e
+ * devolve o seu `id`; o Cartão é o insumo da seleção que será salva como Baralho.
+ */
+async function criarCartaoNoBaralho(
+  baralhoId: string,
+  frente: string,
+  verso: string,
+): Promise<string> {
+  const resposta = await pedir({
+    method: "POST",
+    url: `/baralhos/${baralhoId}/cartoes`,
     payload: { frente, verso },
   });
 
@@ -97,9 +116,10 @@ function lerBaralhos() {
 }
 
 describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => {
-  it("responde 201 com id e nome e os Vínculos aparecem em GET /baralhos (FR-371)", async () => {
-    const primeiro = await criarCartao("How are you?", "Como você está?");
-    const segundo = await criarCartao("Good morning", "Bom dia");
+  it("responde 201 e cria cópias com ids diferentes (T039)", async () => {
+    const baralho = await criarBaralho();
+    const primeiro = await criarCartaoNoBaralho(baralho.id, "How are you?", "Como você está?");
+    const segundo = await criarCartaoNoBaralho(baralho.id, "Good morning", "Bom dia");
 
     const resposta = await postarSelecao({
       id: randomUUID(),
@@ -108,24 +128,32 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     });
 
     expect(resposta.statusCode).toBe(201);
-    const baralho = resposta.json();
-    expect(baralho).toEqual({
+    const baralhoNovo = resposta.json();
+    expect(baralhoNovo).toEqual({
       id: expect.any(String),
       nome: NOME_VALIDO,
     });
 
     const leitura = await lerBaralhos();
     expect(leitura.statusCode).toBe(200);
-    expect(leitura.json()).toHaveLength(1);
-    expect(leitura.json()[0]).toMatchObject({
-      id: baralho.id,
+    expect(leitura.json()).toHaveLength(2);
+    const novoBaralho = leitura.json().find((b: { id: string }) => b.id === baralhoNovo.id);
+    expect(novoBaralho).toMatchObject({
+      id: baralhoNovo.id,
       nome: NOME_VALIDO,
       quantidadeDeCartoes: 2,
     });
+
+    // Verifica que os Cartões foram copiados com ids novos
+    const cartoes = await pedir({ method: "GET", url: "/cartoes" });
+    const copias = cartoes.json().filter((c: { baralho: { id: string } }) => c.baralho.id === baralhoNovo.id);
+    expect(copias).toHaveLength(2);
+    expect(copias.every((c: { id: string }) => c.id !== primeiro && c.id !== segundo)).toBe(true);
   });
 
   it("responde 200 no reenvio do mesmo id, sem duplicar o Baralho (FR-372)", async () => {
-    const cartao = await criarCartao("How are you?", "Como você está?");
+    const baralho = await criarBaralho();
+    const cartao = await criarCartaoNoBaralho(baralho.id, "How are you?", "Como você está?");
     const corpo = {
       id: randomUUID(),
       nome: NOME_VALIDO,
@@ -140,15 +168,14 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     expect(segunda.json()).toEqual(primeira.json());
 
     const leitura = await lerBaralhos();
-    expect(leitura.json()).toHaveLength(1);
-    expect(leitura.json()[0]).toMatchObject({
-      id: primeira.json().id,
-      quantidadeDeCartoes: 1,
-    });
+    const baralhos = leitura.json();
+    const criadosComNomeValido = baralhos.filter((b: { nome: string }) => b.nome === NOME_VALIDO);
+    expect(criadosComNomeValido).toHaveLength(1);
   });
 
   it("recusa nome vazio com 400, código nome_vazio e mensagem em português (FR-373)", async () => {
-    const cartao = await criarCartao("How are you?", "Como você está?");
+    const baralho = await criarBaralho();
+    const cartao = await criarCartaoNoBaralho(baralho.id, "How are you?", "Como você está?");
 
     const resposta = await postarSelecao({
       id: randomUUID(),
@@ -163,7 +190,9 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     });
 
     const leitura = await lerBaralhos();
-    expect(leitura.json()).toEqual([]);
+    const baralhos = leitura.json();
+    const criadosComNomeValido = baralhos.filter((b: { nome: string }) => b.nome === NOME_VALIDO);
+    expect(criadosComNomeValido).toHaveLength(0);
   });
 
   it("recusa cartaoIds vazio com 400 dados_invalidos e nada é criado (FR-374)", async () => {
@@ -177,11 +206,14 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     expect(resposta.json()).toEqual(DADOS_DA_SELECAO_INVALIDOS);
 
     const leitura = await lerBaralhos();
-    expect(leitura.json()).toEqual([]);
+    const baralhos = leitura.json();
+    const criadosComNomeValido = baralhos.filter((b: { nome: string }) => b.nome === NOME_VALIDO);
+    expect(criadosComNomeValido).toHaveLength(0);
   });
 
   it("recusa id que não é UUID com 400 dados_invalidos e nada é criado (FR-374)", async () => {
-    const cartao = await criarCartao("How are you?", "Como você está?");
+    const baralho = await criarBaralho();
+    const cartao = await criarCartaoNoBaralho(baralho.id, "How are you?", "Como você está?");
 
     const resposta = await postarSelecao({
       id: "não-é-um-uuid",
@@ -193,7 +225,9 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     expect(resposta.json()).toEqual(DADOS_DA_SELECAO_INVALIDOS);
 
     const leitura = await lerBaralhos();
-    expect(leitura.json()).toEqual([]);
+    const baralhos = leitura.json();
+    const criadosComNomeValido = baralhos.filter((b: { nome: string }) => b.nome === NOME_VALIDO);
+    expect(criadosComNomeValido).toHaveLength(0);
   });
 
   it("responde 409 cartoes_indisponiveis com o id inexistente e nenhum Baralho novo (FR-374)", async () => {
@@ -213,7 +247,9 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     });
 
     const leitura = await lerBaralhos();
-    expect(leitura.json()).toEqual([]);
+    const baralhos = leitura.json();
+    const criadosComNomeValido = baralhos.filter((b: { nome: string }) => b.nome === NOME_VALIDO);
+    expect(criadosComNomeValido).toHaveLength(0);
   });
 
   it("responde 401 sem Credencial (FR-090)", async () => {

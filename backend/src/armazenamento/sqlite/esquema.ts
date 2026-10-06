@@ -89,6 +89,14 @@ export function aplicarMigracoes(
 
     try {
       banco.exec("BEGIN");
+      if (migracao.precondicao !== undefined) {
+        const resultado = banco.prepare(migracao.precondicao).get();
+
+        if (Number(resultado?.pode_aplicar) !== 1) {
+          banco.exec("ROLLBACK");
+          break;
+        }
+      }
       banco.exec(migracao.sql);
       elevarVersao.run(migracao.versao);
       banco.exec("COMMIT");

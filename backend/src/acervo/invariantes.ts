@@ -10,6 +10,15 @@
 /** Limite de caracteres de Frente e Verso (FR-052). */
 export const LIMITE_DE_CARACTERES_DE_CARTAO = 1000;
 
+/** Chave de comparação para Frentes únicas dentro de um Baralho (FR-398). */
+export function normalizarFrente(frente: string): string {
+  return frente
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
 /**
  * Código estável de erro de regra de Cartão, consumido pelo cliente. Exaustivo
  * nesta feature: não há outro modo de falha de domínio.
@@ -18,7 +27,8 @@ export type CodigoDeErroDeCartao =
   | "frente_vazia"
   | "verso_vazio"
   | "frente_muito_longa"
-  | "verso_muito_longo";
+  | "verso_muito_longo"
+  | "frente_duplicada";
 
 /**
  * Falha de regra de domínio. É resultado previsto da Interface, não exceção:
@@ -134,6 +144,36 @@ export function validarNomeDeBaralho(
   }
 
   return null;
+}
+
+/**
+ * Enumera a Frente para evitar colisão no Baralho (FR-398).
+ *
+ * Se a Frente normalizada não está no conjunto, devolve a Frente inalterada.
+ * Senão, devolve `` `${frente.trim()} (${n})` `` com o menor n >= 2 cuja
+ * chave normalizada esteja livre.
+ *
+ * FR-398.
+ */
+export function numerarFrente(
+  frente: string,
+  chavesOcupadas: ReadonlySet<string>,
+): string {
+  const chave = normalizarFrente(frente);
+  const aparada = frente.trim();
+
+  if (!chavesOcupadas.has(chave)) {
+    return frente;
+  }
+
+  for (let n = 2; ; n++) {
+    const candidata = `${aparada} (${n})`;
+    const chaveCandidata = normalizarFrente(candidata);
+
+    if (!chavesOcupadas.has(chaveCandidata)) {
+      return candidata;
+    }
+  }
 }
 
 /**

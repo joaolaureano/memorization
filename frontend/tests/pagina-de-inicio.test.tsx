@@ -36,13 +36,13 @@ afterEach(() => {
   cleanup();
 });
 
-/** Um Cartão de prova com os Baralhos a que está vinculado (FR-003). */
+/** Um Cartão de prova com seu Baralho dono (FR-003). */
 function cartaoDeProva(id: string): CartaoListado {
   return {
     id,
     frente: `Frente ${id}`,
     verso: `Verso ${id}`,
-    baralhos: [],
+    baralho: { id: "b1", nome: "Inglês" },
     proximaRevisaoEm: null,
   };
 }
@@ -153,16 +153,16 @@ describe("PaginaDeInicio", () => {
     ).toBeNull();
   });
 
-  it("convida a criar o primeiro Cartão quando o acervo está vazio (FR-330)", async () => {
+  it("leva a Baralhos quando o acervo está vazio (FR-330)", async () => {
     renderDaPagina(async () => ({ ok: true, cartoes: [] }));
 
     expect(
       (
         await screen.findByRole("link", {
-          name: "Criar o primeiro Cartão",
+          name: "Ver Baralhos",
         })
       ).getAttribute("href"),
-    ).toBe("#/cartoes/novo");
+    ).toBe("#/baralhos");
   });
 
   it("não convida nem inventa mensagem quando a leitura do acervo falha (FR-330)", async () => {

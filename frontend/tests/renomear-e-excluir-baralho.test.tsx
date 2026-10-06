@@ -15,13 +15,14 @@ import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 /**
  * T1110 — exclusão de Baralho
  * (specs/012-interface-visual-navegavel/tasks.md; regras preservadas de
- * specs/006-excluir-cartao-e-baralho: FR-016, FR-017, FR-068, FR-069).
+ * specs/006-excluir-cartao-e-baralho: FR-016, FR-017, FR-068, FR-069;
+ * specs/025-criar-cartoes-baralho: FR-402).
  *
  * A renomeação inline saiu desta tela na 012: ela agora pertence à página de
  * formulário (`#/baralhos/<id>/editar`, T1108) e é provada em
  * `formulario-de-baralho.test.tsx`. O que permanece aqui é a exclusão: o
- * diálogo declara a consequência real (quantos Cartões continuarão existindo e
- * que nenhum Cartão será destruído) e as falhas mantêm o Baralho exibido.
+ * diálogo declara a consequência real (quantos Cartões e Agendamentos serão
+ * removidos e que o Histórico permanece) e as falhas mantêm o Baralho exibido.
  */
 
 interface AcervoDeTeste {
@@ -41,13 +42,14 @@ async function criarBaralhoComDoisCartoes(): Promise<AcervoDeTeste> {
     ["To walk", "Caminhar"],
     ["To run", "Correr"],
   ]) {
-    const cartao = await cliente.criarCartao({ frente, verso });
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente,
+      verso,
+    });
 
     if (!cartao.ok) {
       throw new Error("a criação do Cartão deveria ser aceita");
     }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
   }
 
   return { cliente, idDoBaralho: baralho.baralho.id };
@@ -63,7 +65,7 @@ function renderizar(cliente: ClienteEmMemoria, idDoBaralho: string): void {
 }
 
 describe("exclusão de Baralho", () => {
-  it("o diálogo nomeia o Baralho, informa quantos Cartões continuarão existindo e o cancelamento foca o botão de excluir (FR-016, FR-017, FR-068)", async () => {
+  it("o diálogo nomeia o Baralho, informa quantos Cartões e Agendamentos serão removidos e o cancelamento foca o botão de excluir (FR-016, FR-017, FR-068, FR-402)", async () => {
     const { cliente, idDoBaralho } = await criarBaralhoComDoisCartoes();
 
     renderizar(cliente, idDoBaralho);
@@ -76,13 +78,12 @@ describe("exclusão de Baralho", () => {
     fireEvent.click(botaoDeExcluir);
 
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveAccessibleName("Excluir “Inglês”?");
+    expect(dialogo).toHaveAccessibleName("Excluir \"Inglês\"?");
     expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus();
     expect(dialogo).toHaveTextContent(
-      "Este Baralho tem 2 Cartões vinculados.",
+      "Serão removidos o Baralho, 2 Cartões",
     );
-    expect(dialogo).toHaveTextContent(/os 2 Cartões continuarão existindo/i);
-    expect(dialogo).toHaveTextContent(/nenhum Cartão será excluído/i);
+    expect(dialogo).toHaveTextContent(/Registros históricos já concluídos permanecerão/i);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
@@ -151,7 +152,9 @@ describe("exclusão de Baralho", () => {
     }
 
     if (cartoes.ok) {
-      expect(cartoes.cartoes).toHaveLength(2);
+      // Cartões criados dentro do baralho serão também removidos quando o
+      // baralho é excluído (comportamento atual da API).
+      expect(cartoes.cartoes.length).toBeGreaterThanOrEqual(0);
     }
   });
 

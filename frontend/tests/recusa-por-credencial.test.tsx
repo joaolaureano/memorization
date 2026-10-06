@@ -30,7 +30,7 @@ import { CREDENCIAL_DE_PROVA, clienteDeProva,
  */
 
 beforeEach(() => {
-  window.location.hash = "#/cartoes";
+  window.location.hash = "#/inicio";
 });
 
 /**
@@ -62,10 +62,10 @@ function entrarPelaTela(): void {
  * e os dois levam à mesma rota.
  */
 function abrirCriacaoDeCartao(): void {
-  const atalho = screen.getAllByRole("link", { name: "Criar cartão" })[0];
+  const atalho = screen.getAllByRole("link", { name: "Criar Cartão" })[0];
 
   if (atalho === undefined) {
-    throw new Error("A tela de Cartões não oferece o atalho de criação.");
+    throw new Error("O Baralho não oferece o atalho de criação.");
   }
 
   fireEvent.click(atalho);
@@ -81,9 +81,9 @@ describe("recusa por Credencial", () => {
     await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
-    // A tela de Cartões carrega com a Credencial ainda válida.
+    // A tela inicial carrega com a Credencial ainda válida.
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Cartões" }),
+      await screen.findByRole("heading", { level: 1, name: /Olá,/ }),
     ).toBeInTheDocument();
 
     // Espera a tela de Cartões assentar no **estado final** — o vazio, pois
@@ -92,9 +92,7 @@ describe("recusa por Credencial", () => {
     // poderia estar em voo quando a Credencial for invalidada abaixo, e a
     // recusa dela chegaria ao guarda antes da operação que a prova exercita.
     // Assentada a tela, a única operação recusada é a que a prova dispara.
-    await screen.findByText(
-      "Ainda não há Cartões. Crie o primeiro para começar.",
-    );
+    await screen.findByRole("link", { name: "Baralhos" });
 
     // O Usuário deixa de existir: a próxima operação de acervo — a listagem da
     // tela de Baralhos — é recusada.
@@ -122,7 +120,10 @@ describe("recusa por Credencial", () => {
   it("uma criação recusada não aparece como concluída e não altera o acervo (FR-044, FR-090)", async () => {
     const servidor = clienteDeProva();
 
-    await servidor.criarCartao({ frente: "To walk", verso: "Caminhar" });
+    const criado = await servidor.criarBaralho({ nome: "Inglês" });
+    if (!criado.ok) throw new Error("não criou Baralho");
+    await servidor.criarCartao(criado.baralho.id, { frente: "To walk", verso: "Caminhar" });
+    window.location.hash = `#/baralhos/${criado.baralho.id}`;
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
     await aguardarVerificacaoDoAcesso();
@@ -153,7 +154,7 @@ describe("recusa por Credencial", () => {
     ).toHaveTextContent(/credencial não é mais válida/i);
     expect(screen.queryByText("To run")).toBeNull();
     expect(screen.queryByText(/cartão criado/i)).toBeNull();
-    expect(screen.queryByRole("heading", { level: 1, name: "Cartões" })).toBeNull();
+    expect(screen.queryByRole("heading", { level: 1, name: "Inglês" })).toBeNull();
 
     // A tela "Entrar" volta, e nenhum rastro da criação recusada permanece —
     // nem uma confirmação, nem o Cartão na lista. A prova de que o acervo ficou
@@ -166,6 +167,9 @@ describe("recusa por Credencial", () => {
 
   it("não deixa a Credencial em armazenamento, cookie nem endereço, nem antes nem depois da recusa (FR-078, FR-079, SC-033)", async () => {
     const servidor = clienteDeProva();
+    const criado = await servidor.criarBaralho({ nome: "Inglês" });
+    if (!criado.ok) throw new Error("não criou Baralho");
+    window.location.hash = `#/baralhos/${criado.baralho.id}`;
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
     await aguardarVerificacaoDoAcesso();
@@ -173,7 +177,7 @@ describe("recusa por Credencial", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole("heading", { level: 1, name: "Cartões" }),
+        screen.getByRole("heading", { level: 1, name: "Inglês" }),
       ).toBeInTheDocument(),
     );
 
@@ -183,9 +187,7 @@ describe("recusa por Credencial", () => {
     // poderia estar em voo quando a Credencial for invalidada adiante, e a
     // recusa dela chegaria ao guarda antes do "Salvar". Assentada a tela, a
     // única operação recusada é o envio da criação.
-    await screen.findByText(
-      "Ainda não há Cartões. Crie o primeiro para começar.",
-    );
+    await screen.findAllByRole("link", { name: "Criar Cartão" });
 
     // FR-141: a criação de Cartão vive em tela própria; é para lá que a
     // pessoa vai antes de digitar.
@@ -232,13 +234,16 @@ describe("recusa por Credencial", () => {
 
   it("a recusa de Credencial vai para Entrar mesmo com proteção ativa, sem abrir confirmação de descarte (FR-157)", async () => {
     const servidor = clienteDeProva();
+    const criado = await servidor.criarBaralho({ nome: "Inglês" });
+    if (!criado.ok) throw new Error("não criou Baralho");
+    window.location.hash = `#/baralhos/${criado.baralho.id}`;
 
     render(<Aplicacao criarCliente={criarFabricas(servidor)} />);
     await aguardarVerificacaoDoAcesso();
     entrarPelaTela();
 
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Cartões" }),
+      await screen.findByRole("heading", { level: 1, name: "Inglês" }),
     ).toBeInTheDocument();
 
     // Espera a tela de Cartões assentar no **estado final** — o vazio, pois
@@ -247,9 +252,7 @@ describe("recusa por Credencial", () => {
     // poderia estar em voo quando a Credencial for invalidada abaixo, e a
     // recusa dela chegaria ao guarda antes da operação que a prova exercita.
     // Assentada a tela, a única operação recusada é a que a prova dispara.
-    await screen.findByText(
-      "Ainda não há Cartões. Crie o primeiro para começar.",
-    );
+    await screen.findAllByRole("link", { name: "Criar Cartão" });
 
     // FR-141: a criação de Cartão tem tela própria. O formulário com
     // alterações não salvas registra a proteção de descarte (FR-148, FR-151):

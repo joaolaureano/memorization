@@ -10,9 +10,11 @@ import {
 import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
- * T2304a — `Acervo.salvarSelecaoComoBaralho`: cria Baralho e Vínculos num gesto
- * único e idempotente (FR-371–FR-374). Toda asserção passa pela Interface, com
- * o Adapter do armazenamento local em memória; nenhum teste inspeciona tabela.
+ * T038, T2304a — `Acervo.salvarSelecaoComoBaralho`: cria Baralho com Cartões
+ * cópia num gesto único e idempotente (FR-371–FR-374). T038: seleção com
+ * Frentes repetidas gera cópias numeradas na ordem da seleção. Toda asserção
+ * passa pela Interface, com o Adapter do armazenamento local em memória;
+ * nenhum teste inspeciona tabela.
  */
 
 const LIMITE_DE_ITENS = 1000;
@@ -21,6 +23,7 @@ const NOME_VALIDO = "Inglês para a próxima viagem";
 
 let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
+let baralhoDeOrigem: { ok: true; baralho: { id: string; nome: string } };
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
@@ -28,17 +31,29 @@ beforeEach(async () => {
   const dono = await criarDonoDeTeste(aberto.usuarios);
 
   acervo = criarAcervo(aberto.armazenamento, dono);
+
+  // Cria um Baralho de origem para os Cartões
+  const resultadoBaralho = await acervo.criarBaralho({ nome: "Baralho de origem" });
+  if (!resultadoBaralho.ok) {
+    throw new Error(`criação de Baralho recusada: ${JSON.stringify(resultadoBaralho)}`);
+  }
+  baralhoDeOrigem = resultadoBaralho;
 });
 
 afterEach(async () => {
   await aberto.encerrar();
 });
 
-/** Cria um Cartão válido no Acervo informado e devolve o seu id. */
-async function criarCartao(alvo: Acervo = acervo): Promise<string> {
-  const resultado = await alvo.criarCartao({
-    frente: "How are you?",
-    verso: "Como você está?",
+/** Cria um Cartão válido no Baralho de origem. */
+async function criarCartao(
+  alvo: Acervo = acervo,
+  baralhoId = baralhoDeOrigem.baralho.id,
+  frente = "How are you?",
+  verso = "Como você está?",
+): Promise<string> {
+  const resultado = await alvo.criarCartao(baralhoId, {
+    frente,
+    verso,
   });
 
   if (!resultado.ok) {
@@ -86,7 +101,8 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
       novo: false,
     });
 
-    expect(await acervo.listarBaralhos()).toHaveLength(1);
+    // Verifica que há apenas 2 Baralhos: o de origem e o salvo
+    expect(await acervo.listarBaralhos()).toHaveLength(2);
   });
 
   it("recusa nome vazio com o código de nome vigente (FR-373)", async () => {
@@ -176,7 +192,19 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
       "bruno.souza",
     );
     const acervoDois = criarAcervo(aberto.armazenamento, donoDois);
-    const alheio = await criarCartao(acervoDois);
+
+    // Cria um Baralho de origem para o outro usuário
+    const resultadoBaralho = await acervoDois.criarBaralho({
+      nome: "Baralho do outro usuário",
+    });
+    if (!resultadoBaralho.ok) {
+      throw new Error(`criação de Baralho recusada: ${JSON.stringify(resultadoBaralho)}`);
+    }
+
+    const alheio = await criarCartao(
+      acervoDois,
+      resultadoBaralho.baralho.id,
+    );
 
     expect(
       await acervo.salvarSelecaoComoBaralho({
@@ -190,7 +218,9 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
       cartaoIds: [alheio],
     });
 
-    expect(await acervo.listarBaralhos()).toEqual([]);
+    // Verifica que só o Baralho de origem foi criado (não o novo Baralho)
+    expect(await acervo.listarBaralhos()).toHaveLength(1);
+    expect((await acervo.listarBaralhos())[0].nome).toBe("Baralho de origem");
   });
 
   it("não altera os Baralhos de origem nem os seus Vínculos (FR-374)", async () => {
@@ -200,7 +230,7 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
 
     const origem = await acervo.salvarSelecaoComoBaralho({
       id: randomUUID(),
-      nome: "Baralho de origem",
+      nome: "Primeira seleção",
       cartaoIds: [um, dois],
     });
     expect(origem.ok).toBe(true);
@@ -211,7 +241,19 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
       "bruno.souza",
     );
     const acervoDois = criarAcervo(aberto.armazenamento, donoDois);
-    const alheio = await criarCartao(acervoDois);
+
+    // Cria um Baralho de origem para o outro usuário
+    const resultadoBaralho = await acervoDois.criarBaralho({
+      nome: "Baralho do outro usuário",
+    });
+    if (!resultadoBaralho.ok) {
+      throw new Error(`criação de Baralho recusada: ${JSON.stringify(resultadoBaralho)}`);
+    }
+
+    const alheio = await criarCartao(
+      acervoDois,
+      resultadoBaralho.baralho.id,
+    );
 
     const antes = await acervo.listarBaralhos();
 
@@ -228,5 +270,124 @@ describe("salvarSelecaoComoBaralho — salvamento pela Interface", () => {
     });
 
     expect(await acervo.listarBaralhos()).toEqual(antes);
+  });
+
+  it("seleção com Frentes repetidas gera cópias numeradas na ordem (T038)", async () => {
+    const um = await criarCartao(
+      acervo,
+      baralhoDeOrigem.baralho.id,
+      "To walk",
+      "Caminhar",
+    );
+    const dois = await criarCartao(
+      acervo,
+      baralhoDeOrigem.baralho.id,
+      "To walk",
+      "Andar",
+    );
+    const tres = await criarCartao(
+      acervo,
+      baralhoDeOrigem.baralho.id,
+      "To run",
+      "Correr",
+    );
+
+    const id = randomUUID();
+    const resultado = await acervo.salvarSelecaoComoBaralho({
+      id,
+      nome: "Seleção com Frentes repetidas",
+      cartaoIds: [um, dois, tres],
+    });
+
+    expect(resultado).toEqual({
+      ok: true,
+      baralho: { id, nome: "Seleção com Frentes repetidas" },
+      novo: true,
+    });
+
+    const baralho = await acervo.obterBaralho(id);
+    expect(baralho.ok).toBe(true);
+    if (!baralho.ok) throw new Error("baralho não encontrado");
+
+    // Verifica que as Frentes foram numeradas na ordem da seleção
+    expect(baralho.baralho.cartoes).toHaveLength(3);
+    const frentes = baralho.baralho.cartoes.map((c) => c.frente).sort();
+    expect(frentes).toContain("To walk");
+    expect(frentes).toContain("To walk (2)");
+    expect(frentes).toContain("To run");
+  });
+
+  it("cópias não têm Agendamento; origens e Agendamentos de origem ficam intactos (T038)", async () => {
+    const um = await criarCartao(
+      acervo,
+      baralhoDeOrigem.baralho.id,
+      "How are you?",
+      "Como você está?",
+    );
+
+    // Verifica que o Cartão original não tem Agendamento inicialmente
+    const cartoesAntes = await acervo.listarCartoes();
+    expect(cartoesAntes).toHaveLength(1);
+    expect(cartoesAntes[0].proximaRevisaoEm).toBeNull();
+
+    // Salva como novo Baralho
+    const id = randomUUID();
+    await acervo.salvarSelecaoComoBaralho({
+      id,
+      nome: "Cópia",
+      cartaoIds: [um],
+    });
+
+    // Verifica que há agora 2 Cartões: o original sem Agendamento e a cópia também sem
+    const cartoesDepois = await acervo.listarCartoes();
+    expect(cartoesDepois).toHaveLength(2);
+
+    const original = cartoesDepois.find((c) => c.baralho.id === baralhoDeOrigem.baralho.id);
+    const copia = cartoesDepois.find((c) => c.baralho.id === id);
+
+    expect(original).toBeDefined();
+    expect(original?.frente).toBe("How are you?");
+    expect(original?.verso).toBe("Como você está?");
+    expect(original?.proximaRevisaoEm).toBeNull();
+
+    expect(copia).toBeDefined();
+    expect(copia?.frente).toBe("How are you?");
+    expect(copia?.verso).toBe("Como você está?");
+    expect(copia?.proximaRevisaoEm).toBeNull();
+  });
+
+  it("reenviar mesmo id devolve novo: false sem novas cópias (T038)", async () => {
+    const um = await criarCartao();
+    const id = randomUUID();
+
+    const primeira = await acervo.salvarSelecaoComoBaralho({
+      id,
+      nome: "Primeira vez",
+      cartaoIds: [um],
+    });
+
+    expect(primeira.ok).toBe(true);
+    if (!primeira.ok) throw new Error("primeira falhou");
+    expect(primeira.novo).toBe(true);
+
+    // Lista Cartões antes de reenviar
+    const cartoesAntes = await acervo.listarCartoes();
+    expect(cartoesAntes).toHaveLength(2); // original + cópia
+
+    // Reenviar o mesmo id
+    const segunda = await acervo.salvarSelecaoComoBaralho({
+      id,
+      nome: "Primeira vez", // nome pode ser diferente, é ignorado no reenvio
+      cartaoIds: [um],
+    });
+
+    expect(segunda.ok).toBe(true);
+    if (!segunda.ok) throw new Error("segunda falhou");
+    expect(segunda.novo).toBe(false);
+    expect(segunda.baralho.id).toBe(id);
+
+    // Lista Cartões depois de reenviar — não deve ter mudado
+    const cartoesDepois = await acervo.listarCartoes();
+    expect(cartoesDepois).toHaveLength(2); // ainda original + cópia
   });
 });

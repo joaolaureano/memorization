@@ -67,7 +67,17 @@ describe("conexão ociosa encerrada pelo provedor", () => {
     try {
       const dono = await criarDonoDeTeste(base.usuarios);
 
-      await base.armazenamento.inserirCartao(dono, cartaoDe("c1"));
+      // Criar dois Baralhos
+      await base.armazenamento.inserirBaralho(dono, {
+        id: "b1",
+        nome: "Inglês",
+      });
+      await base.armazenamento.inserirBaralho(dono, {
+        id: "b2",
+        nome: "Espanhol",
+      });
+
+      await base.armazenamento.inserirCartaoNoBaralho(dono, "b1", cartaoDe("c1"));
 
       const espiões = [
         vi.spyOn(console, "log"),
@@ -106,11 +116,15 @@ describe("conexão ociosa encerrada pelo provedor", () => {
       await vi.waitFor(() => expect(errosEntregues).toBeGreaterThan(0));
 
       /** A próxima operação conclui: outra conexão foi aberta sozinha. */
-      expect(await base.armazenamento.listarCartoes(dono)).toEqual([
-        cartaoDe("c1"),
-      ]);
+      const cartoes = await base.armazenamento.listarCartoes(dono);
+      expect(cartoes).toHaveLength(1);
+      expect(cartoes[0]).toMatchObject({
+        id: "c1",
+        frente: "To walk",
+        verso: "Caminhar",
+      });
       expect(
-        await base.armazenamento.inserirCartao(dono, cartaoDe("c2")),
+        await base.armazenamento.inserirCartaoNoBaralho(dono, "b2", cartaoDe("c2")),
       ).toEqual({
         ok: true,
         valor: cartaoDe("c2"),
@@ -165,14 +179,20 @@ describe("armazenamento indisponível", () => {
     const aberto = await abrirArmazenamentoDaBase(nomeDaBase, avulso);
     const dono = await criarDonoDeTeste(aberto.usuarios);
 
-    await aberto.armazenamento.inserirCartao(dono, cartaoDe("c1"));
+    // Criar um Baralho
+    await aberto.armazenamento.inserirBaralho(dono, {
+      id: "b1",
+      nome: "Inglês",
+    });
+
+    await aberto.armazenamento.inserirCartaoNoBaralho(dono, "b1", cartaoDe("c1"));
 
     /** O servidor para de verdade: a base fica inalcançável. */
     await avulso.encerrar();
 
     try {
       expect(
-        await aberto.armazenamento.inserirCartao(dono, cartaoDe("c2")),
+        await aberto.armazenamento.inserirCartaoNoBaralho(dono, "b1", cartaoDe("c2")),
       ).toEqual({
         ok: false,
         erro: "indisponivel",
@@ -190,8 +210,8 @@ describe("armazenamento indisponível", () => {
       });
       expect(
         await aberto.armazenamento.inserirBaralho(dono, {
-          id: "b1",
-          nome: "Inglês",
+          id: "b2",
+          nome: "Espanhol",
         }),
       ).toEqual({ ok: false, erro: "indisponivel" });
       expect(await aberto.armazenamento.obterBaralho(dono, "b1")).toEqual({
@@ -201,18 +221,10 @@ describe("armazenamento indisponível", () => {
       expect(
         await aberto.armazenamento.atualizarBaralho(dono, {
           id: "b1",
-          nome: "Inglês",
+          nome: "Inglês Avançado",
         }),
       ).toEqual({ ok: false, erro: "indisponivel" });
       expect(await aberto.armazenamento.excluirBaralho(dono, "b1")).toEqual({
-        ok: false,
-        erro: "indisponivel",
-      });
-      expect(await aberto.armazenamento.vincular(dono, "c1", "b1")).toEqual({
-        ok: false,
-        erro: "indisponivel",
-      });
-      expect(await aberto.armazenamento.desvincular(dono, "c1", "b1")).toEqual({
         ok: false,
         erro: "indisponivel",
       });
@@ -233,7 +245,7 @@ describe("armazenamento indisponível", () => {
 
     try {
       expect(
-        await indisponivel.armazenamento.inserirCartao("dono-um", cartao),
+        await indisponivel.armazenamento.inserirCartaoNoBaralho("dono-um", "b-inexistente", cartao),
       ).toEqual({
         ok: false,
         erro: "indisponivel",
@@ -246,8 +258,14 @@ describe("armazenamento indisponível", () => {
     const disponivel = await criarArmazenamentoDeTeste();
     const dono = await criarDonoDeTeste(disponivel.usuarios);
 
+    // Criar um Baralho
+    await disponivel.armazenamento.inserirBaralho(dono, {
+      id: "b1",
+      nome: "Teste",
+    });
+
     try {
-      expect(await disponivel.armazenamento.inserirCartao(dono, cartao)).toEqual({
+      expect(await disponivel.armazenamento.inserirCartaoNoBaralho(dono, "b1", cartao)).toEqual({
         ok: true,
         valor: cartao,
       });

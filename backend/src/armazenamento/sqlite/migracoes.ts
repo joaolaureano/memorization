@@ -23,6 +23,8 @@ export interface Migracao {
    * pelo aplicador, que eleva a versão dentro dela.
    */
   sql: string;
+  /** Consulta booleana avaliada dentro da transação antes de aplicar a migração. */
+  precondicao?: string;
 }
 
 /**
@@ -500,6 +502,34 @@ END WHERE avaliacao IS NOT NULL;
 `;
 
 /**
+ * A migração 13 cria a relação exclusiva sem descartar Vínculos legados.
+ * Cartões pendentes são resolvidos transacionalmente por Usuário pela Interface
+ * do Acervo; `frente_chave` recebe a forma normalizada calculada pelo domínio.
+ */
+const ESQUEMA_PERTENCIMENTO = `
+CREATE TABLE pertencimento (
+  cartao_id    TEXT PRIMARY KEY REFERENCES cartao(id) ON DELETE CASCADE,
+  baralho_id   TEXT NOT NULL REFERENCES baralho(id) ON DELETE CASCADE,
+  frente_chave TEXT NOT NULL,
+  UNIQUE (baralho_id, frente_chave)
+);
+`;
+
+/** A migração 14 só pode remover a fonte legada sem Cartões ainda pendentes. */
+const PODE_REMOVER_VINCULO = `
+SELECT NOT EXISTS (
+  SELECT 1
+    FROM cartao AS cartao
+   WHERE NOT EXISTS (
+     SELECT 1 FROM pertencimento
+      WHERE pertencimento.cartao_id = cartao.id
+   )
+) AS pode_aplicar;
+`;
+
+const ESQUEMA_REMOVER_VINCULO = "DROP TABLE vinculo;";
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -517,4 +547,10 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 10, sql: ESQUEMA_SEM_LIMITE_DE_NOVOS },
   { versao: 11, sql: ESQUEMA_ORIGEM_TEMPORARIA },
   { versao: 12, sql: ESQUEMA_AVALIACAO_ROTULO },
+  { versao: 13, sql: ESQUEMA_PERTENCIMENTO },
+  {
+    versao: 14,
+    sql: ESQUEMA_REMOVER_VINCULO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
 ];

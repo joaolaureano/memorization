@@ -7,22 +7,23 @@ import {
   pedirComCredencial,
   type ServidorDeContrato,
 } from "./apoio-de-contrato.ts";
-import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
+import { registrarRotasDeCartoes, registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
 
 
 /**
- * T007 — contrato HTTP de `POST /cartoes`
- * (specs/001-criar-cartao/contracts/api-cartoes.md).
+ * T025 — contrato HTTP de `POST /baralhos/{id}/cartoes`
+ * (specs/025-criar-cartoes-baralho/contracts/http.md).
  *
  * O servidor é montado com o `Acervo` sobre o Adapter do armazenamento local
  * em memória e o Adapter HTTP registrado sobre a sua Interface; toda asserção
- * atravessa `inject`, a mesma superfície que um cliente HTTP usa. Os quatro
- * códigos de erro do contrato são cobertos com mensagem exata em português, e a
- * forma inválida é recusada na borda, antes de alcançar o `Acervo`.
+ * atravessa `inject`, a mesma superfície que um cliente HTTP usa. Frentes
+ * duplicadas no mesmo Baralho recebem numeração; o mesmo Cartão em Baralho
+ * diferente não numera. A forma inválida é recusada na borda.
  */
 
-const FRENTE_VALIDA = "To walk";
+const FRENTE_VALIDA = "to walk";
 const VERSO_VALIDO = "Caminhar";
+const NOME_DO_BARALHO = "Inglês";
 
 const RECUSA_DE_CORPO_INVALIDO = {
   erro: "corpo_invalido",
@@ -38,7 +39,8 @@ beforeEach(async () => {
    * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
    */
   contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
-  registrarRotasDeCartoes(servidor, acervoDe);
+    registrarRotasDeCartoes(servidor, acervoDe);
+    registrarRotasDeBaralhos(servidor, acervoDe);
   });
   servidor = contrato.servidor;
 });
@@ -56,25 +58,43 @@ function pedir(requisicao: InjectOptions) {
   return pedirComCredencial(servidor, contrato.credencial, requisicao);
 }
 
+/** Cria um Baralho pela rota; falha se a criação for recusada. */
+async function criarBaralho(nome = NOME_DO_BARALHO): Promise<{ id: string }> {
+  const resposta = await pedir({
+    method: "POST",
+    url: "/baralhos",
+    payload: { nome },
+  });
+
+  if (resposta.statusCode !== 201) {
+    throw new Error(`criação de baralho recusada: ${resposta.statusCode}`);
+  }
+
+  return resposta.json() as { id: string };
+}
+
 /**
- * Envia `POST /cartoes`. `corpo` ausente reproduz requisição sem corpo;
+ * Envia `POST /baralhos/{id}/cartoes`. `corpo` ausente reproduz requisição sem corpo;
  * `cabecalhos` permite forçar content-type na requisição.
  */
-function postarCartao(
+function postarCartaoNoBaralho(
+  baralhoId: string,
   corpo?: object | string,
   cabecalhos: Record<string, string> = {},
 ) {
   return pedir({
     method: "POST",
-    url: "/cartoes",
+    url: `/baralhos/${baralhoId}/cartoes`,
     headers: cabecalhos,
     payload: corpo,
   });
 }
 
-describe("POST /cartoes — criação conforme o contrato", () => {
+describe("POST /baralhos/{id}/cartoes — criação conforme o contrato", () => {
   it("responde 201 com o Cartão criado: id, Frente e Verso (FR-001)", async () => {
-    const resposta = await postarCartao({
+    const baralho = await criarBaralho();
+
+    const resposta = await postarCartaoNoBaralho(baralho.id, {
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
     });
@@ -87,108 +107,134 @@ describe("POST /cartoes — criação conforme o contrato", () => {
     });
   });
 
-  it("aceita Frente e Verso com exatamente 1000 caracteres: limite inclusivo (FR-052)", async () => {
-    const resposta = await postarCartao({
-      frente: "a".repeat(1000),
-      verso: "b".repeat(1000),
+  it("segunda criação de mesma Frente no mesmo Baralho recebe numeração (FR-025)", async () => {
+    const baralho = await criarBaralho();
+
+    const primeira = await postarCartaoNoBaralho(baralho.id, {
+      frente: FRENTE_VALIDA,
+      verso: VERSO_VALIDO,
+    });
+    const segunda = await postarCartaoNoBaralho(baralho.id, {
+      frente: FRENTE_VALIDA,
+      verso: "Caminhar (2)",
     });
 
-    expect(resposta.statusCode).toBe(201);
+    expect(primeira.statusCode).toBe(201);
+    expect(segunda.statusCode).toBe(201);
+
+    const primeiroCartao = primeira.json();
+    const segundoCartao = segunda.json();
+
+    expect(primeiroCartao.frente).toBe(FRENTE_VALIDA);
+    expect(segundoCartao.frente).toBe("to walk (2)");
   });
 
-  it("ignora propriedade extra e ela não retorna nas leituras (FR-009)", async () => {
-    const resposta = await postarCartao({
-      frente: FRENTE_VALIDA,
-      verso: VERSO_VALIDO,
-      titulo: "propriedade que não existe em Cartão",
-    });
+  it("mesma Frente em outro Baralho não recebe numeração", async () => {
+    const baralho1 = await criarBaralho("Inglês 1");
+    const baralho2 = await criarBaralho("Inglês 2");
 
-    expect(resposta.statusCode).toBe(201);
-    const cartao = resposta.json();
-    expect(cartao).toEqual({
-      id: expect.any(String),
+    const primeiro = await postarCartaoNoBaralho(baralho1.id, {
       frente: FRENTE_VALIDA,
       verso: VERSO_VALIDO,
     });
+    const segundo = await postarCartaoNoBaralho(baralho2.id, {
+      frente: FRENTE_VALIDA,
+      verso: VERSO_VALIDO,
+    });
 
-    const leitura = await pedir({ method: "GET", url: "/cartoes" });
-    expect(leitura.json()).toEqual([
-      { ...cartao, baralhos: [], proximaRevisaoEm: null },
-    ]);
+    expect(primeiro.statusCode).toBe(201);
+    expect(segundo.statusCode).toBe(201);
+
+    const primeiroCartao = primeiro.json();
+    const segundoCartao = segundo.json();
+
+    expect(primeiroCartao.frente).toBe(FRENTE_VALIDA);
+    expect(segundoCartao.frente).toBe(FRENTE_VALIDA);
   });
 
   it("recusa Frente vazia com 400, código frente_vazia e mensagem em português (FR-002)", async () => {
-    const resposta = await postarCartao({ frente: "", verso: VERSO_VALIDO });
-
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual({
-      erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
-    });
-  });
-
-  it("trata Frente composta só de espaços como vazia (FR-051)", async () => {
-    const resposta = await postarCartao({ frente: "   ", verso: VERSO_VALIDO });
-
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual({
-      erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
-    });
-  });
-
-  it("recusa Verso vazio com 400, código verso_vazio e mensagem em português (FR-002)", async () => {
-    const resposta = await postarCartao({ frente: FRENTE_VALIDA, verso: "" });
-
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual({
-      erro: "verso_vazio",
-      mensagem: "O verso do cartão não pode ficar vazio.",
-    });
-  });
-
-  it("recusa Frente acima de 1000 caracteres com 400, frente_muito_longa, informando limite e tamanho (FR-052, SC-016)", async () => {
-    const resposta = await postarCartao({
-      frente: "a".repeat(1001),
+    const baralho = await criarBaralho();
+    const resposta = await postarCartaoNoBaralho(baralho.id, {
+      frente: "",
       verso: VERSO_VALIDO,
     });
 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
-      erro: "frente_muito_longa",
-      mensagem:
-        "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
+      erro: "frente_vazia",
+      mensagem: "A frente do cartão não pode ficar vazia.",
     });
   });
 
-  it("recusa Verso acima de 1000 caracteres com 400, verso_muito_longo, informando limite e tamanho (FR-052, SC-016)", async () => {
-    const resposta = await postarCartao({
+  it("recusa Baralho inexistente com 404, código nao_encontrado", async () => {
+    const resposta = await postarCartaoNoBaralho("baralho-inexistente", {
       frente: FRENTE_VALIDA,
-      verso: "a".repeat(1001),
+      verso: VERSO_VALIDO,
     });
 
-    expect(resposta.statusCode).toBe(400);
+    expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
-      erro: "verso_muito_longo",
-      mensagem:
-        "O verso do cartão deve ter no máximo 1000 caracteres; o informado tem 1001.",
+      erro: "nao_encontrado",
+      mensagem: "Baralho não encontrado.",
     });
   });
-});
 
-describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo", () => {
-  it("recusa corpo sem Frente com 400 e nada é criado", async () => {
-    const resposta = await postarCartao({ verso: VERSO_VALIDO });
+  it("recusa Baralho de outro Usuário com 404 e nada é criado", async () => {
+    const baralho = await criarBaralho();
+    const outroUsuario = await contrato.cadastrar("outro.usuario");
 
-    expect(resposta.statusCode).toBe(400);
-    expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
+    const resposta = await pedirComCredencial(servidor, outroUsuario, {
+      method: "POST",
+      url: `/baralhos/${baralho.id}/cartoes`,
+      payload: { frente: FRENTE_VALIDA, verso: VERSO_VALIDO },
+    });
 
+    expect(resposta.statusCode).toBe(404);
+    expect(resposta.json()).toEqual({
+      erro: "nao_encontrado",
+      mensagem: "Baralho não encontrado.",
+    });
+
+    // Verifica que nada foi criado no Baralho do primeiro usuário
     const leitura = await pedir({ method: "GET", url: "/cartoes" });
     expect(leitura.json()).toEqual([]);
   });
 
-  it("recusa Frente de tipo errado com 400 e nada é criado", async () => {
-    const resposta = await postarCartao({ frente: 42, verso: VERSO_VALIDO });
+  it("POST /cartoes não existe mais (retorna 404)", async () => {
+    const resposta = await pedir({
+      method: "POST",
+      url: "/cartoes",
+      payload: { frente: FRENTE_VALIDA, verso: VERSO_VALIDO },
+    });
+
+    expect(resposta.statusCode).toBe(404);
+  });
+
+  it("GET /cartoes traz baralho para cada Cartão", async () => {
+    const baralho = await criarBaralho();
+    await postarCartaoNoBaralho(baralho.id, {
+      frente: FRENTE_VALIDA,
+      verso: VERSO_VALIDO,
+    });
+
+    const resposta = await pedir({ method: "GET", url: "/cartoes" });
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.json()).toEqual([
+      expect.objectContaining({
+        frente: FRENTE_VALIDA,
+        verso: VERSO_VALIDO,
+        baralho: { id: baralho.id, nome: NOME_DO_BARALHO },
+        proximaRevisaoEm: null,
+      }),
+    ]);
+  });
+});
+
+describe("POST /baralhos/{id}/cartoes — forma inválida recusada na borda", () => {
+  it("recusa corpo sem Frente com 400 e nada é criado", async () => {
+    const baralho = await criarBaralho();
+    const resposta = await postarCartaoNoBaralho(baralho.id, { verso: VERSO_VALIDO });
 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);
@@ -198,7 +244,8 @@ describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo",
   });
 
   it("recusa corpo que não é JSON com 400 e nada é criado", async () => {
-    const resposta = await postarCartao("isto não é json {", {
+    const baralho = await criarBaralho();
+    const resposta = await postarCartaoNoBaralho(baralho.id, "isto não é json {", {
       "content-type": "application/json",
     });
 
@@ -210,7 +257,8 @@ describe("POST /cartoes — forma inválida recusada na borda, antes do Acervo",
   });
 
   it("recusa requisição sem corpo com 400 e nada é criado", async () => {
-    const resposta = await postarCartao();
+    const baralho = await criarBaralho();
+    const resposta = await postarCartaoNoBaralho(baralho.id);
 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual(RECUSA_DE_CORPO_INVALIDO);

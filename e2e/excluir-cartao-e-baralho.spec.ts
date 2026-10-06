@@ -1,308 +1,107 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-
 import { expect, test } from "@playwright/test";
-
 import {
   aguardarApiPronta,
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
   entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
-  listarCartoesComBaralhosPelaApi,
   listarCartoesPelaApi,
-  obterBaralhoPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
-// T508 — exclusão de Cartão e Baralho em navegador e API reais
-// (specs/006-excluir-cartao-e-baralho/tasks.md, SC-005, SC-006).
-//
-// Nenhuma rede é interceptada: a API real (node + SQLite em arquivo) e o
-// frontend real (Vite dev) são iniciados como processos filhos do próprio
-// teste, em portas livres e com um arquivo SQLite temporário exclusivo. A
-// prova cobre o cancelamento da exclusão de Cartão, a exclusão de Baralho
-// preservando Cartões (conferido na API), e a exclusão do único Cartão
-// vinculado derrubando a elegibilidade do Baralho (conferida na UI e na API).
-
-const CARTAO = {
-  frente: "To walk",
-  verso: "Caminhar",
-} as const;
-
-const BARALHO_A_REMOVER = "Inglês";
-const BARALHO_RESTANTE = "Espanhol";
-
 test.setTimeout(120_000);
 
-test("cancelar exclusão de Cartão não altera o acervo, excluir Baralho preserva Cartões e excluir o único Cartão vinculado derruba a elegibilidade (T508)", async ({ page, browserName }) => {
-  expect(browserName).toBe("chromium");
-
-  const pasta = await criarPastaTemporaria("excluir-t508-");
-  const caminhoDoBanco = join(pasta, "excluir.sqlite");
-
+test("exclusões contextuais removem Cartões em cascata e preservam Histórico", async ({ page }) => {
+  const pasta = await criarPastaTemporaria("exclusao-025-");
+  const arquivo = join(pasta, "acervo.sqlite");
   let api: ProcessoIniciado | null = null;
   let frontend: ProcessoIniciado | null = null;
 
   try {
     const portaDaApi = await portaLivre();
-
-    api = iniciarApi(caminhoDoBanco, portaDaApi);
-
+    api = iniciarApi(arquivo, portaDaApi);
     const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
-
     await aguardarApiPronta(api, enderecoDaApi);
-
     const portaDoFrontend = await portaLivre();
     const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
-
     frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+    await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
 
-    await aguardarProntidao(
-      frontend,
-      enderecoDoFrontend,
-      (resposta) => resposta.ok,
-    );
-
-    // Depois de `008-entrar`, o acervo é por Usuário: o Usuário de prova é
-    // cadastrado antes de preparar o acervo, que é dele (FR-090, FR-092).
     const credencial = await criarUsuarioDeProva(enderecoDaApi);
-
-    // Prepara um Cartão vinculado a dois Baralhos: um será excluído para
-    // provar que o Cartão sobrevive; o outro permanece para provar a
-    // elegibilidade derivada quando o único Cartão vinculado é excluído.
-    const cartao = await criarCartaoPelaApi(enderecoDaApi, CARTAO);
-    const baralhoARemover = await criarBaralhoPelaApi(enderecoDaApi, {
-      nome: BARALHO_A_REMOVER,
+    const origem = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Inglês" });
+    const outro = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Espanhol" });
+    const primeiro = await criarCartaoNoBaralhoPelaApi(enderecoDaApi, origem.id, {
+      frente: "To walk", verso: "Caminhar",
     });
-    const baralhoRestante = await criarBaralhoPelaApi(enderecoDaApi, {
-      nome: BARALHO_RESTANTE,
+    const segundo = await criarCartaoNoBaralhoPelaApi(enderecoDaApi, origem.id, {
+      frente: "To run", verso: "Correr",
+    });
+    const independente = await criarCartaoNoBaralhoPelaApi(enderecoDaApi, outro.id, {
+      frente: "Hola", verso: "Olá",
     });
 
-    await vincularCartaoPelaApi(
-      enderecoDaApi,
-      cartao.id,
-      baralhoARemover.id,
-    );
-    await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralhoRestante.id);
+    const sessaoId = randomUUID();
+    const registro = await fetch(`${enderecoDaApi}/sessoes`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...cabecalhoDeCredencial(credencial) },
+      body: JSON.stringify({
+        id: sessaoId, origem: "baralho", baralhoId: origem.id,
+        nomeDoBaralho: "Inglês",
+        itens: [{ frente: primeiro.frente, verso: primeiro.verso,
+          cartaoId: primeiro.id, avaliacao: "bom" }],
+      }),
+    });
+    expect(registro.status).toBe(201);
 
-    const cartoesIniciais = await listarCartoesComBaralhosPelaApi(
-      enderecoDaApi,
-    );
-
-    expect(cartoesIniciais).toHaveLength(1);
-    expect(cartoesIniciais[0].baralhos).toEqual(
-      expect.arrayContaining([
-        { id: baralhoARemover.id, nome: BARALHO_A_REMOVER },
-        { id: baralhoRestante.id, nome: BARALHO_RESTANTE },
-      ]),
-    );
-
-    // Cancelar a exclusão do Cartão: o diálogo declara a consequência e o
-    // cancelamento mantém o Cartão no acervo, sem alterar a API. A tela é
-    // alcançada depois de Entrar (FR-097).
+    await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page, credencial);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${origem.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Inglês" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Principal" })
+      .getByRole("link", { name: "Cartões" })).toHaveCount(0);
     await page.goto(`${enderecoDoFrontend}/#/cartoes`);
-    await entrarSeNecessario(page, credencial);
+    await expect(page.getByRole("heading", { level: 1, name: "Cartões" })).toHaveCount(0);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${origem.id}`);
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Excluir To run" }).click();
+    const dialogoDoCartao = page.getByRole("dialog");
+    await expect(dialogoDoCartao).toContainText("To run");
+    await dialogoDoCartao.getByRole("button", { name: "Cancelar" }).click();
+    await expect(page.getByText("To run", { exact: true })).toBeVisible();
 
-    const itemDoCartao = page
-      .getByRole("listitem")
-      .filter({ hasText: CARTAO.frente });
-
-    // A lista mostra só a Frente (spec 021, FR-344); os Vínculos aparecem
-    // nas consequências do diálogo de exclusão.
-    await expect(itemDoCartao).not.toContainText(BARALHO_A_REMOVER);
-    await expect(itemDoCartao).not.toContainText(BARALHO_RESTANTE);
-
-    await itemDoCartao.getByRole("button", { name: "Excluir" }).click();
-
-    const dialogoDeExclusaoDeCartao = page.getByRole("dialog");
-    await expect(dialogoDeExclusaoDeCartao).toContainText(
-      "Este Cartão está vinculado a 2 Baralhos.",
-    );
-    await expect(dialogoDeExclusaoDeCartao).toContainText(
-      "nenhum Baralho será excluído",
-    );
-
-    await dialogoDeExclusaoDeCartao
-      .getByRole("button", { name: "Cancelar" })
-      .click();
-
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByRole("listitem")).toHaveCount(1);
-
-    const cartoesAposCancelamento = await listarCartoesComBaralhosPelaApi(
-      enderecoDaApi,
-    );
-
-    expect(cartoesAposCancelamento).toHaveLength(1);
-    expect(cartoesAposCancelamento[0].id).toBe(cartao.id);
-
-    // Exclui um dos Baralhos: o Cartão continua existindo e permanece
-    // vinculado apenas ao Baralho restante.
-    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralhoARemover.id}`);
-    await entrarSeNecessario(page, credencial);
-
-    await expect(
-      page.getByRole("heading", { level: 1, name: BARALHO_A_REMOVER }),
-    ).toBeVisible();
+    await page.getByRole("button", { name: "Excluir To run" }).click();
+    await dialogoDoCartao.getByRole("button", { name: "Excluir Cartão" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("To run", { exact: true })).toHaveCount(0);
+    expect((await listarCartoesPelaApi(enderecoDaApi)).map((cartao) => cartao.id))
+      .not.toContain(segundo.id);
 
     await page.getByRole("button", { name: "Excluir Baralho" }).click();
+    const dialogoDoBaralho = page.getByRole("dialog");
+    await expect(dialogoDoBaralho).toContainText("1 Cartão");
+    await dialogoDoBaralho.getByRole("button", { name: "Excluir Baralho" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { level: 1, name: "Baralhos" })).toBeVisible();
 
-    const dialogoDeExclusaoDeBaralho = page.getByRole("dialog");
-    await expect(dialogoDeExclusaoDeBaralho).toContainText(
-      "Este Baralho tem 1 Cartão vinculado.",
-    );
-    await expect(dialogoDeExclusaoDeBaralho).toContainText(
-      "esse Cartão continuará existindo",
-    );
-    await expect(dialogoDeExclusaoDeBaralho).toContainText(
-      "Nenhum Cartão será excluído.",
-    );
-
-    await dialogoDeExclusaoDeBaralho
-      .getByRole("button", { name: "Excluir Baralho" })
-      .click();
-
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Baralhos" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("listitem").filter({ hasText: BARALHO_A_REMOVER }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("listitem").filter({ hasText: BARALHO_RESTANTE }),
-    ).toHaveCount(1);
-    // Com Cartões, a elegibilidade aparece como o link Revisar visível na
-    // linha fina da lista (FR-144 revisado, SC-079; spec 024: a ação de estudo
-    // passou a se chamar "Revisar").
-    await expect(
-      page
-        .getByRole("listitem")
-        .filter({ hasText: BARALHO_RESTANTE })
-        .getByRole("link", { name: `Revisar ${BARALHO_RESTANTE}` }),
-    ).toBeVisible();
-
-    const respostaDoBaralhoRemovido = await fetch(
-      `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoARemover.id)}`,
-      { headers: cabecalhoDeCredencial(credencial) },
-    );
-
-    expect(respostaDoBaralhoRemovido.status).toBe(404);
-
-    const cartoesAposExcluirBaralho =
-      await listarCartoesComBaralhosPelaApi(enderecoDaApi);
-
-    expect(cartoesAposExcluirBaralho).toHaveLength(1);
-    expect(cartoesAposExcluirBaralho[0].id).toBe(cartao.id);
-    expect(cartoesAposExcluirBaralho[0].baralhos).toEqual([
-      { id: baralhoRestante.id, nome: BARALHO_RESTANTE },
-    ]);
-
-    const baralhoRestanteAposExcluirBaralho = await obterBaralhoPelaApi(
-      enderecoDaApi,
-      baralhoRestante.id,
-    );
-
-    expect(baralhoRestanteAposExcluirBaralho.elegivel).toBe(true);
-    expect(baralhoRestanteAposExcluirBaralho.cartoes).toHaveLength(1);
-
-    // Exclui o único Cartão vinculado restante: o Baralho sobrevive e deixa
-    // de ser elegível, derivado da ausência de Vínculos.
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
-    await entrarSeNecessario(page, credencial);
-
-    const itemDoCartaoRestante = page
-      .getByRole("listitem")
-      .filter({ hasText: CARTAO.frente });
-
-    await expect(itemDoCartaoRestante).not.toContainText(BARALHO_RESTANTE);
-    await expect(itemDoCartaoRestante).not.toContainText(BARALHO_A_REMOVER);
-
-    await itemDoCartaoRestante.getByRole("button", { name: "Excluir" }).click();
-
-    const dialogoDeExclusaoFinal = page.getByRole("dialog");
-    await expect(dialogoDeExclusaoFinal).toContainText(
-      "Este Cartão está vinculado a 1 Baralho.",
-    );
-    await expect(dialogoDeExclusaoFinal).toContainText(
-      "nenhum Baralho será excluído",
-    );
-
-    await dialogoDeExclusaoFinal
-      .getByRole("button", { name: "Excluir Cartão" })
-      .click();
-
-    await expect(
-      page.getByText("Cartão excluído. Nenhum Baralho foi excluído."),
-    ).toBeVisible();
-    await expect(page.getByRole("listitem")).toHaveCount(0);
-
-    const cartoesAposExcluirCartao = await listarCartoesPelaApi(enderecoDaApi);
-
-    expect(cartoesAposExcluirCartao).toHaveLength(0);
-
-    const baralhoRestanteAposExcluirCartao = await obterBaralhoPelaApi(
-      enderecoDaApi,
-      baralhoRestante.id,
-    );
-
-    expect(baralhoRestanteAposExcluirCartao.elegivel).toBe(false);
-    expect(baralhoRestanteAposExcluirCartao.cartoes).toHaveLength(0);
-
-    // A lista de Baralhos continua exibindo o Baralho, agora não elegível.
-    await page.goto(`${enderecoDoFrontend}/#/baralhos`);
-    await entrarSeNecessario(page, credencial);
-
-    const itemDoBaralhoRestante = page
-      .getByRole("listitem")
-      .filter({ hasText: BARALHO_RESTANTE });
-
-    await expect(itemDoBaralhoRestante).toHaveCount(1);
-    await expect(itemDoBaralhoRestante).toContainText("0 Cartões");
-
-    // Linha fina da lista (spec 021, FR-341): o nome é texto somente leitura e
-    // o detalhe abre por "Editar". A linha de status — "Adicione Cartões para
-    // começar a estudar." — e o rótulo "Baralho"/"Ver baralho" não existem.
-    await expect(
-      itemDoBaralhoRestante.getByText(BARALHO_RESTANTE, { exact: true }),
-    ).toBeVisible();
-    await expect(
-      itemDoBaralhoRestante.getByRole("link", {
-        name: `Editar ${BARALHO_RESTANTE}`,
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(itemDoBaralhoRestante).not.toContainText(
-      "Adicione Cartões para começar a estudar.",
-    );
-    await expect(itemDoBaralhoRestante).not.toContainText(
-      "Pronto para uma Sessão de estudo.",
-    );
-
-    // Sem Cartões, o controle Revisar é um botão desabilitado descrito pelo
-    // motivo em texto — nunca apenas pela cor (FR-144; spec 024: a ação
-    // renomeada, com o motivo em qualquer das duas redações).
-    const controleRevisarDoBaralhoRestante = itemDoBaralhoRestante.getByRole(
-      "button",
-      { name: `Revisar ${BARALHO_RESTANTE}` },
-    );
-
-    await expect(controleRevisarDoBaralhoRestante).toBeDisabled();
-    await expect(controleRevisarDoBaralhoRestante).toHaveAccessibleDescription(
-      /Sem Cartões para (estudar|revisar)/,
-    );
+    const restantes = await listarCartoesPelaApi(enderecoDaApi);
+    expect(restantes.map((cartao) => cartao.id)).toEqual([independente.id]);
+    const historico = await fetch(`${enderecoDaApi}/sessoes/${sessaoId}`, {
+      headers: cabecalhoDeCredencial(credencial),
+    });
+    expect(historico.status).toBe(200);
+    const corpo = await historico.json() as { baralhoExiste: boolean; registro: { itens: { frente: string }[] } };
+    expect(corpo.baralhoExiste).toBe(false);
+    expect(corpo.registro.itens[0].frente).toBe("To walk");
   } finally {
     await encerrarProcesso(frontend);
     await encerrarProcesso(api);

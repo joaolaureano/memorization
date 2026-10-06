@@ -6,7 +6,7 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -17,7 +17,6 @@ import {
   obterBaralhoPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
@@ -79,29 +78,25 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
 
     // Prepara um Cartão e um Baralho reais e os vincula pela API real; o que
     // está sob prova são as operações de edição da tela.
-    const cartao = await criarCartaoPelaApi(enderecoDaApi, CARTAO);
     const baralho = await criarBaralhoPelaApi(enderecoDaApi, {
       nome: NOME_ORIGINAL_DO_BARALHO,
     });
-
-    await vincularCartaoPelaApi(enderecoDaApi, cartao.id, baralho.id);
+    const cartao = await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralho.id, CARTAO);
 
     // A lista de Cartões já exibe o nome original do Baralho vinculado — e é
     // alcançada depois de Entrar (FR-097).
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: NOME_ORIGINAL_DO_BARALHO }),
     ).toBeVisible();
 
     const itemDoCartao = page
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    // A lista mostra só a Frente (spec 021, FR-344); o Vínculo e a
-    // propagação do novo nome são conferidos pela API adiante.
-    await expect(itemDoCartao).not.toContainText(NOME_ORIGINAL_DO_BARALHO);
+    await expect(itemDoCartao).toContainText(CARTAO.verso);
 
     // Renomeia o Baralho pela tela real de detalhe e confere o alcance.
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
@@ -115,7 +110,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // Baralho", e é dela que sai o link para renomear (spec 012).
     await expect(
       page.getByRole("button", {
-        name: `Remover ${CARTAO.frente} deste baralho`,
+        name: `Excluir ${CARTAO.frente}`,
       }),
     ).toBeVisible();
 
@@ -142,34 +137,23 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     expect(baralhoRenomeado.cartoes).toHaveLength(1);
     expect(baralhoRenomeado.cartoes[0].id).toBe(cartao.id);
 
-    // A propagação aparece na lista de Cartões: o Cartão passou a exibir o
-    // novo nome do Baralho vinculado.
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    // O detalhe mostra o novo nome e mantém o Cartão no Baralho.
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: NOME_RENOMEADO_DO_BARALHO }),
     ).toBeVisible();
 
     const itemAposRenomeacao = page
       .getByRole("listitem")
       .filter({ hasText: CARTAO.frente });
 
-    await expect(itemAposRenomeacao).not.toContainText(
-      NOME_RENOMEADO_DO_BARALHO,
-    );
-
-    const cartoesComBaralhosRenomeados =
-      await listarCartoesComBaralhosPelaApi(enderecoDaApi);
-
-    expect(cartoesComBaralhosRenomeados).toHaveLength(1);
-    expect(cartoesComBaralhosRenomeados[0].baralhos).toEqual([
-      { id: baralho.id, nome: NOME_RENOMEADO_DO_BARALHO },
-    ]);
+    await expect(itemAposRenomeacao).toContainText("Caminhar");
 
     // Edita o Cartão pela tela real e confere a persistência direto na API.
     await itemAposRenomeacao
-      .getByRole("link", { name: `Editar ${CARTAO.frente}` })
+      .getByRole("link", { name: "Editar", exact: true })
       .click();
 
     await expect(
@@ -184,13 +168,13 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // do formulário não exibe mais "Cartão editado.", e o Cartão aparece
     // atualizado na listagem.
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: NOME_RENOMEADO_DO_BARALHO }),
     ).toBeVisible();
     await expect(
       page.getByRole("listitem").filter({ hasText: "To run" }),
     ).toBeVisible();
 
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);
 
     const itemEditado = page
@@ -198,8 +182,9 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
       .filter({ hasText: "To run" });
 
     await expect(itemEditado).toHaveCount(1);
-    // A lista mostra só a Frente (spec 021, FR-344); o Verso é conferido na API.
-    await expect(itemEditado).not.toContainText("Correr");
+    // O detalhe contextual mostra Frente e Verso; a leitura completa também é
+    // conferida pela API abaixo.
+    await expect(itemEditado).toContainText("Correr");
 
     const cartoesEditados = await listarCartoesComBaralhosPelaApi(
       enderecoDaApi,
@@ -213,15 +198,11 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // alterações?" (spec 012); recusar mantém a edição aberta com o conteúdo
     // digitado e confirmar descarta as alterações.
     await itemEditado
-      .getByRole("link", { name: "Editar To run" })
+      .getByRole("link", { name: "Editar", exact: true })
       .click();
     await page.getByLabel("Frente").fill("To sprint");
 
-    const linkParaCartoes = page
-      .getByRole("navigation", { name: "Principal" })
-      .getByRole("link", { name: "Cartões" });
-
-    await linkParaCartoes.click();
+    await page.getByRole("button", { name: "Cancelar", exact: true }).click();
 
     const dialogoDeDescarte = page.getByRole("dialog");
     await expect(dialogoDeDescarte).toBeVisible();
@@ -230,13 +211,13 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     await dialogoDeDescarte.getByRole("button", { name: "Cancelar" }).click();
     await expect(page.getByLabel("Frente")).toHaveValue("To sprint");
 
-    await linkParaCartoes.click();
+    await page.getByRole("button", { name: "Cancelar", exact: true }).click();
     await dialogoDeDescarte
       .getByRole("button", { name: "Descartar" })
       .click();
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: NOME_RENOMEADO_DO_BARALHO }),
     ).toBeVisible();
     await expect(page.getByLabel("Frente")).toHaveCount(0);
     await expect(itemEditado).toContainText("To run");
@@ -244,7 +225,7 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // Falha de transporte: apenas o PUT é abortado uma única vez. O conteúdo
     // digitado permanece e a nova tentativa conclui a edição contra a API real.
     await itemEditado
-      .getByRole("link", { name: "Editar To run" })
+      .getByRole("link", { name: "Editar", exact: true })
       .click();
     await page.getByLabel("Frente").fill("To jog");
 
@@ -272,13 +253,13 @@ test("editar Cartão persiste, renomear Baralho propaga, descarte e falha preser
     // A nova tentativa também volta para a lista de Cartões com o Cartão
     // atualizado (spec 012), sem mensagem de sucesso na tela do formulário.
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: NOME_RENOMEADO_DO_BARALHO }),
     ).toBeVisible();
     await expect(
       page.getByRole("listitem").filter({ hasText: "To jog" }),
     ).toBeVisible();
 
-    await page.goto(`${enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page);
 
     const itemReeditado = page

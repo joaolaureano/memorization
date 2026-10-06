@@ -7,13 +7,15 @@ import type {
   ArmazenamentoDeUsuarios,
   Baralho,
   Cartao,
+  CartaoPendente,
+  CartaoComDono,
   CompromissoPersistido,
   ContagemPorBaralho,
   ContagensDaConta,
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
-  DesfechoDeBaralhoComVinculos,
+  DesfechoDeBaralhoComCopias,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -28,6 +30,7 @@ import type {
   Usuario,
   VersaoDaRotina,
 } from "../porta.ts";
+import { normalizarFrente } from "../../acervo/invariantes.ts";
 import { abrirBanco } from "./esquema.ts";
 
 /**
@@ -76,10 +79,10 @@ const NAO_ENCONTRADO: Desfecho<never> = {
   erro: "nao_encontrado",
 };
 
-/** Desfecho do par (Cartão, Baralho) repetido. */
-const VINCULO_DUPLICADO: Desfecho<never> = {
+/** Desfecho de Frente duplicada no mesmo Baralho. */
+const FRENTE_DUPLICADA: Desfecho<never> = {
   ok: false,
-  erro: "vinculo_duplicado",
+  erro: "frente_duplicada",
 };
 
 /**
@@ -93,19 +96,19 @@ const CONFLITO: Desfecho<never> = {
   erro: "conflito",
 };
 
-/** Desfecho de falha do armazenamento na criação do Baralho com Vínculos (FR-372). */
-const BARALHO_COM_VINCULOS_INDISPONIVEL: DesfechoDeBaralhoComVinculos = {
+/** Desfecho de falha do armazenamento na criação do Baralho com Cópias (FR-400). */
+const BARALHO_COM_COPIAS_INDISPONIVEL: DesfechoDeBaralhoComCopias = {
   ok: false,
   erro: "indisponivel",
 };
 
 /**
  * Desfecho do `id` de Baralho já usado pelo acervo de **outro** Usuário
- * (FR-373). Como o `conflito` do Registro de Sessão, a colisão entre donos é
+ * (FR-400). Como o `conflito` do Registro de Sessão, a colisão entre donos é
  * recusa de domínio — nunca falha do armazenamento nem revelação do Baralho
  * alheio.
  */
-const BARALHO_COM_VINCULOS_EM_CONFLITO: DesfechoDeBaralhoComVinculos = {
+const BARALHO_COM_COPIAS_EM_CONFLITO: DesfechoDeBaralhoComCopias = {
   ok: false,
   erro: "conflito",
 };
@@ -148,18 +151,17 @@ function comDesfecho<T>(operacao: () => Desfecho<T>): Desfecho<T> {
 }
 
 /**
- * Executa a operação do Baralho com Vínculos e traduz a falha do SQLite em
- * `indisponivel` (FR-372). O desfecho `cartoes_indisponiveis` é **devolvido**,
- * e não lançado: só o erro do driver vira indisponibilidade, e a lista de
- * `cartaoIds` recusados atravessa a Porta intacta (FR-373).
+ * Executa a operação do Baralho com Cópias e traduz a falha do SQLite em
+ * `indisponivel` (FR-400). A operação pode devolver falhas de domínio
+ * (`conflito`) sem lançar exceção: só o erro do driver vira indisponibilidade.
  */
-function comDesfechoDeBaralhoComVinculos(
-  operacao: () => DesfechoDeBaralhoComVinculos,
-): DesfechoDeBaralhoComVinculos {
+function comDesfechoDeBaralhoComCopias(
+  operacao: () => DesfechoDeBaralhoComCopias,
+): DesfechoDeBaralhoComCopias {
   try {
     return operacao();
   } catch {
-    return BARALHO_COM_VINCULOS_INDISPONIVEL;
+    return BARALHO_COM_COPIAS_INDISPONIVEL;
   }
 }
 
@@ -194,6 +196,31 @@ function emTransacao<T>(
 }
 
 /**
+ * Como `emTransacao`, mas para operações que devolvem um desfecho: a recusa
+ * (`ok: false`) também desfaz tudo o que a operação já gravou, de modo que
+ * nenhuma recusa da Porta deixa escrita parcial (FR-397, FR-398, FR-400).
+ */
+function emTransacaoComDesfecho<T extends { ok: boolean }>(
+  banco: DatabaseSync,
+  operacao: () => T,
+): T {
+  banco.exec("BEGIN");
+
+  try {
+    const resultado = operacao();
+    banco.exec(resultado.ok ? "COMMIT" : "ROLLBACK");
+    return resultado;
+  } catch (erro) {
+    try {
+      banco.exec("ROLLBACK");
+    } catch {
+      // Sem transação ativa para desfazer; a falha original é a que importa.
+    }
+    throw erro;
+  }
+}
+
+/**
  * Mesma tradução da falha do driver, no vocabulário de desfecho da Porta de
  * Usuários — que tem códigos próprios e não compartilha `vinculo_duplicado` nem
  * `nao_encontrado` com os do acervo. A duplicata de Nome de usuário não passa
@@ -208,18 +235,19 @@ function comDesfechoDeUsuario<D>(operacao: () => D, indisponivel: D): D {
 }
 
 /**
- * Reconhece a violação de chave primária composta da tabela `vinculo`. O
- * SQLite entrega `errcode` 1555 (SQLITE_CONSTRAINT_PRIMARYKEY) quando o par
- * repetido é inserido; qualquer outro erro é falha do armazenamento.
+ * Reconhece a violação da unicidade `(baralho_id, frente_chave)` da tabela
+ * `pertencimento`. O SQLite entrega `errcode` 2067 (SQLITE_CONSTRAINT_UNIQUE)
+ * quando a chave normalizada é repetida no mesmo Baralho; qualquer outro erro
+ * é falha do armazenamento.
  */
-function ehVinculoDuplicado(erro: unknown): boolean {
+function ehFrenteDuplicada(erro: unknown): boolean {
   if (typeof erro !== "object" || erro === null) {
     return false;
   }
 
   const candidato = erro as { code?: unknown; errcode?: unknown };
 
-  return candidato.code === "ERR_SQLITE_ERROR" && candidato.errcode === 1555;
+  return candidato.code === "ERR_SQLITE_ERROR" && candidato.errcode === 2067;
 }
 
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
@@ -236,6 +264,19 @@ function baralhoDaLinha(linha: Record<string, unknown>): Baralho {
   return {
     id: linha.id as string,
     nome: linha.nome as string,
+  };
+}
+
+/** Lê a linha como Cartão com seu único Baralho dono (FR-389). */
+function cartaoComDonoDaLinha(linha: Record<string, unknown>): CartaoComDono {
+  return {
+    id: linha.id as string,
+    frente: linha.frente as string,
+    verso: linha.verso as string,
+    baralho: {
+      id: linha.baralho_id as string,
+      nome: linha.baralho_nome as string,
+    },
   };
 }
 
@@ -472,28 +513,43 @@ export async function abrirArmazenamentoSqlite(
    * alterada ou excluída. Um `id` de outro Usuário não devolve linha alguma —
    * ele é indistinguível de um `id` que nunca existiu (FR-092, SC-030).
    */
-  const inserirCartao = banco.prepare(
-    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
-     VALUES (?, ?, ?, ?, ?)`,
-  );
   /**
    * A ordem é a de criação, exigida por `loteDeRevisao` para os Cartões novos
    * (FR-201): as linhas anteriores à 015 têm `criado_em` nulo e vêm primeiro
    * (`criado_em IS NOT NULL` vale 0), e o `rowid` — a ordem de inserção —
    * desempata os Cartões de mesmo instante. O `id` não serve para desempatar,
    * porque é um UUID aleatório, sem relação com a criação.
+   * Devolve apenas Cartões com Pertencimento (FR-389), cada um com seu Baralho.
    */
   const listarCartoes = banco.prepare(
-    `SELECT id, frente, verso
+    `SELECT cartao.id, cartao.frente, cartao.verso, baralho.id AS baralho_id,
+            baralho.nome AS baralho_nome
        FROM cartao
-      WHERE usuario_id = ?
-      ORDER BY criado_em IS NOT NULL, criado_em, rowid`,
+       JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+       JOIN baralho ON baralho.id = pertencimento.baralho_id
+      WHERE cartao.usuario_id = ?
+      ORDER BY cartao.criado_em IS NOT NULL, cartao.criado_em, cartao.rowid`,
   );
   const obterCartaoPorId = banco.prepare(
     "SELECT id, frente, verso FROM cartao WHERE id = ? AND usuario_id = ?",
   );
-  const atualizarCartao = banco.prepare(
-    "UPDATE cartao SET frente = ?, verso = ? WHERE id = ? AND usuario_id = ?",
+  /**
+   * Insere um Cartão com o dono já especificado (FR-389). O `criado_em`é o
+   * instante corrente e não faz parte de `Cartao`: existe só para ordenar
+   * Cartões novos por criação (FR-201).
+   */
+  const inserirCartaoComDono = banco.prepare(
+    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const obterPertencimentoDoCartao = banco.prepare(
+    `SELECT baralho_id FROM pertencimento WHERE cartao_id = ?`,
+  );
+  const atualizarCartaoEPertencimento = banco.prepare(
+    `UPDATE cartao SET frente = ?, verso = ? WHERE id = ? AND usuario_id = ?`,
+  );
+  const atualizarFrenteChave = banco.prepare(
+    `UPDATE pertencimento SET frente_chave = ? WHERE cartao_id = ?`,
   );
   const excluirCartao = banco.prepare(
     "DELETE FROM cartao WHERE id = ? AND usuario_id = ?",
@@ -521,54 +577,72 @@ export async function abrirArmazenamentoSqlite(
   const atualizarBaralho = banco.prepare(
     "UPDATE baralho SET nome = ? WHERE id = ? AND usuario_id = ?",
   );
+  /**
+   * Exclui os Cartões do dono cujo Pertencimento aponta para o Baralho, e depois
+   * o Baralho (FR-402). As cascatas do esquema removem os Pertencimentos e
+   * Agendamentos automatiamente.
+   */
+  const excluirCartoesPertencimentoBaralho = banco.prepare(
+    `DELETE FROM cartao
+      WHERE usuario_id = ?
+        AND id IN (
+          SELECT cartao_id FROM pertencimento
+           WHERE baralho_id = ?
+        )`,
+  );
   const excluirBaralho = banco.prepare(
     "DELETE FROM baralho WHERE id = ? AND usuario_id = ?",
   );
 
-  const inserirVinculo = banco.prepare(
-    "INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)",
-  );
-  /**
-   * O Vínculo não tem coluna de dono: ele pertence ao Usuário dos dois
-   * extremos, e é por eles que o escopo chega aqui. Sem os dois `EXISTS`, um
-   * Cartão de outro Usuário poderia ser desvinculado por quem soubesse os dois
-   * `id` (FR-093).
-   */
-  const removerVinculo = banco.prepare(
-    `DELETE FROM vinculo
-      WHERE cartao_id = ?
-        AND baralho_id = ?
-        AND EXISTS (SELECT 1 FROM cartao
-                     WHERE cartao.id = vinculo.cartao_id
-                       AND cartao.usuario_id = ?)
-        AND EXISTS (SELECT 1 FROM baralho
-                     WHERE baralho.id = vinculo.baralho_id
-                       AND baralho.usuario_id = ?)`,
-  );
-  const listarBaralhosDoCartao = banco.prepare(
-    `SELECT baralho.id, baralho.nome
-       FROM vinculo
-       JOIN cartao ON cartao.id = vinculo.cartao_id
-       JOIN baralho ON baralho.id = vinculo.baralho_id
-      WHERE vinculo.cartao_id = ?
-        AND cartao.usuario_id = ?`,
+  const inserirPertencimento = banco.prepare(
+    `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+     VALUES (?, ?, ?)`,
   );
   const listarCartoesDoBaralho = banco.prepare(
     `SELECT cartao.id, cartao.frente, cartao.verso
-       FROM vinculo
-       JOIN cartao ON cartao.id = vinculo.cartao_id
-       JOIN baralho ON baralho.id = vinculo.baralho_id
-      WHERE vinculo.baralho_id = ?
+       FROM pertencimento
+       JOIN cartao ON cartao.id = pertencimento.cartao_id
+       JOIN baralho ON baralho.id = pertencimento.baralho_id
+      WHERE pertencimento.baralho_id = ?
         AND baralho.usuario_id = ?`,
   );
   const contarCartoesPorBaralho = banco.prepare(
     `SELECT baralho.id AS baralhoId,
-            COUNT(vinculo.cartao_id) AS quantidadeDeCartoes
+            COUNT(pertencimento.cartao_id) AS quantidadeDeCartoes
        FROM baralho
-       LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
+       LEFT JOIN pertencimento ON pertencimento.baralho_id = baralho.id
       WHERE baralho.usuario_id = ?
       GROUP BY baralho.id`,
   );
+
+  /** Diz se a tabela legada `vinculo` ainda existe (versão 13, FR-397). */
+  const existeTabelaDeVinculo = banco.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'vinculo'",
+  );
+
+  /**
+   * Devolve os Cartões do dono que ainda não têm Pertencimento (FR-397).
+   * Para incluir os Baralhos legados, lê-se primeiro os Cartões, depois
+   * consulta `vinculo` se a tabela existir (robustez para v14+).
+   */
+  const listarCartoesPendentesCartoes = banco.prepare(
+    `SELECT cartao.id, cartao.frente, cartao.verso
+       FROM cartao
+      WHERE cartao.usuario_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM pertencimento WHERE pertencimento.cartao_id = cartao.id
+        )
+      ORDER BY cartao.id`,
+  );
+
+  /**
+   * Atualiza a Frente de um Cartão do dono informado. Usado na aplicação
+   * de transição quando há numeração por colisão (FR-397).
+   */
+  const atualizarFrenteDoCartao = banco.prepare(
+    `UPDATE cartao SET frente = ? WHERE id = ? AND usuario_id = ?`,
+  );
+
 
   /**
    * As consultas do histórico de Sessões. A inserção do Registro e dos Itens
@@ -897,26 +971,58 @@ export async function abrirArmazenamentoSqlite(
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
-    async inserirCartao(usuarioId, cartao) {
+    /**
+     * Insere um Cartão já validado e já numerado pelo Module e o seu
+     * Pertencimento a `baralhoId`, numa única transação (FR-389, FR-390).
+     * Baralho ausente ou de outro Usuário é `nao_encontrado`; Frente
+     * normalizada já existente no Baralho é `frente_duplicada`, sem gravar nada
+     * (FR-398).
+     */
+    async inserirCartaoNoBaralho(usuarioId, baralhoId, cartao) {
       return comDesfecho(() => {
         /**
-         * `criado_em` é o instante corrente e não faz parte de `Cartao`: ele só
-         * existe para ordenar os Cartões novos por criação (FR-201).
+         * Conferência da posse do Baralho no escopo do dono: Baralho inexistente
+         * ou de outro Usuário é `nao_encontrado`, sem que nada seja gravado
+         * (FR-092, SC-030).
          */
-        inserirCartao.run(
-          cartao.id,
-          cartao.frente,
-          cartao.verso,
-          usuarioId,
-          new Date().toISOString(),
-        );
+        if (obterBaralhoPorId.get(baralhoId, usuarioId) === undefined) {
+          return NAO_ENCONTRADO;
+        }
 
-        return { ok: true, valor: cartao };
+        /**
+         * Insere o Cartão e o Pertencimento numa transação só. Violação de
+         * UNIQUE(baralho_id, frente_chave) é capturada e devolvida como
+         * `frente_duplicada` (FR-398).
+         */
+        try {
+          return emTransacaoComDesfecho(banco, () => {
+            inserirCartaoComDono.run(
+              cartao.id,
+              cartao.frente,
+              cartao.verso,
+              usuarioId,
+              new Date().toISOString(),
+            );
+
+            inserirPertencimento.run(
+              cartao.id,
+              baralhoId,
+              normalizarFrente(cartao.frente),
+            );
+
+            return { ok: true, valor: cartao };
+          });
+        } catch (erro) {
+          if (ehFrenteDuplicada(erro)) {
+            return FRENTE_DUPLICADA;
+          }
+          throw erro;
+        }
       });
     },
 
     async listarCartoes(usuarioId) {
-      return listarCartoes.all(usuarioId).map(cartaoDaLinha);
+      return listarCartoes.all(usuarioId).map(cartaoComDonoDaLinha);
     },
 
     async obterCartao(usuarioId, id) {
@@ -931,16 +1037,47 @@ export async function abrirArmazenamentoSqlite(
 
     async atualizarCartao(usuarioId, cartao) {
       return comDesfecho(() => {
-        const alteradas = atualizarCartao.run(
-          cartao.frente,
-          cartao.verso,
-          cartao.id,
-          usuarioId,
-        );
+        /**
+         * Atualiza Frente e Verso do Cartão (FR-399) e, se houver Pertencimento,
+         * também atualiza a chave normalizada. Cartão ausente é `nao_encontrado`;
+         * colisão com outro Cartão do mesmo Baralho é `frente_duplicada`, sem
+         * alterar nada (FR-399).
+         */
+        try {
+          return emTransacaoComDesfecho(banco, () => {
+            const alteradas = atualizarCartaoEPertencimento.run(
+              cartao.frente,
+              cartao.verso,
+              cartao.id,
+              usuarioId,
+            );
 
-        return Number(alteradas.changes) === 0
-          ? NAO_ENCONTRADO
-          : { ok: true, valor: cartao };
+            if (Number(alteradas.changes) === 0) {
+              return NAO_ENCONTRADO;
+            }
+
+            /**
+             * Se o Cartão tem Pertencimento, atualiza a chave normalizada.
+             * Violação de UNIQUE(baralho_id, frente_chave) → ROLLBACK automático
+             * (FR-399).
+             */
+            const pertencimento = obterPertencimentoDoCartao.get(cartao.id);
+
+            if (pertencimento !== undefined) {
+              atualizarFrenteChave.run(
+                normalizarFrente(cartao.frente),
+                cartao.id,
+              );
+            }
+
+            return { ok: true, valor: cartao };
+          });
+        } catch (erro) {
+          if (ehFrenteDuplicada(erro)) {
+            return FRENTE_DUPLICADA;
+          }
+          throw erro;
+        }
       });
     },
 
@@ -961,26 +1098,27 @@ export async function abrirArmazenamentoSqlite(
     },
 
     /**
-     * Cria o Baralho e um Vínculo por Cartão numa transação só (FR-372,
-     * FR-373): a idempotência do `id`, a conferência de posse de cada Cartão e
-     * as duas gravações compartilham o mesmo desfazer.
+     * Cria o Baralho e as cópias — Cartões novos já numerados pelo Module, cada
+     * um com Pertencimento ao Baralho novo — numa única transação (FR-400). O
+     * mesmo `id` do mesmo dono devolve o Baralho guardado (`novo: false`), sem
+     * gravar de novo; de outro dono é `conflito`. Cópias não recebem Agendamento.
      */
-    async inserirBaralhoComVinculos(usuarioId, baralho, cartaoIds) {
-      return comDesfechoDeBaralhoComVinculos(() =>
+    async inserirBaralhoComCopias(usuarioId, baralho, copias) {
+      return comDesfechoDeBaralhoComCopias(() => {
         /**
-         * Baralho e Vínculos numa transação só (FR-372): um Baralho sem os
-         * Vínculos que o Module prometeu seria acervo meio-gravado, e a
-         * releitura idempotente devolveria um retrato incompleto.
+         * Baralho e Cópias numa transação só (FR-400): um Baralho sem as cópias
+         * que o Module prometeu seria acervo meio-gravado, e a releitura
+         * idempotente devolveria um retrato incompleto.
          */
-        emTransacao(banco, () => {
+        return emTransacaoComDesfecho(banco, () => {
           const existente = obterBaralhoPorIdDeQualquerDono.get(baralho.id);
 
           if (existente !== undefined) {
             /**
              * O mesmo `id` do mesmo Usuário é a retentativa idempotente
-             * (FR-372): o Baralho guardado volta intacto, com `novo: false`, e
+             * (FR-400): o Baralho guardado volta intacto, com `novo: false`, e
              * nada é gravado de novo. O `id` de **outro** Usuário é recusa de
-             * domínio (FR-373), sem que nada do Baralho alheio atravesse a
+             * domínio (FR-400), sem que nada do Baralho alheio atravesse a
              * Porta.
              */
             return (existente.usuario_id as string) === usuarioId
@@ -991,36 +1129,42 @@ export async function abrirArmazenamentoSqlite(
                     novo: false,
                   },
                 }
-              : BARALHO_COM_VINCULOS_EM_CONFLITO;
+              : BARALHO_COM_COPIAS_EM_CONFLITO;
           }
 
           /**
-           * A conferência de cada Cartão é feita **no escopo do dono**: o
-           * Cartão que não existe e o de outro Usuário são a mesma ausência
-           * (FR-092), e os `id` recusados voltam na ordem recebida, sem que
-           * nada seja gravado (FR-373).
+           * Insere o Baralho, depois insere cada cópia com seu Pertencimento
+           * (FR-400). Violação de UNIQUE(baralho_id, frente_chave) →
+           * ROLLBACK automático via emTransacao.
            */
-          const indisponiveis = cartaoIds.filter(
-            (cartaoId) => obterCartaoPorId.get(cartaoId, usuarioId) === undefined,
-          );
-
-          if (indisponiveis.length > 0) {
-            return {
-              ok: false,
-              erro: "cartoes_indisponiveis",
-              cartaoIds: indisponiveis,
-            };
-          }
-
           inserirBaralho.run(baralho.id, baralho.nome, usuarioId);
 
-          for (const cartaoId of cartaoIds) {
-            inserirVinculo.run(cartaoId, baralho.id);
+          for (const copia of copias) {
+            /**
+             * O `criado_em` é o instante corrente e não faz parte de `Cartao`:
+             * existe só para ordenar Cartões novos por criação (FR-201).
+             */
+            inserirCartaoComDono.run(
+              copia.id,
+              copia.frente,
+              copia.verso,
+              usuarioId,
+              new Date().toISOString(),
+            );
+
+            /**
+             * Insere o Pertencimento com a Frente normalizada.
+             */
+            inserirPertencimento.run(
+              copia.id,
+              baralho.id,
+              normalizarFrente(copia.frente),
+            );
           }
 
           return { ok: true, valor: { baralho, novo: true } };
-        }),
-      );
+        });
+      });
     },
 
     async listarBaralhos(usuarioId) {
@@ -1051,62 +1195,39 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
+    /**
+     * Exclui, numa única transação, o Baralho do dono, os Cartões que lhe
+     * pertencem e, pela cascata, os seus Pertencimentos e Agendamentos; os
+     * Registros de sessão ficam intactos (FR-402). Baralho ausente/de outro
+     * dono → `nao_encontrado`. Falha → ROLLBACK, `indisponivel`.
+     */
     async excluirBaralho(usuarioId, id) {
       return comDesfecho(() =>
-        Number(excluirBaralho.run(id, usuarioId).changes) === 0
-          ? NAO_ENCONTRADO
-          : SEM_CARGA,
-      );
-    },
-
-    async vincular(usuarioId, cartaoId, baralhoId) {
-      return comDesfecho(() => {
-        /**
-         * Extremidade inexistente é ausência de linha, e não falha: é a mesma
-         * regra de `nao_encontrado` das outras operações. A conferência é
-         * feita **dentro do escopo**, de modo que a extremidade de outro
-         * Usuário é ausência — sem revelar que ela existe (FR-093). Sem esta
-         * conferência, a chave estrangeira do esquema apareceria como erro do
-         * driver.
-         */
-        if (
-          obterCartaoPorId.get(cartaoId, usuarioId) === undefined ||
-          obterBaralhoPorId.get(baralhoId, usuarioId) === undefined
-        ) {
-          return NAO_ENCONTRADO;
-        }
-
-        try {
-          inserirVinculo.run(cartaoId, baralhoId);
-        } catch (erro) {
-          if (ehVinculoDuplicado(erro)) {
-            return VINCULO_DUPLICADO;
+        emTransacaoComDesfecho(banco, () => {
+          /**
+           * Confere que o Baralho existe e é do dono; senão, nada é alterado
+           * (FR-402).
+           */
+          if (obterBaralhoPorId.get(id, usuarioId) === undefined) {
+            return NAO_ENCONTRADO;
           }
 
-          throw erro;
-        }
+          /**
+           * Exclui os Cartões do dono cujo Pertencimento aponta para o Baralho;
+           * as cascatas do esquema removem os Pertencimentos e Agendamentos
+           * (FR-402).
+           */
+          excluirCartoesPertencimentoBaralho.run(usuarioId, id);
 
-        return SEM_CARGA;
-      });
-    },
+          /**
+           * Exclui o Baralho depois (a ordem não importa aqui, porque os
+           * Pertencimentos já foram cascateados).
+           */
+          excluirBaralho.run(id, usuarioId);
 
-    async desvincular(usuarioId, cartaoId, baralhoId) {
-      return comDesfecho(() => {
-        const removidos = removerVinculo.run(
-          cartaoId,
-          baralhoId,
-          usuarioId,
-          usuarioId,
-        );
-
-        return Number(removidos.changes) === 0 ? NAO_ENCONTRADO : SEM_CARGA;
-      });
-    },
-
-    async listarBaralhosDoCartao(usuarioId, cartaoId) {
-      return listarBaralhosDoCartao
-        .all(cartaoId, usuarioId)
-        .map(baralhoDaLinha);
+          return SEM_CARGA;
+        }),
+      );
     },
 
     async listarCartoesDoBaralho(usuarioId, baralhoId) {
@@ -1318,7 +1439,10 @@ export async function abrirArmazenamentoSqlite(
           }
         });
 
-        return { ok: true, valor: { registro, novo: true } };
+        return {
+          ok: true,
+          valor: { registro, novo: true },
+        };
       });
     },
 
@@ -1354,7 +1478,7 @@ export async function abrirArmazenamentoSqlite(
           }
         });
 
-        return SEM_CARGA;
+        return { ok: true, valor: undefined };
       });
     },
 
@@ -1790,6 +1914,150 @@ export async function abrirArmazenamentoSqlite(
           },
           "BEGIN IMMEDIATE",
         ),
+      );
+    },
+
+    async listarCartoesPendentes(usuarioId) {
+      return comDesfecho(() => {
+        /**
+         * A tabela legada é conferida a cada chamada: na versão 14 ela não
+         * existe, e todo pendente é avulso (`baralhos` vazio). Só Baralhos do
+         * próprio dono atravessam a Porta (FR-092).
+         */
+        const comVinculo = existeTabelaDeVinculo.get() !== undefined;
+        const baralhosLegados = comVinculo
+          ? banco.prepare(
+              `SELECT baralho.id, baralho.nome
+                 FROM vinculo
+                 JOIN baralho ON baralho.id = vinculo.baralho_id
+                WHERE vinculo.cartao_id = ?
+                  AND baralho.usuario_id = ?
+                ORDER BY baralho.nome, baralho.id`,
+            )
+          : null;
+
+        const pendentes: CartaoPendente[] = listarCartoesPendentesCartoes
+          .all(usuarioId)
+          .map((linha) => {
+            const cartao = cartaoDaLinha(linha);
+
+            return {
+              cartao,
+              baralhos:
+                baralhosLegados === null
+                  ? []
+                  : baralhosLegados
+                      .all(cartao.id, usuarioId)
+                      .map(baralhoDaLinha),
+            };
+          });
+
+        return { ok: true, valor: pendentes };
+      });
+    },
+
+    async aplicarTransicao(usuarioId, plano) {
+      return comDesfecho(() =>
+        emTransacaoComDesfecho(banco, () => {
+          /**
+           * Aplica o plano de transição de `usuarioId` numa única transação
+           * (FR-397): Pertencimentos com a Frente final, cópias com Pertencimento
+           * e remoção dos Vínculos legados dos Cartões resolvidos pelo plano.
+           * Cartão que já não esteja pendente, Baralho fora do acervo ou Frente
+           * colidente é `conflito`; UNIQUE violada é também `conflito` (via
+           * ehFrenteDuplicada); qualquer outro erro é `indisponivel` (capturado por
+           * comDesfecho). Em qualquer recusa nada é aplicado (ROLLBACK automático).
+           */
+
+          // Aplica cada pertencimento do plano
+          for (const pert of plano.pertencimentos) {
+            // Confere que o Cartão é do dono
+            const cartao = obterCartaoPorId.get(pert.cartaoId, usuarioId);
+            if (cartao === undefined) {
+              return CONFLITO;
+            }
+
+            // Confere que o Cartão ainda não tem Pertencimento
+            if (obterPertencimentoDoCartao.get(pert.cartaoId) !== undefined) {
+              return CONFLITO;
+            }
+
+            // Confere que o Baralho é do dono
+            if (obterBaralhoPorId.get(pert.baralhoId, usuarioId) === undefined) {
+              return CONFLITO;
+            }
+
+            // Atualiza a Frente do Cartão (se a Frente foi numerada)
+            atualizarFrenteDoCartao.run(
+              pert.frente,
+              pert.cartaoId,
+              usuarioId,
+            );
+
+            // Insere o Pertencimento com a Frente normalizada
+            try {
+              inserirPertencimento.run(
+                pert.cartaoId,
+                pert.baralhoId,
+                normalizarFrente(pert.frente),
+              );
+            } catch (erro) {
+              // Violação de UNIQUE(baralho_id, frente_chave) é conflito
+              if (ehFrenteDuplicada(erro)) {
+                return CONFLITO;
+              }
+              throw erro; // Outro erro é capturado por comDesfecho como indisponivel
+            }
+          }
+
+          // Aplica cada cópia do plano
+          for (const copia of plano.copias) {
+            // Confere que o Baralho é do dono
+            if (obterBaralhoPorId.get(copia.baralhoId, usuarioId) === undefined) {
+              return CONFLITO;
+            }
+
+            // Insere o Cartão (novo, com dono e criado_em agora)
+            inserirCartaoComDono.run(
+              copia.cartao.id,
+              copia.cartao.frente,
+              copia.cartao.verso,
+              usuarioId,
+              new Date().toISOString(),
+            );
+
+            // Insere o Pertencimento
+            try {
+              inserirPertencimento.run(
+                copia.cartao.id,
+                copia.baralhoId,
+                normalizarFrente(copia.cartao.frente),
+              );
+            } catch (erro) {
+              // Violação de UNIQUE também pode ocorrer aqui, embora improvável
+              // com id novo
+              if (ehFrenteDuplicada(erro)) {
+                return CONFLITO;
+              }
+              throw erro;
+            }
+          }
+
+          // Remove os Vínculos legados dos Cartões resolvidos, se a tabela existir
+          // Prepara a query dinamicamente para tratar exceção se vinculo não existir
+          try {
+            const apagarVinculosDoCartao = banco.prepare(
+              `DELETE FROM vinculo WHERE cartao_id = ?`,
+            );
+            for (const pert of plano.pertencimentos) {
+              apagarVinculosDoCartao.run(pert.cartaoId);
+            }
+          } catch {
+            // Tabela `vinculo` não existe (v14+); nenhuma ação necessária
+          }
+
+          return SEM_CARGA;
+        }),
       );
     },
 

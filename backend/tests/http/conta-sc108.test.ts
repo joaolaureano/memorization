@@ -36,14 +36,17 @@ describe("exclusão de conta grande (SC-108)", () => {
     const outro = await contrato.cadastrar("bruno.souza");
 
     await armazenamento.inserirBaralho(dono, { id: "b1", nome: "Inglês" });
-    await armazenamento.inserirCartao(outro.id, {
+
+    const baralhoOutro = { id: "b2", nome: "Português" };
+    await armazenamento.inserirBaralho(outro.id, baralhoOutro);
+    await armazenamento.inserirCartaoNoBaralho(outro.id, baralhoOutro.id, {
       id: "c-outro",
       frente: "To run",
       verso: "Correr",
     });
 
     for (let i = 0; i < 2000; i += 1) {
-      await armazenamento.inserirCartao(dono, {
+      await armazenamento.inserirCartaoNoBaralho(dono, "b1", {
         id: `c${i}`,
         frente: `Frente ${i}`,
         verso: `Verso ${i}`,

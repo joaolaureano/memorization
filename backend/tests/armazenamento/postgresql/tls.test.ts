@@ -137,7 +137,7 @@ describe("a conexão de teste é cifrada e verificada", () => {
 
     try {
       expect(
-        await semVerificacao.armazenamento.inserirCartao("dono-um", {
+        await semVerificacao.armazenamento.inserirCartaoNoBaralho("dono-um", "b-um", {
           id: "c1",
           frente: "To walk",
           verso: "Caminhar",

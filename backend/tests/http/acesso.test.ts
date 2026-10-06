@@ -398,9 +398,18 @@ describe("POST /sair (§2.4)", () => {
 describe("hook de Credencial com Acesso (§3)", () => {
   it("autoriza o acervo só pelo Acesso, sem Credencial Basic (FR-090 revisado)", async () => {
     const { valor } = await entrarComAcesso();
+
+    const baralhoResp = await contrato.servidor.inject({
+      method: "POST",
+      url: "/baralhos",
+      headers: cookieDe(valor ?? ""),
+      payload: { nome: "Inglês" },
+    });
+    const baralho = baralhoResp.json();
+
     const resposta = await contrato.servidor.inject({
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.id}/cartoes`,
       headers: cookieDe(valor ?? ""),
       payload: { frente: "To walk", verso: "Caminhar" },
     });

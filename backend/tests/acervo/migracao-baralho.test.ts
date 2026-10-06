@@ -112,8 +112,13 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
         /** O acervo da 001 não tem a quem pertencer: ele foi descartado. */
         expect(await acervo.listarCartoes()).toEqual([]);
 
+        /** Criar um Baralho para o novo Cartão. */
+        const baralhoResult = await acervo.criarBaralho({ nome: "Inglês" });
+        expect(baralhoResult.ok).toBe(true);
+        const baralhoId = baralhoResult.ok ? baralhoResult.baralho.id : "";
+
         /** E a Interface serve o acervo novo do Usuário, com dono. */
-        const criado = await acervo.criarCartao({
+        const criado = await acervo.criarCartao(baralhoId, {
           frente: "To walk",
           verso: "Caminhar",
         });
@@ -128,7 +133,9 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       try {
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
-        expect(existeTabela(banco, "vinculo")).toBe(true);
+        expect(existeTabela(banco, "pertencimento")).toBe(true);
+        // Base nova sem Cartões pendentes: versão 14, sem vinculo
+        expect(existeTabela(banco, "vinculo")).toBe(false);
       } finally {
         banco.close();
       }
@@ -141,7 +148,9 @@ describe("base legada da feature 001 com Cartões — migração até a versão 
       try {
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
-        expect(existeTabela(banco, "vinculo")).toBe(true);
+        expect(existeTabela(banco, "pertencimento")).toBe(true);
+        // Base nova sem Cartões pendentes: versão 14, sem vinculo
+        expect(existeTabela(banco, "vinculo")).toBe(false);
         expect(contarLinhas(banco, "cartao")).toBe(1);
         expect(
           banco.prepare("SELECT id FROM cartao").get()?.id,

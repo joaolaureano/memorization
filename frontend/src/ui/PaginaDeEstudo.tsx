@@ -301,6 +301,7 @@ export function PaginaDeEstudo({
         nome: "baralho temporário",
         elegivel: true,
         cartoes: [...selecaoTemporaria],
+        quantidadeDeAgendamentos: 0,
       });
 
       if (iniciada.ok) {
@@ -334,6 +335,7 @@ export function PaginaDeEstudo({
         nome: inicioDaAgenda.nomeDoBaralho,
         elegivel: true,
         cartoes: inicioDaAgenda.cartoes,
+        quantidadeDeAgendamentos: 0,
       });
 
       if (iniciada.ok) {

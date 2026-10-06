@@ -53,7 +53,7 @@ afterAll(() => {
 describe("armazenamento indisponível — recusa reportada, sem operação concluída", () => {
   it("recusa a criação de Cartão e de Baralho com código estável e mensagem em português", async () => {
     expect(
-      await acervo.criarCartao({ frente: "To walk", verso: "Caminhar" }),
+      await acervo.criarCartao("b1", { frente: "To walk", verso: "Caminhar" }),
     ).toEqual(INDISPONIVEL);
     expect(await acervo.criarBaralho({ nome: "Inglês" })).toEqual(
       INDISPONIVEL,
@@ -62,7 +62,7 @@ describe("armazenamento indisponível — recusa reportada, sem operação concl
 
   it("mantém as regras de domínio à frente do armazenamento", async () => {
     expect(
-      await acervo.criarCartao({ frente: "", verso: "Caminhar" }),
+      await acervo.criarCartao("b1", { frente: "", verso: "Caminhar" }),
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
@@ -95,12 +95,10 @@ describe("armazenamento indisponível — recusa reportada, sem operação concl
     );
     expect(await acervo.excluirCartao("c1")).toEqual(INDISPONIVEL);
     expect(await acervo.excluirBaralho("b1")).toEqual(INDISPONIVEL);
-    expect(await acervo.vincular("c1", "b1")).toEqual(INDISPONIVEL);
-    expect(await acervo.desvincular("c1", "b1")).toEqual(INDISPONIVEL);
   });
 
   it("carrega apenas o código estável e a mensagem do Module, sem detalhe do driver", async () => {
-    const recusa = await acervo.criarCartao({
+    const recusa = await acervo.criarCartao("b1", {
       frente: "To walk",
       verso: "Caminhar",
     });
@@ -112,8 +110,8 @@ describe("armazenamento indisponível — recusa reportada, sem operação concl
   it("pode ser repetida com o mesmo conteúdo informado, e nada foi gravado", async () => {
     const dados = { frente: "To walk", verso: "Caminhar" };
 
-    expect(await acervo.criarCartao(dados)).toEqual(INDISPONIVEL);
-    expect(await acervo.criarCartao(dados)).toEqual(INDISPONIVEL);
+    expect(await acervo.criarCartao("b1", dados)).toEqual(INDISPONIVEL);
+    expect(await acervo.criarCartao("b1", dados)).toEqual(INDISPONIVEL);
 
     const reaberto = await abrirArmazenamentoSqlite(CAMINHO);
 

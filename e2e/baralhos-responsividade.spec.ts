@@ -1,9 +1,22 @@
 import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
 
 import {
+  aguardarApiPronta,
+  aguardarProntidao,
+  criarBaralhoPelaApi,
+  criarPastaTemporaria,
+  criarUsuarioDeProva,
+  encerrarProcesso,
+  entrarSeNecessario,
   entrarPelaUi,
+  iniciarApi,
+  iniciarFrontend,
+  portaLivre,
   prepararEntradaInterceptada,
+  removerPastaTemporaria,
 } from './servidores-locais';
+import type { ProcessoIniciado } from './servidores-locais';
 
 // T111 — telas utilizáveis em largura de telefone, com 10 Baralhos
 // (FR-042, SC-011; specs/002-criar-baralho/tasks.md).
@@ -49,6 +62,82 @@ test.use({
   viewport: { width: 375, height: 667 },
   isMobile: true,
   hasTouch: true,
+});
+
+test('detalhe, criação, edição e exclusão funcionam em 360/390/768/1440 e zoom 200%', async ({ page }) => {
+  test.setTimeout(120_000);
+  const pasta = await criarPastaTemporaria('responsividade-025-');
+  const arquivo = join(pasta, 'acervo.sqlite');
+  let api: ProcessoIniciado | null = null;
+  let frontend: ProcessoIniciado | null = null;
+
+  try {
+    const portaDaApi = await portaLivre();
+    api = iniciarApi(arquivo, portaDaApi);
+    const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
+    await aguardarApiPronta(api, enderecoDaApi);
+    const portaDoFrontend = await portaLivre();
+    const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
+    frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+    await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
+    const credencial = await criarUsuarioDeProva(enderecoDaApi);
+    await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page, credencial);
+
+    for (const [largura, zoom] of [[360, 1], [390, 1], [768, 1], [1440, 1], [720, 2]]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      const baralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: `Largura ${largura} zoom ${zoom}` });
+      await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
+      await expect(page.getByRole('heading', { level: 1, name: baralho.nome })).toBeVisible();
+      if (zoom === 2) await page.locator('html').evaluate((elemento) => { (elemento as HTMLElement).style.zoom = '2'; });
+
+      const sobreposicoes = await page.locator('main .cabecalho-da-pagina .acoes > *').evaluateAll((controles) => {
+        const caixas = controles.map((controle) => controle.getBoundingClientRect());
+        return caixas.flatMap((caixa, indice) => caixas.slice(indice + 1).filter((outra) =>
+          caixa.left < outra.right && caixa.right > outra.left &&
+          caixa.top < outra.bottom && caixa.bottom > outra.top,
+        )).length;
+      });
+      expect(sobreposicoes).toBe(0);
+
+      const medirLargura = () => page.evaluate(() =>
+        Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth,
+      );
+      expect(await medirLargura()).toBeLessThanOrEqual(0);
+      const criar = page.getByRole('link', { name: 'Criar Cartão' }).first();
+      await criar.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { level: 1, name: 'Criar cartão' })).toBeVisible();
+      await page.getByLabel('Frente').fill(`Frente ${largura}`);
+      await page.getByLabel('Verso').fill('Verso');
+      await page.getByRole('button', { name: 'Salvar' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByText(`Frente ${largura}`, { exact: true })).toBeVisible();
+      expect(await medirLargura()).toBeLessThanOrEqual(0);
+
+      await page.getByRole('link', { name: 'Editar' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('heading', { level: 1, name: 'Editar Cartão' })).toBeVisible();
+      await page.getByLabel('Verso').fill('Verso editado');
+      await page.getByRole('button', { name: 'Salvar' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByText('Verso editado', { exact: true })).toBeVisible();
+
+      await page.getByRole('button', { name: `Excluir Frente ${largura}` }).focus();
+      await page.keyboard.press('Enter');
+      const dialogo = page.getByRole('dialog');
+      await expect(dialogo).toBeVisible();
+      await dialogo.getByRole('button', { name: 'Excluir Cartão' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByText(`Frente ${largura}`, { exact: true })).toHaveCount(0);
+      expect(await medirLargura()).toBeLessThanOrEqual(0);
+      await page.locator('html').evaluate((elemento) => { (elemento as HTMLElement).style.zoom = ''; });
+    }
+  } finally {
+    await encerrarProcesso(frontend);
+    await encerrarProcesso(api);
+    await removerPastaTemporaria(pasta);
+  }
 });
 
 test('lista com 10 Baralhos permanece utilizável e sem rolagem horizontal em telefone (FR-042, SC-011)', async ({ page, browserName }) => {

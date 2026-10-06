@@ -17,6 +17,8 @@ import { SalvarSelecaoComoBaralho } from "../src/ui/SalvarSelecaoComoBaralho";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 
 async function criarSelecao(cliente: ClienteEmMemoria): Promise<Cartao[]> {
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("Baralho de prova não criado");
   const definicoes = [
     { frente: "How are you?", verso: "Como você está?" },
     { frente: "Good morning", verso: "Bom dia" },
@@ -24,7 +26,7 @@ async function criarSelecao(cliente: ClienteEmMemoria): Promise<Cartao[]> {
   ];
   const selecao: Cartao[] = [];
   for (const definicao of definicoes) {
-    const resultado = await cliente.criarCartao(definicao);
+    const resultado = await cliente.criarCartao(baralho.baralho.id, definicao);
     if (!resultado.ok) {
       throw new Error("não foi possível criar o Cartão de prova");
     }
@@ -40,7 +42,9 @@ function renderizar(cliente: ClienteEmMemoria, selecao: Cartao[]) {
         cliente={cliente}
         id=""
         selecaoTemporaria={selecao}
-        aleatoriedade={new AleatoriedadeDeterministica([0.99, 0.99])}
+        aleatoriedade={new AleatoriedadeDeterministica(
+          Array.from({ length: selecao.length - 1 }, () => 0.99),
+        )}
         aoSair={vi.fn()}
       />,
     ),
@@ -66,9 +70,7 @@ async function chegarAoSalvamento(
   selecao: Cartao[],
 ) {
   renderizar(cliente, selecao);
-  await responder();
-  await responder();
-  await responder();
+  for (let indice = 0; indice < selecao.length; indice += 1) await responder();
   await waitFor(() => {
     expect(
       screen.getByRole("status", {
@@ -83,6 +85,33 @@ async function chegarAoSalvamento(
 }
 
 describe("salvar a seleção como Baralho", () => {
+  it("numera Frentes repetidas nas cópias e preserva os dois Baralhos de origem", async () => {
+    const cliente = clienteDeProva();
+    const selecao = await criarSelecao(cliente);
+    const outroBaralho = await cliente.criarBaralho({ nome: "Viagem" });
+    if (!outroBaralho.ok) throw new Error("não criou o segundo Baralho");
+    const repetido = await cliente.criarCartao(outroBaralho.baralho.id, {
+      frente: "How are you?", verso: "Como vai?",
+    });
+    if (!repetido.ok) throw new Error("não criou o Cartão repetido");
+    await chegarAoSalvamento(cliente, [...selecao, repetido.cartao]);
+    fireEvent.change(screen.getByLabelText("Nome do baralho"), {
+      target: { value: "Revisão mista" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await screen.findByText("Baralho salvo.");
+    const baralhos = await listarBaralhos(cliente);
+    const salvo = baralhos.find((item) => item.nome === "Revisão mista");
+    if (!salvo) throw new Error("não salvou o Baralho");
+    const detalhe = await cliente.obterBaralho(salvo.id);
+    if (!detalhe.ok) throw new Error("não carregou o Baralho salvo");
+    expect(detalhe.baralho.cartoes.map((cartao) => cartao.frente)).toEqual([
+      "How are you?", "Good morning", "Thank you", "How are you? (2)",
+    ]);
+    expect(baralhos.find((item) => item.nome === "Inglês")?.quantidadeDeCartoes).toBe(3);
+    expect(baralhos.find((item) => item.nome === "Viagem")?.quantidadeDeCartoes).toBe(1);
+  });
+
   it("cria um único Baralho com os 3 Cartões e volta ao Resumo com «Abrir baralho» focado (FR-371, FR-372, SC-146)", async () => {
     const cliente = clienteDeProva();
     const selecao = await criarSelecao(cliente);
@@ -98,10 +127,11 @@ describe("salvar a seleção como Baralho", () => {
 
     const link = await screen.findByRole("link", { name: "Abrir baralho" });
     const baralhos = await listarBaralhos(cliente);
-    expect(baralhos).toHaveLength(1);
-    expect(baralhos[0].nome).toBe("Inglês para viagem");
-    expect(baralhos[0].quantidadeDeCartoes).toBe(3);
-    expect(link).toHaveAttribute("href", `#/baralhos/${baralhos[0].id}`);
+    expect(baralhos).toHaveLength(2);
+    const salvo = baralhos.find((item) => item.nome === "Inglês para viagem");
+    expect(salvo?.quantidadeDeCartoes).toBe(3);
+    expect(baralhos.find((item) => item.nome === "Inglês")?.quantidadeDeCartoes).toBe(3);
+    expect(link).toHaveAttribute("href", `#/baralhos/${salvo?.id}`);
     await waitFor(() => expect(link).toHaveFocus());
     expect(
       screen.queryByRole("button", { name: "Salvar como baralho" }),
@@ -119,7 +149,7 @@ describe("salvar a seleção como Baralho", () => {
     expect(screen.getByText("18 / 100 caracteres")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "3 Cartões serão vinculados. Os baralhos de origem serão preservados.",
+        "Serão criadas 3 cópias de Cartões. Os baralhos de origem serão preservados.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -149,7 +179,7 @@ describe("salvar a seleção como Baralho", () => {
         screen.getByRole("button", { name: "Salvar como baralho" }),
       ).toHaveFocus(),
     );
-    expect(await listarBaralhos(cliente)).toHaveLength(0);
+    expect(await listarBaralhos(cliente)).toHaveLength(1);
   });
 
   it("nome vazio mostra a mensagem, foca o campo e não cria nada (FR-371)", async () => {
@@ -167,7 +197,7 @@ describe("salvar a seleção como Baralho", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Nome do baralho")).toHaveFocus(),
     );
-    expect(await listarBaralhos(cliente)).toHaveLength(0);
+    expect(await listarBaralhos(cliente)).toHaveLength(1);
   });
 
   it("falha preserva o nome, e a nova tentativa reenvia o mesmo id e salva (FR-373, SC-147)", async () => {
@@ -197,8 +227,8 @@ describe("salvar a seleção como Baralho", () => {
     expect(espiao).toHaveBeenCalledTimes(2);
     expect(espiao.mock.calls[0][0].id).toBe(espiao.mock.calls[1][0].id);
     const baralhos = await listarBaralhos(cliente);
-    expect(baralhos).toHaveLength(1);
-    expect(baralhos[0].id).toBe(espiao.mock.calls[0][0].id);
+    expect(baralhos).toHaveLength(2);
+    expect(baralhos.find((item) => item.nome === "Inglês para viagem")?.id).toBe(espiao.mock.calls[0][0].id);
   });
 
   it("Cartão excluído antes de salvar exige retirar: a contagem passa a 2 e o Baralho salvo tem 2 Cartões (FR-374)", async () => {
@@ -226,7 +256,7 @@ describe("salvar a seleção como Baralho", () => {
 
     expect(
       screen.getByText(
-        "2 Cartões serão vinculados. Os baralhos de origem serão preservados.",
+        "Serão criadas 2 cópias de Cartões. Os baralhos de origem serão preservados.",
       ),
     ).toBeInTheDocument();
 
@@ -235,9 +265,8 @@ describe("salvar a seleção como Baralho", () => {
     expect(screen.getByText("Baralho salvo.")).toBeInTheDocument();
 
     const baralhos = await listarBaralhos(cliente);
-    expect(baralhos).toHaveLength(1);
-    expect(baralhos[0].nome).toBe("Inglês para viagem");
-    expect(baralhos[0].quantidadeDeCartoes).toBe(2);
+    expect(baralhos).toHaveLength(2);
+    expect(baralhos.find((item) => item.nome === "Inglês para viagem")?.quantidadeDeCartoes).toBe(2);
   });
 
   it("sem Cartões restantes, «Salvar» fica desabilitado com a mensagem própria (FR-374)", async () => {
@@ -266,7 +295,7 @@ describe("salvar a seleção como Baralho", () => {
       await screen.findByText("Não há Cartões disponíveis para salvar."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salvar" })).toBeDisabled();
-    expect(await listarBaralhos(cliente)).toHaveLength(0);
+    expect(await listarBaralhos(cliente)).toHaveLength(1);
   });
 
   // T2319 — Formulário "Salvar como baralho" com nome inicial

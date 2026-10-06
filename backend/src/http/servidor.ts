@@ -23,6 +23,7 @@ import {
   registrarRotasDePreferencias,
   registrarRotasDeRevisao,
   registrarRotasDeSessoes,
+  registrarRotasDeTransicao,
   registrarRotasDeUsuarios,
   type AcervoDeUsuario,
 } from "./rotas.ts";
@@ -44,6 +45,9 @@ export const HOST_LOCAL = "127.0.0.1";
  * mínimo: o frontend de navegador consome essas rotas de outra origem.
  */
 export const CAMINHO_DOS_CARTOES = "/cartoes";
+
+/** Transição dos Cartões legados para Pertencimento exclusivo (FR-397). */
+export const CAMINHO_DA_TRANSICAO_DE_CARTOES = "/acervo/transicao-cartoes";
 
 /**
  * Caminho das rotas de Baralho (contrato `api-baralhos.md`). Passa a receber
@@ -336,8 +340,8 @@ export function criarServidor(
       "/cartoes/:id",
       CAMINHO_DOS_BARALHOS,
       "/baralhos/:id",
-      "/baralhos/:baralhoId/vinculos",
-      "/baralhos/:baralhoId/vinculos/:cartaoId",
+      "/baralhos/:baralhoId/cartoes",
+      CAMINHO_DA_TRANSICAO_DE_CARTOES,
       CAMINHO_DOS_USUARIOS,
       CAMINHO_DE_ENTRAR,
       CAMINHO_DAS_SESSOES,
@@ -365,6 +369,7 @@ export function criarServidor(
         caminho.startsWith("/cartoes/") ||
         caminho === CAMINHO_DOS_BARALHOS ||
         caminho.startsWith("/baralhos/") ||
+        caminho === CAMINHO_DA_TRANSICAO_DE_CARTOES ||
         caminho === CAMINHO_DOS_USUARIOS ||
         caminho === CAMINHO_DE_ENTRAR ||
         caminho === CAMINHO_DAS_SESSOES ||
@@ -446,6 +451,7 @@ export function registrarRotasDaAplicacao(
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
   registrarRotasDeBaralhos(servidor, acervoDe);
+  registrarRotasDeTransicao(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
   registrarRotasDeRevisao(servidor, acervoDe);
   registrarRotasDePreferencias(servidor, acervoDe);

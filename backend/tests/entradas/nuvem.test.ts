@@ -25,7 +25,15 @@ import {
   servidorDeTeste,
   type ServidorAutonomo,
 } from "../armazenamento/postgresql/servidor-de-teste.ts";
-import { versaoCorrenteConhecida } from "../../src/armazenamento/postgresql/esquema.ts";
+import {
+  versaoCorrenteConhecida,
+  aplicarMigracoes,
+} from "../../src/armazenamento/postgresql/esquema.ts";
+import { MIGRACOES } from "../../src/armazenamento/postgresql/migracoes.ts";
+import {
+  criarPiscina,
+  type ConfiguracaoDaConexao,
+} from "../../src/armazenamento/postgresql/conexao.ts";
 
 /**
  * T906, T907, T908 e T909 — o início da nuvem: a URL de conexão validada sem
@@ -284,6 +292,95 @@ function urlDaBase(nomeDaBase: string, sslmode = "verify-full"): string {
   );
 }
 
+/**
+ * Cria uma base nova e migra-a apenas até a versão informada (FR-397).
+ * Útil para testar estados de versão específicos.
+ */
+async function criarBaseNaVersao(
+  titulo: string,
+  versaoAlvo: number,
+): Promise<string> {
+  const host = servidor.configuracao.host;
+  const porta = servidor.configuracao.porta;
+  const usuario = servidor.configuracao.usuario;
+  const senha = servidor.configuracao.senha;
+  const ca = servidor.configuracao.certificadoDaAutoridade;
+
+  const nomeDaBase = await servidor.criarBase(titulo);
+  const configuracao: ConfiguracaoDaConexao = {
+    url: `postgresql://${usuario}:${senha}@${host}:${porta}/${nomeDaBase}?sslmode=verify-full`,
+    ca,
+  };
+
+  const piscina = criarPiscina(configuracao);
+
+  try {
+    // Aplica apenas as migrações até a versão alvo.
+    const migracoesFiltradas = MIGRACOES.filter((m) => m.versao <= versaoAlvo);
+    await aplicarMigracoes(piscina, migracoesFiltradas);
+  } finally {
+    await piscina.end();
+  }
+
+  return nomeDaBase;
+}
+
+/**
+ * Insere um cartão numa base na versão 13 ou posterior, sem pertencimento.
+ * Usado para testar a precondição da migração 14 (FR-397).
+ */
+async function inserirCartaoSemPertencimento(
+  nomeDaBase: string,
+  cartaoId: string,
+): Promise<void> {
+  const host = servidor.configuracao.host;
+  const porta = servidor.configuracao.porta;
+  const usuario = servidor.configuracao.usuario;
+  const senha = servidor.configuracao.senha;
+  const ca = servidor.configuracao.certificadoDaAutoridade;
+
+  const configuracao: ConfiguracaoDaConexao = {
+    url: `postgresql://${usuario}:${senha}@${host}:${porta}/${nomeDaBase}?sslmode=verify-full`,
+    ca,
+  };
+
+  const piscina = criarPiscina(configuracao);
+
+  try {
+    // Precisa de um usuário para inserir o cartão (migração 5 adiciona usuario_id).
+    // Insere um usuário primeiro.
+    await piscina.query(
+      `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "usuario-teste",
+        "teste",
+        Buffer.alloc(16),
+        Buffer.alloc(32),
+        '{"iterations":1}',
+      ],
+    );
+
+    // Cria um baralho.
+    await piscina.query(
+      `INSERT INTO baralho (id, nome, usuario_id)
+       VALUES ($1, $2, $3)`,
+      ["baralho-teste", "Baralho de Teste", "usuario-teste"],
+    );
+
+    // Insere um cartão.
+    await piscina.query(
+      `INSERT INTO cartao (id, frente, verso, usuario_id)
+       VALUES ($1, $2, $3, $4)`,
+      [cartaoId, "Frente", "Verso", "usuario-teste"],
+    );
+
+    // NÃO insere pertencimento, deixando o cartão pendente.
+  } finally {
+    await piscina.end();
+  }
+}
+
 describe("recusa da URL de conexão (T906, SC-046)", () => {
   it("recusa com a variável ausente, sem nada escutar e sem repetir valor algum", async () => {
     const porta = await portaLivre();
@@ -507,6 +604,66 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
     expect(tabelas).toEqual([]);
   }, PRAZO_DA_ENTRADA);
 
+  it("sobe quando a base está na versão 13 (transitória) com cartão pendente", async () => {
+    const nomeDaBase = await criarBaseNaVersao("transicao-v13", 13);
+    await inserirCartaoSemPertencimento(nomeDaBase, "cartao-pendente");
+    const pasta = mkdtempSync(join(pastaTemporaria, "v13-"));
+    const porta = await portaLivre();
+
+    const nuvem = iniciarEntrada(
+      {
+        ...ambienteSemUrl(),
+        PORTA: String(porta),
+        DB_CA_CERT: certificado.caminho,
+        DB_URL: urlDaBase(nomeDaBase),
+      },
+      pasta,
+    );
+
+    try {
+      expect(await nuvem.primeiraLinha).toBe(LINHA_DE_INICIO);
+
+      await aguardarSaude(porta);
+    } finally {
+      await nuvem.encerrar();
+    }
+
+    // Verifica que a base continua na versão 13 (a migração 14 não foi aplicada).
+    const versaoAtual = await servidor.consultar<{ versao: number }>(
+      nomeDaBase,
+      "SELECT versao FROM versao_do_esquema;",
+    );
+
+    expect(versaoAtual[0]?.versao).toBe(13);
+  }, PRAZO_DA_ENTRADA);
+
+  it("recusa iniciar quando a base está na versão 12 (muito atrasada)", async () => {
+    const nomeDaBase = await criarBaseNaVersao("atrasada-v12", 12);
+    const porta = await portaLivre();
+    const corrente = versaoCorrenteConhecida();
+
+    const { codigo, saida } = await executarEntrada({
+      ...ambienteSemUrl(),
+      PORTA: String(porta),
+      DB_CA_CERT: certificado.caminho,
+      DB_URL: urlDaBase(nomeDaBase),
+    });
+
+    expect(codigo).toBe(1);
+    expect(saida).toContain(
+      "Início recusado: o esquema da base está na versão 12 e a versão " +
+        `corrente é ${corrente}.`,
+    );
+    expect(saida).toContain("comando de migração");
+    expect(saida).not.toContain("Armazenamento:");
+
+    await expect(
+      fetch(`http://127.0.0.1:${porta}/health`, {
+        signal: AbortSignal.timeout(1_000),
+      }),
+    ).rejects.toThrow();
+  }, PRAZO_DA_ENTRADA);
+
   it("sobe quando a base está na versão corrente e não cria tabela alguma", async () => {
     const nomeDaBase = await criarBaseMigrada("corrente");
     const pasta = mkdtempSync(join(pastaTemporaria, "corrente-"));
@@ -545,12 +702,12 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
+      "pertencimento",
       "preferencias",
       "registro_de_sessao",
       "rotina_de_estudo",
       "usuario",
       "versao_do_esquema",
-      "vinculo",
     ]);
   }, PRAZO_DA_ENTRADA);
 });

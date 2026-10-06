@@ -16,14 +16,14 @@ import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
  * T402 — `Acervo` renomeia Baralho pela sua Interface, reaplicando as regras
- * da criação e preservando Vínculos e elegibilidade.
+ * da criação e preservando o Pertencimento e elegibilidade.
  *
  * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao`,
- * `vincular`, `renomearBaralho`, `listarBaralhos` e `listarCartoes`) sobre o
- * Adapter do armazenamento local em memória; nenhum teste inspeciona a tabela.
- * O nome novo vale em todos os lugares (FR-015), os Vínculos permanecem
- * intactos e a elegibilidade continua derivada da contagem. Nome inválido é
- * recusado como na criação e Baralho inexistente, como `nao_encontrado`.
+ * `renomearBaralho`, `listarBaralhos` e `listarCartoes`) sobre o Adapter do
+ * armazenamento local em memória; nenhum teste inspeciona a tabela. O nome
+ * novo vale em todos os lugares (FR-015), o Pertencimento permanece intacto e
+ * a elegibilidade continua derivada da contagem. Nome inválido é recusado como
+ * na criação e Baralho inexistente, como `nao_encontrado`.
  */
 
 const NOME_VALIDO = "Inglês";
@@ -71,9 +71,9 @@ async function criarBaralho(nome = NOME_VALIDO): Promise<Baralho> {
 }
 
 /** Cria um Cartão válido pela Interface. */
-async function criarCartao(): Promise<Cartao> {
+async function criarCartao(baralhoId: string): Promise<Cartao> {
   return cartaoDo(
-    await acervo.criarCartao({ frente: "To walk", verso: "Caminhar" }),
+    await acervo.criarCartao(baralhoId, { frente: "To walk", verso: "Caminhar" }),
   );
 }
 
@@ -98,11 +98,9 @@ describe("renomearBaralho — edição pela Interface", () => {
     ]);
   });
 
-  it("preserva Vínculos e elegibilidade ao renomear", async () => {
+  it("preserva Pertencimento e elegibilidade ao renomear", async () => {
     const baralho = await criarBaralho();
-    const cartao = await criarCartao();
-
-    await acervo.vincular(cartao.id, baralho.id);
+    const cartao = await criarCartao(baralho.id);
 
     expect(
       await acervo.renomearBaralho(baralho.id, { nome: NOME_EDITADO }),
@@ -120,7 +118,7 @@ describe("renomearBaralho — edição pela Interface", () => {
       },
     ]);
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [{ id: baralho.id, nome: NOME_EDITADO }], proximaRevisaoEm: null },
+      { ...cartao, baralho: { id: baralho.id, nome: NOME_EDITADO }, proximaRevisaoEm: null },
     ]);
   });
 

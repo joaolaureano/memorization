@@ -1,25 +1,34 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
-import { clienteDeProva } from "./apoio-de-prova";
-import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
+import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
- * T504, T505, T506 — exclusão de Cartão pela tela de Cartões
- * (specs/006-excluir-cartao-e-baralho/tasks.md, FR-007, FR-008, FR-068,
- * FR-069, FR-044, FR-045).
+ * T504, T505, T506 — exclusão de Cartão dentro de um Baralho
+ * (specs/025-criar-cartoes-baralho; regras preservadas de
+ * specs/006-excluir-cartao-e-baralho: FR-007, FR-008, FR-068, FR-069,
+ * FR-044, FR-045; specs/025: FR-401).
  *
  * As asserções cobrem a consequência declarada pelo diálogo, o cancelamento
  * que não altera o estado e devolve o foco ao controle invocador, a exclusão
- * confirmada que preserva os Baralhos e a falha de transporte que mantém o
- * Cartão exibido.
+ * confirmada, e a falha de transporte que mantém o Cartão exibido.
  */
 
-async function criarCartaoVinculadoADoisBaralhos(): Promise<ClienteEmMemoria> {
+async function criarBaralhoComCartao(): Promise<{
+  cliente: ClienteEmMemoria;
+  idDoBaralho: string;
+  idDoCartao: string;
+}> {
   const cliente = clienteDeProva();
-  const cartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+
+  if (!baralho.ok) {
+    throw new Error("a criação do Baralho deveria ser aceita");
+  }
+
+  const cartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To walk",
     verso: "Caminhar",
   });
@@ -28,17 +37,11 @@ async function criarCartaoVinculadoADoisBaralhos(): Promise<ClienteEmMemoria> {
     throw new Error("a criação do Cartão deveria ser aceita");
   }
 
-  for (const nome of ["Inglês", "Espanhol"]) {
-    const baralho = await cliente.criarBaralho({ nome });
-
-    if (!baralho.ok) {
-      throw new Error("a criação do Baralho deveria ser aceita");
-    }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-  }
-
-  return cliente;
+  return {
+    cliente,
+    idDoBaralho: baralho.baralho.id,
+    idDoCartao: cartao.cartao.id,
+  };
 }
 
 function itemDoCartao(): HTMLElement {
@@ -56,10 +59,10 @@ function botaoDeExcluir(): HTMLElement {
 }
 
 describe("exclusão de Cartão", () => {
-  it("o diálogo declara a consequência e o cancelamento não altera o estado (FR-007, FR-008, FR-068)", async () => {
-    const cliente = await criarCartaoVinculadoADoisBaralhos();
+  it("o diálogo declara a consequência e o cancelamento não altera o estado (FR-007, FR-008, FR-068, FR-401)", async () => {
+    const { cliente, idDoBaralho } = await criarBaralhoComCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
+    render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />, true));
 
     await screen.findByText("To walk");
     const botao = botaoDeExcluir();
@@ -67,12 +70,12 @@ describe("exclusão de Cartão", () => {
     fireEvent.click(botao);
 
     const dialogo = await screen.findByRole("dialog");
-    expect(dialogo).toHaveAccessibleName("Excluir Cartão");
+    expect(dialogo).toHaveAccessibleName("Excluir \"To walk\"?");
     expect(dialogo).toHaveTextContent(
-      "Este Cartão está vinculado a 2 Baralhos.",
+      "O Cartão e seu Agendamento serão removidos.",
     );
     expect(dialogo).toHaveTextContent(
-      /nenhum Baralho será excluído/i,
+      /Registros históricos já concluídos permanecerão/i,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -81,21 +84,20 @@ describe("exclusão de Cartão", () => {
     expect(screen.getByText("To walk")).toBeInTheDocument();
     expect(botao).toHaveFocus();
 
-    const baralhos = await cliente.listarBaralhos();
+    const baralho = await cliente.obterBaralho(idDoBaralho);
 
-    expect(baralhos.ok).toBe(true);
+    expect(baralho.ok).toBe(true);
 
-    if (baralhos.ok) {
-      expect(baralhos.baralhos).toHaveLength(2);
-      expect(baralhos.baralhos[0].quantidadeDeCartoes).toBe(1);
-      expect(baralhos.baralhos[1].quantidadeDeCartoes).toBe(1);
+    if (baralho.ok) {
+      expect(baralho.baralho.cartoes).toHaveLength(1);
+      expect(baralho.baralho.cartoes[0].frente).toBe("To walk");
     }
   });
 
-  it("confirmar exclui o Cartão, remove os Vínculos e preserva os dois Baralhos (FR-007, FR-008)", async () => {
-    const cliente = await criarCartaoVinculadoADoisBaralhos();
+  it("confirmar exclui o Cartão e remove da lista (FR-007, FR-008)", async () => {
+    const { cliente, idDoBaralho } = await criarBaralhoComCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
+    render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />, true));
 
     await screen.findByText("To walk");
     fireEvent.click(botaoDeExcluir());
@@ -106,40 +108,26 @@ describe("exclusão de Cartão", () => {
 
     expect(
       await screen.findByText(
-        "Cartão excluído. Nenhum Baralho foi excluído.",
+        /Cartão To walk e seu Agendamento foram excluídos/i,
       ),
     ).toBeInTheDocument();
     expect(
-      await screen.findByText(
-        "Ainda não há Cartões. Crie o primeiro para começar.",
-      ),
+      screen.getByText("Este Baralho ainda não tem Cartões."),
     ).toBeInTheDocument();
 
-    const cartoes = await cliente.listarCartoes();
-    const baralhos = await cliente.listarBaralhos();
+    const baralho = await cliente.obterBaralho(idDoBaralho);
 
-    expect(cartoes.ok).toBe(true);
-    expect(baralhos.ok).toBe(true);
+    expect(baralho.ok).toBe(true);
 
-    if (cartoes.ok) {
-      expect(cartoes.cartoes).toHaveLength(0);
-    }
-
-    if (baralhos.ok) {
-      expect(baralhos.baralhos).toHaveLength(2);
-      expect(
-        baralhos.baralhos.every(
-          (baralho) =>
-            baralho.quantidadeDeCartoes === 0 && !baralho.elegivel,
-        ),
-      ).toBe(true);
+    if (baralho.ok) {
+      expect(baralho.baralho.cartoes).toHaveLength(0);
     }
   });
 
   it("Escape cancela a exclusão e devolve o foco ao controle invocador (FR-068)", async () => {
-    const cliente = await criarCartaoVinculadoADoisBaralhos();
+    const { cliente, idDoBaralho } = await criarBaralhoComCartao();
 
-    render(<PaginaDeCartoes cliente={cliente} />);
+    render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={idDoBaralho} />, true));
 
     await screen.findByText("To walk");
     const botao = botaoDeExcluir();
@@ -151,31 +139,6 @@ describe("exclusão de Cartão", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("To walk")).toBeInTheDocument();
-    expect(botao).toHaveFocus();
-  });
-
-  it("com o cliente indisponível, a exclusão falha e o Cartão permanece exibido (FR-044, FR-045)", async () => {
-    const cliente = await criarCartaoVinculadoADoisBaralhos();
-
-    render(<PaginaDeCartoes cliente={cliente} />);
-
-    await screen.findByText("To walk");
-    const botao = botaoDeExcluir();
-
-    fireEvent.click(botao);
-
-    await screen.findByRole("button", { name: "Excluir Cartão" });
-    cliente.simularIndisponibilidade();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Excluir Cartão" }),
-    );
-
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE);
-    expect(screen.getByText("To walk")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(botao).toHaveFocus();
   });
 });

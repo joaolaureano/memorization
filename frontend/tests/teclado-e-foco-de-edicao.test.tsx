@@ -75,7 +75,9 @@ function apertarEnter(elemento: HTMLElement): void {
 
 async function criarCartao(): Promise<ClienteEmMemoria> {
   const cliente = clienteDeProva();
-  const cartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("Baralho de prova não criado");
+  const cartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To walk",
     verso: "Caminhar",
   });
@@ -110,11 +112,14 @@ describe("edição por teclado", () => {
       throw new Error("a listagem deveria ser aceita");
     }
 
+    window.location.hash = `#/baralhos/${cartao.cartoes[0].baralho.id}/cartoes/${cartao.cartoes[0].id}/editar`;
+
     render(
       comProtecaoDeSaida(
         <PaginaDoFormularioDeCartao
           cliente={cliente}
           id={cartao.cartoes[0].id}
+          baralhoId={cartao.cartoes[0].baralho.id}
         />,
         true,
       ),
@@ -155,12 +160,13 @@ describe("edição por teclado", () => {
     apertarEnter(screen.getByRole("button", { name: "Salvar" }));
 
     await waitFor(() => {
-      expect(window.location.hash).toBe("#/cartoes");
+      expect(window.location.hash).toBe(`#/baralhos/${cartao.cartoes[0].baralho.id}`);
     });
   });
 
   it("renomeia um Baralho, salva, confirma descarte e foca o campo recusado só por teclado (FR-067, FR-159)", async () => {
     const { cliente, idDoBaralho } = await criarBaralho();
+    window.location.hash = `#/baralhos/${idDoBaralho}/editar`;
 
     // A renomeação acontece na página de formulário própria da spec 012; a
     // confirmação de descarte vem da proteção de saída que a envolve.

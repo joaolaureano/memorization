@@ -11,6 +11,7 @@ import type {
   DadosDeRegistro,
   DadosDeRotina,
   DadosDeUsuario,
+  EscolhaDeTransicao,
 } from "../acervo-cliente/cliente";
 
 /**
@@ -67,8 +68,8 @@ export function comGuardaDeCredencial(
   return {
     entrar: (dados: DadosDeEntrada) => cliente.entrar(dados),
 
-    criarCartao: async (dados: DadosDeCartao) =>
-      vigiar(await cliente.criarCartao(dados)),
+    criarCartao: async (baralhoId: string, dados: DadosDeCartao) =>
+      vigiar(await cliente.criarCartao(baralhoId, dados)),
 
     listarCartoes: async () => vigiar(await cliente.listarCartoes()),
 
@@ -80,12 +81,6 @@ export function comGuardaDeCredencial(
     listarBaralhos: async () => vigiar(await cliente.listarBaralhos()),
 
     obterBaralho: async (id: string) => vigiar(await cliente.obterBaralho(id)),
-
-    vincular: async (cartaoId: string, baralhoId: string) =>
-      vigiar(await cliente.vincular(cartaoId, baralhoId)),
-
-    desvincular: async (cartaoId: string, baralhoId: string) =>
-      vigiar(await cliente.desvincular(cartaoId, baralhoId)),
 
     editarCartao: async (id: string, frente: string, verso: string) =>
       vigiar(await cliente.editarCartao(id, frente, verso)),
@@ -135,6 +130,11 @@ export function comGuardaDeCredencial(
 
     excluirConta: async (dados: DadosDeExclusaoDeConta) =>
       vigiar(await cliente.excluirConta(dados)),
+
+    obterTransicao: async () => vigiar(await cliente.obterTransicao()),
+
+    concluirTransicao: async (escolhas: EscolhaDeTransicao[]) =>
+      vigiar(await cliente.concluirTransicao(escolhas)),
 
     // O Acesso temporário (018): a carga e a renovação passam pela guarda, de
     // modo que a recusa por Acesso expirado leva a Entrar (FR-091 revisado,

@@ -60,7 +60,48 @@ export interface Baralho {
 }
 
 /**
- * Quantidade de Cartões vinculados a um Baralho, lida dos Vínculos a cada
+ * Cartão com o seu único Baralho dono — o Pertencimento (FR-389). É a forma
+ * das leituras que atravessam Baralhos, como a montagem de estudo temporário.
+ */
+export interface CartaoComDono extends Cartao {
+  baralho: Baralho;
+}
+
+/**
+ * Cartão legado ainda sem Pertencimento (FR-397), com os Baralhos a que estava
+ * vinculado na tabela legada. `baralhos` vazio é Cartão avulso; um único
+ * Baralho é resolvido automaticamente; dois ou mais exigem escolha.
+ */
+export interface CartaoPendente {
+  cartao: Cartao;
+  baralhos: Baralho[];
+}
+
+/**
+ * Plano atômico da transição de um Usuário, calculado pelo Module (FR-397).
+ *
+ * - `pertencimentos`: Cartões pendentes que passam a pertencer a `baralhoId`;
+ *   `frente` é a Frente final, já numerada pelo Module em caso de colisão — o
+ *   Adapter grava essa Frente no Cartão e a chave normalizada no Pertencimento.
+ * - `copias`: Cartões novos (identidade nova, sem Agendamento nem Histórico),
+ *   cada um com o seu Baralho dono.
+ *
+ * O Adapter aplica tudo numa transação, recusa como `conflito` quando algum
+ * Cartão de `pertencimentos` já não está pendente ou quando uma Frente colide,
+ * e remove os Vínculos legados **somente dos Cartões resolvidos pelo plano**, se
+ * a tabela ainda existir — os demais pendentes conservam a sua origem.
+ */
+export interface PlanoDeTransicao {
+  pertencimentos: readonly {
+    cartaoId: string;
+    baralhoId: string;
+    frente: string;
+  }[];
+  copias: readonly { baralhoId: string; cartao: Cartao }[];
+}
+
+/**
+ * Quantidade de Cartões pertencentes a um Baralho, lida dos Pertencimentos a cada
  * listagem. É a entrada da elegibilidade derivada, que continua sendo regra do
  * Module: a contagem vem da Porta, a elegibilidade não (FR-024).
  */
@@ -356,8 +397,9 @@ export type CalculoDeAgendamentos = (
 /**
  * Códigos de falha tipada da Porta. São vocabulário de armazenamento, nunca
  * mensagem: `nao_encontrado` é a ausência de linha a ler, a alterar ou a
- * excluir; `vinculo_duplicado` é o par (Cartão, Baralho) repetido, reconhecido
- * pela unicidade do esquema; `conflito` é o identificador de um Registro de
+ * excluir; `frente_duplicada` é a Frente normalizada repetida no mesmo
+ * Baralho, reconhecida pela unicidade `(baralho_id, frente_chave)` do esquema
+ * (FR-398, FR-399); `conflito` é o identificador de um Registro de
  * sessão já usado **por outro Usuário**, reconhecido pela chave primária do
  * registro (FR-163, FR-166); `indisponivel` é a falha do armazenamento —
  * arquivo, conexão, transação ou consulta —, e jamais significa concluído
@@ -365,7 +407,7 @@ export type CalculoDeAgendamentos = (
  */
 export type CodigoDeFalhaDeArmazenamento =
   | "nao_encontrado"
-  | "vinculo_duplicado"
+  | "frente_duplicada"
   | "conflito"
   | "indisponivel";
 
@@ -376,10 +418,9 @@ export type CodigoDeFalhaDeArmazenamento =
  * `indisponivel` não apresenta a operação como feita e pode tentar de novo com
  * o mesmo conteúdo informado (FR-044, FR-045, FR-107).
  */
-/** Desfecho de `inserirBaralhoComVinculos` (FR-372, FR-373). */
-export type DesfechoDeBaralhoComVinculos =
+/** Desfecho de `inserirBaralhoComCopias` (FR-400). */
+export type DesfechoDeBaralhoComCopias =
   | { ok: true; valor: { baralho: Baralho; novo: boolean } }
-  | { ok: false; erro: "cartoes_indisponiveis"; cartaoIds: string[] }
   | { ok: false; erro: "conflito" | "indisponivel" };
 
 export type Desfecho<T> =
@@ -578,7 +619,7 @@ export interface ArmazenamentoDeAcessos {
 /**
  * A Interface única por onde o acervo lê e grava dados persistidos.
  *
- * As operações são de armazenamento **do domínio** — Cartão, Baralho, Vínculo,
+ * As operações são de armazenamento **do domínio** — Cartão, Baralho, Pertencimento,
  * as contagens da elegibilidade e o Registro de sessão do Histórico —, e não
  * um executor de SQL: o Adapter decide como perguntar, e o Module decide
  * apenas o que perguntar. O que a Interface esconde é esquema, dialeto,
@@ -589,19 +630,28 @@ export interface ArmazenamentoDeAcessos {
  * Implementações restringem a ela toda linha que leem ou gravam, de modo que
  * um Cartão ou um Baralho de outro Usuário responde como inexistente —
  * `nao_encontrado`, o mesmo desfecho de um `id` que nunca existiu (SC-030) —, e
- * nunca como um erro novo ou um 403 que revelasse a existência. Vincular exige
- * as duas extremidades **no mesmo dono** (FR-093).
+ * nunca como um erro novo ou um 403 que revelasse a existência. O Pertencimento
+ * exige Cartão e Baralho **no mesmo dono** (FR-093).
  */
 export interface ArmazenamentoDoAcervo {
   /**
-   * Guarda um Cartão já validado pelo Module, como acervo do Usuário
-   * `usuarioId`. `id` é opaco e vem de quem chama, de modo que o Module
-   * continua dono da identidade (FR-009).
+   * Guarda um Cartão já validado e já numerado pelo Module e o seu
+   * Pertencimento a `baralhoId`, numa única transação (FR-389, FR-390). `id` é
+   * opaco e vem de quem chama. Baralho ausente ou de outro Usuário é
+   * `nao_encontrado`; Frente normalizada já existente no Baralho é
+   * `frente_duplicada`, sem gravar nada (FR-398).
    */
-  inserirCartao(usuarioId: string, cartao: Cartao): Promise<Desfecho<Cartao>>;
+  inserirCartaoNoBaralho(
+    usuarioId: string,
+    baralhoId: string,
+    cartao: Cartao,
+  ): Promise<Desfecho<Cartao>>;
 
-  /** Devolve os Cartões de `usuarioId`, sem prometer ordem alguma. */
-  listarCartoes(usuarioId: string): Promise<Cartao[]>;
+  /**
+   * Devolve os Cartões de `usuarioId` que têm Pertencimento, cada um com o seu
+   * Baralho dono, sem prometer ordem. Cartão legado pendente não aparece.
+   */
+  listarCartoes(usuarioId: string): Promise<CartaoComDono[]>;
 
   /**
    * Devolve o Cartão de `id` **no acervo de `usuarioId`**; ausente — inclusive
@@ -610,15 +660,17 @@ export interface ArmazenamentoDoAcervo {
   obterCartao(usuarioId: string, id: string): Promise<Desfecho<Cartao>>;
 
   /**
-   * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId`,
-   * preservando os Vínculos. Ausente é `nao_encontrado`.
+   * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId` e
+   * atualiza a chave normalizada do Pertencimento. Ausente é `nao_encontrado`;
+   * colisão com outro Cartão do mesmo Baralho é `frente_duplicada`, sem
+   * alterar nada (FR-399).
    */
   atualizarCartao(usuarioId: string, cartao: Cartao): Promise<Desfecho<Cartao>>;
 
   /**
-   * Exclui o Cartão de `id` do acervo de `usuarioId`; os Vínculos dele caem
-   * pela cascata do esquema e os Baralhos são preservados (FR-008). Ausente é
-   * `nao_encontrado`.
+   * Exclui o Cartão de `id` do acervo de `usuarioId`; Pertencimento e
+   * Agendamento caem pela cascata do esquema e os Registros de sessão ficam
+   * intactos (FR-401). Ausente é `nao_encontrado`.
    */
   excluirCartao(usuarioId: string, id: string): Promise<Desfecho<void>>;
 
@@ -630,17 +682,16 @@ export interface ArmazenamentoDoAcervo {
   inserirBaralho(usuarioId: string, baralho: Baralho): Promise<Desfecho<Baralho>>;
 
   /**
-   * Cria o Baralho e um Vínculo para cada Cartão numa única transação (FR-372,
-   * FR-373). O mesmo `id` do mesmo dono devolve o Baralho guardado
-   * (`novo: false`), sem gravar de novo; de outro dono é `conflito`. Cartão
-   * inexistente ou alheio recusa tudo como `cartoes_indisponiveis`, com os ids
-   * na ordem recebida.
+   * Cria o Baralho e as `copias` — Cartões novos já numerados pelo Module,
+   * cada um com Pertencimento ao Baralho novo — numa única transação (FR-400).
+   * O mesmo `id` do mesmo dono devolve o Baralho guardado (`novo: false`), sem
+   * gravar de novo; de outro dono é `conflito`. Cópias não recebem Agendamento.
    */
-  inserirBaralhoComVinculos(
+  inserirBaralhoComCopias(
     usuarioId: string,
     baralho: Baralho,
-    cartaoIds: readonly string[],
-  ): Promise<DesfechoDeBaralhoComVinculos>;
+    copias: readonly Cartao[],
+  ): Promise<DesfechoDeBaralhoComCopias>;
 
   /** Devolve os Baralhos de `usuarioId`, sem prometer ordem alguma. */
   listarBaralhos(usuarioId: string): Promise<Baralho[]>;
@@ -653,60 +704,53 @@ export interface ArmazenamentoDoAcervo {
 
   /**
    * Grava o nome do Baralho de `baralho.id` no acervo de `usuarioId`,
-   * preservando os Vínculos e a elegibilidade derivada (FR-015). Ausente é
+   * preservando os Cartões e a elegibilidade derivada (FR-015). Ausente é
    * `nao_encontrado`.
    */
   atualizarBaralho(usuarioId: string, baralho: Baralho): Promise<Desfecho<Baralho>>;
 
   /**
-   * Exclui o Baralho de `id` do acervo de `usuarioId`; os Vínculos dele caem
-   * pela cascata do esquema e os Cartões são preservados (FR-017). Ausente é
-   * `nao_encontrado`.
+   * Exclui, numa única transação, o Baralho de `id` do acervo de `usuarioId`,
+   * os Cartões que lhe pertencem e, pela cascata, os seus Pertencimentos e
+   * Agendamentos; os Registros de sessão ficam intactos (FR-402). Ausente é
+   * `nao_encontrado`; falha não remove nada.
    */
   excluirBaralho(usuarioId: string, id: string): Promise<Desfecho<void>>;
 
   /**
-   * Associa um Cartão existente a um Baralho existente (FR-019), **os dois no
-   * acervo de `usuarioId`**: extremidade de outro Usuário é `nao_encontrado`,
-   * como se ela não existisse (FR-093). O par repetido é recusado como
-   * `vinculo_duplicado` — nenhum dos dois desfechos é falha do armazenamento.
-   */
-  vincular(
-    usuarioId: string,
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<Desfecho<void>>;
-
-  /**
-   * Desfaz o Vínculo no acervo de `usuarioId`, preservando Cartão e Baralho
-   * (FR-021). Vínculo inexistente é recusado como `nao_encontrado`.
-   */
-  desvincular(
-    usuarioId: string,
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<Desfecho<void>>;
-
-  /**
-   * Devolve os Baralhos a que o Cartão de `usuarioId` está vinculado, sem
-   * ordem prometida.
-   */
-  listarBaralhosDoCartao(usuarioId: string, cartaoId: string): Promise<Baralho[]>;
-
-  /**
-   * Devolve os Cartões vinculados ao Baralho de `usuarioId`, sem ordem
+   * Devolve os Cartões que pertencem ao Baralho de `usuarioId`, sem ordem
    * prometida.
    */
   listarCartoesDoBaralho(usuarioId: string, baralhoId: string): Promise<Cartao[]>;
 
   /**
    * Devolve a quantidade de Cartões de cada Baralho **do Usuário
-   * `usuarioId`**, lida dos Vínculos. É o insumo da elegibilidade derivada, que
-   * o Module calcula como contagem maior que zero (FR-024).
+   * `usuarioId`**, lida dos Pertencimentos. É o insumo da elegibilidade
+   * derivada, que o Module calcula como contagem maior que zero (FR-024).
    */
   contarCartoesPorBaralho(
     usuarioId: string,
   ): Promise<ContagemPorBaralho[]>;
+
+  /**
+   * Devolve os Cartões de `usuarioId` ainda sem Pertencimento, com os Baralhos
+   * do Usuário a que estavam vinculados na tabela legada `vinculo` (FR-397).
+   * Sem a tabela legada — base já na versão 14 —, `baralhos` é vazio. Lista
+   * vazia significa transição concluída para esse Usuário.
+   */
+  listarCartoesPendentes(usuarioId: string): Promise<Desfecho<CartaoPendente[]>>;
+
+  /**
+   * Aplica o plano de transição de `usuarioId` numa única transação (FR-397):
+   * Pertencimentos com a Frente final, cópias com Pertencimento e remoção dos
+   * Vínculos legados dos Cartões resolvidos pelo plano. Cartão que já não esteja pendente, Baralho
+   * fora do acervo ou Frente colidente é `conflito`; falha é `indisponivel`.
+   * Em qualquer recusa nada é aplicado.
+   */
+  aplicarTransicao(
+    usuarioId: string,
+    plano: PlanoDeTransicao,
+  ): Promise<Desfecho<void>>;
 
   /**
    * Guarda um Registro de sessão concluída (FR-161) no Histórico de

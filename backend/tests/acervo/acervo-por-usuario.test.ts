@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { criarAcervo, type Acervo } from "../../src/acervo/acervo.ts";
+import {
+  criarAcervo,
+  type Acervo,
+  type Baralho,
+} from "../../src/acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
@@ -24,6 +28,8 @@ import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 let aberto: ArmazenamentoSqliteAberto;
 let ana: Acervo;
 let bruno: Acervo;
+let baralhoDeAna: Baralho;
+let baralhoDeBruno: Baralho;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
@@ -37,15 +43,33 @@ beforeEach(async () => {
 
   ana = criarAcervo(aberto.armazenamento, donaAna);
   bruno = criarAcervo(aberto.armazenamento, donoBruno);
+
+  // Cria Baralhos de testes para cada usuário
+  const resultadoAna = await ana.criarBaralho({ nome: "Inglês" });
+  if (!resultadoAna.ok) {
+    throw new Error(`criação de Baralho recusada: ${resultadoAna.mensagem}`);
+  }
+  baralhoDeAna = resultadoAna.baralho;
+
+  const resultadoBruno = await bruno.criarBaralho({ nome: "Alemão" });
+  if (!resultadoBruno.ok) {
+    throw new Error(`criação de Baralho recusada: ${resultadoBruno.mensagem}`);
+  }
+  baralhoDeBruno = resultadoBruno.baralho;
 });
 
 afterEach(async () => {
   await aberto.encerrar();
 });
 
-/** Cria um Cartão pela Interface, falhando se a criação for recusada. */
-async function criarCartao(acervo: Acervo, frente: string, verso: string) {
-  const resultado = await acervo.criarCartao({ frente, verso });
+/** Cria um Cartão no Baralho padrão do Usuário, falhando se a criação for recusada. */
+async function criarCartao(
+  acervo: Acervo,
+  baralho: Baralho,
+  frente: string,
+  verso: string,
+) {
+  const resultado = await acervo.criarCartao(baralho.id, { frente, verso });
 
   if (!resultado.ok) {
     throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);
@@ -67,10 +91,10 @@ async function criarBaralho(acervo: Acervo, nome: string) {
 
 describe("acervo por usuário — cada um vê e opera somente o seu", () => {
   it("lista somente os Cartões e Baralhos do próprio dono (SC-030)", async () => {
-    await criarCartao(ana, "To walk", "Caminhar");
-    await criarBaralho(ana, "Inglês");
-    await criarCartao(bruno, "To read", "Ler");
-    await criarBaralho(bruno, "Alemão");
+    await criarCartao(ana, baralhoDeAna, "To walk", "Caminhar");
+    await criarBaralho(ana, "Francês");
+    await criarCartao(bruno, baralhoDeBruno, "To read", "Ler");
+    await criarBaralho(bruno, "Espanhol");
 
     expect(await ana.listarCartoes()).toEqual([
       expect.objectContaining({ frente: "To walk", verso: "Caminhar" }),
@@ -78,17 +102,18 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     expect(await bruno.listarCartoes()).toEqual([
       expect.objectContaining({ frente: "To read", verso: "Ler" }),
     ]);
-    expect(await ana.listarBaralhos()).toEqual([
-      expect.objectContaining({ nome: "Inglês", quantidadeDeCartoes: 0 }),
-    ]);
-    expect(await bruno.listarBaralhos()).toEqual([
-      expect.objectContaining({ nome: "Alemão", quantidadeDeCartoes: 0 }),
-    ]);
+    expect(await ana.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ nome: "Inglês", quantidadeDeCartoes: 1 }),
+    );
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ nome: "Alemão", quantidadeDeCartoes: 1 }),
+    );
   });
 
   it("edita e exclui somente o próprio conteúdo, e o do outro permanece intacto", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk", "Caminhar");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
+    const cartaoDaAna = await criarCartao(ana, baralhoDeAna, "To walk", "Caminhar");
+    const outroBaralhoDeBruno = await criarBaralho(bruno, "Espanhol");
+    const cartaoDoBruno = await criarCartao(bruno, baralhoDeBruno, "To read", "Ler");
 
     expect(
       await ana.editarCartao(cartaoDaAna.id, {
@@ -99,23 +124,30 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
 
     expect(await ana.excluirCartao(cartaoDaAna.id)).toEqual({ ok: true });
 
-    /** O outro Usuário continua com o seu, como estava. */
-    expect(await bruno.listarBaralhos()).toEqual([
-      expect.objectContaining({ id: baralhoDoBruno.id, nome: "Alemão" }),
-    ]);
+    /** O outro Usuário continua com seus Baralhos e Cartões, como estavam. */
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ id: baralhoDeBruno.id, nome: "Alemão" }),
+    );
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ id: outroBaralhoDeBruno.id, nome: "Espanhol" }),
+    );
+    expect(await bruno.listarCartoes()).toContainEqual(
+      expect.objectContaining({ id: cartaoDoBruno.id, frente: "To read" }),
+    );
   });
 
   it("o id do outro Usuário responde como um id que nunca existiu, jamais 403 (SC-030)", async () => {
-    const cartaoDoBruno = await criarCartao(bruno, "To read", "Ler");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
+    const cartaoDoBruno = await criarCartao(bruno, baralhoDeBruno, "To read", "Ler");
+    const outroBaralhoDoBruno = await criarBaralho(bruno, "Espanhol");
 
-    const cartaoInexistente = await ana.obterBaralho("cartao-que-nunca-existiu");
-    const edicaoDeInexistente = await ana.editarCartao("outro-que-nunca-existiu", {
+    const baralhoInexistente = await ana.obterBaralho("baralho-que-nunca-existiu");
+    const edicaoDeInexistente = await ana.editarCartao("cartao-que-nunca-existiu", {
       frente: "To walk",
       verso: "Caminhar",
     });
     const exclusaoDeInexistente = await ana.excluirCartao("id-desconhecido");
 
+    // Tentar editar/excluir Cartão de outro Usuário retorna o mesmo erro de inexistente
     expect(await ana.editarCartao(cartaoDoBruno.id, {
       frente: "To drink",
       verso: "Beber",
@@ -123,17 +155,17 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     expect(await ana.excluirCartao(cartaoDoBruno.id)).toEqual(
       exclusaoDeInexistente,
     );
-    expect(await ana.obterBaralho(baralhoDoBruno.id)).toEqual(
-      cartaoInexistente,
+    expect(await ana.obterBaralho(outroBaralhoDoBruno.id)).toEqual(
+      baralhoInexistente,
     );
 
     /** O conteúdo do outro Usuário não mudou com as tentativas. */
     expect(await bruno.listarCartoes()).toEqual([
       expect.objectContaining({ id: cartaoDoBruno.id, frente: "To read" }),
     ]);
-    expect(await bruno.listarBaralhos()).toEqual([
-      expect.objectContaining({ id: baralhoDoBruno.id, nome: "Alemão" }),
-    ]);
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ id: baralhoDeBruno.id, nome: "Alemão" }),
+    );
 
     /** E a recusa é a de sempre: `nao_encontrado`, com a mensagem de sempre. */
     expect(edicaoDeInexistente).toEqual({
@@ -143,103 +175,87 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     });
   });
 
-  it("recusa vincular um Cartão de um Usuário a um Baralho de outro, e nada muda (FR-093)", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk", "Caminhar");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
+  it("cada Cartão pertence a exatamente um Baralho e é contado no seu dono (FR-389)", async () => {
+    const cartaoDaAna = await criarCartao(ana, baralhoDeAna, "To walk", "Caminhar");
+    const cartaoDoBruno = await criarCartao(bruno, baralhoDeBruno, "To read", "Ler");
 
-    expect(await ana.vincular(cartaoDaAna.id, baralhoDoBruno.id)).toEqual({
+    expect(await ana.listarBaralhos()).toContainEqual(
+      expect.objectContaining({
+        id: baralhoDeAna.id,
+        quantidadeDeCartoes: 1,
+        elegivel: true,
+      }),
+    );
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({
+        id: baralhoDeBruno.id,
+        quantidadeDeCartoes: 1,
+        elegivel: true,
+      }),
+    );
+
+    // Ana vê seu Cartão no seu Baralho
+    expect(await ana.listarCartoes()).toContainEqual(
+      expect.objectContaining({
+        id: cartaoDaAna.id,
+        baralho: expect.objectContaining({ id: baralhoDeAna.id }),
+      }),
+    );
+
+    // Bruno vê seu Cartão no seu Baralho
+    expect(await bruno.listarCartoes()).toContainEqual(
+      expect.objectContaining({
+        id: cartaoDoBruno.id,
+        baralho: expect.objectContaining({ id: baralhoDeBruno.id }),
+      }),
+    );
+
+    // Ana não vê o Cartão de Bruno
+    expect(await ana.listarCartoes()).not.toContainEqual(
+      expect.objectContaining({ id: cartaoDoBruno.id }),
+    );
+  });
+
+  it("cada Baralho é visível apenas para o seu dono (FR-092)", async () => {
+    const outroBaralhoDaAna = await criarBaralho(ana, "Francês");
+    const cartao = await criarCartao(ana, baralhoDeAna, "To walk", "Caminhar");
+    expect(await ana.listarCartoes()).toContainEqual(
+      expect.objectContaining({ id: cartao.id, baralho: expect.objectContaining({ id: baralhoDeAna.id }) }),
+    );
+    expect(await ana.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ id: outroBaralhoDaAna.id }),
+    );
+
+    // Ana vê seus Baralhos
+    const baralhosDaAna = await ana.obterBaralho(baralhoDeAna.id);
+    expect(baralhosDaAna).toMatchObject({ ok: true, baralho: { elegivel: true } });
+
+    // Bruno não vê o Baralho de Ana
+    expect(await bruno.obterBaralho(baralhoDeAna.id)).toEqual({
       ok: false,
       erro: "nao_encontrado",
       mensagem: "Baralho não encontrado.",
     });
-    expect(await bruno.vincular(cartaoDaAna.id, baralhoDoBruno.id)).toEqual({
-      ok: false,
-      erro: "nao_encontrado",
-      mensagem: "Cartão não encontrado.",
-    });
 
-    /** Nenhum Vínculo foi criado de nenhum dos lados. */
-    expect(await ana.listarCartoes()).toEqual([
-      expect.objectContaining({ id: cartaoDaAna.id, baralhos: [] }),
-    ]);
-    expect(await bruno.listarBaralhos()).toEqual([
-      expect.objectContaining({
-        id: baralhoDoBruno.id,
-        quantidadeDeCartoes: 0,
-        elegivel: false,
-      }),
-    ]);
-  });
-
-  it("conta e deriva a elegibilidade somente dos Vínculos do dono (FR-092)", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk", "Caminhar");
-    const baralhoDaAna = await criarBaralho(ana, "Inglês");
-    const cartaoDoBruno = await criarCartao(bruno, "To read", "Ler");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
-
-    expect(await ana.vincular(cartaoDaAna.id, baralhoDaAna.id)).toEqual({
-      ok: true,
-    });
-    expect(await bruno.vincular(cartaoDoBruno.id, baralhoDoBruno.id)).toEqual({
-      ok: true,
-    });
-
-    expect(await ana.listarBaralhos()).toEqual([
-      expect.objectContaining({
-        id: baralhoDaAna.id,
-        quantidadeDeCartoes: 1,
-        elegivel: true,
-      }),
-    ]);
-    expect(await bruno.listarBaralhos()).toEqual([
-      expect.objectContaining({
-        id: baralhoDoBruno.id,
-        quantidadeDeCartoes: 1,
-        elegivel: true,
-      }),
-    ]);
-
-    /** O Baralho do outro nunca aparece na leitura de quem não o possui. */
-    const doBruno = await bruno.obterBaralho(baralhoDoBruno.id);
-
-    expect(doBruno).toMatchObject({ ok: true, baralho: { elegivel: true } });
-    expect(await bruno.obterBaralho(baralhoDaAna.id)).toEqual({
-      ok: false,
-      erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
-    });
-  });
-
-  it("desvincula somente o próprio Vínculo: o do outro Usuário é nao_encontrado", async () => {
-    const cartaoDoBruno = await criarCartao(bruno, "To read", "Ler");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
-
-    await bruno.vincular(cartaoDoBruno.id, baralhoDoBruno.id);
-
-    expect(await ana.desvincular(cartaoDoBruno.id, baralhoDoBruno.id)).toEqual({
-      ok: false,
-      erro: "vinculo_nao_encontrado",
-      mensagem: "O vínculo não existe.",
-    });
-    expect(await bruno.obterBaralho(baralhoDoBruno.id)).toMatchObject({
-      ok: true,
-      baralho: { elegivel: true },
-    });
+    // Cada um vê apenas seus Baralhos
+    expect(await ana.listarBaralhos()).not.toContainEqual(
+      expect.objectContaining({ id: baralhoDeBruno.id }),
+    );
+    expect(await bruno.listarBaralhos()).not.toContainEqual(
+      expect.objectContaining({ id: baralhoDeAna.id }),
+    );
   });
 
   it("os dados de uma Sessão de estudo saem das listagens do dono, e só delas (FR-092, SC-028)", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk", "Caminhar");
-    const baralhoDaAna = await criarBaralho(ana, "Inglês");
-
-    await ana.vincular(cartaoDaAna.id, baralhoDaAna.id);
+    const cartaoDaAna = await criarCartao(ana, baralhoDeAna, "To walk", "Caminhar");
 
     /** É por `obterBaralho` que a Sessão carrega os Cartões de um Baralho. */
-    const elegivelDaAna = await ana.obterBaralho(baralhoDaAna.id);
+    const baralhoComCartoes = await ana.obterBaralho(baralhoDeAna.id);
 
-    expect(elegivelDaAna).toEqual({
+    expect(baralhoComCartoes).toEqual({
       ok: true,
       baralho: {
-        id: baralhoDaAna.id,
+        id: baralhoDeAna.id,
         nome: "Inglês",
         elegivel: true,
         cartoes: [
@@ -249,18 +265,21 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
             verso: "Caminhar",
           },
         ],
+        quantidadeDeAgendamentos: 0,
       },
     });
 
     /** O mesmo Baralho não existe para o outro Usuário. */
-    expect(await bruno.obterBaralho(baralhoDaAna.id)).toEqual({
+    expect(await bruno.obterBaralho(baralhoDeAna.id)).toEqual({
       ok: false,
       erro: "nao_encontrado",
       mensagem: "Baralho não encontrado.",
     });
 
-    /** E as listagens do outro dono continuam vazias. */
+    /** E as listagens do outro dono continuam apenas com seus próprios Baralhos e Cartões. */
     expect(await bruno.listarCartoes()).toEqual([]);
-    expect(await bruno.listarBaralhos()).toEqual([]);
+    expect(await bruno.listarBaralhos()).toContainEqual(
+      expect.objectContaining({ id: baralhoDeBruno.id }),
+    );
   });
 });

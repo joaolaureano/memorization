@@ -11,7 +11,6 @@ import {
   MENSAGEM_DE_ACESSO_EXPIRADO,
   MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
   MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
-  MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
   NAO_AUTENTICADO,
 } from "./cliente";
@@ -24,6 +23,7 @@ import type {
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
   DadosDeTrocaDeSenha,
+  EscolhaDeTransicao,
   RecusaDeConta,
   ResultadoDeAcaoDeConta,
   ResultadoDeObterAcesso,
@@ -62,12 +62,12 @@ import type {
   ResultadoDeSalvarSelecao,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
-  ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeEntrar,
   ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
+  ResultadoDeConcluirTransicao,
   ResultadoDeIniciarCompromisso,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
@@ -75,12 +75,12 @@ import type {
   ResultadoDeObterAgenda,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
+  ResultadoDeObterTransicao,
   ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeSalvarPreferencias,
   ResultadoDeSalvarRotina,
-  ResultadoDeVinculacao,
   Usuario,
 } from "./cliente";
 import { ehCodigoDeErroDeBaralho, ehCodigoDeErroDeCartao } from "./validacao";
@@ -291,15 +291,92 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  async obterTransicao(): Promise<ResultadoDeObterTransicao> {
+    try {
+      const resposta = await this.pedir(
+        `${this.endereco}/acervo/transicao-cartoes`,
+        { headers: this.cabecalho() },
+      );
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      if (resposta.status === 200) {
+        const corpo = await resposta.json();
+
+        if (
+          Array.isArray(corpo.cartoes) &&
+          Array.isArray(corpo.baralhos)
+        ) {
+          return { ok: true, cartoes: corpo.cartoes, baralhos: corpo.baralhos };
+        }
+
+        return this.falhaDeIndisponibilidade();
+      }
+
+      return this.falhaDeIndisponibilidade();
+    } catch {
+      return this.falhaDeIndisponibilidade();
+    }
+  }
+
+  async concluirTransicao(
+    escolhas: EscolhaDeTransicao[],
+  ): Promise<ResultadoDeConcluirTransicao> {
+    try {
+      const resposta = await this.pedir(
+        `${this.endereco}/acervo/transicao-cartoes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...this.cabecalho() },
+          body: JSON.stringify({ escolhas }),
+        },
+      );
+
+      if (resposta.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(resposta);
+      }
+
+      if (resposta.status === 204) {
+        return { ok: true };
+      }
+
+      if (resposta.status === 400) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Escolhas inválidas.",
+        };
+      }
+
+      if (resposta.status === 409) {
+        return {
+          ok: false,
+          erro: "conflito",
+          mensagem: "Conflito na transição.",
+        };
+      }
+
+      return this.falhaDeIndisponibilidade();
+    } catch {
+      return this.falhaDeIndisponibilidade();
+    }
+  }
+
   async criarCartao(
+    baralhoId: string,
     dados: DadosDeCartao,
   ): Promise<ResultadoDeCriacaoDeCartao> {
     try {
-      const resposta = await this.pedir(`${this.endereco}/cartoes`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...this.cabecalho() },
-        body: JSON.stringify({ frente: dados.frente, verso: dados.verso }),
-      });
+      const resposta = await this.pedir(
+        `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/cartoes`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...this.cabecalho() },
+          body: JSON.stringify({ frente: dados.frente, verso: dados.verso }),
+        },
+      );
 
       if (resposta.status === 401) {
         return await this.falhaDeNaoAutenticadoDe(resposta);
@@ -317,6 +394,27 @@ export class ClienteHttp implements ClienteDoAcervo {
 
       if (resposta.status === 400) {
         return this.traduzirRecusaDeCartao(await resposta.json());
+      }
+
+      if (resposta.status === 404) {
+        return {
+          ok: false,
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        };
+      }
+
+      if (resposta.status === 409) {
+        const corpo = await resposta.json();
+        const erro = ehCodigoDeErroDeCartao(corpo.erro)
+          ? corpo.erro
+          : "frente_duplicada";
+        return {
+          ok: false,
+          erro,
+          mensagem:
+            corpo.mensagem ?? "Já existe um cartão com esta frente neste baralho.",
+        };
       }
 
       return this.falhaDeIndisponibilidade();
@@ -533,82 +631,6 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
-  async vincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeVinculacao> {
-    try {
-      const resposta = await this.pedir(
-        `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ cartaoId }),
-        },
-      );
-
-      if (resposta.status === 401) {
-        return await this.falhaDeNaoAutenticadoDe(resposta);
-      }
-
-      if (resposta.status === 201) {
-        return { ok: true };
-      }
-
-      if (resposta.status === 404) {
-        const corpo = await resposta.json();
-
-        if (ehCorpoDeRecusaComCodigo(corpo, "nao_encontrado")) {
-          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
-        }
-      }
-
-      if (resposta.status === 409) {
-        const corpo = await resposta.json();
-
-        if (ehCorpoDeRecusaComCodigo(corpo, "vinculo_duplicado")) {
-          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
-        }
-      }
-
-      return this.falhaDeIndisponibilidadeDeVinculos();
-    } catch {
-      return this.falhaDeIndisponibilidadeDeVinculos();
-    }
-  }
-
-  async desvincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeDesvinculacao> {
-    try {
-      const resposta = await this.pedir(
-        `${this.endereco}/baralhos/${encodeURIComponent(baralhoId)}/vinculos/${encodeURIComponent(cartaoId)}`,
-        { method: "DELETE", headers: this.cabecalho() },
-      );
-
-      if (resposta.status === 401) {
-        return await this.falhaDeNaoAutenticadoDe(resposta);
-      }
-
-      if (resposta.status === 204) {
-        return { ok: true };
-      }
-
-      if (resposta.status === 404) {
-        const corpo = await resposta.json();
-
-        if (ehCorpoDeRecusaComCodigo(corpo, "vinculo_nao_encontrado")) {
-          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
-        }
-      }
-
-      return this.falhaDeIndisponibilidadeDeVinculos();
-    } catch {
-      return this.falhaDeIndisponibilidadeDeVinculos();
-    }
-  }
-
   async editarCartao(
     id: string,
     frente: string,
@@ -646,6 +668,14 @@ export class ClienteHttp implements ClienteDoAcervo {
         const corpo = await resposta.json();
 
         if (ehCorpoDeRecusaComCodigo(corpo, "nao_encontrado")) {
+          return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+        }
+      }
+
+      if (resposta.status === 409) {
+        const corpo = await resposta.json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "frente_duplicada")) {
           return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
         }
       }
@@ -1461,18 +1491,6 @@ export class ClienteHttp implements ClienteDoAcervo {
     };
   }
 
-  private falhaDeIndisponibilidadeDeVinculos(): {
-    ok: false;
-    erro: typeof INDISPONIVEL;
-    mensagem: string;
-  } {
-    return {
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-    };
-  }
-
   private falhaDeIndisponibilidadeDeUsuarios(): {
     ok: false;
     erro: typeof INDISPONIVEL;
@@ -1748,27 +1766,18 @@ function lerCartaoListado(corpo: unknown): CartaoListado | null {
 
   const campos = corpo as Record<string, unknown>;
 
-  if (
-    !Array.isArray(campos.baralhos) ||
-    (campos.proximaRevisaoEm !== null &&
-      typeof campos.proximaRevisaoEm !== "string")
-  ) {
+  if (campos.proximaRevisaoEm !== null && typeof campos.proximaRevisaoEm !== "string") {
     return null;
   }
 
-  const baralhos: Baralho[] = [];
+  // Ler o baralho único
+  const baralho = lerBaralho(campos.baralho);
 
-  for (const item of campos.baralhos) {
-    const baralho = lerBaralho(item);
-
-    if (baralho === null) {
-      return null;
-    }
-
-    baralhos.push(baralho);
+  if (baralho === null) {
+    return null;
   }
 
-  return { ...cartao, baralhos, proximaRevisaoEm: campos.proximaRevisaoEm };
+  return { ...cartao, baralho, proximaRevisaoEm: campos.proximaRevisaoEm };
 }
 
 function lerListaDeCartoesListados(corpo: unknown): CartaoListado[] | null {
@@ -1843,8 +1852,14 @@ function lerBaralhoComCartoes(corpo: unknown): BaralhoComCartoes | null {
   const campos = corpo as Record<string, unknown>;
   const elegivel = campos.elegivel;
   const cartoesVinculados = campos.cartoes;
+  const quantidadeDeAgendamentos = campos.quantidadeDeAgendamentos;
 
-  if (typeof elegivel !== "boolean" || !Array.isArray(cartoesVinculados)) {
+  if (
+    typeof elegivel !== "boolean" ||
+    !Array.isArray(cartoesVinculados) ||
+    (typeof quantidadeDeAgendamentos !== "number" &&
+      quantidadeDeAgendamentos !== undefined)
+  ) {
     return null;
   }
 
@@ -1864,6 +1879,7 @@ function lerBaralhoComCartoes(corpo: unknown): BaralhoComCartoes | null {
     ...baralho,
     elegivel,
     cartoes,
+    quantidadeDeAgendamentos: (quantidadeDeAgendamentos as number) ?? 0,
   };
 }
 

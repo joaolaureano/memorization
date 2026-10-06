@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baralhos · Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="moldura">
+    <a class="marca" href="#inicio" data-navegar="inicio">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio" data-navegar="inicio">Início</a>
+      <a href="#estudo" data-navegar="estudo">Estudo</a>
+      <a href="#baralhos" data-navegar="baralhos" aria-current="page">Baralhos</a>
+      <a href="#preferencias" data-navegar="preferencias">Perfil</a>
+    </nav>
+    <button class="botao-de-saida" type="button" data-aviso="Sair">Sair</button>
+  </header>
+
+  <main class="aplicacao" id="principal">
+    <div id="tela"></div>
+  </main>
+
+  <aside class="galeria" aria-label="Cenários do protótipo">
+    <p><strong>Protótipo · Feature 025</strong><br>Dados fictícios na memória desta aba.</p>
+    <div class="pt-controles-galeria">
+      <label class="rotulo" for="cenario">Cenário</label>
+      <select id="cenario">
+        <option value="normal">Lista de Baralhos</option>
+        <option value="migracao">Cartões legados</option>
+        <option value="vazio">Baralho vazio</option>
+        <option value="falha">Falha na transição</option>
+      </select>
+      <button class="botao botao--secundario" id="abrir-cenario" type="button">Abrir cenário</button>
+      <button class="botao botao--secundario" id="salvar-selecao" type="button">Simular seleção salva</button>
+    </div>
+  </aside>
+
+  <p class="visualmente-oculto" id="anuncio" role="status" aria-live="polite" aria-atomic="true"></p>
+
+  <dialog id="confirmacao" aria-labelledby="confirmacao-titulo" aria-describedby="confirmacao-texto">
+    <h2 id="confirmacao-titulo"></h2>
+    <p id="confirmacao-texto"></p>
+    <div class="acoes-do-dialogo">
+      <button class="botao botao--secundario" id="cancelar" type="button">Cancelar</button>
+      <button class="botao botao--perigo" id="confirmar" type="button">Excluir</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

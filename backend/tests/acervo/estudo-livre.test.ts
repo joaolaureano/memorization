@@ -44,6 +44,7 @@ const FIM_DO_DIA_SEGUINTE = new Date("2026-10-03T00:00:00.000Z");
 let aberto: ArmazenamentoSqliteAberto;
 let usuarioId: string;
 let acervo: ReturnType<typeof criarAcervo>;
+let baralho: Baralho;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
@@ -54,6 +55,13 @@ beforeEach(async () => {
   // para que nenhuma infraestrutura de teste dependa do tempo falso.
   vi.useFakeTimers();
   vi.setSystemTime(INSTANTE_INICIAL);
+
+  // Cria um Baralho de testes
+  const resultadoBaralho = await acervo.criarBaralho({ nome: "Inglês" });
+  if (!resultadoBaralho.ok) {
+    throw new Error(`criação de Baralho recusada: ${resultadoBaralho.mensagem}`);
+  }
+  baralho = resultadoBaralho.baralho;
 });
 
 afterEach(async () => {
@@ -68,26 +76,15 @@ function avancar(segundos: number): void {
   );
 }
 
-/** Cria um Cartão válido pela Interface. */
+/** Cria um Cartão válido no Baralho de testes. */
 async function criarCartao(frente = FRENTE, verso = VERSO): Promise<Cartao> {
-  const resultado = await acervo.criarCartao({ frente, verso });
+  const resultado = await acervo.criarCartao(baralho.id, { frente, verso });
 
   if (!resultado.ok) {
     throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);
   }
 
   return resultado.cartao;
-}
-
-/** Cria um Baralho válido pela Interface. */
-async function criarBaralho(nome = "Inglês"): Promise<Baralho> {
-  const resultado = await acervo.criarBaralho({ nome });
-
-  if (!resultado.ok) {
-    throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);
-  }
-
-  return resultado.baralho;
 }
 
 /** Item cru do corpo: Frente, Verso, Cartão de origem e Avaliação (FR-193). */
@@ -190,32 +187,36 @@ describe("registrarSessao no estudo livre — o Agendamento nasce do Cartão", (
   });
 });
 
-describe("o Agendamento é do Cartão, não do Vínculo (FR-206, FR-207, FR-208)", () => {
-  it("mantém um único Agendamento para um Cartão estudado por um de dois Baralhos (FR-206, FR-207)", async () => {
+describe("o Agendamento é do Cartão (FR-206, FR-207, FR-208)", () => {
+  it("o Agendamento é do Cartão: estudar o Baralho dono atualiza o mesmo Agendamento (FR-206, FR-207)", async () => {
     const cartao = await criarCartao();
-    const primeiro = await criarBaralho("Inglês");
-    const segundo = await criarBaralho("Viagem");
 
-    expect(await acervo.vincular(cartao.id, primeiro.id)).toEqual({ ok: true });
-    expect(await acervo.vincular(cartao.id, segundo.id)).toEqual({ ok: true });
-
-    // Estudado por um dos Baralhos apenas.
+    // Estudar o Cartão no seu Baralho dono.
     await registrar(
       corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
-        baralhoId: primeiro.id,
-        nomeDoBaralho: primeiro.nome,
+        baralhoId: baralho.id,
+        nomeDoBaralho: baralho.nome,
       }),
     );
 
-    // Um Agendamento só: o Cartão conta uma vez, não uma por Vínculo.
+    // Um Agendamento foi criado para o Cartão.
     expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
+
+    // Estudar de novo no mesmo dia atualiza o Agendamento, não cria novo.
+    await registrar(
+      corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
+        baralhoId: baralho.id,
+        nomeDoBaralho: baralho.nome,
+      }),
+    );
+
+    // Continua tendo um único Agendamento (reagendado para 6 dias).
+    expect((await agendamentos()).length).toBe(1);
+    expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([]);
   });
 
-  it("preserva o Agendamento ao desvincular e ao editar a Frente (FR-207, FR-208)", async () => {
+  it("preserva o Agendamento ao editar a Frente (FR-208)", async () => {
     const cartao = await criarCartao();
-    const baralho = await criarBaralho("Inglês");
-
-    expect(await acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
 
     await registrar(
       corpoComItens([itemDe(FRENTE, VERSO, cartao.id, "bom")], {
@@ -226,11 +227,7 @@ describe("o Agendamento é do Cartão, não do Vínculo (FR-206, FR-207, FR-208)
 
     expect(await idsVencidosAte(FIM_DO_DIA_SEGUINTE)).toEqual([cartao.id]);
 
-    // Nem perder o Vínculo nem trocar a Frente mexem no Agendamento.
-    expect(await acervo.desvincular(cartao.id, baralho.id)).toEqual({
-      ok: true,
-    });
-
+    // Editar a Frente não mexe no Agendamento.
     expect(
       await acervo.editarCartao(cartao.id, { frente: "To stroll", verso: VERSO }),
     ).toEqual({

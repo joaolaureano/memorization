@@ -63,18 +63,11 @@ async function semearIngles(servidor: ClienteEmMemoria): Promise<void> {
   ];
 
   for (const par of pares) {
-    const cartao = await servidor.criarCartao(par);
+    const cartao = await servidor.criarCartao(baralho.baralho.id, par);
     if (!cartao.ok) {
       throw new Error(`não foi possível criar o cartão ${par.frente}`);
     }
 
-    const vinculo = await servidor.vincular(
-      cartao.cartao.id,
-      baralho.baralho.id,
-    );
-    if (!vinculo.ok) {
-      throw new Error(`não foi possível vincular ${par.frente}`);
-    }
   }
 }
 

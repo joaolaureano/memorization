@@ -59,7 +59,7 @@ async function baralhoComCartoes(
   const cartaoIds: string[] = [];
 
   for (let i = 1; i <= quantidade; i += 1) {
-    const cartao = await servidor.criarCartao({
+    const cartao = await servidor.criarCartao(baralho.baralho.id, {
       frente: `${nome} ${i}`,
       verso: `Resposta ${i}`,
     });
@@ -68,7 +68,6 @@ async function baralhoComCartoes(
       throw new Error("Cartão");
     }
 
-    await servidor.vincular(cartao.cartao.id, baralho.baralho.id);
     cartaoIds.push(cartao.cartao.id);
   }
 
@@ -458,10 +457,8 @@ describe("Sessão iniciada pela Agenda (FR-231–FR-236, FR-255)", () => {
 
     await abrir(servidor, "#/agenda/estudo");
 
-    expect(
-      await screen.findByRole("heading", { level: 2, name: "Agenda de estudo" }).catch(() => null),
-    ).toBeNull();
     await waitFor(() => expect(window.location.hash).toBe("#/inicio"));
+    expect(screen.queryByRole("heading", { level: 2, name: "Agenda de estudo" })).toBeNull();
     expect(await screen.findByText(/Olá,/)).toBeInTheDocument();
   });
 

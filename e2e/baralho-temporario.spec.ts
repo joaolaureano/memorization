@@ -1,6 +1,7 @@
 // T2312 — prova E2E real do Baralho temporário (spec 023; SC-143–SC-146, SC-149; FR-367, FR-376)
 
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -10,16 +11,17 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
   entrarSeNecessario,
   iniciarApi,
   iniciarFrontend,
+  listarBaralhosPelaApi,
+  obterBaralhoPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   fixarRelogioDoContexto,
 } from "./servidores-locais";
@@ -30,6 +32,52 @@ test.setTimeout(240_000);
 // O dia de «hoje» é o mesmo na API e no navegador, e não o da máquina que roda.
 test.beforeEach(async ({ context }) => {
   await fixarRelogioDoContexto(context);
+});
+
+test("salvar Frentes repetidas copia cada identidade uma vez e preserva as origens no reenvio (T044)", async ({ page }) => {
+  const ambiente = await subirAmbiente();
+  try {
+    const credencial = await criarUsuarioDeProva(ambiente.enderecoDaApi, "usuario.copias.temporarias");
+    const primeiro = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Origem A" }, credencial);
+    const segundo = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Origem B" }, credencial);
+    const a = await criarCartaoNoBaralhoPelaApi(
+      ambiente.enderecoDaApi, primeiro.id, { frente: "Saudação", verso: "Hello" }, credencial,
+    );
+    const b = await criarCartaoNoBaralhoPelaApi(
+      ambiente.enderecoDaApi, segundo.id, { frente: " saudação ", verso: "Hi" }, credencial,
+    );
+    const corpo = { id: randomUUID(), nome: "Seleção copiada", cartaoIds: [a.id, b.id] };
+    const salvar = () => fetch(`${ambiente.enderecoDaApi}/baralhos/de-selecao`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...cabecalhoDeCredencial(credencial) },
+      body: JSON.stringify(corpo),
+    });
+    const primeira = await salvar();
+    expect(primeira.status).toBe(201);
+    const criado = await primeira.json() as { id: string; nome: string };
+    const repetida = await salvar();
+    expect(repetida.status).toBe(200);
+    expect(await repetida.json()).toEqual(criado);
+
+    const baralhos = await listarBaralhosPelaApi(ambiente.enderecoDaApi, credencial);
+    expect(baralhos.filter((item) => item.nome === corpo.nome)).toHaveLength(1);
+    const copia = await obterBaralhoPelaApi(ambiente.enderecoDaApi, criado.id, credencial);
+    expect(copia.cartoes).toHaveLength(2);
+    expect(copia.cartoes.map((cartao) => cartao.frente).sort()).toEqual(["Saudação", "saudação (2)"]);
+    expect(copia.cartoes.map((cartao) => cartao.id)).not.toContain(a.id);
+    expect(copia.cartoes.map((cartao) => cartao.id)).not.toContain(b.id);
+    expect((await obterBaralhoPelaApi(ambiente.enderecoDaApi, primeiro.id, credencial)).cartoes)
+      .toEqual([expect.objectContaining({ id: a.id, frente: a.frente })]);
+    expect((await obterBaralhoPelaApi(ambiente.enderecoDaApi, segundo.id, credencial)).cartoes)
+      .toEqual([expect.objectContaining({ id: b.id, frente: b.frente })]);
+
+    await abrirTela(page, ambiente, `baralhos/${criado.id}`, credencial);
+    await expect(page.getByRole("heading", { name: corpo.nome, level: 1 })).toBeVisible();
+    await expect(page.getByText("Saudação", { exact: true })).toBeVisible();
+    await expect(page.getByText("saudação (2)", { exact: true })).toBeVisible();
+  } finally {
+    await derrubarAmbiente(ambiente);
+  }
 });
 
 /** As quatro frentes semeadas em toda a suíte. */
@@ -95,23 +143,15 @@ interface CartaoSemeado {
   verso: string;
 }
 
-/** Cria um Cartão avulso pela API real. */
-async function prepararCartao(
-  ambiente: Ambiente,
-  credencial: CredencialDeProva,
+/** Descreve um Cartão para semeá-lo diretamente no Baralho dono. */
+function prepararCartao(
   frente: string,
   verso: string,
-): Promise<CartaoSemeado> {
-  const criado = await criarCartaoPelaApi(
-    ambiente.enderecoDaApi,
-    { frente, verso },
-    credencial,
-  );
-
-  return { id: criado.id, frente: criado.frente, verso: criado.verso };
+): CartaoSemeado {
+  return { id: "", frente, verso };
 }
 
-/** Cria um Baralho e vincula Cartões já semeados, pela API real. */
+/** Cria um Baralho e seus Cartões pela rota contextual atual. */
 async function prepararBaralho(
   ambiente: Ambiente,
   credencial: CredencialDeProva,
@@ -125,12 +165,13 @@ async function prepararBaralho(
   );
 
   for (const cartao of cartoes) {
-    await vincularCartaoPelaApi(
+    const criado = await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
-      cartao.id,
       baralho.id,
+      cartao,
       credencial,
     );
+    Object.assign(cartao, criado);
   }
 
   return { id: baralho.id, nome: baralho.nome };
@@ -184,13 +225,13 @@ test("Temporário: A + B + C4 rendem «4 Cartões», o estudo vira Baralho salvo
       "usuario.temporario",
     );
 
-    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
-    const c3 = await prepararCartao(ambiente, credencial, FRENTES[2], "Obrigado");
-    await prepararCartao(ambiente, credencial, FRENTES[3], "Até logo");
+    const c1 = prepararCartao(FRENTES[0], "Como você está?");
+    const c2 = prepararCartao(FRENTES[1], "Bom dia");
+    const c3 = prepararCartao(FRENTES[2], "Obrigado");
+    const c4 = prepararCartao(FRENTES[3], "Até logo");
 
-    await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
-    await prepararBaralho(ambiente, credencial, "Viagem", [c2, c3]);
+    await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2, c4]);
+    await prepararBaralho(ambiente, credencial, "Viagem", [c3]);
 
     await abrirTela(page, ambiente, "baralhos", credencial);
 
@@ -203,13 +244,9 @@ test("Temporário: A + B + C4 rendem «4 Cartões», o estudo vira Baralho salvo
       page.getByRole("heading", { name: "Criar baralho temporário" }),
     ).toBeVisible();
 
-    // C1 + C2 (A) e C2 + C3 (B): C2 não duplica.
+    // C1 + C2 + C4 (A) e C3 (B) formam quatro Cartões com donos exclusivos.
     await page.getByRole("button", { name: "Adicionar Inglês", exact: true }).click();
     await page.getByRole("button", { name: "Adicionar Viagem", exact: true }).click();
-
-    // C4 é um Cartão avulso, adicionado pela fonte «Cartões».
-    await page.getByRole("button", { name: "Adicionar cartões", exact: true }).click();
-    await page.getByRole("button", { name: "Adicionar See you", exact: true }).click();
 
     await expect(selecaoDoEstudo(page)).toContainText("4 Cartões");
 
@@ -274,8 +311,8 @@ test("Temporário: A + B + C4 rendem «4 Cartões», o estudo vira Baralho salvo
     await expect(
       itemDeBaralho(page, "Inglês para viagem").getByText("4 Cartões"),
     ).toBeVisible();
-    await expect(itemDeBaralho(page, "Inglês").getByText("2 Cartões")).toBeVisible();
-    await expect(itemDeBaralho(page, "Viagem").getByText("2 Cartões")).toBeVisible();
+    await expect(itemDeBaralho(page, "Inglês").getByText("3 Cartões")).toBeVisible();
+    await expect(itemDeBaralho(page, "Viagem").getByText("1 Cartão")).toBeVisible();
   } finally {
     await derrubarAmbiente(ambiente);
   }
@@ -292,12 +329,12 @@ test("Temporário sem salvar: nenhum Baralho novo e o Histórico registra (SC-14
       "usuario.sem-salvar",
     );
 
-    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
-    const c3 = await prepararCartao(ambiente, credencial, FRENTES[2], "Obrigado");
+    const c1 = prepararCartao(FRENTES[0], "Como você está?");
+    const c2 = prepararCartao(FRENTES[1], "Bom dia");
+    const c3 = prepararCartao(FRENTES[2], "Obrigado");
 
     await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
-    await prepararBaralho(ambiente, credencial, "Viagem", [c2, c3]);
+    await prepararBaralho(ambiente, credencial, "Viagem", [c3]);
 
     await abrirTela(page, ambiente, "baralhos/temporario", credencial);
 
@@ -356,8 +393,8 @@ test("Temporário: Cartão excluído avisa e sai com «Retirar indisponíveis» 
       "usuario.indisponivel",
     );
 
-    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
+    const c1 = prepararCartao(FRENTES[0], "Como você está?");
+    const c2 = prepararCartao(FRENTES[1], "Bom dia");
 
     await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
 
@@ -406,14 +443,14 @@ test("Isolamento: a montagem só oferece Baralhos e Cartões do próprio Usuári
       "usuario.b.temporario",
     );
 
-    const c1 = await prepararCartao(ambiente, credencialA, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencialA, FRENTES[1], "Bom dia");
-    const c3 = await prepararCartao(ambiente, credencialA, FRENTES[2], "Obrigado");
+    const c1 = prepararCartao(FRENTES[0], "Como você está?");
+    const c2 = prepararCartao(FRENTES[1], "Bom dia");
+    const c3 = prepararCartao(FRENTES[2], "Obrigado");
 
     await prepararBaralho(ambiente, credencialA, "Inglês", [c1, c2]);
-    await prepararBaralho(ambiente, credencialA, "Viagem", [c2, c3]);
+    await prepararBaralho(ambiente, credencialA, "Viagem", [c3]);
 
-    const proprio = await prepararCartao(ambiente, credencialB, "Bonjour", "Olá");
+    const proprio = prepararCartao("Bonjour", "Olá");
     await prepararBaralho(ambiente, credencialB, "Francês", [proprio]);
 
     await abrirTela(page, ambiente, "baralhos/temporario", credencialB);
@@ -457,8 +494,8 @@ test("Temporário: nome do baralho aparece no Resumo e no Histórico (FR-363, T2
       "usuario.nomeado",
     );
 
-    const c1 = await prepararCartao(ambiente, credencial, FRENTES[0], "Como você está?");
-    const c2 = await prepararCartao(ambiente, credencial, FRENTES[1], "Bom dia");
+    const c1 = prepararCartao(FRENTES[0], "Como você está?");
+    const c2 = prepararCartao(FRENTES[1], "Bom dia");
 
     await prepararBaralho(ambiente, credencial, "Inglês", [c1, c2]);
 

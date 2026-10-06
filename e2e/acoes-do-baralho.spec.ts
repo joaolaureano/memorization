@@ -7,7 +7,7 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -16,7 +16,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { ProcessoIniciado } from "./servidores-locais";
 
@@ -47,7 +46,7 @@ const ALTURA = 800;
 /** As quatro ações do Baralho, na ordem em que a tela precisa apresentá-las. */
 const ACOES = [
   "Revisar este Baralho",
-  "Adicionar cartões existentes",
+  "Criar Cartão",
   "Renomear",
   "Excluir Baralho",
 ];
@@ -178,20 +177,16 @@ async function prepararAcervo(enderecoDaApi: string): Promise<Acervo> {
     nome: "Baralho de quarenta Cartões",
   });
 
-  const unico = await criarCartaoPelaApi(enderecoDaApi, {
+  await criarCartaoNoBaralhoPelaApi(enderecoDaApi, unitario.id, {
     frente: "Frente única",
     verso: "Verso único",
   });
 
-  await vincularCartaoPelaApi(enderecoDaApi, unico.id, unitario.id);
-
   for (let indice = 1; indice <= CARTOES_NO_BARALHO_CHEIO; indice += 1) {
-    const cartao = await criarCartaoPelaApi(enderecoDaApi, {
+    await criarCartaoNoBaralhoPelaApi(enderecoDaApi, cheio.id, {
       frente: `Frente ${indice}`,
       verso: `Verso ${indice}`,
     });
-
-    await vincularCartaoPelaApi(enderecoDaApi, cartao.id, cheio.id);
   }
 
   return { vazio, unitario, cheio };
@@ -224,7 +219,7 @@ async function abrirDetalheDoBaralho(
  * Excluir. O filtro sobre `main a, main button` cobre os quatro casos.
  */
 function localizarAcao(page: Page, nome: string): Locator {
-  return page.locator("main a, main button").filter({ hasText: nome });
+  return page.locator("main .cabecalho-da-pagina a, main .cabecalho-da-pagina button").filter({ hasText: nome });
 }
 
 /**
@@ -292,7 +287,7 @@ async function conferirOrdemNoDocumento(
   const resultado = await page.evaluate((): OrdemNoDocumento => {
     const nomes = [
       "Revisar este Baralho",
-      "Adicionar cartões existentes",
+      "Criar Cartão",
       "Renomear",
       "Excluir Baralho",
     ];
@@ -323,9 +318,7 @@ async function conferirOrdemNoDocumento(
     const remover = clicaveis.filter((elemento) => {
       const rotulo = elemento.getAttribute("aria-label") ?? "";
 
-      return (
-        rotulo.startsWith("Remover ") && rotulo.endsWith(" deste baralho")
-      );
+      return rotulo.startsWith("Excluir ") && rotulo !== "Excluir Baralho";
     });
 
     const alvos: { descricao: string; elemento: Element }[] = [];
@@ -478,7 +471,7 @@ async function descreverFoco(page: Page): Promise<Foco> {
     return {
       nome,
       ehRemover:
-        nome.startsWith("Remover ") && nome.endsWith(" deste baralho"),
+        nome.startsWith("Excluir ") && nome !== "Excluir Baralho",
     };
   });
 }

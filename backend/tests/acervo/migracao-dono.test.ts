@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it } from "vitest";
 
+import { criarAcervo } from "../../src/acervo/acervo.ts";
 import { abrirArmazenamentoSqlite } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import { abrirBanco, aplicarMigracoes } from "../../src/armazenamento/sqlite/esquema.ts";
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
@@ -141,12 +142,13 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
         expect(versaoAtual(depois)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(depois, "cartao")).toBe(true);
         expect(existeTabela(depois, "baralho")).toBe(true);
-        expect(existeTabela(depois, "vinculo")).toBe(true);
+        expect(existeTabela(depois, "pertencimento")).toBe(true);
+        // Sem Cartões pendentes, versão 14 não tem vinculo
+        expect(existeTabela(depois, "vinculo")).toBe(false);
 
         /** Nenhum Cartão, Baralho ou Vínculo sem dono existe (FR-099). */
         expect(contarLinhas(depois, "cartao")).toBe(0);
         expect(contarLinhas(depois, "baralho")).toBe(0);
-        expect(contarLinhas(depois, "vinculo")).toBe(0);
 
         /** E os Usuários da `007` sobrevivem à recriação das três tabelas. */
         expect(
@@ -164,14 +166,29 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
   });
 
   it("deixa usuario_id obrigatório e indexado nas duas tabelas, e a chave composta de vinculo intacta", async () => {
-    await comBaseNaVersao4(async (caminho) => {
-      const aberto = await abrirArmazenamentoSqlite(caminho);
+    // Este teste verifica o schema até versão 12, antes das migrações 13 e 14
+    // que trazem pertencimento e removem vinculo
+    const diretorio = mkdtempSync(join(tmpdir(), "acervo-dono-schema-"));
+    const caminho = join(diretorio, "banco.sqlite");
 
-      await aberto.encerrar();
+    try {
+      const anterior = new DatabaseSync(caminho);
 
+      try {
+        prepararBaseInstalada(anterior);
+      } finally {
+        anterior.close();
+      }
+
+      // Abrir apenas até versão 12 para que vinculo ainda exista
       const banco = new DatabaseSync(caminho);
 
       try {
+        aplicarMigracoes(
+          banco,
+          MIGRACOES.filter((m) => m.versao <= 12),
+        );
+
         for (const tabela of ["cartao", "baralho"]) {
           const colunas = banco.prepare(`PRAGMA table_info(${tabela})`).all();
 
@@ -227,18 +244,33 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       } finally {
         banco.close();
       }
-    });
+    } finally {
+      rmSync(diretorio, { recursive: true, force: true });
+    }
   });
 
   it("não acrescenta coluna capaz de guardar a Credencial, em tabela alguma", async () => {
-    await comBaseNaVersao4(async (caminho) => {
-      const aberto = await abrirArmazenamentoSqlite(caminho);
+    // Este teste verifica apenas até versão 12 para que vinculo exista
+    const diretorio = mkdtempSync(join(tmpdir(), "acervo-dono-cred-"));
+    const caminho = join(diretorio, "banco.sqlite");
 
-      await aberto.encerrar();
+    try {
+      const anterior = new DatabaseSync(caminho);
+
+      try {
+        prepararBaseInstalada(anterior);
+      } finally {
+        anterior.close();
+      }
 
       const banco = new DatabaseSync(caminho);
 
       try {
+        aplicarMigracoes(
+          banco,
+          MIGRACOES.filter((m) => m.versao <= 12),
+        );
+
         for (const tabela of [
           "cartao",
           "baralho",
@@ -253,11 +285,24 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       } finally {
         banco.close();
       }
-    });
+    } finally {
+      rmSync(diretorio, { recursive: true, force: true });
+    }
   });
 
   it("não reaplica a migração ao reabrir, e o acervo novo do Usuário é gravado com dono", async () => {
-    await comBaseNaVersao4(async (caminho) => {
+    const diretorio = mkdtempSync(join(tmpdir(), "acervo-dono-reabrir-"));
+    const caminho = join(diretorio, "banco.sqlite");
+
+    try {
+      const anterior = new DatabaseSync(caminho);
+
+      try {
+        prepararBaseInstalada(anterior);
+      } finally {
+        anterior.close();
+      }
+
       const primeira = await abrirArmazenamentoSqlite(caminho);
 
       /** A migração 5 já rodou: reabrir não pode tentar derrubar tabela nada. */
@@ -266,24 +311,34 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       const segunda = await abrirArmazenamentoSqlite(caminho);
 
       try {
-        const gravado = await segunda.armazenamento.inserirCartao("usuario-um", {
-          id: "c-novo",
+        // Criar o Acervo para cada usuário
+        const acervoUm = criarAcervo(segunda.armazenamento, "usuario-um");
+        const acervoDois = criarAcervo(segunda.armazenamento, "usuario-dois");
+
+        // Criar um Baralho para receber o Cartão
+        const baralhoResult = await acervoUm.criarBaralho({ nome: "Inglês" });
+        expect(baralhoResult.ok).toBe(true);
+        const baralhoId = baralhoResult.ok ? baralhoResult.baralho.id : "";
+
+        // Criar Cartão no Baralho via Acervo
+        const criado = await acervoUm.criarCartao(baralhoId, {
           frente: "To walk",
           verso: "Caminhar",
         });
 
-        expect(gravado).toEqual({
-          ok: true,
-          valor: { id: "c-novo", frente: "To walk", verso: "Caminhar" },
-        });
+        expect(criado.ok).toBe(true);
 
         /** O Cartão novo é do primeiro Usuário, e invisível para o segundo. */
-        expect(await segunda.armazenamento.listarCartoes("usuario-um")).toEqual([
-          { id: "c-novo", frente: "To walk", verso: "Caminhar" },
-        ]);
-        expect(await segunda.armazenamento.listarCartoes("usuario-dois")).toEqual(
-          [],
-        );
+        const cartoesUm = await acervoUm.listarCartoes();
+        expect(cartoesUm).toHaveLength(1);
+        expect(cartoesUm[0]).toMatchObject({
+          id: expect.any(String),
+          frente: "To walk",
+          verso: "Caminhar",
+        });
+
+        const cartoesDois = await acervoDois.listarCartoes();
+        expect(cartoesDois).toEqual([]);
       } finally {
         await segunda.encerrar();
       }
@@ -296,7 +351,9 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       } finally {
         banco.close();
       }
-    });
+    } finally {
+      rmSync(diretorio, { recursive: true, force: true });
+    }
   });
 
   it("sobe desde a versão 1 e descarta o acervo adotado da feature 001", async () => {
@@ -331,7 +388,8 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(contarLinhas(banco, "cartao")).toBe(0);
         expect(contarLinhas(banco, "baralho")).toBe(0);
-        expect(contarLinhas(banco, "vinculo")).toBe(0);
+        // Versão 14 sem pendências: vinculo não existe
+        expect(existeTabela(banco, "vinculo")).toBe(false);
 
         /** E toda linha nova do acervo exige dono, que agora é obrigatório. */
         expect(() =>

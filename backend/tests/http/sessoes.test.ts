@@ -106,6 +106,7 @@ const acervoIndisponivel = {
 
 let servidor: FastifyInstance;
 let contrato: ServidorDeContrato;
+let baralhoCompartilhado: string;
 
 beforeEach(async () => {
   agoraEmMilissegundos = Date.UTC(2026, 2, 11, 15, 0, 0);
@@ -121,6 +122,7 @@ beforeEach(async () => {
     { agora },
   );
   servidor = contrato.servidor;
+  baralhoCompartilhado = await criarBaralho();
 });
 
 afterEach(async () => {
@@ -193,7 +195,7 @@ async function criarBaralho(): Promise<string> {
 async function criarCartao(): Promise<string> {
   const resposta = await pedir({
     method: "POST",
-    url: "/cartoes",
+    url: `/baralhos/${baralhoCompartilhado}/cartoes`,
     payload: { frente: "casa", verso: "house" },
   });
   expect(resposta.statusCode).toBe(201);
@@ -562,7 +564,6 @@ describe("GET /estatisticas — leitura conforme o contrato", () => {
   it("responde 200 com o tamanho do acervo atual e o Histórico (FR-169, FR-170)", async () => {
     await criarCartao();
     await criarCartao();
-    await criarBaralho();
     const criado = await registrarSessao();
 
     const resposta = await lerEstatisticas();

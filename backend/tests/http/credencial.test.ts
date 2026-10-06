@@ -56,17 +56,15 @@ afterEach(async () => {
 /** Todas as rotas de acervo do contrato, com uma carga válida de cada uma. */
 function rotasDeAcervo(): InjectOptions[] {
   return [
-    { method: "POST", url: "/cartoes", payload: { frente: "To walk", verso: "Caminhar" } },
+    { method: "POST", url: "/baralhos", payload: { nome: "Inglês" } },
+    { method: "POST", url: "/baralhos/b1/cartoes", payload: { frente: "To walk", verso: "Caminhar" } },
     { method: "GET", url: "/cartoes" },
     { method: "PUT", url: "/cartoes/c1", payload: { frente: "To walk", verso: "Caminhar" } },
     { method: "DELETE", url: "/cartoes/c1" },
-    { method: "POST", url: "/baralhos", payload: { nome: "Inglês" } },
     { method: "GET", url: "/baralhos" },
     { method: "GET", url: "/baralhos/b1" },
     { method: "PUT", url: "/baralhos/b1", payload: { nome: "Inglês" } },
     { method: "DELETE", url: "/baralhos/b1" },
-    { method: "POST", url: "/baralhos/b1/vinculos", payload: { cartaoId: "c1" } },
-    { method: "DELETE", url: "/baralhos/b1/vinculos/c1" },
     { method: "POST", url: "/entrar" },
   ];
 }
@@ -141,14 +139,14 @@ describe("Credencial obrigatória — sem ela, a rota não roda", () => {
   it("aborta antes do handler em toda rota: nada é criado sem Credencial (SC-028)", async () => {
     await servidor.inject({
       method: "POST",
-      url: "/cartoes",
-      payload: { frente: "To walk", verso: "Caminhar" },
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
     });
 
     const leitura = await pedirComCredencial(
       servidor,
       contrato.credencial,
-      { method: "GET", url: "/cartoes" },
+      { method: "GET", url: "/baralhos" },
     );
 
     expect(leitura.statusCode).toBe(200);
@@ -157,9 +155,14 @@ describe("Credencial obrigatória — sem ela, a rota não roda", () => {
 
   it("a recusa não distingue quem existe: sem Credencial, o acervo de qualquer Usuário responde 401", async () => {
     const outro = await contrato.cadastrar("bruno.souza");
+    const baralho = await pedirComCredencial(servidor, outro, {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
     const criado = await pedirComCredencial(servidor, outro, {
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.json().id}/cartoes`,
       payload: { frente: "To walk", verso: "Caminhar" },
     });
 

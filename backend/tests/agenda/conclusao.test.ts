@@ -206,7 +206,7 @@ describe("iniciarCompromisso: autorização e snapshot (FR-231, FR-232, FR-254)"
     const a = await criarRotina(m.acervo, { baralhoId: ingles.id, dias: [1] });
     const b = await criarRotina(m.acervo, { baralhoId: frances.id, dias: [1] });
 
-    await m.acervo.desvincular(ingles.cartaoIds[0], ingles.id);
+    await m.acervo.excluirCartao(ingles.cartaoIds[0]);
     await m.acervo.excluirBaralho(frances.id);
 
     for (const rotina of [a, b]) {

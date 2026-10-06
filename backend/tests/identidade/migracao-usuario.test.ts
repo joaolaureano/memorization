@@ -107,9 +107,9 @@ describe("migração 4 — base instalada da feature 006 com dados reais", () =>
         expect(
           banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
         ).toBe(0);
-        expect(
-          banco.prepare("SELECT count(*) AS total FROM vinculo").get()?.total,
-        ).toBe(0);
+        // Versão 14 sem Cartões pendentes: vinculo não existe
+        expect(existeTabela(banco, "vinculo")).toBe(false);
+        expect(existeTabela(banco, "pertencimento")).toBe(true);
       } finally {
         banco.close();
       }
@@ -125,9 +125,9 @@ describe("migração 4 — base instalada da feature 006 com dados reais", () =>
         expect(
           banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
         ).toBe(0);
-        expect(
-          banco.prepare("SELECT count(*) AS total FROM vinculo").get()?.total,
-        ).toBe(0);
+        // Versão 14 sem Cartões pendentes: vinculo não existe
+        expect(existeTabela(banco, "vinculo")).toBe(false);
+        expect(existeTabela(banco, "pertencimento")).toBe(true);
       } finally {
         banco.close();
       }

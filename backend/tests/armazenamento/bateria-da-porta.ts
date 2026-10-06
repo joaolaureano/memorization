@@ -10,6 +10,7 @@ import type {
   Cartao,
   CompromissoPersistido,
   ContagemPorBaralho,
+  Desfecho,
   InicioAutorizado,
   ItemRegistrado,
   RegistroDeSessao,
@@ -233,11 +234,39 @@ export function bateriaDaPorta(
       return aberto.armazenamento;
     }
 
+    /**
+     * Helper para criar Cartões na bateria de testes (FR-389). Garante que um
+     * Baralho de apoio do dono existe (criando com `inserirBaralho` se necessário)
+     * e insere o Cartão nele com `inserirCartaoNoBaralho`. Sem `baralhoId`, usa
+     * o Baralho de apoio próprio do Cartão, `apoio-<id>`.
+     */
+    async function guardarCartao(
+      usuarioId: string,
+      cartao: Cartao,
+      baralhoId: string = `apoio-${cartao.id}`,
+    ): Promise<Desfecho<Cartao>> {
+      /**
+       * Sem Baralho informado, cada Cartão recebe um Baralho de apoio próprio:
+       * Frentes repetidas entre Cartões de teste não colidem (FR-398), e o
+       * Baralho é criado quando ainda não existe.
+       */
+      const baralhoExistente = await armazenamento().obterBaralho(usuarioId, baralhoId);
+
+      if (!baralhoExistente.ok) {
+        await armazenamento().inserirBaralho(usuarioId, {
+          id: baralhoId,
+          nome: `Baralho de apoio (${baralhoId})`,
+        });
+      }
+
+      return armazenamento().inserirCartaoNoBaralho(usuarioId, baralhoId, cartao);
+    }
+
     describe("Cartão", () => {
       it("guarda um Cartão e o devolve no desfecho de sucesso", async () => {
         const cartao = cartaoDe("c1");
 
-        expect(await armazenamento().inserirCartao(DONO_UM, cartao)).toEqual({
+        expect(await guardarCartao(DONO_UM, cartao)).toEqual({
           ok: true,
           valor: { id: "c1", frente: "To walk", verso: "Caminhar" },
         });
@@ -246,19 +275,25 @@ export function bateriaDaPorta(
       it("começa vazio e lista todos os Cartões guardados", async () => {
         expect(await armazenamento().listarCartoes(DONO_UM)).toEqual([]);
 
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To walk", "Andar"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c2", "To walk", "Andar"));
 
-        expect(await armazenamento().listarCartoes(DONO_UM)).toEqual(
+        const cartoes = await armazenamento().listarCartoes(DONO_UM);
+        expect(cartoes).toHaveLength(2);
+        expect(cartoes.map((c) => ({ id: c.id, frente: c.frente, verso: c.verso }))).toEqual(
           expect.arrayContaining([
             { id: "c1", frente: "To walk", verso: "Caminhar" },
             { id: "c2", frente: "To walk", verso: "Andar" },
           ]),
         );
+        expect(cartoes.map((c) => c.baralho.id).sort()).toEqual([
+          "apoio-c1",
+          "apoio-c2",
+        ]);
       });
 
       it("devolve o Cartão de identificador conhecido e recusa o ausente como nao_encontrado", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         expect(await armazenamento().obterCartao(DONO_UM, "c1")).toEqual({
           ok: true,
@@ -271,7 +306,7 @@ export function bateriaDaPorta(
       });
 
       it("atualiza Frente e Verso e recusa a atualização do Cartão ausente", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         expect(
           await armazenamento().atualizarCartao(
@@ -292,7 +327,7 @@ export function bateriaDaPorta(
       });
 
       it("exclui o Cartão e recusa a exclusão repetida como nao_encontrado", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         expect(await armazenamento().excluirCartao(DONO_UM, "c1")).toEqual({
           ok: true,
@@ -377,134 +412,17 @@ export function bateriaDaPorta(
       });
     });
 
-    describe("Vínculo", () => {
-      it("vincula as duas extremidades existentes e as devolve nas duas listagens", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-
-        expect(await armazenamento().vincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c1")).toEqual([
-          { id: "b1", nome: "Inglês" },
-        ]);
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual([
-          { id: "c1", frente: "To walk", verso: "Caminhar" },
-        ]);
-      });
-
-      it("devolve lista vazia para Cartão e Baralho sem nenhum Vínculo", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c1")).toEqual([]);
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual([]);
-      });
-
-      it("recusa o par repetido como vinculo_duplicado, sem deixar duplicata", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
-
-        expect(await armazenamento().vincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: false,
-          erro: "vinculo_duplicado",
-        });
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toHaveLength(
-          1,
-        );
-      });
-
-      it("recusa Cartão inexistente como nao_encontrado", async () => {
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-
-        expect(await armazenamento().vincular(DONO_UM, "inexistente", "b1")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-      });
-
-      it("recusa Baralho inexistente como nao_encontrado", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-
-        expect(await armazenamento().vincular(DONO_UM, "c1", "inexistente")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-      });
-
-      it("desvincula preservando Cartão e Baralho, e recusa o Vínculo inexistente", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
-
-        expect(await armazenamento().desvincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c1")).toEqual([]);
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual([]);
-        expect(await armazenamento().obterCartao(DONO_UM, "c1")).toEqual({
-          ok: true,
-          valor: { id: "c1", frente: "To walk", verso: "Caminhar" },
-        });
-        expect(await armazenamento().obterBaralho(DONO_UM, "b1")).toEqual({
-          ok: true,
-          valor: { id: "b1", nome: "Inglês" },
-        });
-        expect(await armazenamento().desvincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-      });
-
-      it("excluir uma extremidade remove os seus Vínculos e preserva a outra", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
-        await armazenamento().vincular(DONO_UM, "c2", "b1");
-
-        expect(await armazenamento().excluirCartao(DONO_UM, "c1")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual([
-          { id: "c2", frente: "To read", verso: "Ler" },
-        ]);
-        expect(await armazenamento().obterBaralho(DONO_UM, "b1")).toEqual({
-          ok: true,
-          valor: { id: "b1", nome: "Inglês" },
-        });
-
-        expect(await armazenamento().excluirBaralho(DONO_UM, "b1")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c2")).toEqual([]);
-        expect(await armazenamento().obterCartao(DONO_UM, "c2")).toEqual({
-          ok: true,
-          valor: { id: "c2", frente: "To read", verso: "Ler" },
-        });
-      });
-    });
-
-    describe("Baralho com Vínculos — salvar seleção (023)", () => {
-      it("cria o Baralho com um Vínculo por Cartão e preserva os Vínculos anteriores (FR-372)", async () => {
+    describe("Baralho com cópias — salvar seleção (025)", () => {
+      it("cria o Baralho com as cópias (FR-400)", async () => {
         const porta = armazenamento();
-        const c1 = cartaoDe("c1");
-        const c2 = cartaoDe("c2");
+        const copia1 = cartaoDe("c1");
+        // O Module já entrega as cópias com Frentes distintas (FR-400).
+        const copia2 = cartaoDe("c2", "To read", "Ler");
 
-        await porta.inserirCartao(DONO_UM, c1);
-        await porta.inserirCartao(DONO_UM, c2);
-        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await porta.vincular(DONO_UM, "c1", "b1");
-
-        const resultado = await porta.inserirBaralhoComVinculos(
+        const resultado = await porta.inserirBaralhoComCopias(
           DONO_UM,
           baralhoDe("b2", "Seleção"),
-          ["c1", "c2"],
+          [copia1, copia2],
         );
 
         expect(resultado).toEqual({
@@ -514,25 +432,20 @@ export function bateriaDaPorta(
 
         const cartoesDoB2 = await porta.listarCartoesDoBaralho(DONO_UM, "b2");
         expect(cartoesDoB2.map((cartao) => cartao.id).sort()).toEqual(["c1", "c2"]);
-
-        const baralhosDoC1 = await porta.listarBaralhosDoCartao(DONO_UM, "c1");
-        expect(baralhosDoC1.map((baralho) => baralho.id).sort()).toEqual(["b1", "b2"]);
       });
 
-      it("reenviar o mesmo id não duplica nem regrava (FR-373)", async () => {
+      it("reenviar o mesmo id não duplica nem regrava (FR-400)", async () => {
         const porta = armazenamento();
         const b2 = baralhoDe("b2", "Seleção");
+        const copias = [cartaoDe("c1"), cartaoDe("c2", "To read", "Ler")];
 
-        await porta.inserirCartao(DONO_UM, cartaoDe("c1"));
-        await porta.inserirCartao(DONO_UM, cartaoDe("c2"));
-
-        const primeiro = await porta.inserirBaralhoComVinculos(DONO_UM, b2, ["c1", "c2"]);
+        const primeiro = await porta.inserirBaralhoComCopias(DONO_UM, b2, copias);
         expect(primeiro).toEqual({
           ok: true,
           valor: { baralho: b2, novo: true },
         });
 
-        const segundo = await porta.inserirBaralhoComVinculos(DONO_UM, b2, ["c1", "c2"]);
+        const segundo = await porta.inserirBaralhoComCopias(DONO_UM, b2, copias);
         expect(segundo).toEqual({
           ok: true,
           valor: { baralho: b2, novo: false },
@@ -545,60 +458,15 @@ export function bateriaDaPorta(
         expect(cartoesDoB2).toHaveLength(2);
       });
 
-      it("Cartão inexistente recusa tudo sem gravar (FR-373)", async () => {
+      it("id de Baralho de outro dono é conflito (FR-400)", async () => {
         const porta = armazenamento();
-        await porta.inserirCartao(DONO_UM, cartaoDe("c1"));
 
-        const resultado = await porta.inserirBaralhoComVinculos(
+        await porta.inserirBaralho(DONO_DOIS, baralhoDe("b2", "Original"));
+
+        const resultado = await porta.inserirBaralhoComCopias(
           DONO_UM,
           baralhoDe("b2", "Seleção"),
-          ["c1", "c9"],
-        );
-
-        expect(resultado).toEqual({
-          ok: false,
-          erro: "cartoes_indisponiveis",
-          cartaoIds: ["c9"],
-        });
-
-        const baralhos = await porta.listarBaralhos(DONO_UM);
-        expect(baralhos.some((baralho) => baralho.id === "b2")).toBe(false);
-      });
-
-      it("Cartão de outro Usuário é indisponível, sem revelar nada (FR-361)", async () => {
-        const porta = armazenamento();
-        await porta.inserirCartao(DONO_DOIS, cartaoDe("c1"));
-
-        const resultado = await porta.inserirBaralhoComVinculos(
-          DONO_UM,
-          baralhoDe("b2", "Seleção"),
-          ["c1"],
-        );
-
-        expect(resultado).toEqual({
-          ok: false,
-          erro: "cartoes_indisponiveis",
-          cartaoIds: ["c1"],
-        });
-
-        const baralhosDoUm = await porta.listarBaralhos(DONO_UM);
-        expect(baralhosDoUm.some((baralho) => baralho.id === "b2")).toBe(false);
-
-        const baralhosDoDois = await porta.listarBaralhos(DONO_DOIS);
-        expect(baralhosDoDois.some((baralho) => baralho.id === "b2")).toBe(false);
-      });
-
-      it("id de Baralho de outro dono é conflito (FR-373)", async () => {
-        const porta = armazenamento();
-        const b2Original = baralhoDe("b2", "Original");
-
-        await porta.inserirCartao(DONO_UM, cartaoDe("c1"));
-        await porta.inserirBaralho(DONO_DOIS, b2Original);
-
-        const resultado = await porta.inserirBaralhoComVinculos(
-          DONO_UM,
-          baralhoDe("b2", "Seleção"),
-          ["c1"],
+          [cartaoDe("c1")],
         );
 
         expect(resultado).toEqual({ ok: false, erro: "conflito" });
@@ -606,16 +474,13 @@ export function bateriaDaPorta(
         const baralhosDoDois = await porta.listarBaralhos(DONO_DOIS);
         const b2 = baralhosDoDois.find((baralho) => baralho.id === "b2");
         expect(b2).toMatchObject({ id: "b2", nome: "Original" });
-
-        const cartoesDoB2 = await porta.listarCartoesDoBaralho(DONO_DOIS, "b2");
-        expect(cartoesDoB2).toEqual([]);
       });
 
       it("nomes repetidos são permitidos (FR-371)", async () => {
         const porta = armazenamento();
         await porta.inserirBaralho(DONO_UM, baralhoDe("b1", "Inglês"));
 
-        const resultado = await porta.inserirBaralhoComVinculos(
+        const resultado = await porta.inserirBaralhoComCopias(
           DONO_UM,
           baralhoDe("b2", "Inglês"),
           [],
@@ -625,26 +490,233 @@ export function bateriaDaPorta(
           ok: true,
           valor: { baralho: { id: "b2", nome: "Inglês" }, novo: true },
         });
+      });
+    });
 
-        const baralhos = await porta.listarBaralhos(DONO_UM);
-        expect(baralhos.map((baralho) => baralho.id).sort()).toEqual(["b1", "b2"]);
-        expect(baralhos.map((baralho) => baralho.nome).sort()).toEqual(["Inglês", "Inglês"]);
+    describe("Pertencimento (025)", () => {
+      it("insere um Cartão num Baralho existente criando Pertencimento único (FR-389)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+        const resultado = await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1"));
+
+        expect(resultado).toEqual({
+          ok: true,
+          valor: { id: "c1", frente: "To walk", verso: "Caminhar" },
+        });
+
+        // Cartão está no Baralho e pode ser listado com seu Pertencimento
+        const cartoes = await porta.listarCartoesDoBaralho(DONO_UM, "b1");
+        expect(cartoes).toHaveLength(1);
+        expect(cartoes[0]).toMatchObject({
+          id: "c1",
+          frente: "To walk",
+          verso: "Caminhar",
+        });
+      });
+
+      it("rejeita Baralho inexistente como nao_encontrado (FR-390)", async () => {
+        const resultado = await armazenamento().inserirCartaoNoBaralho(
+          DONO_UM,
+          "inexistente",
+          cartaoDe("c1"),
+        );
+
+        expect(resultado).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("rejeita frente duplicada no mesmo Baralho como frente_duplicada (FR-398)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1"));
+
+        const resultado = await porta.inserirCartaoNoBaralho(
+          DONO_UM,
+          "b1",
+          cartaoDe("c2", "To walk", "Caminhar"), // Mesma frente normalizada
+        );
+
+        expect(resultado).toEqual({
+          ok: false,
+          erro: "frente_duplicada",
+        });
+      });
+    });
+
+    describe("Pertencimento (025) — Frente única por Baralho", () => {
+      it("compara a Frente sem caixa, acento nem espaços externos, sem gravar a recusada (FR-398)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1", "Água", "Water"));
+
+        expect(
+          await porta.inserirCartaoNoBaralho(
+            DONO_UM,
+            "b1",
+            cartaoDe("c2", "  agua ", "Water"),
+          ),
+        ).toEqual({ ok: false, erro: "frente_duplicada" });
+        expect(await porta.obterCartao(DONO_UM, "c2")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("aceita a mesma Frente em Baralhos diferentes e lista cada Cartão com o seu dono (FR-389, FR-398)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1", "Inglês"));
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b2", "Viagens"));
+
+        expect(
+          (await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1"))).ok,
+        ).toBe(true);
+        expect(
+          (await porta.inserirCartaoNoBaralho(DONO_UM, "b2", cartaoDe("c2"))).ok,
+        ).toBe(true);
+
+        expect(
+          (await porta.listarCartoesDoBaralho(DONO_UM, "b1")).map((c) => c.id),
+        ).toEqual(["c1"]);
+        expect(
+          (await porta.listarCartoes(DONO_UM))
+            .map((c) => [c.id, c.baralho.id])
+            .sort(),
+        ).toEqual([
+          ["c1", "b1"],
+          ["c2", "b2"],
+        ]);
+      });
+
+      it("recusa a edição que colide no mesmo Baralho sem alterar o Cartão (FR-399)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1"));
+        await porta.inserirCartaoNoBaralho(
+          DONO_UM,
+          "b1",
+          cartaoDe("c2", "To read", "Ler"),
+        );
+
+        expect(
+          await porta.atualizarCartao(DONO_UM, {
+            id: "c2",
+            frente: "TO WALK",
+            verso: "Outro",
+          }),
+        ).toEqual({ ok: false, erro: "frente_duplicada" });
+        expect(await porta.obterCartao(DONO_UM, "c2")).toEqual({
+          ok: true,
+          valor: { id: "c2", frente: "To read", verso: "Ler" },
+        });
+      });
+
+      it("recusa Baralho de outro Usuário como nao_encontrado, sem gravar o Cartão (FR-092)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_DOIS, baralhoDe("b2"));
+
+        expect(
+          await porta.inserirCartaoNoBaralho(DONO_UM, "b2", cartaoDe("c1")),
+        ).toEqual({ ok: false, erro: "nao_encontrado" });
+        expect(await porta.listarCartoesDoBaralho(DONO_DOIS, "b2")).toEqual([]);
+        expect(await porta.obterCartao(DONO_UM, "c1")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("as cópias de uma seleção não recebem Agendamento e a origem permanece (FR-400)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await porta.inserirCartaoNoBaralho(DONO_UM, "b1", cartaoDe("c1"));
+
+        await porta.inserirBaralhoComCopias(DONO_UM, baralhoDe("b2", "Seleção"), [
+          cartaoDe("c1-copia"),
+        ]);
+
+        expect(
+          (await porta.listarCartoesDoBaralho(DONO_UM, "b1")).map((c) => c.id),
+        ).toEqual(["c1"]);
+        expect(await porta.listarAgendamentos(DONO_UM)).toEqual([]);
+      });
+    });
+
+    describe("excluirBaralho cascata (025)", () => {
+      it("exclui o Baralho e seus Pertencimentos (FR-400)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralhoComCopias(
+          DONO_UM,
+          baralhoDe("b1"),
+          [cartaoDe("c1"), cartaoDe("c2", "To read", "Ler")],
+        );
+
+        // Antes da exclusão: Cartões existem e têm Pertencimento
+        let cartoes = await porta.listarCartoesDoBaralho(DONO_UM, "b1");
+        expect(cartoes).toHaveLength(2);
+
+        // Excluir o Baralho
+        const resultado = await porta.excluirBaralho(DONO_UM, "b1");
+        expect(resultado).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+
+        // Depois: Cartões ainda existem mas não estão no Baralho
+        cartoes = await porta.listarCartoesDoBaralho(DONO_UM, "b1");
+        expect(cartoes).toHaveLength(0);
+
+        // Baralho foi excluído
+        expect(await porta.obterBaralho(DONO_UM, "b1")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+      });
+
+      it("respeita isolamento entre Usuários na cascata (FR-400)", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralhoComCopias(
+          DONO_UM,
+          baralhoDe("b_um"),
+          [cartaoDe("c1")],
+        );
+        await porta.inserirBaralhoComCopias(
+          DONO_DOIS,
+          baralhoDe("b_dois"),
+          [cartaoDe("c2", "To read", "Ler")],
+        );
+
+        // Excluir só do primeiro dono
+        await porta.excluirBaralho(DONO_UM, "b_um");
+
+        // Segundo dono não foi afetado
+        const baralho = await porta.obterBaralho(DONO_DOIS, "b_dois");
+        expect(baralho).toEqual({
+          ok: true,
+          valor: { id: "b_dois", nome: "Inglês" },
+        });
+
+        const cartoes = await porta.listarCartoesDoBaralho(DONO_DOIS, "b_dois");
+        expect(cartoes).toHaveLength(1);
       });
     });
 
     describe("contagens — elegibilidade derivada", () => {
-      it("conta os Cartões de cada Baralho, lidos dos Vínculos", async () => {
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1", "Vazio"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b2", "Com dois"));
+      it("conta os Cartões de cada Baralho, lidos dos Pertencimentos", async () => {
+        const porta = armazenamento();
+        await porta.inserirBaralhoComCopias(
+          DONO_UM,
+          baralhoDe("b1", "Com um"),
+          [cartaoDe("c1")],
+        );
+        await porta.inserirBaralhoComCopias(
+          DONO_UM,
+          baralhoDe("b2", "Com dois"),
+          [cartaoDe("c2", "To read", "Ler"), cartaoDe("c3", "To run", "Correr")],
+        );
 
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
-        await armazenamento().vincular(DONO_UM, "c1", "b2");
-        await armazenamento().vincular(DONO_UM, "c2", "b2");
-        await armazenamento().vincular(DONO_UM, "c3", "b1");
-
-        const contagens = await armazenamento().contarCartoesPorBaralho(DONO_UM);
+        const contagens = await porta.contarCartoesPorBaralho(DONO_UM);
 
         expect(contagens).toContainEqual({
           baralhoId: "b2",
@@ -655,53 +727,45 @@ export function bateriaDaPorta(
 
       it("devolve zero para o Baralho sem nenhum Cartão vinculado", async () => {
         await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1", "Vazio"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const contagens = await armazenamento().contarCartoesPorBaralho(DONO_UM);
 
         expect(contagemDe(contagens, "b1")).toBe(0);
       });
-
-      it("reduz a contagem quando o Vínculo é desfeito e quando o Cartão é excluído", async () => {
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
-        await armazenamento().vincular(DONO_UM, "c2", "b1");
-
-        await armazenamento().desvincular(DONO_UM, "c1", "b1");
-
-        expect(
-          contagemDe(await armazenamento().contarCartoesPorBaralho(DONO_UM), "b1"),
-        ).toBe(1);
-
-        await armazenamento().excluirCartao(DONO_UM, "c2");
-
-        expect(
-          contagemDe(await armazenamento().contarCartoesPorBaralho(DONO_UM), "b1"),
-        ).toBe(0);
-      });
     });
 
     describe("isolamento entre Usuários — o dono é o escopo", () => {
       it("cada dono lista e lê somente o próprio acervo", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(
-          DONO_DOIS,
-          cartaoDe("c2", "To read", "Ler"),
-        );
         await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
         await armazenamento().inserirBaralho(
           DONO_DOIS,
           baralhoDe("b2", "Espanhol"),
         );
+        await guardarCartao(DONO_UM, cartaoDe("c1"), "b1");
+        await guardarCartao(
+          DONO_DOIS,
+          cartaoDe("c2", "To read", "Ler"),
+          "b2",
+        );
 
-        expect(await armazenamento().listarCartoes(DONO_UM)).toEqual([
-          { id: "c1", frente: "To walk", verso: "Caminhar" },
-        ]);
-        expect(await armazenamento().listarCartoes(DONO_DOIS)).toEqual([
-          { id: "c2", frente: "To read", verso: "Ler" },
-        ]);
+        const cartoesUM = await armazenamento().listarCartoes(DONO_UM);
+        expect(cartoesUM).toHaveLength(1);
+        expect(cartoesUM[0]).toMatchObject({
+          id: "c1",
+          frente: "To walk",
+          verso: "Caminhar",
+          baralho: expect.objectContaining({ id: "b1" }),
+        });
+
+        const cartoesDOIS = await armazenamento().listarCartoes(DONO_DOIS);
+        expect(cartoesDOIS).toHaveLength(1);
+        expect(cartoesDOIS[0]).toMatchObject({
+          id: "c2",
+          frente: "To read",
+          verso: "Ler",
+          baralho: expect.objectContaining({ id: "b2" }),
+        });
         expect(await armazenamento().listarBaralhos(DONO_UM)).toEqual([
           { id: "b1", nome: "Inglês" },
         ]);
@@ -711,7 +775,7 @@ export function bateriaDaPorta(
       });
 
       it("o conteúdo do outro Usuário é indistinguível de inexistente, também nas escritas", async () => {
-        await armazenamento().inserirCartao(
+        await guardarCartao(
           DONO_DOIS,
           cartaoDe("c2", "To read", "Ler"),
         );
@@ -760,110 +824,8 @@ export function bateriaDaPorta(
         });
       });
 
-      it("vincular exige as duas extremidades no mesmo dono, e recusa como nao_encontrado", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().inserirCartao(
-          DONO_DOIS,
-          cartaoDe("c2", "To read", "Ler"),
-        );
-        await armazenamento().inserirBaralho(
-          DONO_DOIS,
-          baralhoDe("b2", "Espanhol"),
-        );
-
-        /** Cartão de um Usuário com Baralho de outro: recusa, e nada muda. */
-        expect(await armazenamento().vincular(DONO_UM, "c1", "b2")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-        expect(await armazenamento().vincular(DONO_DOIS, "c1", "b2")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c1")).toEqual(
-          [],
-        );
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual(
-          [],
-        );
-
-        /** O mesmo dono continua podendo vincular as suas duas extremidades. */
-        expect(await armazenamento().vincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-        expect(await armazenamento().vincular(DONO_DOIS, "c2", "b2")).toEqual({
-          ok: true,
-          valor: undefined,
-        });
-      });
-
-      it("as listagens de Vínculo e as contagens são as do dono, nunca as do outro", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().inserirCartao(
-          DONO_DOIS,
-          cartaoDe("c2", "To read", "Ler"),
-        );
-        await armazenamento().inserirBaralho(
-          DONO_DOIS,
-          baralhoDe("b2", "Espanhol"),
-        );
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
-        await armazenamento().vincular(DONO_DOIS, "c2", "b2");
-
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c1")).toEqual(
-          [{ id: "b1", nome: "Inglês" }],
-        );
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual(
-          [{ id: "c1", frente: "To walk", verso: "Caminhar" }],
-        );
-
-        /** O `id` do outro Usuário não devolve Vínculo algum. */
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_UM, "c2")).toEqual(
-          [],
-        );
-        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b2")).toEqual(
-          [],
-        );
-
-        const contagens = await armazenamento().contarCartoesPorBaralho(DONO_UM);
-
-        expect(contagens).toContainEqual({
-          baralhoId: "b1",
-          quantidadeDeCartoes: 1,
-        });
-        expect(contagemDe(contagens, "b2")).toBe(0);
-        expect(
-          contagemDe(await armazenamento().contarCartoesPorBaralho(DONO_DOIS), "b2"),
-        ).toBe(1);
-      });
-
-      it("desvincular não alcança o Vínculo de outro Usuário", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().inserirCartao(
-          DONO_DOIS,
-          cartaoDe("c2", "To read", "Ler"),
-        );
-        await armazenamento().inserirBaralho(
-          DONO_DOIS,
-          baralhoDe("b2", "Espanhol"),
-        );
-        await armazenamento().vincular(DONO_DOIS, "c2", "b2");
-
-        expect(await armazenamento().desvincular(DONO_UM, "c2", "b2")).toEqual({
-          ok: false,
-          erro: "nao_encontrado",
-        });
-        expect(await armazenamento().listarBaralhosDoCartao(DONO_DOIS, "c2")).toEqual(
-          [{ id: "b2", nome: "Espanhol" }],
-        );
-      });
-
       it("excluir uma extremidade de outro Usuário não a alcança", async () => {
-        await armazenamento().inserirCartao(
+        await guardarCartao(
           DONO_DOIS,
           cartaoDe("c2", "To read", "Ler"),
         );
@@ -1071,16 +1033,14 @@ export function bateriaDaPorta(
         ).toEqual({ ok: false, erro: "nao_encontrado" });
       });
 
-      it("preserva o Registro quando o Baralho e os Cartões de origem são excluídos", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
-        await armazenamento().vincular(DONO_UM, "c1", "b1");
+      it("preserva o Registro quando o Cartão e seu Baralho são excluídos", async () => {
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const registro = registroDe("r1", "2026-01-02T00:00:00.000Z");
 
         await armazenamento().inserirRegistroDeSessao(DONO_UM, registro);
         await armazenamento().excluirCartao(DONO_UM, "c1");
-        await armazenamento().excluirBaralho(DONO_UM, "b1");
+        await armazenamento().excluirBaralho(DONO_UM, "apoio-c1");
 
         expect(await armazenamento().obterRegistroDeSessao(DONO_UM, "r1")).toEqual({
           ok: true,
@@ -1091,13 +1051,13 @@ export function bateriaDaPorta(
 
     describe("falha do armazenamento — desfecho indisponivel", () => {
       it("reporta indisponivel depois de o armazenamento ser encerrado, sem nada passar por concluído", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
         await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
 
         await aberto.encerrar();
         encerrado = true;
 
-        expect(await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2"))).toEqual({
+        expect(await guardarCartao(DONO_UM, cartaoDe("c2"))).toEqual({
           ok: false,
           erro: "indisponivel",
         });
@@ -1124,14 +1084,6 @@ export function bateriaDaPorta(
           ok: false,
           erro: "indisponivel",
         });
-        expect(await armazenamento().vincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: false,
-          erro: "indisponivel",
-        });
-        expect(await armazenamento().desvincular(DONO_UM, "c1", "b1")).toEqual({
-          ok: false,
-          erro: "indisponivel",
-        });
       });
 
       it("carrega apenas o código estável no desfecho de indisponibilidade, sem detalhe algum do driver", async () => {
@@ -1155,11 +1107,13 @@ export function bateriaDaPorta(
      */
     describe("Repetição espaçada (015)", () => {
       it("lista os Cartões em ordem de criação, o insumo dos Cartões novos (FR-201)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await guardarCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
 
-        expect(await armazenamento().listarCartoes(DONO_UM)).toEqual([
+        const cartoes = await armazenamento().listarCartoes(DONO_UM);
+        expect(cartoes).toHaveLength(3);
+        expect(cartoes.map((c) => ({ id: c.id, frente: c.frente, verso: c.verso }))).toEqual([
           { id: "c1", frente: "To walk", verso: "Caminhar" },
           { id: "c2", frente: "To read", verso: "Ler" },
           { id: "c3", frente: "To run", verso: "Correr" },
@@ -1194,8 +1148,8 @@ export function bateriaDaPorta(
       });
 
       it("grava o Registro e os Agendamentos na primeira vez, com os Itens de origem (FR-210, SC-085)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
 
         const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
           itemAvaliadoDe(0, "c1", "bom"),
@@ -1219,7 +1173,7 @@ export function bateriaDaPorta(
       });
 
       it("reenviar o mesmo id devolve novo falso, sem reaplicar Agendamentos (FR-163, FR-210, SC-085)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const guardado = registroDe("r1", "2026-01-02T00:00:00.000Z", [
           itemAvaliadoDe(0, "c1", "bom"),
@@ -1253,7 +1207,7 @@ export function bateriaDaPorta(
       });
 
       it("recusa como conflito o Registro de mesmo id vindo de outro Usuário (FR-166, FR-210)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
           itemAvaliadoDe(0, "c1", "bom"),
@@ -1270,7 +1224,7 @@ export function bateriaDaPorta(
       });
 
       it("descarta em silêncio o Agendamento de Cartão inexistente (D5, FR-210)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
           itemAvaliadoDe(0, "c1", "bom"),
@@ -1288,7 +1242,7 @@ export function bateriaDaPorta(
       });
 
       it("descarta em silêncio o Agendamento de Cartão de outro Usuário (FR-219)", async () => {
-        await armazenamento().inserirCartao(
+        await guardarCartao(
           DONO_DOIS,
           cartaoDe("c2", "To read", "Ler"),
         );
@@ -1305,7 +1259,7 @@ export function bateriaDaPorta(
       });
 
       it("o upsert por Cartão preserva o criadoEm da primeira Avaliação (FR-207, D3)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const primeiro = agendamentoDe("c1", "2026-02-01T00:00:00.000Z");
 
@@ -1344,7 +1298,7 @@ export function bateriaDaPorta(
       });
 
       it("a origem revisao tem baralhoId vazio e nome Revisão do dia (D5, FR-196)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const registro: RegistroDeSessao = {
           ...registroDe("r1", "2026-01-02T00:00:00.000Z", [
@@ -1366,7 +1320,7 @@ export function bateriaDaPorta(
       });
 
       it("excluir o Cartão remove o Agendamento e preserva o Registro (FR-208, FR-209)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         const registro = registroDe("r1", "2026-01-02T00:00:00.000Z", [
           itemAvaliadoDe(0, "c1", "bom"),
@@ -1385,9 +1339,9 @@ export function bateriaDaPorta(
       });
 
       it("substituirAgendamentos troca as Preferências e só os Agendamentos do dono (FR-213, SC-086)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().inserirCartao(
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await guardarCartao(
           DONO_DOIS,
           cartaoDe("c3", "To run", "Correr"),
         );
@@ -1431,9 +1385,9 @@ export function bateriaDaPorta(
       });
 
       it("lista os Itens avaliados em ordem (concluidaEm, posicao), o insumo do replay (FR-213, SC-083)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c2", "To read", "Ler"));
+        await guardarCartao(DONO_UM, cartaoDe("c3", "To run", "Correr"));
 
         await armazenamento().inserirRegistroEAgendamentos(
           DONO_UM,
@@ -1474,7 +1428,7 @@ export function bateriaDaPorta(
       });
 
       it("não lista Itens gravados sem avaliacao ou sem cartaoId (FR-196, FR-197, FR-213)", async () => {
-        await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
+        await guardarCartao(DONO_UM, cartaoDe("c1"));
 
         /** Registro anterior à 015: Item sem `avaliacao` e sem `cartaoId`. */
         await armazenamento().inserirRegistroDeSessao(
@@ -2179,8 +2133,8 @@ export function bateriaDaPorta(
 
           async function prepararSessao(): Promise<void> {
             await prepararRotina();
-            await armazenamento().inserirCartao(DONO_UM, cartaoDe("c1"));
-            await armazenamento().inserirCartao(DONO_UM, cartaoDe("c2"));
+            await guardarCartao(DONO_UM, cartaoDe("c1"));
+            await guardarCartao(DONO_UM, cartaoDe("c2"));
           }
 
           const registroDaAgenda = (id: string) =>
@@ -2568,9 +2522,12 @@ export function bateriaDaPorta(
         const baralhoId = `b-${sufixo}`;
         const rotinaId = `r-${sufixo}`;
 
-        await armazenamento().inserirCartao(dono, cartaoDe(cartaoId));
-        await armazenamento().inserirBaralho(dono, baralhoDe(baralhoId));
-        await armazenamento().vincular(dono, cartaoId, baralhoId);
+        // Cria o Baralho com o Cartão via Pertencimento
+        await armazenamento().inserirBaralhoComCopias(
+          dono,
+          baralhoDe(baralhoId),
+          [cartaoDe(cartaoId)],
+        );
         await armazenamento().inserirRegistroDeSessao(
           dono,
           registroDe(`reg-${sufixo}`, "2026-01-01T00:00:00.000Z", [

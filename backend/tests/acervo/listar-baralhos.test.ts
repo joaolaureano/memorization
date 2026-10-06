@@ -16,18 +16,17 @@ import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
  * T104 — `Acervo` lista Baralhos pela sua Interface; e T205 — a contagem e a
- * elegibilidade passam a ser derivadas dos Vínculos na leitura, nunca lidas de
+ * elegibilidade são derivadas do Pertencimento na leitura, nunca lidas de
  * coluna.
  *
  * Cada item carrega exatamente id, nome, quantidadeDeCartoes e elegivel. O
  * nome é rótulo, não identificador: dois Baralhos homônimos aparecem
  * separadamente. A elegibilidade é `quantidadeDeCartoes > 0` (FR-024).
  *
- * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao`,
- * `vincular` e `listarBaralhos`) sobre o Adapter do armazenamento local em
- * memória; nenhum teste inspeciona a tabela. A ordem não é pré-condição da
- * Interface, portanto as asserções comparam conjuntos de Baralhos, nunca
- * posições na lista.
+ * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao` e
+ * `listarBaralhos`) sobre o Adapter do armazenamento local em memória; nenhum
+ * teste inspeciona a tabela. A ordem não é pré-condição da Interface, portanto
+ * as asserções comparam conjuntos de Baralhos, nunca posições na lista.
  */
 
 const NOME_VALIDO = "Inglês";
@@ -74,8 +73,8 @@ async function criar(nome: string): Promise<Baralho> {
 }
 
 /** Cria um Cartão válido pela Interface e devolve o Cartão criado. */
-async function criarCartao(frente: string, verso: string): Promise<Cartao> {
-  return cartaoDo(await acervo.criarCartao({ frente, verso }));
+async function criarCartao(baralhoId: string, frente: string, verso: string): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao(baralhoId, { frente, verso }));
 }
 
 describe("listarBaralhos — leitura pela Interface", () => {
@@ -96,7 +95,7 @@ describe("listarBaralhos — leitura pela Interface", () => {
     ]);
   });
 
-  it("deriva quantidadeDeCartoes como 0 e elegivel como contagem > 0 para Baralho sem Vínculo", async () => {
+  it("deriva quantidadeDeCartoes como 0 e elegivel como contagem > 0 para Baralho sem Cartão", async () => {
     await criar(NOME_VALIDO);
 
     const [listado] = await acervo.listarBaralhos();
@@ -132,19 +131,15 @@ describe("listarBaralhos — leitura pela Interface", () => {
     expect(new Set(listados.map((baralho) => baralho.id)).size).toBe(2);
   });
 
-  it("deriva quantidadeDeCartoes e elegivel da contagem de Vínculos para 0, 1 e 3 Cartões", async () => {
+  it("deriva quantidadeDeCartoes e elegivel da contagem de Cartões para 0, 1 e 3 Cartões", async () => {
     const vazio = await criar("Vazio");
     const comUm = await criar("Com um");
     const comTres = await criar("Com três");
 
-    await acervo.vincular((await criarCartao("To walk", "Caminhar")).id, comUm.id);
+    await criarCartao(comUm.id, "To walk", "Caminhar");
 
-    for (const cartao of [
-      await criarCartao("To run", "Correr"),
-      await criarCartao("To sleep", "Dormir"),
-      await criarCartao("To read", "Ler"),
-    ]) {
-      await acervo.vincular(cartao.id, comTres.id);
+    for (const frente of ["To run", "To sleep", "To read"]) {
+      await criarCartao(comTres.id, frente, frente);
     }
 
     const listados = await acervo.listarBaralhos();

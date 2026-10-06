@@ -15,6 +15,7 @@ import {
 } from "../armazenamento/postgresql/conexao.ts";
 import {
   lerVersaoDoEsquema,
+  versaoAceitaNoInicio,
   versaoCorrenteConhecida,
 } from "../armazenamento/postgresql/esquema.ts";
 import { criarServidor, registrarRotasDaAplicacao } from "../http/servidor.ts";
@@ -176,11 +177,14 @@ function mensagemRegistravel(erro: unknown): string {
 }
 
 /**
- * Confere se a base está na versão corrente do esquema, **sem migrar**: a
+ * Confere se a base está numa versão aceitável do esquema, **sem migrar**: a
  * versão é lida por uma conexão curta, fechada em qualquer desfecho, e a lista
  * de migrações conhecida pelo binário é a fonte da verdade da versão corrente
- * (FR-127, SC-055). Uma base atrasada recusa a inicialização, e nenhuma
- * migração é aplicada.
+ * (FR-127, SC-055, FR-397). Uma base atrasada demais recusa a inicialização,
+ * e nenhuma migração é aplicada.
+ *
+ * Versões aceitas: a versão corrente, e a versão anterior **se** a última
+ * migração tiver `precondicao` (um estado legítimo e transitório).
  */
 async function conferirVersaoDoEsquema(
   configuracao: ConfiguracaoDaConexao,
@@ -191,7 +195,7 @@ async function conferirVersaoDoEsquema(
     const encontrada = await lerVersaoDoEsquema(piscina);
     const corrente = versaoCorrenteConhecida();
 
-    if (encontrada !== corrente) {
+    if (!versaoAceitaNoInicio(encontrada)) {
       throw new InicializacaoRecusadaError(
         "Início recusado: o esquema da base está na versão " +
           `${encontrada} e a versão corrente é ${corrente}. ` +

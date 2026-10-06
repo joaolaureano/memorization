@@ -12,6 +12,7 @@ import {
 } from "../armazenamento/postgresql/conexao.ts";
 import {
   lerVersaoDoEsquema,
+  versaoAceitaNoInicio,
   versaoCorrenteConhecida,
 } from "../armazenamento/postgresql/esquema.ts";
 import { iniciarServidor } from "../http/servidor.ts";
@@ -141,12 +142,16 @@ function reportarFalha(mensagem: string): false {
 }
 
 /**
- * Confere se a base está na versão corrente do esquema, **sem migrar**.
+ * Confere se a base está numa versão aceitável do esquema, **sem migrar**
+ * (FR-397).
  *
  * A versão é lida por uma conexão curta, que é fechada em qualquer desfecho. A
  * lista de migrações conhecida pelo binário é a fonte da verdade da versão
  * corrente, de modo que a conferência continua valendo quando a `007` e a `008`
  * acrescentarem as migrações delas (FR-121, SC-048).
+ *
+ * Versões aceitas: a versão corrente, e a versão anterior **se** a última
+ * migração tiver `precondicao` (um estado legítimo e transitório).
  */
 async function esquemaNaVersaoCorrente(
   configuracao: ConfiguracaoDaConexao,
@@ -157,7 +162,7 @@ async function esquemaNaVersaoCorrente(
     const encontrada = await lerVersaoDoEsquema(piscina);
     const corrente = versaoCorrenteConhecida();
 
-    return encontrada === corrente
+    return versaoAceitaNoInicio(encontrada)
       ? true
       : reportarFalha(inicioRecusado(encontrada, corrente));
   } catch (erro) {

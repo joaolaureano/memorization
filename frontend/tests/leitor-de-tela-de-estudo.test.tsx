@@ -39,8 +39,11 @@ async function criarAcervoElegivel(
 }> {
   const cliente = clienteDeProva();
 
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("a criação do Baralho deveria ser aceita");
+
   for (let indice = 1; indice <= quantidadeDeCartoes; indice += 1) {
-    const cartao = await cliente.criarCartao({
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
       frente: `Frente ${indice}`,
       verso: `Verso ${indice}`,
     });
@@ -50,20 +53,10 @@ async function criarAcervoElegivel(
     }
   }
 
-  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
-
-  if (!baralho.ok) {
-    throw new Error("a criação do Baralho deveria ser aceita");
-  }
-
   const cartoes = await cliente.listarCartoes();
 
   if (!cartoes.ok) {
     throw new Error("a listagem de Cartões deveria ser aceita");
-  }
-
-  for (const cartao of cartoes.cartoes) {
-    await cliente.vincular(cartao.id, baralho.baralho.id);
   }
 
   return { cliente, idDoBaralho: baralho.baralho.id };
@@ -201,7 +194,7 @@ describe("PaginaDeEstudo para leitor de tela", () => {
         id: `c${indice + 1}`,
         frente: `Frente ${indice + 1}`,
         verso: `Verso ${indice + 1}`,
-        baralhos: [{ id: idDoBaralho, nome: "Inglês" }],
+        baralho: { id: idDoBaralho, nome: "Inglês" },
         proximaRevisaoEm: isoDaquiA(3),
       }),
     );
@@ -217,6 +210,7 @@ describe("PaginaDeEstudo para leitor de tela", () => {
         nome: "Inglês",
         elegivel: true,
         cartoes: [],
+        quantidadeDeAgendamentos: 0,
       },
     });
 

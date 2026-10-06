@@ -15,14 +15,14 @@ import {
 import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
- * T205 — `obterBaralho` devolve o Baralho com a elegibilidade derivada e os
- * Cartões vinculados, conforme o contrato de `GET /baralhos/{id}` (FR-014).
+ * T205 — `obterBaralho` devolve o Baralho com a elegibilidade derivada, os
+ * Cartões do Baralho e a quantidade de Agendamentos desses Cartões, conforme o
+ * contrato de `GET /baralhos/{id}` (FR-014, FR-402).
  *
- * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao`,
- * `vincular` e `obterBaralho`) sobre o Adapter do armazenamento local em
- * memória; nenhum teste inspeciona a tabela. A ordem dos Cartões não é
- * pré-condição do contrato, portanto as asserções comparam conjuntos, nunca
- * posições.
+ * Toda asserção atravessa a Interface (`criarBaralho`, `criarCartao` e
+ * `obterBaralho`) sobre o Adapter do armazenamento local em memória; nenhum
+ * teste inspeciona a tabela. A ordem dos Cartões não é pré-condição do
+ * contrato, portanto as asserções comparam conjuntos, nunca posições.
  */
 
 const FRENTE_VALIDA = "To walk";
@@ -69,8 +69,12 @@ async function criarBaralho(nome = NOME_VALIDO): Promise<Baralho> {
   return baralhoDo(await acervo.criarBaralho({ nome }));
 }
 
-async function criarCartao(frente: string, verso: string): Promise<Cartao> {
-  return cartaoDo(await acervo.criarCartao({ frente, verso }));
+async function criarCartao(
+  baralhoId: string,
+  frente: string,
+  verso: string,
+): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao(baralhoId, { frente, verso }));
 }
 
 describe("obterBaralho — leitura pela Interface", () => {
@@ -82,7 +86,7 @@ describe("obterBaralho — leitura pela Interface", () => {
     });
   });
 
-  it("devolve Baralho sem Cartões como não elegível, com cartoes vazio", async () => {
+  it("devolve Baralho sem Cartões como não elegível, com cartoes vazio e quantidadeDeAgendamentos zero", async () => {
     const baralho = await criarBaralho();
 
     expect(await acervo.obterBaralho(baralho.id)).toEqual({
@@ -92,19 +96,16 @@ describe("obterBaralho — leitura pela Interface", () => {
         nome: NOME_VALIDO,
         elegivel: false,
         cartoes: [],
+        quantidadeDeAgendamentos: 0,
       },
     });
   });
 
-  it("devolve Baralho elegível com os três Cartões vinculados", async () => {
+  it("devolve Baralho elegível com os três Cartões do Baralho", async () => {
     const baralho = await criarBaralho();
-    const primeiro = await criarCartao("To walk", "Caminhar");
-    const segundo = await criarCartao("To run", "Correr");
-    const terceiro = await criarCartao("To sleep", "Dormir");
-
-    for (const cartao of [primeiro, segundo, terceiro]) {
-      await acervo.vincular(cartao.id, baralho.id);
-    }
+    const primeiro = await criarCartao(baralho.id, "To walk", "Caminhar");
+    const segundo = await criarCartao(baralho.id, "To run", "Correr");
+    const terceiro = await criarCartao(baralho.id, "To sleep", "Dormir");
 
     const resultado = await acervo.obterBaralho(baralho.id);
 
@@ -115,48 +116,37 @@ describe("obterBaralho — leitura pela Interface", () => {
         nome: NOME_VALIDO,
         elegivel: true,
         cartoes: expect.arrayContaining([primeiro, segundo, terceiro]),
+        quantidadeDeAgendamentos: 0,
       },
     });
     expect(resultado.ok ? resultado.baralho.cartoes : []).toHaveLength(3);
   });
 
-  it("deriva a elegibilidade da presença de Cartões, nunca de coluna", async () => {
-    const baralho = await criarBaralho();
-    const cartao = await criarCartao(FRENTE_VALIDA, VERSO_VALIDO);
+  it("conta quantidadeDeAgendamentos apenas dos Cartões desse Baralho", async () => {
+    const baralho1 = await criarBaralho("Inglês");
+    const baralho2 = await criarBaralho("Espanhol");
+    const cartao1 = await criarCartao(baralho1.id, FRENTE_VALIDA, VERSO_VALIDO);
+    const cartao2 = await criarCartao(baralho2.id, "Hola", "Olá");
 
-    const antes = await acervo.obterBaralho(baralho.id);
-
-    expect(antes).toEqual({
+    expect(await acervo.obterBaralho(baralho1.id)).toEqual({
       ok: true,
       baralho: {
-        id: baralho.id,
-        nome: NOME_VALIDO,
-        elegivel: false,
-        cartoes: [],
-      },
-    });
-
-    await acervo.vincular(cartao.id, baralho.id);
-
-    expect(await acervo.obterBaralho(baralho.id)).toEqual({
-      ok: true,
-      baralho: {
-        id: baralho.id,
-        nome: NOME_VALIDO,
+        id: baralho1.id,
+        nome: "Inglês",
         elegivel: true,
-        cartoes: [cartao],
+        cartoes: [cartao1],
+        quantidadeDeAgendamentos: 0,
       },
     });
 
-    await acervo.desvincular(cartao.id, baralho.id);
-
-    expect(await acervo.obterBaralho(baralho.id)).toEqual({
+    expect(await acervo.obterBaralho(baralho2.id)).toEqual({
       ok: true,
       baralho: {
-        id: baralho.id,
-        nome: NOME_VALIDO,
-        elegivel: false,
-        cartoes: [],
+        id: baralho2.id,
+        nome: "Espanhol",
+        elegivel: true,
+        cartoes: [cartao2],
+        quantidadeDeAgendamentos: 0,
       },
     });
   });

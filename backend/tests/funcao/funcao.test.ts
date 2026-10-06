@@ -5,7 +5,15 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { versaoCorrenteConhecida } from "../../src/armazenamento/postgresql/esquema.ts";
+import {
+  versaoCorrenteConhecida,
+  aplicarMigracoes,
+} from "../../src/armazenamento/postgresql/esquema.ts";
+import { MIGRACOES } from "../../src/armazenamento/postgresql/migracoes.ts";
+import {
+  criarPiscina,
+  type ConfiguracaoDaConexao,
+} from "../../src/armazenamento/postgresql/conexao.ts";
 import {
   criarFuncao,
   type FuncaoDaNuvem,
@@ -147,6 +155,83 @@ function segredosDoCenario(base: string): SegredosDaFuncao {
     segredoDeOrigem: SEGREDO_DE_ORIGEM,
     segredoDasSenhas: SEGREDO_DAS_SENHAS,
   };
+}
+
+/**
+ * Cria uma base nova e migra-a apenas até a versão informada (FR-397).
+ * Útil para testar estados de versão específicos.
+ */
+async function criarBaseNaVersao(
+  titulo: string,
+  versaoAlvo: number,
+): Promise<string> {
+  const nomeDaBase = await servidor.criarBase(titulo);
+  const configuracao: ConfiguracaoDaConexao = {
+    url: servidor.urlDaBase(nomeDaBase),
+    ca: servidor.configuracao.certificadoDaAutoridade,
+  };
+
+  const piscina = criarPiscina(configuracao);
+
+  try {
+    // Aplica apenas as migrações até a versão alvo.
+    const migracoesFiltradas = MIGRACOES.filter((m) => m.versao <= versaoAlvo);
+    await aplicarMigracoes(piscina, migracoesFiltradas);
+  } finally {
+    await piscina.end();
+  }
+
+  return nomeDaBase;
+}
+
+/**
+ * Insere um cartão numa base na versão 13 ou posterior, sem pertencimento.
+ * Usado para testar a precondição da migração 14 (FR-397).
+ */
+async function inserirCartaoSemPertencimento(
+  nomeDaBase: string,
+  cartaoId: string,
+): Promise<void> {
+  const configuracao: ConfiguracaoDaConexao = {
+    url: servidor.urlDaBase(nomeDaBase),
+    ca: servidor.configuracao.certificadoDaAutoridade,
+  };
+
+  const piscina = criarPiscina(configuracao);
+
+  try {
+    // Precisa de um usuário para inserir o cartão (migração 5 adiciona usuario_id).
+    // Insere um usuário primeiro.
+    await piscina.query(
+      `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        "usuario-teste",
+        "teste",
+        Buffer.alloc(16),
+        Buffer.alloc(32),
+        '{"iterations":1}',
+      ],
+    );
+
+    // Cria um baralho.
+    await piscina.query(
+      `INSERT INTO baralho (id, nome, usuario_id)
+       VALUES ($1, $2, $3)`,
+      ["baralho-teste", "Baralho de Teste", "usuario-teste"],
+    );
+
+    // Insere um cartão.
+    await piscina.query(
+      `INSERT INTO cartao (id, frente, verso, usuario_id)
+       VALUES ($1, $2, $3, $4)`,
+      [cartaoId, "Frente", "Verso", "usuario-teste"],
+    );
+
+    // NÃO insere pertencimento, deixando o cartão pendente.
+  } finally {
+    await piscina.end();
+  }
 }
 
 interface OpcoesDoEvento {
@@ -398,15 +483,6 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
     expect(entrou.cookies[0]).toContain("Secure");
     expect(entrou.cookies[0]).toContain("SameSite=Strict");
 
-    const cartao = await pedir(funcao, "POST", "/cartoes", {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-      corpo: { frente: "To walk", verso: "Caminhar" },
-    });
-
-    expect(cartao.status).toBe(201);
-    const cartaoId = (cartao.corpo as { id: string }).id;
-
     const baralho = await pedir(funcao, "POST", "/baralhos", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
@@ -416,13 +492,13 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
     expect(baralho.status).toBe(201);
     const baralhoId = (baralho.corpo as { id: string }).id;
 
-    const vinculo = await pedir(funcao, "POST", `/baralhos/${baralhoId}/vinculos`, {
+    const cartao = await pedir(funcao, "POST", `/baralhos/${baralhoId}/cartoes`, {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
-      corpo: { cartaoId },
+      corpo: { frente: "To walk", verso: "Caminhar" },
     });
-
-    expect(vinculo.status).toBe(201);
+    expect(cartao.status).toBe(201);
+    const cartaoId = (cartao.corpo as { id: string }).id;
 
     /** A leitura devolve o que foi criado. */
     const listagem = await pedir(funcao, "GET", "/cartoes", {
@@ -436,7 +512,7 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
         id: cartaoId,
         frente: "To walk",
         verso: "Caminhar",
-        baralhos: [{ id: baralhoId, nome: "Inglês" }],
+        baralho: { id: baralhoId, nome: "Inglês" },
       },
     ]);
 
@@ -478,13 +554,13 @@ describe("a ida e volta do acervo contra o PostgreSQL (SC-051)", () => {
 
     expect(cartoesNaBase).toEqual([{ frente: "To run" }]);
 
-    const vinculosNaBase = await servidor.consultar<{ quantidade: string }>(
+    const pertencimentosNaBase = await servidor.consultar<{ quantidade: string }>(
       nomeDaBase,
-      "SELECT COUNT(*) AS quantidade FROM vinculo WHERE cartao_id = $1;",
+      "SELECT COUNT(*) AS quantidade FROM pertencimento WHERE cartao_id = $1;",
       [cartaoId],
     );
 
-    expect(vinculosNaBase.map((linha) => Number(linha.quantidade))).toEqual([1]);
+    expect(pertencimentosNaBase.map((linha) => Number(linha.quantidade))).toEqual([1]);
   }, 60_000);
 
   it("recusa a Credencial que não confere sem revelar qual parte falhou", async () => {
@@ -594,15 +670,6 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
 
     expect(cadastro.status).toBe(201);
 
-    const cartao = await pedir(funcao, "POST", "/cartoes", {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-      corpo: { frente: "To walk", verso: "Caminhar" },
-    });
-
-    expect(cartao.status).toBe(201);
-    const cartaoId = (cartao.corpo as { id: string }).id;
-
     const baralho = await pedir(funcao, "POST", "/baralhos", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
@@ -611,6 +678,15 @@ describe("a paridade das rotas da Repetição espaçada (015)", () => {
 
     expect(baralho.status).toBe(201);
     const baralhoId = (baralho.corpo as { id: string }).id;
+
+    const cartao = await pedir(funcao, "POST", `/baralhos/${baralhoId}/cartoes`, {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+      credencial,
+      corpo: { frente: "To walk", verso: "Caminhar" },
+    });
+
+    expect(cartao.status).toBe(201);
+    const cartaoId = (cartao.corpo as { id: string }).id;
 
     /** `POST /previas` — a prévia dos Cartões do estudo livre (FR-221). */
     const previas = await pedir(funcao, "POST", "/previas", {
@@ -736,12 +812,6 @@ describe("a paridade das rotas da Agenda (016)", () => {
       ).status,
     ).toBe(201);
 
-    const cartao = await pedir(funcao, "POST", "/cartoes", {
-      segredoDeOrigem: SEGREDO_DE_ORIGEM,
-      credencial,
-      corpo: { frente: "To walk", verso: "Caminhar" },
-    });
-    const cartaoId = (cartao.corpo as { id: string }).id;
     const baralho = await pedir(funcao, "POST", "/baralhos", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
@@ -749,11 +819,13 @@ describe("a paridade das rotas da Agenda (016)", () => {
     });
     const baralhoId = (baralho.corpo as { id: string }).id;
 
-    await pedir(funcao, "POST", `/baralhos/${baralhoId}/vinculos`, {
+    const cartao = await pedir(funcao, "POST", `/baralhos/${baralhoId}/cartoes`, {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
       credencial,
-      corpo: { cartaoId },
+      corpo: { frente: "To walk", verso: "Caminhar" },
     });
+    expect(cartao.status).toBe(201);
+    const cartaoId = (cartao.corpo as { id: string }).id;
 
     const rotina = await pedir(funcao, "POST", "/agenda/rotinas", {
       segredoDeOrigem: SEGREDO_DE_ORIGEM,
@@ -1188,6 +1260,52 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     );
 
     expect(tabelas).toEqual([]);
+  }, 60_000);
+
+  it("aceita uma base na versão 13 (transitória) com cartão pendente", async () => {
+    const baseV13 = await criarBaseNaVersao("funcao-v13", 13);
+    await inserirCartaoSemPertencimento(baseV13, "cartao-pendente");
+    const alvo = criarFuncao(leitorDaBase(baseV13), {
+      prefixo: PREFIXO_DE_TESTE,
+      caminhoDoCertificado: certificado.caminho,
+    });
+
+    const resposta = await pedir(alvo, "GET", "/health", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+    });
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.bruto).toContain("ok");
+
+    // Verifica que a base continua na versão 13 (a migração 14 não foi aplicada).
+    const versaoAtual = await servidor.consultar<{ versao: number }>(
+      baseV13,
+      "SELECT versao FROM versao_do_esquema;",
+    );
+
+    expect(versaoAtual[0]?.versao).toBe(13);
+  }, 60_000);
+
+  it("recusa uma base na versão 12 (muito atrasada)", async () => {
+    const baseV12 = await criarBaseNaVersao("funcao-v12", 12);
+    const alvo = criarFuncao(leitorDaBase(baseV12), {
+      prefixo: PREFIXO_DE_TESTE,
+      caminhoDoCertificado: certificado.caminho,
+    });
+
+    const resposta = await pedir(alvo, "GET", "/health", {
+      segredoDeOrigem: SEGREDO_DE_ORIGEM,
+    });
+
+    expect(resposta.status).toBe(503);
+    expect(resposta.bruto).not.toMatch(/versão|migra/i);
+
+    /** O registro nomeia as duas versões e manda executar a migração da nuvem. */
+    const registrado = registroDeProcesso.join("\n");
+
+    expect(registrado).toContain("o esquema da base está na versão 12");
+    expect(registrado).toContain(`a versão corrente é ${versaoCorrenteConhecida()}`);
+    expect(registrado).toContain("comando de migração");
   }, 60_000);
 
   it("responde 503 quando a base não pode ser alcançada, sem revelar valor algum", async () => {

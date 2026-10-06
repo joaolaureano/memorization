@@ -8,13 +8,15 @@ import type {
   Avaliacao,
   Baralho,
   Cartao,
+  CartaoComDono,
+  CartaoPendente,
   CompromissoPersistido,
   ContagemPorBaralho,
   ContagensDaConta,
   Desfecho,
   DesfechoDeAcesso,
   DesfechoDeAcessoValido,
-  DesfechoDeBaralhoComVinculos,
+  DesfechoDeBaralhoComCopias,
   DesfechoDeOperacaoDeConta,
   DesfechoDeInsercaoDeUsuario,
   DesfechoDeLeituraDeUsuario,
@@ -33,6 +35,7 @@ import type {
   Usuario,
   VersaoDaRotina,
 } from "../porta.ts";
+import { normalizarFrente } from "../../acervo/invariantes.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
 
 /**
@@ -90,10 +93,19 @@ const NAO_ENCONTRADO: Desfecho<never> = {
   erro: "nao_encontrado",
 };
 
-/** Desfecho do par (Cartão, Baralho) repetido. */
-const VINCULO_DUPLICADO: Desfecho<never> = {
+/** Desfecho de Frente normalizada repetida no mesmo Baralho. */
+const FRENTE_DUPLICADA: Desfecho<never> = {
   ok: false,
-  erro: "vinculo_duplicado",
+  erro: "frente_duplicada",
+};
+
+/**
+ * Desfecho genérico de conflito de domínio (ex. Cartão já resolvido,
+ * Baralho inexistente ou Frente duplicada em aplicarTransicao).
+ */
+const CONFLITO: Desfecho<never> = {
+  ok: false,
+  erro: "conflito",
 };
 
 /**
@@ -103,10 +115,7 @@ const VINCULO_DUPLICADO: Desfecho<never> = {
  * cliente, e a recusa precisa ser distinta: `conflito`, e não `nao_encontrado`,
  * para que quem chamou saiba que o `id` está tomado (FR-163).
  */
-const CONFLITO_DE_REGISTRO: Desfecho<never> = {
-  ok: false,
-  erro: "conflito",
-};
+const CONFLITO_DE_REGISTRO: Desfecho<never> = CONFLITO;
 
 /** Desfecho de sucesso sem carga: exclusão, Vínculo e desvínculo. */
 const SEM_CARGA: Desfecho<void> = { ok: true, valor: undefined };
@@ -130,11 +139,13 @@ const VIOLACAO_DE_UNICIDADE = "23505";
 const VIOLACAO_DE_CHAVE_ESTRANGEIRA = "23503";
 
 /**
- * Nome estável da chave primária composta de `vinculo`. O DDL é nosso, então é
- * por este nome que o Vínculo repetido — resultado de domínio — se distingue de
- * qualquer outra unicidade violada, que é falha do armazenamento.
+ * Nome estável da constraint de unicidade de `pertencimento`. O DDL é nosso,
+ * então é por este nome que a colisão de Frente normalizada — resultado de
+ * domínio — se distingue de qualquer outra unicidade violada, que é falha do
+ * armazenamento (FR-398).
  */
-const CHAVE_PRIMARIA_DE_VINCULO = "vinculo_pkey";
+const CHAVE_UNICA_DE_PERTENCIMENTO =
+  "pertencimento_baralho_id_frente_chave_key";
 
 /**
  * Nome estável do índice único de Nome de usuário da migração 4. É por ele que
@@ -150,37 +161,23 @@ const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
  * existiu (FR-092, SC-030).
  */
 /**
- * `criado_em` é gravado pelo Adapter com o instante corrente: é a ordem de
- * criação que `loteDeRevisao` usa para os Cartões novos (FR-201). O tipo
- * `Cartao` não muda — o instante é do armazenamento, e não do domínio.
- */
-const INSERIR_CARTAO = `
-INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
-VALUES ($1, $2, $3, $4, $5::timestamptz);
-`;
-
-/**
+ * Devolve Cartões com Pertencimento, cada um com seu Baralho dono (FR-389).
  * A ordem de criação é a da listagem (FR-201): as linhas anteriores à 015, com
  * `criado_em` nulo, vêm primeiro, e `ordem_de_insercao` desempata os Cartões de
- * mesmo instante — o `id` não serve, por ser um UUID aleatório. A coluna é do
- * armazenamento, e não do domínio: ela nunca aparece no tipo `Cartao`.
+ * mesmo instante.
  */
 const LISTAR_CARTOES = `
-SELECT id, frente, verso FROM cartao WHERE usuario_id = $1
- ORDER BY criado_em NULLS FIRST, ordem_de_insercao;
+SELECT cartao.id, cartao.frente, cartao.verso, baralho.id AS baralho_id,
+       baralho.nome AS baralho_nome
+  FROM cartao
+  JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+  JOIN baralho ON baralho.id = pertencimento.baralho_id
+ WHERE cartao.usuario_id = $1
+ ORDER BY cartao.criado_em NULLS FIRST, cartao.ordem_de_insercao;
 `;
 
 const OBTER_CARTAO = `
 SELECT id, frente, verso FROM cartao WHERE id = $1 AND usuario_id = $2;
-`;
-
-/**
- * Os Cartões de `$2` que pertencem ao Usuário `$1`. Os `id` **ausentes** do
- * resultado são os indisponíveis: Cartão inexistente e Cartão de outro dono são
- * indistinguíveis, como no resto do acervo (FR-093, FR-372, FR-373).
- */
-const LISTAR_CARTOES_DO_DONO_POR_IDS = `
-SELECT id FROM cartao WHERE usuario_id = $1 AND id = ANY($2::text[]);
 `;
 
 const ATUALIZAR_CARTAO = `
@@ -217,64 +214,55 @@ const ATUALIZAR_BARALHO = `
 UPDATE baralho SET nome = $1 WHERE id = $2 AND usuario_id = $3;
 `;
 
+/**
+ * Exclui os Cartões do dono cujo Pertencimento aponta para o Baralho, e depois
+ * o Baralho (FR-402). As cascatas do esquema removem os Pertencimentos e
+ * Agendamentos automaticamente.
+ */
+const EXCLUIR_CARTOES_PERTENCIMENTO_BARALHO = `
+DELETE FROM cartao
+ WHERE usuario_id = $1
+   AND id IN (
+     SELECT cartao_id FROM pertencimento WHERE baralho_id = $2
+   );
+`;
+
 const EXCLUIR_BARALHO = `
 DELETE FROM baralho WHERE id = $1 AND usuario_id = $2;
 `;
 
 /**
- * A inserção só acontece quando **as duas extremidades estão no acervo do
- * Usuário**: a extremidade de outro Usuário — ou inexistente — deixa a inserção
- * sem linha alguma, e o Adapter a traduz em `nao_encontrado`, sem nunca
- * revelar que ela existe (FR-093).
+ * Insere Cartão e Pertencimento numa transação (FR-389, FR-390). A violação de
+ * UNIQUE(baralho_id, frente_chave) é reconhecida e traduzida em `frente_duplicada`.
  */
-const INSERIR_VINCULO = `
-INSERT INTO vinculo (cartao_id, baralho_id)
-SELECT $1, $2
- WHERE EXISTS (SELECT 1 FROM cartao  WHERE id = $1 AND usuario_id = $3)
-   AND EXISTS (SELECT 1 FROM baralho WHERE id = $2 AND usuario_id = $3);
+const INSERIR_CARTAO_NO_BARALHO = `
+INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
+VALUES ($1, $2, $3, $4, $5::timestamptz);
 `;
 
 /**
- * O Vínculo não tem coluna de dono: ele pertence ao Usuário dos dois extremos,
- * e é por eles que o escopo chega aqui. Sem os dois `EXISTS`, um Cartão de
- * outro Usuário poderia ser desvinculado por quem soubesse os dois `id`
- * (FR-093).
+ * Insere o Pertencimento com a Frente normalizada. Violação da UNIQUE será
+ * traduzida em `frente_duplicada` (FR-398).
  */
-const REMOVER_VINCULO = `
-DELETE FROM vinculo
- WHERE cartao_id = $1
-   AND baralho_id = $2
-   AND EXISTS (SELECT 1 FROM cartao
-                WHERE cartao.id = vinculo.cartao_id
-                  AND cartao.usuario_id = $3)
-   AND EXISTS (SELECT 1 FROM baralho
-                WHERE baralho.id = vinculo.baralho_id
-                  AND baralho.usuario_id = $3);
-`;
-
-const LISTAR_BARALHOS_DO_CARTAO = `
-SELECT baralho.id, baralho.nome
-  FROM vinculo
-  JOIN cartao ON cartao.id = vinculo.cartao_id
-  JOIN baralho ON baralho.id = vinculo.baralho_id
- WHERE vinculo.cartao_id = $1
-   AND cartao.usuario_id = $2;
+const INSERIR_PERTENCIMENTO = `
+INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+VALUES ($1, $2, $3);
 `;
 
 const LISTAR_CARTOES_DO_BARALHO = `
 SELECT cartao.id, cartao.frente, cartao.verso
-  FROM vinculo
-  JOIN cartao ON cartao.id = vinculo.cartao_id
-  JOIN baralho ON baralho.id = vinculo.baralho_id
- WHERE vinculo.baralho_id = $1
+  FROM pertencimento
+  JOIN cartao ON cartao.id = pertencimento.cartao_id
+  JOIN baralho ON baralho.id = pertencimento.baralho_id
+ WHERE pertencimento.baralho_id = $1
    AND baralho.usuario_id = $2;
 `;
 
 const CONTAR_CARTOES_POR_BARALHO = `
 SELECT baralho.id AS "baralhoId",
-       COUNT(vinculo.cartao_id) AS "quantidadeDeCartoes"
+       COUNT(pertencimento.cartao_id) AS "quantidadeDeCartoes"
   FROM baralho
-  LEFT JOIN vinculo ON vinculo.baralho_id = baralho.id
+  LEFT JOIN pertencimento ON pertencimento.baralho_id = baralho.id
  WHERE baralho.usuario_id = $1
  GROUP BY baralho.id;
 `;
@@ -480,6 +468,78 @@ SELECT
    + (SELECT COUNT(*) FROM compromisso_de_estudo WHERE usuario_id = $1)
    + (SELECT COUNT(*) FROM inicio_de_compromisso WHERE usuario_id = $1))::int
     AS agenda;
+`;
+
+/**
+ * Cartões pendentes: sem Pertencimento no acervo do Usuário. Se `vinculo` ainda
+ * existe, traz os Baralhos a que estava vinculado; senão, traz lista vazia.
+ * (FR-397)
+ */
+const LISTAR_CARTOES_PENDENTES = `
+SELECT cartao.id, cartao.frente, cartao.verso, '[]'::json AS baralhos_json
+  FROM cartao
+ WHERE cartao.usuario_id = $1
+   AND NOT EXISTS (
+     SELECT 1 FROM pertencimento WHERE pertencimento.cartao_id = cartao.id
+   )
+ ORDER BY cartao.id;
+`;
+
+/**
+ * Mesma leitura com os Baralhos do dono ligados pela tabela legada. Só pode ser
+ * enviada enquanto `vinculo` existe: o PostgreSQL resolve toda relação citada
+ * ao planejar a consulta, mesmo dentro de um `CASE` (FR-397).
+ */
+const LISTAR_CARTOES_PENDENTES_COM_VINCULO = `
+SELECT cartao.id, cartao.frente, cartao.verso,
+       (
+         SELECT COALESCE(json_agg(
+           json_build_object('id', baralho.id, 'nome', baralho.nome)
+           ORDER BY baralho.nome, baralho.id
+         ), '[]'::json)
+           FROM vinculo
+           JOIN baralho ON baralho.id = vinculo.baralho_id
+          WHERE vinculo.cartao_id = cartao.id
+            AND baralho.usuario_id = cartao.usuario_id
+       ) AS baralhos_json
+  FROM cartao
+ WHERE cartao.usuario_id = $1
+   AND NOT EXISTS (
+     SELECT 1 FROM pertencimento WHERE pertencimento.cartao_id = cartao.id
+   )
+ ORDER BY cartao.id;
+`;
+
+/**
+ * Confere que um Cartão de `pertencimentos` ainda é pendente (sem Pertencimento).
+ */
+const CONFERIR_CARTAO_PENDENTE = `
+SELECT 1 FROM cartao
+ WHERE id = $1 AND usuario_id = $2
+   AND NOT EXISTS (
+     SELECT 1 FROM pertencimento WHERE pertencimento.cartao_id = cartao.id
+   );
+`;
+
+/**
+ * Confere que o Baralho existe e é do dono.
+ */
+const CONFERIR_BARALHO_DO_USUARIO = `
+SELECT 1 FROM baralho WHERE id = $1 AND usuario_id = $2;
+`;
+
+/**
+ * Atualiza apenas a Frente do Cartão na transação de aplicarTransicao (FR-397).
+ */
+const ATUALIZAR_FRENTE_DO_CARTAO = `
+UPDATE cartao SET frente = $1 WHERE id = $2 AND usuario_id = $3;
+`;
+
+/**
+ * Remove Vínculos legados de um Cartão, se a tabela existir (FR-397).
+ */
+const REMOVER_VINCULOS_DO_CARTAO = `
+DELETE FROM vinculo WHERE cartao_id = $1;
 `;
 
 const INSERIR_ACESSO = `
@@ -724,6 +784,20 @@ type LinhaDeBaralho = {
  */
 type LinhaDeBaralhoComDono = LinhaDeBaralho & { usuarioId: string };
 
+/** Linha de CartaoPendente: Cartão sem Pertencimento com Baralhos legados (FR-397). */
+type LinhaDeCartaoPendente = LinhaDeCartao & {
+  baralhos_json: Baralho[];
+};
+
+/**
+ * Linha de Cartão com seu Baralho dono: a forma que LISTAR_CARTOES devolve
+ * com JOIN a pertencimento e baralho (FR-389).
+ */
+type LinhaDeCartaoComDono = LinhaDeCartao & {
+  baralho_id: string;
+  baralho_nome: string;
+};
+
 /** Linha da contagem por Baralho; o `COUNT` do PostgreSQL chega como texto. */
 type LinhaDeContagem = {
   baralhoId: string;
@@ -897,36 +971,34 @@ async function comDesfecho<T>(
   }
 }
 
-/** Desfecho de falha do armazenamento na criação de Baralho com Vínculos. */
-const BARALHO_COM_VINCULOS_INDISPONIVEL: DesfechoDeBaralhoComVinculos = {
+/** Desfecho de falha do armazenamento na criação de Baralho com Cópias (FR-400). */
+const BARALHO_COM_COPIAS_INDISPONIVEL: DesfechoDeBaralhoComCopias = {
   ok: false,
   erro: "indisponivel",
 };
 
 /**
- * Desfecho do `id` de Baralho já usado por **outro** dono (FR-372, FR-373): o
- * reenvio do mesmo Usuário é idempotente, mas o `id` tomado não pode ser
- * sobrescrito nem confundido com Cartões indisponíveis.
+ * Desfecho do `id` de Baralho já usado por **outro** dono (FR-400): o reenvio
+ * do mesmo Usuário é idempotente, mas o `id` tomado não pode ser sobrescrito.
  */
-const CONFLITO_DE_BARALHO: DesfechoDeBaralhoComVinculos = {
+const BARALHO_COM_COPIAS_EM_CONFLITO: DesfechoDeBaralhoComCopias = {
   ok: false,
   erro: "conflito",
 };
 
 /**
  * Executa a operação e traduz a falha do driver em `indisponivel` no
- * vocabulário da criação de Baralho com Vínculos (FR-372, FR-373). Os desfechos
- * de domínio — `conflito` e `cartoes_indisponiveis` — são devolvidos antes de
- * qualquer exceção e atravessam intactos; nenhum erro do driver chega ao
- * chamador (FR-107, FR-118).
+ * vocabulário da criação de Baralho com Cópias (FR-400). Os desfechos de
+ * domínio — `conflito` — são devolvidos antes de qualquer exceção e atravessam
+ * intactos; nenhum erro do driver chega ao chamador (FR-107, FR-118).
  */
-async function comDesfechoDeBaralhoComVinculos(
-  operacao: () => Promise<DesfechoDeBaralhoComVinculos>,
-): Promise<DesfechoDeBaralhoComVinculos> {
+async function comDesfechoDeBaralhoComCopias(
+  operacao: () => Promise<DesfechoDeBaralhoComCopias>,
+): Promise<DesfechoDeBaralhoComCopias> {
   try {
     return await operacao();
   } catch {
-    return BARALHO_COM_VINCULOS_INDISPONIVEL;
+    return BARALHO_COM_COPIAS_INDISPONIVEL;
   }
 }
 
@@ -981,6 +1053,54 @@ async function emTransacao<T>(
   }
 }
 
+/**
+ * Como `emTransacao`, mas para corpos que devolvem um desfecho: a recusa
+ * (`ok: false`) também desfaz tudo o que o corpo já gravou, de modo que
+ * nenhuma recusa da Porta deixa escrita parcial (FR-397, FR-398, FR-400).
+ */
+async function emTransacaoComDesfecho<T extends { ok: boolean }>(
+  piscina: Pool,
+  corpo: (cliente: PoolClient) => Promise<T>,
+): Promise<T> {
+  const cliente = await piscina.connect();
+
+  try {
+    await cliente.query("BEGIN;");
+
+    const resultado = await corpo(cliente);
+
+    await cliente.query(resultado.ok ? "COMMIT;" : "ROLLBACK;");
+
+    return resultado;
+  } catch (erro) {
+    try {
+      await cliente.query("ROLLBACK;");
+    } catch {
+      // Sem transação ativa para desfazer; a falha original é a que importa.
+    }
+
+    throw erro;
+  } finally {
+    cliente.release();
+  }
+}
+
+/**
+ * Confere se a tabela legada `vinculo` ainda existe usando `to_regclass`.
+ * Devolve true se existe, false caso contrário.
+ */
+async function temTabelaVinculo(conexao: Conexao): Promise<boolean> {
+  try {
+    const { rows } = await conexao.query<{ existe: boolean }>(
+      "SELECT to_regclass('vinculo') IS NOT NULL AS existe;",
+    );
+
+    return rows[0]?.existe ?? false;
+  } catch {
+    return false;
+  }
+}
+
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
   return { id: linha.id, frente: linha.frente, verso: linha.verso };
@@ -989,6 +1109,23 @@ function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
 /** Lê a linha como Baralho, sem deixar a forma do driver atravessar a Porta. */
 function baralhoDaLinha(linha: LinhaDeBaralho): Baralho {
   return { id: linha.id, nome: linha.nome };
+}
+
+/** Lê a linha como CartaoPendente: Cartão sem Pertencimento com Baralhos legados (FR-397). */
+function cartaoPendenteDaLinha(linha: LinhaDeCartaoPendente): CartaoPendente {
+  const cartao = cartaoDaLinha(linha);
+  // O driver `pg` já entrega a coluna `json` decodificada.
+  return { cartao, baralhos: linha.baralhos_json };
+}
+
+/** Lê a linha como CartaoComDono: Cartão com seu Baralho dono (FR-389). */
+function cartaoComDonoDaLinha(linha: LinhaDeCartaoComDono): CartaoComDono {
+  return {
+    id: linha.id,
+    frente: linha.frente,
+    verso: linha.verso,
+    baralho: { id: linha.baralho_id, nome: linha.baralho_nome },
+  };
 }
 
 /** Lê a linha como Usuário: o Nome de usuário e a transformação da Senha. */
@@ -1308,26 +1445,72 @@ export async function abrirArmazenamentoPostgresql(
   let encerrado = false;
 
   const armazenamento: ArmazenamentoDoAcervo = {
-    async inserirCartao(usuarioId, cartao) {
+    /**
+     * Insere um Cartão já validado e já numerado pelo Module e o seu
+     * Pertencimento a `baralhoId`, numa única transação (FR-389, FR-390).
+     * Baralho ausente ou de outro Usuário é `nao_encontrado`; Frente
+     * normalizada já existente no Baralho é `frente_duplicada`, sem gravar nada
+     * (FR-398).
+     */
+    async inserirCartaoNoBaralho(usuarioId, baralhoId, cartao) {
       return comDesfecho(async () => {
-        await piscina.query(INSERIR_CARTAO, [
-          cartao.id,
-          cartao.frente,
-          cartao.verso,
-          usuarioId,
-          new Date().toISOString(),
-        ]);
+        try {
+          return await emTransacaoComDesfecho<Desfecho<Cartao>>(
+            piscina,
+            async (cliente) => {
+              /**
+               * Confere que o Baralho existe e é do dono; senão, nada é gravado
+               * (FR-092, SC-030).
+               */
+              const { rows: baralhos } = await cliente.query<LinhaDeBaralho>(
+                OBTER_BARALHO,
+                [baralhoId, usuarioId],
+              );
 
-        return { ok: true, valor: cartao };
+              if (baralhos[0] === undefined) {
+                return NAO_ENCONTRADO;
+              }
+
+              /**
+               * Insere o Cartão e o Pertencimento numa transação só. Violação de
+               * UNIQUE(baralho_id, frente_chave) → frente_duplicada (FR-398).
+               */
+              await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
+                cartao.id,
+                cartao.frente,
+                cartao.verso,
+                usuarioId,
+                new Date().toISOString(),
+              ]);
+
+              await cliente.query(INSERIR_PERTENCIMENTO, [
+                cartao.id,
+                baralhoId,
+                normalizarFrente(cartao.frente),
+              ]);
+
+              return { ok: true, valor: cartao };
+            },
+          );
+        } catch (erro) {
+          if (
+            ehViolacao(erro, VIOLACAO_DE_UNICIDADE, CHAVE_UNICA_DE_PERTENCIMENTO)
+          ) {
+            return FRENTE_DUPLICADA;
+          }
+
+          throw erro;
+        }
       });
     },
 
     async listarCartoes(usuarioId) {
-      const { rows } = await piscina.query<LinhaDeCartao>(LISTAR_CARTOES, [
-        usuarioId,
-      ]);
+      const { rows } = await piscina.query<LinhaDeCartaoComDono>(
+        LISTAR_CARTOES,
+        [usuarioId],
+      );
 
-      return rows.map(cartaoDaLinha);
+      return rows.map(cartaoComDonoDaLinha);
     },
 
     async obterCartao(usuarioId, id) {
@@ -1343,18 +1526,58 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
+    /**
+     * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId` e
+     * atualiza a chave normalizada do Pertencimento. Ausente é `nao_encontrado`;
+     * colisão com outro Cartão do mesmo Baralho é `frente_duplicada`, sem
+     * alterar nada (FR-399).
+     */
     async atualizarCartao(usuarioId, cartao) {
       return comDesfecho(async () => {
-        const { rowCount } = await piscina.query(ATUALIZAR_CARTAO, [
-          cartao.frente,
-          cartao.verso,
-          cartao.id,
-          usuarioId,
-        ]);
+        try {
+          return await emTransacaoComDesfecho<Desfecho<Cartao>>(
+            piscina,
+            async (cliente) => {
+              const { rowCount: alteradas } = await cliente.query(
+                ATUALIZAR_CARTAO,
+                [cartao.frente, cartao.verso, cartao.id, usuarioId],
+              );
 
-        return (rowCount ?? 0) === 0
-          ? NAO_ENCONTRADO
-          : { ok: true, valor: cartao };
+              if ((alteradas ?? 0) === 0) {
+                return NAO_ENCONTRADO;
+              }
+
+              /**
+               * Se o Cartão tem Pertencimento, atualiza a chave normalizada.
+               * Violação de UNIQUE(baralho_id, frente_chave) → ROLLBACK automático
+               * (FR-399).
+               */
+              const { rows: pertencimentos } = await cliente.query<{
+                baralho_id: string;
+              }>(
+                "SELECT baralho_id FROM pertencimento WHERE cartao_id = $1",
+                [cartao.id],
+              );
+
+              if (pertencimentos[0]) {
+                await cliente.query(
+                  "UPDATE pertencimento SET frente_chave = $1 WHERE cartao_id = $2",
+                  [normalizarFrente(cartao.frente), cartao.id],
+                );
+              }
+
+              return { ok: true, valor: cartao };
+            },
+          );
+        } catch (erro) {
+          if (
+            ehViolacao(erro, VIOLACAO_DE_UNICIDADE, CHAVE_UNICA_DE_PERTENCIMENTO)
+          ) {
+            return FRENTE_DUPLICADA;
+          }
+
+          throw erro;
+        }
       });
     },
 
@@ -1379,73 +1602,75 @@ export async function abrirArmazenamentoPostgresql(
     },
 
     /**
-     * Cria o Baralho e os Vínculos com os Cartões numa **única transação**
-     * (FR-372, FR-373): ou o Baralho entra com todos os Vínculos, ou nada é
-     * gravado. O `id` do Baralho é lido **sem escopo de dono** — o Baralho já
-     * existente e do próprio Usuário é reenvio idempotente, devolvido como está
-     * (`novo: false`), e o de outro dono é `conflito`. Só depois de reconhecer
-     * que o Baralho é novo é que os Cartões são conferidos: os que não estão no
-     * acervo do Usuário — inexistentes ou alheios, indistinguíveis (FR-093) —
-     * recusam como `cartoes_indisponiveis`, na ordem recebida, sem gravar
-     * Baralho nem Vínculo algum.
+     * Cria o Baralho e as cópias — Cartões novos já numerados pelo Module, cada
+     * um com Pertencimento ao Baralho novo — numa única transação (FR-400). O
+     * mesmo `id` do mesmo dono devolve o Baralho guardado (`novo: false`), sem
+     * gravar de novo; de outro dono é `conflito`. Cópias não recebem Agendamento.
      */
-    async inserirBaralhoComVinculos(usuarioId, baralho, cartaoIds) {
-      return comDesfechoDeBaralhoComVinculos(() =>
-        emTransacao<DesfechoDeBaralhoComVinculos>(
-          piscina,
-          async (cliente) => {
-            const { rows } = await cliente.query<LinhaDeBaralhoComDono>(
-              OBTER_BARALHO_DE_QUALQUER_DONO,
-              [baralho.id],
-            );
-            const existente = rows[0];
+    async inserirBaralhoComCopias(usuarioId, baralho, copias) {
+      return comDesfechoDeBaralhoComCopias(() =>
+        emTransacaoComDesfecho<DesfechoDeBaralhoComCopias>(piscina, async (cliente) => {
+          const { rows } = await cliente.query<LinhaDeBaralhoComDono>(
+            OBTER_BARALHO_DE_QUALQUER_DONO,
+            [baralho.id],
+          );
+          const existente = rows[0];
 
-            if (existente !== undefined) {
-              return existente.usuarioId === usuarioId
-                ? {
-                    ok: true,
-                    valor: {
-                      baralho: baralhoDaLinha(existente),
-                      novo: false,
-                    },
-                  }
-                : CONFLITO_DE_BARALHO;
-            }
+          if (existente !== undefined) {
+            /**
+             * O mesmo `id` do mesmo Usuário é a retentativa idempotente
+             * (FR-400): o Baralho guardado volta intacto, com `novo: false`, e
+             * nada é gravado de novo. O `id` de **outro** Usuário é recusa de
+             * domínio (FR-400), sem que nada do Baralho alheio atravesse a
+             * Porta.
+             */
+            return existente.usuarioId === usuarioId
+              ? {
+                  ok: true,
+                  valor: {
+                    baralho: baralhoDaLinha(existente),
+                    novo: false,
+                  },
+                }
+              : BARALHO_COM_COPIAS_EM_CONFLITO;
+          }
 
-            const { rows: disponiveis } = await cliente.query<{ id: string }>(
-              LISTAR_CARTOES_DO_DONO_POR_IDS,
-              [usuarioId, cartaoIds],
-            );
-            const doUsuario = new Set(disponiveis.map((linha) => linha.id));
-            const indisponiveis = cartaoIds.filter(
-              (id) => !doUsuario.has(id),
-            );
+          /**
+           * Insere o Baralho, depois insere cada cópia com seu Pertencimento
+           * (FR-400). Violação de UNIQUE(baralho_id, frente_chave) →
+           * ROLLBACK automático via emTransacao.
+           */
+          await cliente.query(INSERIR_BARALHO, [
+            baralho.id,
+            baralho.nome,
+            usuarioId,
+          ]);
 
-            if (indisponiveis.length > 0) {
-              return {
-                ok: false,
-                erro: "cartoes_indisponiveis",
-                cartaoIds: indisponiveis,
-              };
-            }
-
-            await cliente.query(INSERIR_BARALHO, [
-              baralho.id,
-              baralho.nome,
+          for (const copia of copias) {
+            /**
+             * O `criado_em` é o instante corrente e não faz parte de `Cartao`:
+             * existe só para ordenar Cartões novos por criação (FR-201).
+             */
+            await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
+              copia.id,
+              copia.frente,
+              copia.verso,
               usuarioId,
+              new Date().toISOString(),
             ]);
 
-            for (const cartaoId of cartaoIds) {
-              await cliente.query(INSERIR_VINCULO, [
-                cartaoId,
-                baralho.id,
-                usuarioId,
-              ]);
-            }
+            /**
+             * Insere o Pertencimento com a Frente normalizada.
+             */
+            await cliente.query(INSERIR_PERTENCIMENTO, [
+              copia.id,
+              baralho.id,
+              normalizarFrente(copia.frente),
+            ]);
+          }
 
-            return { ok: true, valor: { baralho, novo: true } };
-          },
-        ),
+          return { ok: true, valor: { baralho, novo: true } };
+        }),
       );
     },
 
@@ -1484,61 +1709,47 @@ export async function abrirArmazenamentoPostgresql(
       });
     },
 
+    /**
+     * Exclui, numa única transação, o Baralho de `id` do acervo de `usuarioId`,
+     * os Cartões que lhe pertencem e, pela cascata, os seus Pertencimentos e
+     * Agendamentos; os Registros de sessão ficam intactos (FR-402). Ausente é
+     * `nao_encontrado`; falha não remove nada.
+     */
     async excluirBaralho(usuarioId, id) {
       return comDesfecho(async () =>
-        (await piscina.query(EXCLUIR_BARALHO, [id, usuarioId])).rowCount === 0
-          ? NAO_ENCONTRADO
-          : SEM_CARGA,
-      );
-    },
+        emTransacaoComDesfecho<Desfecho<void>>(piscina, async (cliente) => {
+          /**
+           * Confere que o Baralho existe e é do dono; senão, nada é alterado
+           * (FR-402).
+           */
+          const { rows: baralhos } = await cliente.query<LinhaDeBaralho>(
+            OBTER_BARALHO,
+            [id, usuarioId],
+          );
 
-    async vincular(usuarioId, cartaoId, baralhoId) {
-      return comDesfecho(async () => {
-        try {
-          const { rowCount } = await piscina.query(INSERIR_VINCULO, [
-            cartaoId,
-            baralhoId,
+          if (baralhos[0] === undefined) {
+            return NAO_ENCONTRADO;
+          }
+
+          /**
+           * Exclui os Cartões do dono cujo Pertencimento aponta para o Baralho;
+           * as cascatas do esquema removem os Pertencimentos e Agendamentos
+           * (FR-402).
+           */
+          await cliente.query(EXCLUIR_CARTOES_PERTENCIMENTO_BARALHO, [
             usuarioId,
+            id,
           ]);
 
           /**
-           * Nenhuma linha inserida é extremidade ausente **no escopo do
-           * Usuário**, e não falha do armazenamento.
+           * Exclui o Baralho depois (a ordem não importa aqui, porque os
+           * Pertencimentos já foram cascateados).
            */
-          return (rowCount ?? 0) === 0 ? NAO_ENCONTRADO : SEM_CARGA;
-        } catch (erro) {
-          if (
-            ehViolacao(erro, VIOLACAO_DE_UNICIDADE, CHAVE_PRIMARIA_DE_VINCULO)
-          ) {
-            return VINCULO_DUPLICADO;
-          }
+          await cliente.query(EXCLUIR_BARALHO, [id, usuarioId]);
 
-          throw erro;
-        }
-      });
-    },
-
-    async desvincular(usuarioId, cartaoId, baralhoId) {
-      return comDesfecho(async () =>
-        (
-          await piscina.query(REMOVER_VINCULO, [
-            cartaoId,
-            baralhoId,
-            usuarioId,
-          ])
-        ).rowCount === 0
-          ? NAO_ENCONTRADO
-          : SEM_CARGA,
+          return SEM_CARGA;
+        }),
       );
-    },
-
-    async listarBaralhosDoCartao(usuarioId, cartaoId) {
-      const { rows } = await piscina.query<LinhaDeBaralho>(
-        LISTAR_BARALHOS_DO_CARTAO,
-        [cartaoId, usuarioId],
-      );
-
-      return rows.map(baralhoDaLinha);
     },
 
     async listarCartoesDoBaralho(usuarioId, baralhoId) {
@@ -1562,6 +1773,128 @@ export async function abrirArmazenamentoPostgresql(
       }));
 
       return contagens;
+    },
+
+    /**
+     * Devolve os Cartões de `usuarioId` ainda sem Pertencimento, com os Baralhos
+     * do Usuário a que estavam vinculados na tabela legada `vinculo` (FR-397).
+     * Sem a tabela legada — base já na versão 14 —, `baralhos` é vazio. Lista
+     * vazia significa transição concluída para esse Usuário.
+     */
+    async listarCartoesPendentes(usuarioId) {
+      return comDesfecho(async () => {
+        const { rows } = await piscina.query<LinhaDeCartaoPendente>(
+          (await temTabelaVinculo(piscina))
+            ? LISTAR_CARTOES_PENDENTES_COM_VINCULO
+            : LISTAR_CARTOES_PENDENTES,
+          [usuarioId],
+        );
+
+        return { ok: true, valor: rows.map(cartaoPendenteDaLinha) };
+      });
+    },
+
+    /**
+     * Aplica o plano de transição de `usuarioId` numa única transação (FR-397):
+     * Pertencimentos com a Frente final, cópias com Pertencimento e remoção dos
+     * Vínculos legados dos Cartões resolvidos pelo plano. Cartão que já não esteja
+     * pendente, Baralho fora do acervo ou Frente colidente é `conflito`; falha é
+     * `indisponivel`. Em qualquer recusa nada é aplicado.
+     */
+    async aplicarTransicao(usuarioId, plano) {
+      return comDesfecho(async () => {
+        try {
+          return await emTransacaoComDesfecho<Desfecho<void>>(
+            piscina,
+            async (cliente) => {
+              /**
+               * Confere cada Pertencimento: Cartão do dono ainda pendente
+               * e Baralho do dono.
+               */
+              for (const p of plano.pertencimentos) {
+                const { rows: cartaoRows } = await cliente.query(
+                  CONFERIR_CARTAO_PENDENTE,
+                  [p.cartaoId, usuarioId],
+                );
+
+                if (cartaoRows[0] === undefined) {
+                  return CONFLITO;
+                }
+
+                const { rows: baralhoRows } = await cliente.query(
+                  CONFERIR_BARALHO_DO_USUARIO,
+                  [p.baralhoId, usuarioId],
+                );
+
+                if (baralhoRows[0] === undefined) {
+                  return CONFLITO;
+                }
+
+                /**
+                 * Atualiza a Frente do Cartão e insere o Pertencimento
+                 * (FR-397).
+                 */
+                await cliente.query(ATUALIZAR_FRENTE_DO_CARTAO, [
+                  p.frente,
+                  p.cartaoId,
+                  usuarioId,
+                ]);
+
+                await cliente.query(INSERIR_PERTENCIMENTO, [
+                  p.cartaoId,
+                  p.baralhoId,
+                  normalizarFrente(p.frente),
+                ]);
+              }
+
+              /**
+               * Insere as cópias: Cartões novos com Pertencimento (FR-397).
+               */
+              for (const copia of plano.copias) {
+                await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
+                  copia.cartao.id,
+                  copia.cartao.frente,
+                  copia.cartao.verso,
+                  usuarioId,
+                  new Date().toISOString(),
+                ]);
+
+                await cliente.query(INSERIR_PERTENCIMENTO, [
+                  copia.cartao.id,
+                  copia.baralhoId,
+                  normalizarFrente(copia.cartao.frente),
+                ]);
+              }
+
+              /**
+               * Remove os Vínculos legados dos Cartões resolvidos pelo plano,
+               * se a tabela ainda existir (FR-397).
+               */
+              if (await temTabelaVinculo(cliente)) {
+                for (const p of plano.pertencimentos) {
+                  await cliente.query(REMOVER_VINCULOS_DO_CARTAO, [p.cartaoId]);
+                }
+
+                for (const copia of plano.copias) {
+                  await cliente.query(REMOVER_VINCULOS_DO_CARTAO, [
+                    copia.cartao.id,
+                  ]);
+                }
+              }
+
+              return SEM_CARGA;
+            },
+          );
+        } catch (erro) {
+          if (
+            ehViolacao(erro, VIOLACAO_DE_UNICIDADE, CHAVE_UNICA_DE_PERTENCIMENTO)
+          ) {
+            return CONFLITO;
+          }
+
+          throw erro;
+        }
+      });
     },
 
     /**

@@ -1,23 +1,21 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
  * T1110 — tela de detalhe do Baralho
- * (specs/012-interface-visual-navegavel/tasks.md, FR-145, FR-147, FR-153,
- * FR-156; e as regras preservadas de 003/005/006: FR-021, FR-044, FR-045,
- * FR-046, FR-066).
+ * (specs/012-interface-visual-navegavel/tasks.md, FR-145, FR-392, FR-396,
+ * FR-401, FR-402, FR-153, FR-156; specs/025-criar-cartoes-baralho).
  *
  * A tela é exercitada com o `ClienteEmMemoria`, o Adapter de teste da Seam
  * `ClienteDoAcervo`, sem servidor. As asserções cobrem a apresentação do
  * Baralho e da contagem, o caminho para Revisar (primeiro e desabilitado sem
- * Cartões — a ação da spec 024, FR-378), a remoção de um Cartão **sem**
- * diálogo de confirmação (FR-147, FR-066), o Baralho inexistente e a falha de
- * gravação que não some com o Vínculo confirmado (FR-044, FR-045, SC-012).
+ * Cartões — a ação da spec 024, FR-378), a criação de Cartões neste Baralho
+ * (FR-392), a exclusão de Cartão com confirmação explícita (FR-401, FR-396),
+ * o Baralho inexistente e a falha de gravação (FR-044, FR-045, SC-012).
  */
 
 interface AcervoDeTeste {
@@ -29,18 +27,23 @@ interface AcervoDeTeste {
 
 async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
   const cliente = clienteDeProva();
-  const primeiroCartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+
+  if (!baralho.ok) {
+    throw new Error("a criação do Baralho deveria ser aceita");
+  }
+
+  const primeiroCartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To walk",
     verso: "Caminhar",
   });
-  const segundoCartao = await cliente.criarCartao({
+  const segundoCartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To run",
     verso: "Correr",
   });
-  const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
-  if (!primeiroCartao.ok || !segundoCartao.ok || !baralho.ok) {
-    throw new Error("as criações do cenário deveriam ser aceitas");
+  if (!primeiroCartao.ok || !segundoCartao.ok) {
+    throw new Error("as criações do Cartão deveriam ser aceitas");
   }
 
   return {
@@ -52,47 +55,42 @@ async function criarAcervoDeTeste(): Promise<AcervoDeTeste> {
 }
 
 /**
- * Acervo de prova com três Cartões vinculados — quantidade suficiente para que
- * a lista de Cartões tenha controles próprios ("Remover … deste baralho")
- * além das ações do Baralho, o que permite provar a ordem de leitura e de Tab
+ * Acervo de prova com três Cartões — quantidade suficiente para que
+ * a lista de Cartões tenha controles próprios (Editar, Excluir) além das
+ * ações do Baralho, o que permite provar a ordem de leitura e de Tab
  * (FR-145 revisado, SC-078).
  */
 async function criarAcervoDeTesteComTresCartoes(): Promise<AcervoDeTeste> {
   const cliente = clienteDeProva();
-
-  for (const [frente, verso] of [
-    ["To walk", "Caminhar"],
-    ["To run", "Correr"],
-    ["To sleep", "Dormir"],
-  ]) {
-    const cartao = await cliente.criarCartao({ frente, verso });
-
-    if (!cartao.ok) {
-      throw new Error("a criação do Cartão deveria ser aceita");
-    }
-  }
-
   const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
   if (!baralho.ok) {
     throw new Error("a criação do Baralho deveria ser aceita");
   }
 
-  const cartoes = await cliente.listarCartoes();
+  const cartoes: string[] = [];
+  for (const [frente, verso] of [
+    ["To walk", "Caminhar"],
+    ["To run", "Correr"],
+    ["To sleep", "Dormir"],
+  ]) {
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente,
+      verso,
+    });
 
-  if (!cartoes.ok) {
-    throw new Error("a listagem de Cartões deveria ser aceita");
-  }
+    if (!cartao.ok) {
+      throw new Error("a criação do Cartão deveria ser aceita");
+    }
 
-  for (const cartao of cartoes.cartoes) {
-    await cliente.vincular(cartao.id, baralho.baralho.id);
+    cartoes.push(cartao.cartao.id);
   }
 
   return {
     cliente,
     idDoBaralho: baralho.baralho.id,
-    idDoPrimeiroCartao: cartoes.cartoes[0].id,
-    idDoSegundoCartao: cartoes.cartoes[1].id,
+    idDoPrimeiroCartao: cartoes[0],
+    idDoSegundoCartao: cartoes[1],
   };
 }
 
@@ -155,25 +153,20 @@ function apertarTabAPartirDe(origem: HTMLElement): void {
 
 describe("PaginaDoBaralho", () => {
   it("apresenta o Baralho, a contagem e o caminho para Revisar (FR-145, FR-378)", async () => {
-    const { cliente, idDoBaralho, idDoPrimeiroCartao } =
-      await criarAcervoDeTeste();
-    await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
 
     renderizar(cliente, idDoBaralho);
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Inglês" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
+    expect(screen.getByText("2 Cartões neste Baralho.")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Revisar este Baralho" }),
     ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
-    expect(
-      screen.queryByRole("link", { name: "← Voltar para Baralhos" }),
-    ).toBeNull();
   });
 
-  it("sem Cartões, Revisar fica desabilitado com a explicação e o vazio oferece adicionar (FR-145, FR-153, FR-378)", async () => {
+  it("sem Cartões, Revisar fica desabilitado com a explicação e o vazio oferece criar (FR-145, FR-153, FR-378, FR-392)", async () => {
     const cliente = clienteDeProva();
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
 
@@ -188,57 +181,129 @@ describe("PaginaDoBaralho", () => {
     const revisar = screen.getByRole("button", { name: "Revisar este Baralho" });
     expect(revisar).toBeDisabled();
     expect(revisar).toHaveAccessibleDescription(
-      "Adicione Cartões ao Baralho para poder revisar.",
+      "Crie Cartões neste Baralho para poder revisar.",
     );
+    const estadoVazio = screen.getByText("Este Baralho ainda não tem Cartões.").closest(
+      "div",
+    );
+    expect(estadoVazio).toBeInTheDocument();
     expect(
-      screen.getByText("Este Baralho ainda não tem Cartões."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Adicionar cartões existentes" }),
-    ).toHaveAttribute("href", `#/baralhos/${baralho.baralho.id}/adicionar`);
+      within(estadoVazio!).getByRole("link", { name: "Criar Cartão" }),
+    ).toHaveAttribute("href", `#/baralhos/${baralho.baralho.id}/cartoes/novo`);
   });
 
-  it("remove um Cartão sem confirmação e preserva os demais Vínculos e o Cartão no acervo (FR-147, FR-066, FR-021)", async () => {
-    const { cliente, idDoBaralho, idDoPrimeiroCartao, idDoSegundoCartao } =
-      await criarAcervoDeTeste();
-    await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
-    await cliente.vincular(idDoSegundoCartao, idDoBaralho);
+  it("apresenta Frente e Verso de cada Cartão com botões Editar e Excluir (FR-025)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
 
     renderizar(cliente, idDoBaralho);
 
-    await screen.findByRole("button", {
-      name: "Remover To walk deste baralho",
+    await screen.findByRole("heading", { level: 1, name: "Inglês" });
+
+    const secaoDeCartoes = secao("Cartões do Baralho");
+    const cartoes = within(secaoDeCartoes).getAllByRole("listitem");
+
+    expect(cartoes).toHaveLength(2);
+    expect(within(cartoes[0]).getByText("To walk")).toBeInTheDocument();
+    expect(within(cartoes[0]).getByText("Caminhar")).toBeInTheDocument();
+    expect(
+      within(cartoes[0]).getByRole("link", { name: "Editar" }),
+    ).toHaveAttribute("href", expect.stringContaining("/editar"));
+    expect(
+      within(cartoes[0]).getByRole("button", { name: "Excluir To walk" }),
+    ).toBeInTheDocument();
+  });
+
+  it("exclui Cartão com confirmação explícita que menciona Agendamento (FR-401, FR-396)", async () => {
+    const { cliente, idDoBaralho, idDoPrimeiroCartao, idDoSegundoCartao } =
+      await criarAcervoDeTeste();
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("region", { name: "Cartões do Baralho" });
+    const botaoDeExcluir = screen.getByRole("button", {
+      name: "Excluir To walk",
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remover To walk deste baralho" }),
+
+    fireEvent.click(botaoDeExcluir);
+
+    const dialogo = await screen.findByRole("dialog");
+    expect(dialogo).toHaveAccessibleName("Excluir \"To walk\"?");
+    expect(dialogo).toHaveTextContent(
+      "O Cartão e seu Agendamento serão removidos.",
+    );
+    expect(dialogo).toHaveTextContent(
+      /Registros históricos já concluídos permanecerão/i,
     );
 
-    expect(
-      await screen.findByText(/Cartão removido deste Baralho\./),
-    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
-    // Remover é reversível e não destrói nada: nenhum diálogo é apresentado.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByText("To walk")).toBeInTheDocument();
+    expect(botaoDeExcluir).toHaveFocus();
 
-    const cartoesDoBaralho = secao("Cartões do Baralho");
-    expect(within(cartoesDoBaralho).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(cartoesDoBaralho).getByText("To run")).toBeInTheDocument();
-    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
+    const baralho = await cliente.obterBaralho(idDoBaralho);
 
-    // O Cartão removido continua no acervo.
-    const acervo = await cliente.listarCartoes();
+    expect(baralho.ok).toBe(true);
 
-    expect(acervo.ok).toBe(true);
-
-    if (acervo.ok) {
-      expect(acervo.cartoes).toHaveLength(2);
-      expect(acervo.cartoes.some((cartao) => cartao.id === idDoPrimeiroCartao))
-        .toBe(true);
+    if (baralho.ok) {
+      expect(baralho.baralho.cartoes).toHaveLength(2);
+      expect(baralho.baralho.cartoes[0].id).toBe(idDoPrimeiroCartao);
+      expect(baralho.baralho.cartoes[1].id).toBe(idDoSegundoCartao);
     }
   });
 
-  it("Baralho inexistente mostra a mensagem em português com o link de volta (FR-156)", async () => {
+  it("confirmar exclui o Cartão, remove da lista e anuncia (FR-401, FR-396)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("region", { name: "Cartões do Baralho" });
+    fireEvent.click(screen.getByRole("button", { name: "Excluir To walk" }));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Excluir Cartão" }),
+    );
+
+    expect(
+      await screen.findByText(/Cartão To walk e seu Agendamento foram excluídos/i),
+    ).toBeInTheDocument();
+    expect(
+      within(secao("Cartões do Baralho")).getByText("To run"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("To walk")).not.toBeInTheDocument();
+    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
+
+    const baralho = await cliente.obterBaralho(idDoBaralho);
+
+    expect(baralho.ok).toBe(true);
+
+    if (baralho.ok) {
+      expect(baralho.baralho.cartoes).toHaveLength(1);
+      expect(baralho.baralho.cartoes[0].frente).toBe("To run");
+    }
+  });
+
+  it("Escape cancela a exclusão e devolve o foco ao controle invocador (FR-401)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
+
+    renderizar(cliente, idDoBaralho);
+
+    await screen.findByRole("region", { name: "Cartões do Baralho" });
+    const botaoDeExcluir = screen.getByRole("button", {
+      name: "Excluir To walk",
+    });
+
+    fireEvent.click(botaoDeExcluir);
+
+    const dialogo = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("To walk")).toBeInTheDocument();
+    expect(botaoDeExcluir).toHaveFocus();
+  });
+
+  it("Baralho inexistente mostra a mensagem em português (FR-156)", async () => {
     renderizar(clienteDeProva(), "b-inexistente");
 
     expect(
@@ -250,57 +315,7 @@ describe("PaginaDoBaralho", () => {
     expect(screen.getByText("Baralho não encontrado.")).toBeInTheDocument();
   });
 
-  it("com o cliente indisponível, remover falha e o Vínculo confirmado permanece exibido (FR-044, FR-045, SC-012)", async () => {
-    const { cliente, idDoBaralho, idDoPrimeiroCartao } =
-      await criarAcervoDeTeste();
-    await cliente.vincular(idDoPrimeiroCartao, idDoBaralho);
-
-    renderizar(cliente, idDoBaralho);
-
-    await screen.findByRole("button", {
-      name: "Remover To walk deste baralho",
-    });
-
-    cliente.simularIndisponibilidade();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remover To walk deste baralho" }),
-    );
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-    );
-
-    expect(
-      screen.queryByText(/Cartão removido deste Baralho\./),
-    ).not.toBeInTheDocument();
-    expect(within(secao("Cartões do Baralho")).getAllByRole("listitem"))
-      .toHaveLength(1);
-    // A elegibilidade é comunicada apenas pelo estado de "Revisar este
-    // Baralho": com o Vínculo confirmado, o caminho continua disponível.
-    expect(
-      screen.getByRole("link", { name: "Revisar este Baralho" }),
-    ).toHaveAttribute("href", `#/baralhos/${idDoBaralho}/estudo`);
-    expect(screen.getByText("1 Cartão neste Baralho.")).toBeInTheDocument();
-  });
-
-  it("a falha de carregamento oferece tentar novamente (FR-153)", async () => {
-    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
-
-    cliente.simularIndisponibilidade();
-
-    renderizar(cliente, idDoBaralho);
-
-    // A carga desta tela vem de `obterBaralho`: a indisponibilidade devolve a
-    // mensagem de Baralhos, não a de Vínculos.
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Não foi possível acessar os Baralhos. Tente novamente.",
-    );
-    expect(
-      screen.getByRole("button", { name: "Tentar novamente" }),
-    ).toBeInTheDocument();
-  });
-
-  it("as quatro ações do Baralho aparecem antes da lista, na ordem Revisar, Adicionar, Renomear e Excluir (FR-145 revisado, SC-078)", async () => {
+  it("as ações do Baralho aparecem antes da lista, na ordem Revisar, Criar, Renomear e Excluir (FR-145 revisado, SC-078)", async () => {
     const { cliente, idDoBaralho } = await criarAcervoDeTesteComTresCartoes();
 
     renderizar(cliente, idDoBaralho);
@@ -309,18 +324,19 @@ describe("PaginaDoBaralho", () => {
 
     const acoes = [
       screen.getByRole("link", { name: "Revisar este Baralho" }),
-      screen.getByRole("link", { name: "Adicionar cartões existentes" }),
+      screen.getByRole("link", { name: "Criar Cartão" }),
       screen.getByRole("link", { name: "Renomear" }),
       screen.getByRole("button", { name: "Excluir Baralho" }),
     ];
     const tituloDosCartoes = screen.getByRole("region", {
       name: "Cartões do Baralho",
     });
-    const botoesDeRemover = screen.getAllByRole("button", {
-      name: /deste baralho$/,
-    });
+    const botoesDeExcluirCartao = within(tituloDosCartoes).getAllByRole(
+      "button",
+      { name: /^Excluir / },
+    );
 
-    expect(botoesDeRemover).toHaveLength(3);
+    expect(botoesDeExcluirCartao).toHaveLength(3);
 
     // Cada ação precede o título da lista e cada controle de Cartão.
     for (const acao of acoes) {
@@ -329,15 +345,15 @@ describe("PaginaDoBaralho", () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
 
-      for (const remover of botoesDeRemover) {
+      for (const excluir of botoesDeExcluirCartao) {
         expect(
-          acao.compareDocumentPosition(remover) &
+          acao.compareDocumentPosition(excluir) &
             Node.DOCUMENT_POSITION_FOLLOWING,
         ).toBeTruthy();
       }
     }
 
-    // E, entre si, na ordem visual: Revisar, Adicionar, Renomear e Excluir.
+    // E, entre si, na ordem visual: Revisar, Criar, Renomear e Excluir.
     for (let indice = 1; indice < acoes.length; indice += 1) {
       expect(
         acoes[indice - 1].compareDocumentPosition(acoes[indice]) &
@@ -356,29 +372,32 @@ describe("PaginaDoBaralho", () => {
       name: "Inglês",
     });
     const revisar = screen.getByRole("link", { name: "Revisar este Baralho" });
-    const adicionar = screen.getByRole("link", {
-      name: "Adicionar cartões existentes",
-    });
+    const criar = screen.getByRole("link", { name: "Criar Cartão" });
     const renomear = screen.getByRole("link", { name: "Renomear" });
-    const excluir = screen.getByRole("button", { name: "Excluir Baralho" });
+    const excluirBaralho = screen.getByRole("button", {
+      name: "Excluir Baralho",
+    });
 
     apertarTabAPartirDe(titulo);
     expect(document.activeElement).toBe(revisar);
 
     apertarTab();
-    expect(document.activeElement).toBe(adicionar);
+    expect(document.activeElement).toBe(criar);
 
     apertarTab();
     expect(document.activeElement).toBe(renomear);
 
     apertarTab();
-    expect(document.activeElement).toBe(excluir);
+    expect(document.activeElement).toBe(excluirBaralho);
 
-    // Nenhuma remoção de Vínculo foi alcançada antes das quatro ações.
-    for (const remover of screen.getAllByRole("button", {
-      name: /deste baralho$/,
+    // Nenhum botão de exclusão de Cartão foi alcançado antes das quatro ações.
+    const secaoCartoes = screen.getByRole("region", {
+      name: "Cartões do Baralho",
+    });
+    for (const excluirCartao of within(secaoCartoes).getAllByRole("button", {
+      name: /^Excluir /,
     })) {
-      expect(remover).not.toBe(document.activeElement);
+      expect(excluirCartao).not.toBe(document.activeElement);
     }
   });
 });

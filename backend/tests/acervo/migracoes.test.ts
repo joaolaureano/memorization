@@ -76,14 +76,85 @@ function comBanco(corpo: (banco: DatabaseSync) => void): void {
   }
 }
 
+describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
+  it("retém Vínculos enquanto qualquer Usuário tem Cartão pendente e limpa só após conclusão global", () => {
+    const banco = new DatabaseSync(":memory:");
+
+    try {
+      banco.exec("PRAGMA foreign_keys = ON;");
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((migracao) => migracao.versao <= 12),
+      );
+
+      const primeiroDono = gravarDono(banco, "dono-a", "ana.silva");
+      const segundoDono = gravarDono(banco, "dono-b", "bia.souza");
+      gravarBaralho(banco, primeiroDono, "b1", "Inglês");
+      gravarBaralho(banco, primeiroDono, "b2", "Viagens");
+      gravarBaralho(banco, segundoDono, "b3", "Espanhol");
+      gravarCartao(banco, primeiroDono, "c-unico", "To walk", "Caminhar");
+      gravarCartao(banco, primeiroDono, "c-avulso", "To read", "Ler");
+      gravarCartao(banco, segundoDono, "c-compartilhado", "To travel", "Viajar");
+      gravarVinculo(banco, "c-unico", "b1");
+      gravarVinculo(banco, "c-compartilhado", "b1");
+      gravarVinculo(banco, "c-compartilhado", "b2");
+
+      aplicarEsquema(banco);
+
+      expect(versaoAtual(banco)).toBe(13);
+      expect(existeTabela(banco, "pertencimento")).toBe(true);
+      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(
+        banco.prepare("SELECT cartao_id, baralho_id FROM pertencimento").all(),
+      ).toEqual([]);
+
+      const inserirCartao = banco.prepare(
+        `INSERT INTO cartao (id, frente, verso, usuario_id)
+         VALUES (?, ?, ?, ?)`,
+      );
+      const inserirPertencimento = banco.prepare(
+        `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+         VALUES (?, ?, ?)`,
+      );
+
+      inserirPertencimento.run("c-unico", "b1", "to walk");
+      inserirPertencimento.run("c-avulso", "b2", "to read");
+      banco.prepare("DELETE FROM vinculo WHERE cartao_id = ?").run("c-unico");
+
+      aplicarEsquema(banco);
+
+      expect(versaoAtual(banco)).toBe(13);
+      expect(existeTabela(banco, "vinculo")).toBe(true);
+
+      inserirPertencimento.run("c-compartilhado", "b1", "to travel");
+      inserirCartao.run(
+        "c-copia",
+        "To travel (2)",
+        "Viajar",
+        segundoDono,
+      );
+      inserirPertencimento.run("c-copia", "b2", "to travel (2)");
+
+      aplicarEsquema(banco);
+
+      expect(versaoAtual(banco)).toBe(14);
+      expect(existeTabela(banco, "vinculo")).toBe(false);
+      expect(contarLinhas(banco, "pertencimento")).toBe(4);
+    } finally {
+      banco.close();
+    }
+  });
+});
+
 describe("base nova — todas as migrações, em ordem", () => {
-  it("cria cartao, baralho, vinculo e usuario e registra a última versão da lista, com controle de versão de um único inteiro", () => {
+  it("cria cartao, baralho, pertencimento e usuario, removendo vinculo legado sem pendências", () => {
     const banco = abrirBanco(":memory:");
 
     try {
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(existeTabela(banco, "pertencimento")).toBe(true);
+      expect(existeTabela(banco, "vinculo")).toBe(false);
       expect(existeTabela(banco, "usuario")).toBe(true);
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
@@ -153,7 +224,8 @@ describe("base já migrada — migração não reaplica", () => {
       try {
         expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(banco, "baralho")).toBe(true);
-        expect(existeTabela(banco, "vinculo")).toBe(true);
+        expect(existeTabela(banco, "pertencimento")).toBe(true);
+        expect(existeTabela(banco, "vinculo")).toBe(false);
 
         const lido = banco
           .prepare("SELECT id, frente, verso FROM cartao WHERE id = ?")
@@ -215,7 +287,8 @@ describe("falha no meio da migração — sem estado parcial", () => {
       expect(existeTabela(banco, "parcial")).toBe(false);
       expect(existeTabela(banco, "cartao")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(existeTabela(banco, "pertencimento")).toBe(true);
+      expect(existeTabela(banco, "vinculo")).toBe(false);
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
     } finally {
       banco.close();
@@ -260,7 +333,8 @@ describe("arquivo legado da feature 001 — cartao sem tabela de versão", () =>
 
       expect(existeTabela(banco, "versao_do_esquema")).toBe(true);
       expect(existeTabela(banco, "baralho")).toBe(true);
-      expect(existeTabela(banco, "vinculo")).toBe(true);
+      expect(existeTabela(banco, "pertencimento")).toBe(true);
+      expect(existeTabela(banco, "vinculo")).toBe(false);
       expect(existeTabela(banco, "usuario")).toBe(true);
       expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
 
@@ -300,7 +374,12 @@ describe("arquivo já na versão corrente — mesma versão, mesmos dados", () =
 
         gravarCartao(anterior, dono, "c1");
         gravarBaralho(anterior, dono, "b1", "Inglês");
-        gravarVinculo(anterior, "c1", "b1");
+        anterior
+          .prepare(
+            `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+             VALUES (?, ?, ?)`,
+          )
+          .run("c1", "b1", "to walk");
       } finally {
         anterior.close();
       }
@@ -310,15 +389,18 @@ describe("arquivo já na versão corrente — mesma versão, mesmos dados", () =
       const aberto = await abrirArmazenamentoSqlite(caminho);
 
       try {
-        expect(await aberto.armazenamento.listarCartoes("dono-um")).toEqual([
-          { id: "c1", frente: "To walk", verso: "Caminhar" },
-        ]);
-        expect(
-          await aberto.armazenamento.listarBaralhosDoCartao("dono-um", "c1"),
-        ).toEqual([{ id: "b1", nome: "Inglês" }]);
-        expect(
-          await aberto.armazenamento.contarCartoesPorBaralho("dono-um"),
-        ).toContainEqual({ baralhoId: "b1", quantidadeDeCartoes: 1 });
+        // listarCartoes agora devolve cada Cartão com seu Baralho dono (FR-389)
+        const cartoes = await aberto.armazenamento.listarCartoes("dono-um");
+        expect(cartoes).toHaveLength(1);
+        expect(cartoes[0]).toMatchObject({
+          id: "c1",
+          frente: "To walk",
+          verso: "Caminhar",
+          baralho: {
+            id: "b1",
+            nome: "Inglês",
+          },
+        });
       } finally {
         await aberto.encerrar();
       }
@@ -331,7 +413,8 @@ describe("arquivo já na versão corrente — mesma versão, mesmos dados", () =
         expect(versaoAtual(reaberto)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
         expect(existeTabela(reaberto, "cartao")).toBe(true);
         expect(existeTabela(reaberto, "baralho")).toBe(true);
-        expect(existeTabela(reaberto, "vinculo")).toBe(true);
+        expect(existeTabela(reaberto, "pertencimento")).toBe(true);
+        expect(existeTabela(reaberto, "vinculo")).toBe(false);
         expect(
           reaberto.prepare("SELECT frente FROM cartao WHERE id = ?").get("c1")
             ?.frente,
@@ -430,9 +513,10 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+      expect(versaoAtual(banco)).toBe(13);
       expect(contarLinhas(banco, "cartao")).toBe(1);
       expect(contarLinhas(banco, "baralho")).toBe(1);
+      expect(contarLinhas(banco, "pertencimento")).toBe(0);
       expect(contarLinhas(banco, "vinculo")).toBe(1);
       expect(contarLinhas(banco, "usuario")).toBe(1);
 
@@ -496,8 +580,8 @@ describe("migração 7 — repetição espaçada", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
-      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(12);
+      expect(versaoAtual(banco)).toBe(13);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(14);
 
       expect(existeTabela(banco, "agendamento")).toBe(true);
       expect(existeTabela(banco, "preferencias")).toBe(true);
@@ -506,6 +590,7 @@ describe("migração 7 — repetição espaçada", () => {
       expect(contarLinhas(banco, "cartao")).toBe(1);
       expect(contarLinhas(banco, "baralho")).toBe(1);
       expect(contarLinhas(banco, "vinculo")).toBe(1);
+      expect(contarLinhas(banco, "pertencimento")).toBe(0);
       expect(contarLinhas(banco, "registro_de_sessao")).toBe(1);
       expect(contarLinhas(banco, "item_de_registro")).toBe(1);
 

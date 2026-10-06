@@ -182,8 +182,10 @@ describe("ClienteEmMemoria — conta", () => {
   it("obterConta devolve nome e contagens do dono", async () => {
     const { ana } = criar();
 
-    await ana.criarCartao({ frente: "To walk", verso: "Caminhar" });
-    await ana.criarBaralho({ nome: "Inglês" });
+    const baralho = await ana.criarBaralho({ nome: "Inglês" });
+    if (baralho.ok) {
+      await ana.criarCartao(baralho.baralho.id, { frente: "To walk", verso: "Caminhar" });
+    }
 
     expect(await ana.obterConta()).toEqual({
       ok: true,
@@ -270,8 +272,15 @@ describe("ClienteEmMemoria — conta", () => {
       senha: "senha-do-bruno",
     });
 
-    await ana.criarCartao({ frente: "To walk", verso: "Caminhar" });
-    await bruno.criarCartao({ frente: "To run", verso: "Correr" });
+    const baralhoAna = await ana.criarBaralho({ nome: "Inglês" });
+    if (baralhoAna.ok) {
+      await ana.criarCartao(baralhoAna.baralho.id, { frente: "To walk", verso: "Caminhar" });
+    }
+
+    const baralhobruno = await bruno.criarBaralho({ nome: "Espanhol" });
+    if (baralhobruno.ok) {
+      await bruno.criarCartao(baralhobruno.baralho.id, { frente: "To run", verso: "Correr" });
+    }
 
     expect(await ana.excluirConta({ senhaAtual: "errada" })).toMatchObject({
       ok: false,

@@ -69,7 +69,7 @@ export async function prepararMundo(
       const cartaoIds: string[] = [];
 
       for (let indice = 1; indice <= quantidade; indice += 1) {
-        const cartao = await acervo.criarCartao({
+        const cartao = await acervo.criarCartao(baralho.baralho.id, {
           frente: `${nome} ${indice}`,
           verso: `Resposta ${indice}`,
         });
@@ -78,7 +78,6 @@ export async function prepararMundo(
           throw new Error("não criou o Cartão de teste");
         }
 
-        await acervo.vincular(cartao.cartao.id, baralho.baralho.id);
         cartaoIds.push(cartao.cartao.id);
       }
 

@@ -100,7 +100,7 @@ describe("migração 12 — rótulo da Avaliação", () => {
     gravarItem(banco, "r1", 3, "acertou", "facil");
     gravarItem(banco, "r1", 4, "acertou", null);
 
-    aplicarMigracoes(banco, MIGRACOES);
+    aplicarMigracoes(banco, MIGRACOES.slice(0, 12));
 
     expect(versaoAtual(banco)).toBe(12);
 
@@ -122,8 +122,15 @@ describe("migração 12 — rótulo da Avaliação", () => {
     expect(itensDepois[1].avaliacao).toBe("dificil");
   });
 
-  it("é a última migração do esquema", () => {
-    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(12);
+  it("é seguida pelas migrações 13 e 14", () => {
+    const indice12 = MIGRACOES.findIndex((m) => m.versao === 12);
+    const indice13 = MIGRACOES.findIndex((m) => m.versao === 13);
+    const indice14 = MIGRACOES.findIndex((m) => m.versao === 14);
+
+    expect(indice12).toBeGreaterThanOrEqual(0);
+    expect(indice13).toBe(indice12 + 1);
+    expect(indice14).toBe(indice12 + 2);
+    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(14);
   });
 
   it("mantém a chave estrangeira de item_de_registro apontando para registro_de_sessao", () => {

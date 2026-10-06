@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { join } from "node:path";
 
 import { expect, test } from "@playwright/test";
@@ -9,7 +10,7 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -18,7 +19,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   fixarRelogioDoContexto,
 } from "./servidores-locais";
@@ -157,16 +157,10 @@ async function prepararBaralho(
   const criados: { id: string; frente: string; verso: string }[] = [];
 
   for (const cartao of cartoes) {
-    const criado = await criarCartaoPelaApi(
+    const criado = await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
-      cartao,
-      credencial,
-    );
-
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      criado.id,
       baralho.id,
+      cartao,
       credencial,
     );
 
@@ -369,50 +363,39 @@ async function semearAcervo(
     credencial,
   );
 
-  const cartoes = await emParalelo(
-    Array.from({ length: CARTOES_DO_DESEMPENHO }, (_, indice) => indice),
-    LARGURA_DO_SEMEIO,
-    async (indice) =>
-      await criarCartaoPelaApi(
-        ambiente.enderecoDaApi,
-        {
-          frente: `Frente semeada ${indice}`,
-          verso: `Verso semeado ${indice}`,
-        },
-        credencial,
-      ),
-  );
-
-  await emParalelo(
-    Array.from({ length: SESSOES_DO_DESEMPENHO }, (_, indice) => indice),
-    LARGURA_DO_SEMEIO,
-    async (indice) => {
-      const cartao = cartoes[indice];
-
-      const status = await registrarSessaoPelaApi(
-        ambiente.enderecoDaApi,
-        {
-          id: randomUUID(),
-          origem: "baralho",
-          baralhoId: baralho.id,
-          nomeDoBaralho: baralho.nome,
-          itens: [
-            {
-              frente: cartao.frente,
-              verso: cartao.verso,
-              cartaoId: cartao.id,
-              avaliacao: "bom",
-            },
-          ],
-        },
-        credencial,
-      );
-
-      if (status !== 201) {
-        throw new Error(`POST /sessoes respondeu ${status}`);
+  // Este cenário mede as leituras agregadas com 2.000 registros. Semeia o
+  // volume diretamente no SQLite para que o tempo da prova meça a tela, sem
+  // gastar minutos em 2.000 viagens HTTP individuais.
+  const banco = new DatabaseSync(join(ambiente.pasta, "repeticao.sqlite"));
+  try {
+    banco.exec("PRAGMA foreign_keys = ON; BEGIN;");
+    const dono = banco.prepare("SELECT id FROM usuario WHERE nome_de_usuario = ?")
+      .get(credencial.nomeDeUsuario) as { id: string };
+    const inserirCartao = banco.prepare("INSERT INTO cartao (id, frente, verso, usuario_id) VALUES (?, ?, ?, ?)");
+    const inserirPertencimento = banco.prepare("INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave) VALUES (?, ?, ?)");
+    const inserirSessao = banco.prepare("INSERT INTO registro_de_sessao (id, usuario_id, baralho_id, nome_do_baralho, concluida_em, estudados, acertos, erros, origem) VALUES (?, ?, ?, ?, ?, 1, 1, 0, 'baralho')");
+    const inserirItem = banco.prepare("INSERT INTO item_de_registro (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo) VALUES (?, 1, ?, ?, 'acertou', ?, 'bom', 'Bom')");
+    const concluidaEm = new Date().toISOString();
+    for (let indice = 0; indice < CARTOES_DO_DESEMPENHO; indice += 1) {
+      const id = randomUUID();
+      const frente = `Frente semeada ${indice}`;
+      const verso = `Verso semeado ${indice}`;
+      inserirCartao.run(id, frente, verso, dono.id);
+      inserirPertencimento.run(id, baralho.id, frente.trim().toLocaleLowerCase("pt-BR"));
+      if (indice < SESSOES_DO_DESEMPENHO) {
+        const registroId = randomUUID();
+        inserirSessao.run(registroId, dono.id, baralho.id, baralho.nome, concluidaEm);
+        inserirItem.run(registroId, frente, verso, id);
       }
-    },
-  );
+    }
+    banco.exec("COMMIT;");
+  } catch (erro) {
+    banco.exec("ROLLBACK;");
+    throw erro;
+  } finally {
+    banco.close();
+  }
+
 }
 
 // --- Cenário 2: o estudo livre também alimenta o Agendamento ----------------
@@ -553,12 +536,10 @@ test("SC-087: Início monta com leituras agregadas e em número fixo, com 2.000 
 
     await page
       .getByRole("navigation", { name: "Principal" })
-      .getByRole("link", { name: "Cartões" })
+      .getByRole("link", { name: "Baralhos" })
       .click();
-    await expect(page).toHaveURL(/#\/cartoes/);
-    // Espera a contagem visível: garante que GET /cartoes e /baralhos
-    // concluíram e não vazam para a prova do Início.
-    await expect(page.getByText(/^\d+ resultados?$/)).toBeVisible();
+    await expect(page).toHaveURL(/#\/baralhos$/);
+    await expect(page.getByRole("heading", { name: "Baralhos" })).toBeVisible();
 
     // SC-087, sem relógio: o orçamento de 1 s é consequência de o Início montar
     // com leituras pequenas e em número fixo. A prova é

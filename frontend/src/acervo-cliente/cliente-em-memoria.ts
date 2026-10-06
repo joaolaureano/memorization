@@ -14,7 +14,6 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA,
   MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
-  MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
   MENSAGEM_DE_SENHA_ATUAL_INCORRETA,
   MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
@@ -24,6 +23,7 @@ import type {
   Avaliacao,
   Baralho,
   BaralhoComCartoes,
+  CartaoDaTransicao,
   Cartao,
   ClienteDoAcervo,
   ContagensDaConta,
@@ -38,6 +38,7 @@ import type {
   DadosDeRotina,
   DadosDeSelecaoParaBaralho,
   DadosDeUsuario,
+  EscolhaDeTransicao,
   OpcaoDeAlgoritmo,
   OpcaoDeAvaliacao,
   Preferencias,
@@ -54,12 +55,12 @@ import type {
   ResultadoDeCriacaoDeBaralho,
   ResultadoDeCriacaoDeCartao,
   ResultadoDeCriacaoDeUsuario,
-  ResultadoDeDesvinculacao,
   ResultadoDeEdicaoDeCartao,
   ResultadoDeEntrar,
   ResultadoDeEstatisticas,
   ResultadoDeExclusaoDeBaralho,
   ResultadoDeExclusaoDeCartao,
+  ResultadoDeConcluirTransicao,
   ResultadoDeIniciarCompromisso,
   ResultadoDeListagemDeBaralhos,
   ResultadoDeListagemDeCartoes,
@@ -67,13 +68,13 @@ import type {
   ResultadoDeObterAgenda,
   ResultadoDeObterBaralho,
   ResultadoDeObterRegistro,
+  ResultadoDeObterTransicao,
   ResultadoDePreferencias,
   ResultadoDeRegistroDeSessao,
   ResultadoDeRenomeacaoDeBaralho,
   ResultadoDeSalvarPreferencias,
   ResultadoDeSalvarRotina,
   ResultadoDeSalvarSelecao,
-  ResultadoDeVinculacao,
   ResultadoDoItemRegistrado,
 } from "./cliente";
 import {
@@ -202,6 +203,30 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     this.base = novaBaseEmMemoria(usuariosJaCadastrados);
   }
 
+  /**
+   * Adiciona cartões legados para testes (025). Deve ser chamado antes de
+   * qualquer operação do cliente para que os cartões apareçam em `obterTransicao`.
+   */
+  adicionarCartoesLegados(
+    cartoesLegadosPorUsuario: Array<{
+      usuarioId: string;
+      cartoesLegados: Array<{
+        cartao: Cartao;
+        baralhoIds: string[];
+      }>;
+    }>,
+  ): void {
+    for (const { usuarioId, cartoesLegados } of cartoesLegadosPorUsuario) {
+      for (const { cartao, baralhoIds } of cartoesLegados) {
+        this.base.cartoesLegados.push({
+          usuarioId,
+          cartao,
+          baralhoIds,
+        });
+      }
+    }
+  }
+
   async entrar(dados: DadosDeEntrada): Promise<ResultadoDeEntrar> {
     if (this.indisponivel) {
       return {
@@ -316,6 +341,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 
   async criarCartao(
+    baralhoId: string,
     dados: DadosDeCartao,
   ): Promise<ResultadoDeCriacaoDeCartao> {
     if (this.indisponivel) {
@@ -332,16 +358,44 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return this.falhaDeNaoAutenticado();
     }
 
+    // Verificar se o baralho existe e pertence ao dono
+    const baralho = this.base.baralhos.find(
+      (b) => b.id === baralhoId && b.usuarioId === dono.id,
+    );
+
+    if (baralho === undefined) {
+      return {
+        ok: false,
+        erro: "nao_encontrado",
+        mensagem: "Baralho não encontrado.",
+      };
+    }
+
     const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
 
     if (falha !== null) {
       return { ok: false, ...falha };
     }
 
+    // Normalizar frente e verificar duplicação no baralho
+    const cartoesDoBara1ho = this.base.cartoes.filter(
+      (c) => c.usuarioId === dono.id && c.baralhoId === baralhoId,
+    );
+
+    let frenteFinal = dados.frente;
+    let numero = 2;
+    while (
+      cartoesDoBara1ho.some((c) => normalizarFrente(c.frente) === normalizarFrente(frenteFinal.trim()))
+    ) {
+      frenteFinal = `${dados.frente.trim()} (${numero})`;
+      numero++;
+    }
+
     const cartao: CartaoDoDono = {
       id: `c${++this.base.sequenciaDeCartoes}`,
       usuarioId: dono.id,
-      frente: dados.frente,
+      baralhoId,
+      frente: frenteFinal,
       verso: dados.verso,
     };
 
@@ -369,11 +423,14 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       ok: true,
       cartoes: this.base.cartoes
         .filter((cartao) => cartao.usuarioId === dono.id)
-        .map((cartao) => ({
-          ...cartaoSemDono(cartao),
-          baralhos: this.baralhosDoCartao(dono.id, cartao.id),
-          proximaRevisaoEm: this.proximaRevisaoDoCartao(dono.id, cartao.id),
-        })),
+        .map((cartao) => {
+          const baralho = this.baralhoDoCartao(dono.id, cartao.id);
+          return {
+            ...cartaoSemDono(cartao),
+            baralho: baralho || { id: "", nome: "" }, // Deveria nunca ser null após 025
+            proximaRevisaoEm: this.proximaRevisaoDoCartao(dono.id, cartao.id),
+          };
+        }),
     };
   }
 
@@ -458,6 +515,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return { ok: true, baralho: baralhoSemDono(existente) };
     }
 
+    // Validar que todos os cartões existem e pertencem ao dono
     const indisponiveis = dados.cartaoIds.filter(
       (cartaoId) =>
         !this.base.cartoes.some(
@@ -474,6 +532,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
+    // Criar o novo baralho
     const baralho: BaralhoDoDono = {
       id: dados.id,
       usuarioId: dono.id,
@@ -482,12 +541,40 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     this.base.baralhos.push(baralho);
 
-    for (const cartaoId of dados.cartaoIds) {
-      this.base.vinculos.push({
-        usuarioId: dono.id,
-        cartaoId,
-        baralhoId: baralho.id,
-      });
+    // Criar cópias dos cartões (com IDs novos e Frentes numeradas)
+    for (let indice = 0; indice < dados.cartaoIds.length; indice++) {
+      const cartaoOriginalId = dados.cartaoIds[indice];
+      const cartaoOriginal = this.base.cartoes.find(
+        (c) => c.id === cartaoOriginalId && c.usuarioId === dono.id,
+      );
+
+      if (cartaoOriginal) {
+        // Iniciar a numeração da cópia
+        let frenteFinal = cartaoOriginal.frente;
+        let numero = 2;
+        const cartoesDoBara1ho = this.base.cartoes.filter(
+          (c) => c.baralhoId === baralho.id,
+        );
+
+        while (
+          cartoesDoBara1ho.some(
+            (c) => normalizarFrente(c.frente) === normalizarFrente(frenteFinal.trim()),
+          )
+        ) {
+          frenteFinal = `${cartaoOriginal.frente.trim()} (${numero})`;
+          numero++;
+        }
+
+        const copia: CartaoDoDono = {
+          id: `c${++this.base.sequenciaDeCartoes}`,
+          usuarioId: dono.id,
+          baralhoId: baralho.id,
+          frente: frenteFinal,
+          verso: cartaoOriginal.verso,
+        };
+
+        this.base.cartoes.push(copia);
+      }
     }
 
     return { ok: true, baralho: baralhoSemDono(baralho) };
@@ -514,11 +601,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         .filter((baralho) => baralho.usuarioId === dono.id)
         .map((baralho) => {
           // Derivada na leitura, nunca armazenada (FR-024): a contagem vem dos
-          // Vínculos **do dono** e a elegibilidade é contagem maior que zero.
-          const quantidadeDeCartoes = this.base.vinculos.filter(
-            (vinculo) =>
-              vinculo.usuarioId === dono.id &&
-              vinculo.baralhoId === baralho.id,
+          // Cartões **do dono** neste baralho, e a elegibilidade é contagem maior que zero.
+          const quantidadeDeCartoes = this.base.cartoes.filter(
+            (cartao) =>
+              cartao.usuarioId === dono.id &&
+              cartao.baralhoId === baralho.id,
           ).length;
 
           return {
@@ -559,132 +646,28 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
-    const cartoes = this.base.vinculos
-      .filter(
-        (vinculo) =>
-          vinculo.usuarioId === dono.id && vinculo.baralhoId === baralho.id,
-      )
-      .map((vinculo) =>
-        this.base.cartoes.find((cartao) => cartao.id === vinculo.cartaoId),
-      )
-      .filter((cartao): cartao is CartaoDoDono => cartao !== undefined)
-      .map((cartao) => cartaoSemDono(cartao));
+    // Cartões que pertencem a este baralho
+    const cartoes = this.base.cartoes
+      .filter((c) => c.usuarioId === dono.id && c.baralhoId === baralho.id)
+      .map((c) => cartaoSemDono(c));
+
+    // Contar agendamentos para os cartões do baralho
+    const quantidadeDeAgendamentos = this.base.agendamentos.filter(
+      (a) =>
+        a.usuarioId === dono.id &&
+        cartoes.some((c) => c.id === a.cartaoId),
+    ).length;
 
     const baralhoComCartoes: BaralhoComCartoes = {
       ...baralhoSemDono(baralho),
       elegivel: cartoes.length > 0,
       cartoes,
+      quantidadeDeAgendamentos,
     };
 
     return { ok: true, baralho: baralhoComCartoes };
   }
 
-  async vincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeVinculacao> {
-    if (this.indisponivel) {
-      return {
-        ok: false,
-        erro: INDISPONIVEL,
-        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-      };
-    }
-
-    const dono = this.dono();
-
-    if (dono === null) {
-      return this.falhaDeNaoAutenticado();
-    }
-
-    // Cartão e Baralho precisam existir **no escopo de quem pede**: um Vínculo
-    // une somente um Cartão e um Baralho do mesmo Usuário (FR-093), e o par
-    // com o conteúdo de outro Usuário é o mesmo `nao_encontrado` (FR-092).
-    if (
-      !this.base.cartoes.some(
-        (cartao) => cartao.id === cartaoId && cartao.usuarioId === dono.id,
-      )
-    ) {
-      return {
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Cartão não encontrado.",
-      };
-    }
-
-    if (
-      !this.base.baralhos.some(
-        (baralho) => baralho.id === baralhoId && baralho.usuarioId === dono.id,
-      )
-    ) {
-      return {
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
-      };
-    }
-
-    if (
-      this.base.vinculos.some(
-        (vinculo) =>
-          vinculo.usuarioId === dono.id &&
-          vinculo.cartaoId === cartaoId &&
-          vinculo.baralhoId === baralhoId,
-      )
-    ) {
-      return {
-        ok: false,
-        erro: "vinculo_duplicado",
-        mensagem: "O vínculo já existe.",
-      };
-    }
-
-    this.base.vinculos.push({
-      usuarioId: dono.id,
-      cartaoId,
-      baralhoId,
-    });
-
-    return { ok: true };
-  }
-
-  async desvincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeDesvinculacao> {
-    if (this.indisponivel) {
-      return {
-        ok: false,
-        erro: INDISPONIVEL,
-        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-      };
-    }
-
-    const dono = this.dono();
-
-    if (dono === null) {
-      return this.falhaDeNaoAutenticado();
-    }
-
-    const indice = this.base.vinculos.findIndex(
-      (vinculo) =>
-        vinculo.usuarioId === dono.id &&
-        vinculo.cartaoId === cartaoId &&
-        vinculo.baralhoId === baralhoId,
-    );
-
-    if (indice === -1) {
-      return {
-        ok: false,
-        erro: "vinculo_nao_encontrado",
-        mensagem: "O vínculo não existe.",
-      };
-    }
-
-    this.base.vinculos.splice(indice, 1);
-
-    return { ok: true };
-  }
 
   async editarCartao(
     id: string,
@@ -705,11 +688,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return this.falhaDeNaoAutenticado();
     }
 
-    const indice = this.base.cartoes.findIndex(
+    const cartaoAtual = this.base.cartoes.find(
       (cartao) => cartao.id === id && cartao.usuarioId === dono.id,
     );
 
-    if (indice === -1) {
+    if (cartaoAtual === undefined) {
       return {
         ok: false,
         erro: "nao_encontrado",
@@ -723,11 +706,37 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return { ok: false, ...falha };
     }
 
-    const cartao: CartaoDoDono = { id, usuarioId: dono.id, frente, verso };
+    // Verificar duplicação no mesmo baralho
+    const frenteNormalizada = normalizarFrente(frente);
+    const cartoesDoBara1ho = this.base.cartoes.filter(
+      (c) =>
+        c.usuarioId === dono.id &&
+        c.baralhoId === cartaoAtual.baralhoId &&
+        c.id !== id,
+    );
 
-    this.base.cartoes[indice] = cartao;
+    if (
+      cartoesDoBara1ho.some(
+        (c) => normalizarFrente(c.frente) === frenteNormalizada,
+      )
+    ) {
+      return {
+        ok: false,
+        erro: "frente_duplicada",
+        mensagem: "Já existe um cartão com esta frente neste baralho.",
+      };
+    }
 
-    return { ok: true, cartao: cartaoSemDono(cartao) };
+    const cartaoAtualizado: CartaoDoDono = {
+      ...cartaoAtual,
+      frente,
+      verso,
+    };
+
+    const indice = this.base.cartoes.indexOf(cartaoAtual);
+    this.base.cartoes[indice] = cartaoAtualizado;
+
+    return { ok: true, cartao: cartaoSemDono(cartaoAtualizado) };
   }
 
   async renomearBaralho(
@@ -800,8 +809,18 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
+    // Remover agendamentos do cartão
+    for (let i = this.base.agendamentos.length - 1; i >= 0; i -= 1) {
+      if (
+        this.base.agendamentos[i].usuarioId === dono.id &&
+        this.base.agendamentos[i].cartaoId === id
+      ) {
+        this.base.agendamentos.splice(i, 1);
+      }
+    }
+
+    // Remover o cartão
     this.base.cartoes.splice(indice, 1);
-    this.removerVinculosDoCartao(dono.id, id);
 
     return { ok: true };
   }
@@ -833,8 +852,26 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
+    // Remover o baralho
     this.base.baralhos.splice(indice, 1);
-    this.removerVinculosDoBaralho(dono.id, id);
+
+    // Remover os cartões que pertencem a este baralho
+    for (let i = this.base.cartoes.length - 1; i >= 0; i -= 1) {
+      const cartao = this.base.cartoes[i];
+      if (cartao.usuarioId === dono.id && cartao.baralhoId === id) {
+        // Remover agendamentos associados
+        for (let j = this.base.agendamentos.length - 1; j >= 0; j -= 1) {
+          if (
+            this.base.agendamentos[j].usuarioId === dono.id &&
+            this.base.agendamentos[j].cartaoId === cartao.id
+          ) {
+            this.base.agendamentos.splice(j, 1);
+          }
+        }
+        // Remover o cartão
+        this.base.cartoes.splice(i, 1);
+      }
+    }
 
     return { ok: true };
   }
@@ -984,18 +1021,12 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         continue;
       }
 
-      const cartoes = this.base.vinculos
+      const cartoes = this.base.cartoes
         .filter(
-          (vinculo) =>
-            vinculo.usuarioId === usuario.id && vinculo.baralhoId === baralho.id,
+          (cartao) =>
+            cartao.usuarioId === usuario.id && cartao.baralhoId === baralho.id,
         )
-        .flatMap((vinculo) => {
-          const cartao = this.base.cartoes.find(
-            (item) => item.id === vinculo.cartaoId,
-          );
-
-          return cartao === undefined ? [] : [cartaoSemDono(cartao)];
-        });
+        .map((cartao) => cartaoSemDono(cartao));
 
       baralhos.set(baralho.id, { nome: baralho.nome, cartoes });
     }
@@ -1392,7 +1423,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     base.cartoes = doOutro(base.cartoes);
     base.baralhos = doOutro(base.baralhos);
-    base.vinculos = doOutro(base.vinculos);
     base.registros = doOutro(base.registros);
     base.agendamentos = doOutro(base.agendamentos);
     base.preferencias = doOutro(base.preferencias);
@@ -1412,6 +1442,332 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     ) {
       this.navegador.cookie = null;
     }
+
+    return { ok: true };
+  }
+
+  async obterTransicao(): Promise<ResultadoDeObterTransicao> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+      };
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    // A leitura também resolve automaticamente Cartões com um único Baralho,
+    // como faz o servidor antes de devolver as escolhas pendentes.
+    await this.concluirTransicao([]);
+
+    // Cartões legados do dono
+    const todosOsLegados = this.base.cartoesLegados.filter(
+      (cl) => cl.usuarioId === dono.id,
+    );
+
+    // Pendentes: os que exigem escolha (0 ou >=2 Baralhos legados)
+    const pendentes = todosOsLegados.filter(
+      (cl) => cl.baralhoIds.length !== 1,
+    );
+
+    // Ordenar pendentes por frente normalizada e id
+    const ordenados = pendentes.sort((a, b) => {
+      const chavea = normalizarFrente(a.cartao.frente);
+      const chaveb = normalizarFrente(b.cartao.frente);
+      if (chavea !== chaveb) {
+        return chavea.localeCompare(chaveb);
+      }
+      return a.cartao.id.localeCompare(b.cartao.id);
+    });
+
+    // Construir lista de Cartões da Transição com seus Baralhos legados
+    const cartoesDaTransicao: CartaoDaTransicao[] = ordenados.map((p) => {
+      // Os Baralhos legados são representados como {id, nome}
+      // Aqui simulamos apenas os ids como nomes (em teste, eles já têm id)
+      const baralhos: Baralho[] = p.baralhoIds.map((id) => ({
+        id,
+        nome: id, // Em teste, o nome é o próprio id
+      }));
+
+      return {
+        ...p.cartao,
+        baralhos,
+      };
+    });
+
+    // Baralhos do dono, ordenados por nome
+    const todosOsBaralhos = this.base.baralhos
+      .filter((b) => b.usuarioId === dono.id)
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+      .map((b) => baralhoSemDono(b));
+
+    return { ok: true, cartoes: cartoesDaTransicao, baralhos: todosOsBaralhos };
+  }
+
+  async concluirTransicao(
+    escolhas: EscolhaDeTransicao[],
+  ): Promise<ResultadoDeConcluirTransicao> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        erro: INDISPONIVEL,
+        mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
+      };
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    // Validar escolhas é um array
+    if (!Array.isArray(escolhas)) {
+      return {
+        ok: false,
+        erro: "escolhas_invalidas",
+        mensagem: "Escolhas inválidas.",
+      };
+    }
+
+    // Cartões legados do dono
+    const todosOsLegados = this.base.cartoesLegados.filter(
+      (cl) => cl.usuarioId === dono.id,
+    );
+
+    // Auto-atribuição: legados com exatamente 1 Baralho legado
+    const podeAutoAtribuir = todosOsLegados.filter(
+      (cl) => cl.baralhoIds.length === 1,
+    );
+
+    // Auto-atribui aplicando a transição automática
+    const chavesAcumuladasPorBaralho = new Map<string, Set<string>>();
+    for (const legado of podeAutoAtribuir) {
+      const baralhoEscolhido = legado.baralhoIds[0];
+
+      // Obter chaves já usadas do baralho legado
+      let chavesUsadas = chavesAcumuladasPorBaralho.get(baralhoEscolhido);
+      if (!chavesUsadas) {
+        const cartoesDoBaralho = this.base.cartoes.filter(
+          (c) => c.baralhoId === baralhoEscolhido && c.usuarioId === dono.id,
+        );
+        chavesUsadas = new Set(
+          cartoesDoBaralho.map((c) => normalizarFrente(c.frente)),
+        );
+        chavesAcumuladasPorBaralho.set(baralhoEscolhido, chavesUsadas);
+      }
+
+      // Calcular frente final
+      const frenteFinal = numerarFrente(legado.cartao.frente, chavesUsadas);
+      chavesUsadas.add(normalizarFrente(frenteFinal));
+
+      // Criar o cartão no baralho legado
+      const novoCartao: CartaoDoDono = {
+        id: legado.cartao.id,
+        frente: frenteFinal,
+        verso: legado.cartao.verso,
+        usuarioId: dono.id,
+        baralhoId: baralhoEscolhido,
+      };
+
+      this.base.cartoes.push(novoCartao);
+
+      // Remover este legado da lista
+      const indice = this.base.cartoesLegados.findIndex(
+        (cl) =>
+          cl.cartao.id === legado.cartao.id && cl.usuarioId === dono.id,
+      );
+      if (indice >= 0) {
+        this.base.cartoesLegados.splice(indice, 1);
+      }
+    }
+
+    // Pendentes: os que exigem escolha (0 ou >=2 Baralhos legados)
+    const pendentes = this.base.cartoesLegados.filter(
+      (cl) => cl.usuarioId === dono.id && cl.baralhoIds.length !== 1,
+    );
+
+    // Se não há pendentes, retorna ok
+    if (pendentes.length === 0) {
+      return { ok: true };
+    }
+
+    // Validar que há exatamente uma escolha por pendente
+    if (escolhas.length !== pendentes.length) {
+      return {
+        ok: false,
+        erro: "escolhas_invalidas",
+        mensagem: `Esperado ${pendentes.length} escolhas, obtido ${escolhas.length}.`,
+      };
+    }
+
+    // Validar que não há cartões repetidos
+    const cartaoIds = new Set<string>();
+    for (const escolha of escolhas) {
+      if (typeof escolha !== "object" || escolha === null) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Cada escolha deve ser um objeto.",
+        };
+      }
+
+      const { cartaoId, baralhoId } = escolha as {
+        cartaoId?: unknown;
+        baralhoId?: unknown;
+      };
+
+      if (typeof cartaoId !== "string" || typeof baralhoId !== "string") {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Cartão e baralho devem ser strings.",
+        };
+      }
+
+      if (cartaoIds.has(cartaoId)) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Cartão repetido nas escolhas.",
+        };
+      }
+
+      cartaoIds.add(cartaoId);
+    }
+
+    // Validar que todos os ids nas escolhas correspondem a pendentes
+    for (const cartaoId of cartaoIds) {
+      if (!pendentes.some((p) => p.cartao.id === cartaoId)) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: `Cartão ${cartaoId} não está pendente.`,
+        };
+      }
+    }
+
+    // Monta o mapa de escolhas
+    const escolhasMap = new Map<string, string>();
+    for (const escolha of escolhas) {
+      const { cartaoId, baralhoId } = escolha as {
+        cartaoId: string;
+        baralhoId: string;
+      };
+      escolhasMap.set(cartaoId, baralhoId);
+    }
+
+    // Validar que os Baralhos escolhidos existem e são válidos
+    for (const [cartaoId, baralhoId] of escolhasMap) {
+      const pendente = pendentes.find((p) => p.cartao.id === cartaoId);
+      if (!pendente) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: `Cartão ${cartaoId} não está pendente.`,
+        };
+      }
+
+      // Para cartão avulso (baralhoIds.length === 0), o baralho deve existir no sistema moderno
+      if (pendente.baralhoIds.length === 0) {
+        const baralhoExiste = this.base.baralhos.some(
+          (b) => b.id === baralhoId && b.usuarioId === dono.id,
+        );
+
+        if (!baralhoExiste) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Baralho ${baralhoId} não existe.`,
+          };
+        }
+      } else {
+        // Para cartão compartilhado, o baralho deve ser um dos seus legados
+        if (!pendente.baralhoIds.includes(baralhoId)) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Baralho ${baralhoId} não é um dos baralhos legados do cartão.`,
+          };
+        }
+      }
+    }
+
+    // Aplicar as transições dos pendentes (compartilhados/avulsos)
+    for (const pendente of pendentes) {
+      const baralhoEscolhido = escolhasMap.get(pendente.cartao.id)!;
+
+      // Obter chaves já usadas do baralho escolhido
+      let chavesUsadas = chavesAcumuladasPorBaralho.get(baralhoEscolhido);
+      if (!chavesUsadas) {
+        const cartoesDoBaralho = this.base.cartoes.filter(
+          (c) => c.baralhoId === baralhoEscolhido && c.usuarioId === dono.id,
+        );
+        chavesUsadas = new Set(
+          cartoesDoBaralho.map((c) => normalizarFrente(c.frente)),
+        );
+        chavesAcumuladasPorBaralho.set(baralhoEscolhido, chavesUsadas);
+      }
+
+      // Calcular frente final
+      const frenteFinal = numerarFrente(pendente.cartao.frente, chavesUsadas);
+      chavesUsadas.add(normalizarFrente(frenteFinal));
+
+      // Criar o cartão no baralho escolhido
+      const novoCartao: CartaoDoDono = {
+        id: pendente.cartao.id,
+        frente: frenteFinal,
+        verso: pendente.cartao.verso,
+        usuarioId: dono.id,
+        baralhoId: baralhoEscolhido,
+      };
+
+      this.base.cartoes.push(novoCartao);
+
+      // Para cada outro Baralho legado, criar uma cópia
+      const outrosBaralhos = pendente.baralhoIds
+        .filter((id) => id !== baralhoEscolhido)
+        .sort();
+
+      for (const baralhoId of outrosBaralhos) {
+        let chaVesDoOutro = chavesAcumuladasPorBaralho.get(baralhoId);
+        if (!chaVesDoOutro) {
+          const cartoesDoOutroBaralho = this.base.cartoes.filter(
+            (c) => c.baralhoId === baralhoId && c.usuarioId === dono.id,
+          );
+          chaVesDoOutro = new Set(
+            cartoesDoOutroBaralho.map((c) => normalizarFrente(c.frente)),
+          );
+          chavesAcumuladasPorBaralho.set(baralhoId, chaVesDoOutro);
+        }
+
+        const frenteDaCopia = numerarFrente(
+          pendente.cartao.frente,
+          chaVesDoOutro,
+        );
+        chaVesDoOutro.add(normalizarFrente(frenteDaCopia));
+
+        const copia: CartaoDoDono = {
+          id: `${pendente.cartao.id}-copia-${baralhoId}`,
+          frente: frenteDaCopia,
+          verso: pendente.cartao.verso,
+          usuarioId: dono.id,
+          baralhoId,
+        };
+
+        this.base.cartoes.push(copia);
+      }
+    }
+
+    // Remover os legados processados
+    this.base.cartoesLegados = this.base.cartoesLegados.filter(
+      (cl) => !pendentes.some((p) => p.cartao.id === cl.cartao.id),
+    );
 
     return { ok: true };
   }
@@ -1769,21 +2125,22 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       .map(({ registro }) => registro);
   }
 
-  private baralhosDoCartao(usuarioId: string, cartaoId: string): Baralho[] {
-    return this.base.vinculos
-      .filter(
-        (vinculo) =>
-          vinculo.usuarioId === usuarioId && vinculo.cartaoId === cartaoId,
-      )
-      .map((vinculo) =>
-        this.base.baralhos.find(
-          (baralho) =>
-            baralho.id === vinculo.baralhoId &&
-            baralho.usuarioId === usuarioId,
-        ),
-      )
-      .filter((baralho): baralho is BaralhoDoDono => baralho !== undefined)
-      .map((baralho) => baralhoSemDono(baralho));
+  /**
+   * O Baralho único que contém este Cartão, ou `null` se o Cartão não tiver
+   * Baralho (situação de erro que não deve ocorrer após 025).
+   */
+  private baralhoDoCartao(usuarioId: string, cartaoId: string): Baralho | null {
+    const cartao = this.base.cartoes.find(
+      (c) => c.id === cartaoId && c.usuarioId === usuarioId,
+    );
+
+    if (!cartao) return null;
+
+    const baralho = this.base.baralhos.find(
+      (b) => b.id === cartao.baralhoId && b.usuarioId === usuarioId,
+    );
+
+    return baralho ? baralhoSemDono(baralho) : null;
   }
 
   /**
@@ -1801,25 +2158,6 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     return agendamento?.proximaRevisaoEm ?? null;
   }
 
-  private removerVinculosDoCartao(usuarioId: string, cartaoId: string): void {
-    for (let indice = this.base.vinculos.length - 1; indice >= 0; indice -= 1) {
-      const vinculo = this.base.vinculos[indice];
-
-      if (vinculo.usuarioId === usuarioId && vinculo.cartaoId === cartaoId) {
-        this.base.vinculos.splice(indice, 1);
-      }
-    }
-  }
-
-  private removerVinculosDoBaralho(usuarioId: string, baralhoId: string): void {
-    for (let indice = this.base.vinculos.length - 1; indice >= 0; indice -= 1) {
-      const vinculo = this.base.vinculos[indice];
-
-      if (vinculo.usuarioId === usuarioId && vinculo.baralhoId === baralhoId) {
-        this.base.vinculos.splice(indice, 1);
-      }
-    }
-  }
 }
 
 /** O cookie do Acesso temporário de um navegador simulado (018). */
@@ -1831,16 +2169,27 @@ interface NavegadorSimulado {
  * O estado do stand-in: os Usuários e o acervo que os clientes de prova
  * compartilham, mais a sequência de ids opacos.
  */
+/**
+ * Cartão legado pendente de transição (025): o Cartão com seus Baralhos legados
+ * e o usuário dono.
+ */
+interface CartaoLegadoDaBase {
+  usuarioId: string;
+  cartao: Cartao;
+  baralhoIds: string[];
+}
+
 interface BaseEmMemoria {
   usuarios: UsuarioDaBase[];
   cartoes: CartaoDoDono[];
   baralhos: BaralhoDoDono[];
-  vinculos: VinculoDoDono[];
   registros: RegistroDaBase[];
   agendamentos: AgendamentoDoDono[];
   preferencias: PreferenciasDoDono[];
   /** A Agenda de estudo (016): Rotinas, Compromissos persistidos e Inícios. */
   agenda: AgendaBase;
+  /** Cartões legados pendentes de transição por usuário (025). */
+  cartoesLegados: CartaoLegadoDaBase[];
   sequenciaDeCartoes: number;
   sequenciaDeBaralhos: number;
   sequenciaDeUsuarios: number;
@@ -1870,21 +2219,18 @@ interface UsuarioDaBase {
   senha: string;
 }
 
-/** Cartão com o dono: o `usuarioId` é o escopo de toda operação (FR-092). */
+/**
+ * Cartão com o dono e seu Baralho único (025): o `usuarioId` é o escopo de
+ * toda operação (FR-092), e o `baralhoId` identifica o dono único do Cartão.
+ */
 interface CartaoDoDono extends Cartao {
   usuarioId: string;
+  baralhoId: string;
 }
 
 /** Baralho com o dono: o `usuarioId` é o escopo de toda operação (FR-092). */
 interface BaralhoDoDono extends Baralho {
   usuarioId: string;
-}
-
-/** Vínculo com o dono, que é sempre o mesmo do Cartão e do Baralho (FR-093). */
-interface VinculoDoDono {
-  usuarioId: string;
-  cartaoId: string;
-  baralhoId: string;
 }
 
 /**
@@ -1914,11 +2260,11 @@ function novaBaseEmMemoria(
     usuarios: [],
     cartoes: [],
     baralhos: [],
-    vinculos: [],
     registros: [],
     agendamentos: [],
     preferencias: [],
     agenda: novaAgendaBase(),
+    cartoesLegados: [],
     sequenciaDeCartoes: 0,
     sequenciaDeBaralhos: 0,
     sequenciaDeUsuarios: 0,
@@ -1948,6 +2294,46 @@ function cartaoSemDono(cartao: CartaoDoDono): Cartao {
 /** O Baralho como a Interface o devolve: sem o dono, que é Implementation. */
 function baralhoSemDono(baralho: BaralhoDoDono): Baralho {
   return { id: baralho.id, nome: baralho.nome };
+}
+
+/**
+ * Normalizar Frente para comparação de duplicação: sem acentos, lowercase,
+ * espaços externos removidos.
+ */
+function normalizarFrente(f: string): string {
+  return f
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Enumera a Frente para evitar colisão no Baralho (FR-398).
+ *
+ * Se a Frente normalizada não está no conjunto, devolve a Frente inalterada.
+ * Senão, devolve `` `${frente.trim()} (${n})` `` com o menor n >= 2 cuja
+ * chave normalizada esteja livre.
+ */
+function numerarFrente(
+  frente: string,
+  chavesOcupadas: ReadonlySet<string>,
+): string {
+  const chave = normalizarFrente(frente);
+  const aparada = frente.trim();
+
+  if (!chavesOcupadas.has(chave)) {
+    return frente;
+  }
+
+  for (let n = 2; ; n++) {
+    const candidata = `${aparada} (${n})`;
+    const chaveCandidata = normalizarFrente(candidata);
+
+    if (!chavesOcupadas.has(chaveCandidata)) {
+      return candidata;
+    }
+  }
 }
 
 /** Registro do histórico com o dono: o `usuarioId` é o escopo (FR-161). */

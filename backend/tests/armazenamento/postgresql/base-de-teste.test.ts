@@ -53,7 +53,12 @@ describe("a base de cada cenário", () => {
       /** O acervo é de um Usuário: as duas bases são independentes (FR-092). */
       const dono = await criarDonoDeTeste(primeira.usuarios);
 
-      await primeira.armazenamento.inserirCartao(dono, {
+      await primeira.armazenamento.inserirBaralho(dono, {
+        id: "b1",
+        nome: "Teste",
+      });
+
+      await primeira.armazenamento.inserirCartaoNoBaralho(dono, "b1", {
         id: "c1",
         frente: "To walk",
         verso: "Caminhar",
@@ -82,7 +87,12 @@ describe("a base de cada cenário", () => {
     const base = await abrirBaseDeTeste("descarte");
     const dono = await criarDonoDeTeste(base.usuarios);
 
-    await base.armazenamento.inserirCartao(dono, {
+    await base.armazenamento.inserirBaralho(dono, {
+      id: "b1",
+      nome: "Teste",
+    });
+
+    await base.armazenamento.inserirCartaoNoBaralho(dono, "b1", {
       id: "c1",
       frente: "To walk",
       verso: "Caminhar",

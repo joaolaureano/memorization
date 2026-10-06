@@ -5,16 +5,16 @@ import { Moldura } from "../src/ui/Moldura";
 import type { Rota } from "../src/ui/navegacao";
 
 /**
- * Moldura (FR-139, FR-168, FR-212, FR-335).
+ * Moldura (FR-139, FR-168, FR-212, FR-025).
  *
  * A marca e os destinos do acervo apontam para as rotas canônicas, e o destino
  * corrente é decidido por `destinoAtivo` — por isso a prova percorre cada
  * família de rota: o Início e a Revisão do dia marcam Início; o Registro de
  * Sessão e as rotas da Agenda (rotinas, agendar, editar rotina e sessão da
  * agenda) marcam Estudo (FR-307, FR-323), assim como a Central de Estudo; as de
- * Cartões marcam Cartões, as de Baralho (inclusive a Sessão de estudo, que
- * pertence ao Baralho) marcam Baralhos, Perfil marca Perfil, e Entrar e Criar
- * conta não marcam nenhum destino.
+ * Baralho (inclusive a Sessão de estudo, Criar Cartão e Editar Cartão que agora
+ * pertencem ao Baralho; FR-025) marcam Baralhos, Perfil marca Perfil, e Entrar
+ * e Criar conta não marcam nenhum destino.
  *
  * Sair é irmão do `<nav>`: em telas de até 600px só a navegação desce para a
  * barra inferior, e Sair precisa continuar no cabeçalho.
@@ -23,7 +23,7 @@ import type { Rota } from "../src/ui/navegacao";
 const CASOS: ReadonlyArray<{
   descricao: string;
   rota: Rota;
-  ativo: "Início" | "Estudo" | "Baralhos" | "Cartões" | "Perfil" | null;
+  ativo: "Início" | "Estudo" | "Baralhos" | "Perfil" | null;
 }> = [
   { descricao: "Início", rota: { nome: "inicio" }, ativo: "Início" },
   {
@@ -40,11 +40,9 @@ const CASOS: ReadonlyArray<{
   { descricao: "Novo Baralho", rota: { nome: "novo-baralho" }, ativo: "Baralhos" },
   { descricao: "Detalhe do Baralho", rota: { nome: "baralho", id: "b1" }, ativo: "Baralhos" },
   { descricao: "Editar Baralho", rota: { nome: "editar-baralho", id: "b1" }, ativo: "Baralhos" },
-  { descricao: "Adicionar Cartões", rota: { nome: "adicionar-cartoes", id: "b1" }, ativo: "Baralhos" },
+  { descricao: "Novo Cartão no Baralho", rota: { nome: "novo-cartao", baralhoId: "b1" }, ativo: "Baralhos" },
+  { descricao: "Editar Cartão no Baralho", rota: { nome: "editar-cartao", baralhoId: "b1", id: "c1" }, ativo: "Baralhos" },
   { descricao: "Sessão de estudo", rota: { nome: "estudo", id: "b1" }, ativo: "Baralhos" },
-  { descricao: "Cartões", rota: { nome: "cartoes" }, ativo: "Cartões" },
-  { descricao: "Novo Cartão", rota: { nome: "novo-cartao" }, ativo: "Cartões" },
-  { descricao: "Editar Cartão", rota: { nome: "editar-cartao", id: "c1" }, ativo: "Cartões" },
   { descricao: "Perfil", rota: { nome: "preferencias" }, ativo: "Perfil" },
   { descricao: "Entrar", rota: { nome: "entrar" }, ativo: null },
   { descricao: "Criar conta", rota: { nome: "cadastro" }, ativo: null },
@@ -72,22 +70,19 @@ describe("Moldura — marca e destinos", () => {
       "href",
       "#/baralhos",
     );
-    expect(screen.getByRole("link", { name: "Cartões" })).toHaveAttribute(
-      "href",
-      "#/cartoes",
-    );
     expect(screen.getByRole("link", { name: "Perfil" })).toHaveAttribute(
       "href",
       "#/preferencias",
     );
 
-    // FR-168, FR-212, FR-307 e FR-335: a navegação lista Início, Estudo,
-    // Baralhos, Cartões e Perfil, nessa ordem.
+    // FR-168, FR-212, FR-307 e FR-025: a navegação lista Início, Estudo,
+    // Baralhos e Perfil, nessa ordem. Cartões deixou de ser um destino de
+    // primeiro nível (agora contextualizado dentro de Baralhos).
     expect(
       within(screen.getByRole("navigation", { name: "Principal" }))
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Início", "Estudo", "Baralhos", "Cartões", "Perfil"]);
+    ).toEqual(["Início", "Estudo", "Baralhos", "Perfil"]);
   });
 });
 
@@ -99,7 +94,6 @@ describe("Moldura — destino corrente", () => {
       "Início",
       "Estudo",
       "Baralhos",
-      "Cartões",
       "Perfil",
     ] as const) {
       const link = screen.getByRole("link", { name: nome });
@@ -116,7 +110,7 @@ describe("Moldura — destino corrente", () => {
 describe("Moldura — Sair", () => {
   it("aciona aoSair e fica fora da navegação", () => {
     const aoSair = vi.fn();
-    render(<Moldura rota={{ nome: "cartoes" }} aoSair={aoSair} />);
+    render(<Moldura rota={{ nome: "baralhos" }} aoSair={aoSair} />);
 
     const sair = screen.getByRole("button", { name: "Sair" });
     expect(sair).toHaveClass("botao-de-saida");

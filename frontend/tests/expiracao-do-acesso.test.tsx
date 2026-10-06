@@ -13,7 +13,7 @@ import { CREDENCIAL_DE_PROVA, clienteDeProva } from "./apoio-de-prova";
  */
 
 beforeEach(() => {
-  window.location.hash = "#/cartoes/novo";
+  window.location.hash = "#/baralhos";
 });
 
 afterEach(() => {
@@ -23,6 +23,9 @@ afterEach(() => {
 describe("expiração do Acesso durante o uso", () => {
   it("com um formulário preenchido, a operação recusada vai a Entrar sem confirmação, sem salvar e com a mensagem exata (FR-157, FR-294)", async () => {
     const servidor = clienteDeProva();
+    const criado = await servidor.criarBaralho({ nome: "Inglês" });
+    if (!criado.ok) throw new Error("não criou Baralho");
+    window.location.hash = `#/baralhos/${criado.baralho.id}/cartoes/novo`;
 
     await servidor.entrar({ ...CREDENCIAL_DE_PROVA, continuarConectado: true });
 
@@ -76,7 +79,7 @@ describe("expiração do Acesso durante o uso", () => {
     await screen.findByRole("heading", { level: 1, name: "Baralhos" });
 
     servidor.avancarRelogio(301_000);
-    fireEvent.click(screen.getByRole("link", { name: "Cartões" }));
+    fireEvent.click(screen.getByRole("link", { name: "Estudo" }));
 
     const titulo = await screen.findByRole("heading", {
       level: 1,

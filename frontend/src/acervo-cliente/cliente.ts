@@ -3,7 +3,6 @@ import type {
   CodigoDeErroDeCadastro,
   CodigoDeErroDeCartao,
   CodigoDeErroDeNaoEncontrado,
-  CodigoDeErroDeVinculo,
 } from "./validacao";
 
 /**
@@ -39,14 +38,14 @@ export interface Cartao {
 }
 
 /**
- * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
- * está vinculado (FR-003) e a próxima revisão do seu Agendamento (FR-352). O
- * Cartão sem nenhum Baralho devolve `baralhos: []` — estado legítimo, e não
- * ausência de campo. `criarCartao` e `editarCartao` continuam devolvendo
- * apenas `Cartao`, sem carregar campos que a escrita não exige.
+ * Cartão como devolvido por `listarCartoes`: o Cartão mais seu Baralho único
+ * (FR-003) e a próxima revisão do seu Agendamento (FR-352). Um Cartão sem
+ * Baralho é invalido — todo Cartão pertence a exatamente um Baralho.
+ * `criarCartao` e `editarCartao` continuam devolvendo apenas `Cartao`,
+ * sem carregar campos que a escrita não exige.
  */
 export interface CartaoListado extends Cartao {
-  baralhos: Baralho[];
+  baralho: Baralho;
   /**
    * ISO-8601 da próxima revisão do Agendamento do Cartão, ou `null` quando o
    * Cartão não tem Agendamento (FR-352).
@@ -91,13 +90,6 @@ export const MENSAGEM_DE_INDISPONIBILIDADE =
 export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS =
   "Não foi possível acessar os Baralhos. Tente novamente.";
 
-/**
- * Mensagem em português destinada ao usuário quando o transporte até as rotas
- * de Vínculo falha (FR-046). Mantida separada das mensagens de Cartão e de
- * Baralho para que cada operação anuncie a entidade que falhou.
- */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS =
-  "Não foi possível acessar os Vínculos. Tente novamente.";
 
 /**
  * Mensagem em português destinada ao usuário quando o transporte até as rotas
@@ -217,8 +209,9 @@ export type ResultadoDeEntrar =
 /**
  * Resultado de `criarCartao`. Falha é resultado previsto, e não exceção: o
  * caller distingue `ok` e, na recusa, recebe o código estável e a mensagem
- * em português — os códigos de regra de Cartão, `indisponivel` para a falha
- * de transporte ou `nao_autenticado` para a recusa por Credencial.
+ * em português — os códigos de regra de Cartão, `nao_encontrado` quando o
+ * Baralho não existe, `indisponivel` para a falha de transporte ou
+ * `nao_autenticado` para a recusa por Credencial.
  */
 export type ResultadoDeCriacaoDeCartao =
   | { ok: true; cartao: Cartao }
@@ -226,6 +219,7 @@ export type ResultadoDeCriacaoDeCartao =
       ok: false;
       erro:
         | CodigoDeErroDeCartao
+        | CodigoDeErroDeNaoEncontrado
         | typeof INDISPONIVEL
         | typeof NAO_AUTENTICADO;
       mensagem: string;
@@ -278,12 +272,13 @@ export interface BaralhoListado extends Baralho {
 
 /**
  * Baralho como devolvido por `obterBaralho`: o Baralho com a elegibilidade
- * derivada e os Cartões vinculados, conforme o contrato de
- * `GET /baralhos/{id}` (FR-014).
+ * derivada, a quantidade de agendamentos e os Cartões vinculados, conforme
+ * o contrato de `GET /baralhos/{id}` (FR-014).
  */
 export interface BaralhoComCartoes extends Baralho {
   elegivel: boolean;
   cartoes: Cartao[];
+  quantidadeDeAgendamentos: number;
 }
 
 /**
@@ -350,37 +345,6 @@ export type ResultadoDeListagemDeBaralhos =
       mensagem: string;
     };
 
-/**
- * Resultado de `vincular`. Sucesso não tem carga; as recusas de domínio são
- * `vinculo_duplicado` (par já existente) e `nao_encontrado` (Cartão ou Baralho
- * inexistente).
- */
-export type ResultadoDeVinculacao =
-  | { ok: true }
-  | {
-      ok: false;
-      erro:
-        | "vinculo_duplicado"
-        | CodigoDeErroDeNaoEncontrado
-        | typeof INDISPONIVEL
-        | typeof NAO_AUTENTICADO;
-      mensagem: string;
-    };
-
-/**
- * Resultado de `desvincular`. Sucesso não tem carga; a única recusa de domínio
- * é `vinculo_nao_encontrado` (Vínculo inexistente).
- */
-export type ResultadoDeDesvinculacao =
-  | { ok: true }
-  | {
-      ok: false;
-      erro:
-        | CodigoDeErroDeVinculo
-        | typeof INDISPONIVEL
-        | typeof NAO_AUTENTICADO;
-      mensagem: string;
-    };
 
 /**
  * Resultado de `obterBaralho`. Sucesso devolve o Baralho com seus Cartões;
@@ -399,7 +363,8 @@ export type ResultadoDeObterBaralho =
 
 /**
  * Resultado de `editarCartao`. As regras de conteúdo são as mesmas da criação;
- * Cartão inexistente é recusado como `nao_encontrado`.
+ * Cartão inexistente é recusado como `nao_encontrado`; frente duplicada no
+ * mesmo Baralho é recusada como `frente_duplicada`.
  */
 export type ResultadoDeEdicaoDeCartao =
   | { ok: true; cartao: Cartao }
@@ -408,6 +373,7 @@ export type ResultadoDeEdicaoDeCartao =
       erro:
         | CodigoDeErroDeCartao
         | CodigoDeErroDeNaoEncontrado
+        | "frente_duplicada"
         | typeof INDISPONIVEL
         | typeof NAO_AUTENTICADO;
       mensagem: string;
@@ -1016,6 +982,57 @@ export type ResultadoDeSair =
   | { ok: false; erro: typeof INDISPONIVEL; mensagem: string };
 
 /**
+ * Cartão da transição entre Cartões legados e modernos: o Cartão mais os
+ * Baralhos que o têm (pode ser múltiplo em Cartões compartilhados).
+ */
+export interface CartaoDaTransicao extends Cartao {
+  baralhos: Baralho[];
+}
+
+/**
+ * Escolha do Usuário: qual Cartão (potencialmente em múltiplos Baralhos)
+ * vai para qual Baralho moderno.
+ */
+export interface EscolhaDeTransicao {
+  cartaoId: string;
+  baralhoId: string;
+}
+
+/**
+ * Resultado de `obterTransicao`: lista de Cartões pendentes de transição
+ * (estado legítimo quando vazio) e lista de Baralhos disponíveis para
+ * escolha.
+ */
+export type ResultadoDeObterTransicao =
+  | {
+      ok: true;
+      cartoes: CartaoDaTransicao[];
+      baralhos: Baralho[];
+    }
+  | {
+      ok: false;
+      erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
+ * Resultado de `concluirTransicao`: sucesso puro sem carga, ou recusa de
+ * escolhas inválidas (incompletas ou inconsistentes), conflito entre
+ * transições simultâneas, indisponibilidade ou credencial.
+ */
+export type ResultadoDeConcluirTransicao =
+  | { ok: true }
+  | {
+      ok: false;
+      erro:
+        | "escolhas_invalidas"
+        | "conflito"
+        | typeof INDISPONIVEL
+        | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/**
  * Interface do Module `ClienteDoAcervo` (Princípio IV).
  *
  * As operações assíncronas escondem o transporte até a API e a forma dos
@@ -1036,7 +1053,15 @@ export interface ClienteDoAcervo {
    */
   entrar(dados: DadosDeEntrada): Promise<ResultadoDeEntrar>;
 
-  criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
+  /**
+   * Cria um Cartão no Baralho especificado (025). O Baralho deve existir e
+   * pertencer ao dono — inexistente ou alheio é `nao_encontrado`. A Frente é
+   * normalizada; duplicação no mesmo Baralho gera numeração (`"X (2)"`).
+   */
+  criarCartao(
+    baralhoId: string,
+    dados: DadosDeCartao,
+  ): Promise<ResultadoDeCriacaoDeCartao>;
 
   /**
    * Lista todos os Cartões existentes, cada um com sua Frente, seu Verso e
@@ -1075,26 +1100,11 @@ export interface ClienteDoAcervo {
   listarBaralhos(): Promise<ResultadoDeListagemDeBaralhos>;
 
   /**
-   * Devolve um Baralho com a elegibilidade derivada e os Cartões vinculados
-   * (FR-014). Baralho inexistente é recusado como `nao_encontrado`.
+   * Devolve um Baralho com a elegibilidade derivada, a contagem de agendamentos
+   * e os Cartões vinculados (FR-014). Baralho inexistente é recusado como
+   * `nao_encontrado`.
    */
   obterBaralho(id: string): Promise<ResultadoDeObterBaralho>;
-
-  /**
-   * Vincula um Cartão existente a um Baralho existente (FR-019). O par
-   * repetido é recusado como `vinculo_duplicado`; Cartão ou Baralho
-   * inexistente, como `nao_encontrado`.
-   */
-  vincular(cartaoId: string, baralhoId: string): Promise<ResultadoDeVinculacao>;
-
-  /**
-   * Desfaz o Vínculo, preservando Cartão e Baralho (FR-021). Vínculo
-   * inexistente é recusado como `vinculo_nao_encontrado`.
-   */
-  desvincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeDesvinculacao>;
 
   /**
    * Edita a Frente e o Verso de um Cartão existente (FR-005), reaplicando as
@@ -1250,4 +1260,19 @@ export interface ClienteDoAcervo {
    * FR-295). Outros navegadores do mesmo Usuário não são afetados (FR-299).
    */
   sair(): Promise<ResultadoDeSair>;
+
+  /**
+   * Obtém os Cartões e Baralhos na transição entre Cartões legados e
+   * modernos (025). A lista vazia de Cartões significa nada a resolver.
+   */
+  obterTransicao(): Promise<ResultadoDeObterTransicao>;
+
+  /**
+   * Conclui a transição de Cartões legados para modernos (025): avulso
+   * recebe um Baralho, compartilhado recebe cópias numeradas em Baralhos
+   * escolhidos. Tudo ou nada; sem pendentes é ok idempotente.
+   */
+  concluirTransicao(
+    escolhas: EscolhaDeTransicao[],
+  ): Promise<ResultadoDeConcluirTransicao>;
 }

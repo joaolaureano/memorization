@@ -8,7 +8,7 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -18,7 +18,6 @@ import {
   listarCartoesPelaApi,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
 } from "./servidores-locais";
 import type { CredencialDeProva, ProcessoIniciado } from "./servidores-locais";
 
@@ -141,16 +140,10 @@ async function prepararBaralho(
   const criados: { id: string; frente: string; verso: string }[] = [];
 
   for (const cartao of cartoes) {
-    const criado = await criarCartaoPelaApi(
+    const criado = await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
-      cartao,
-      credencial,
-    );
-
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      criado.id,
       baralho.id,
+      cartao,
       credencial,
     );
 
@@ -561,9 +554,9 @@ test("Registro preserva Frente e nome do Baralho após edição e exclusão (FR-
     expect(hrefDoRegistro).toMatch(/^#\/sessoes\//);
 
     // Edita a Frente do Cartão estudado, pela tela real (FR-165).
-    await page.goto(`${ambiente.enderecoDoFrontend}/#/cartoes`);
+    await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/${baralho.id}`);
     await entrarSeNecessario(page, credencial);
-    await page.getByRole("link", { name: `Editar ${frenteOriginal}` }).click();
+    await page.getByRole("listitem").getByRole("link", { name: "Editar", exact: true }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Editar Cartão" }),
     ).toBeVisible();
@@ -682,12 +675,9 @@ test("Histórico e Registros são isolados por Usuário (FR-166, FR-179, SC-075)
         name: `Olá, ${credencialB.nomeDeUsuario}`,
       }),
     ).toBeVisible();
-    // Sem acervo, o Início mostra o resumo vazio e o caminho do primeiro
-    // Cartão (FR-312, FR-314).
+    // Sem acervo, o Início mostra o resumo vazio; o acervo começa pela criação
+    // de um Baralho (FR-312, FR-314).
     await expect(paginaB.locator("p.resumo-de-sete-dias")).toHaveCount(0);
-    await expect(
-      paginaB.getByRole("link", { name: "Criar o primeiro Cartão" }),
-    ).toBeVisible();
     // As Estatísticas da feature 019 vivem em Estudo (FR-314, FR-315).
     await irParaEstudo(paginaB);
 

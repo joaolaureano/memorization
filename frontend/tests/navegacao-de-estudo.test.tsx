@@ -70,17 +70,14 @@ describe("interpretarRota para Sessão de estudo", () => {
 describe("Aplicacao — rota de estudo", () => {
   it("renderiza a tela de estudo e mantém Baralhos como link corrente", async () => {
     const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
-      frente: "To walk",
-      verso: "Caminhar",
-    });
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
-
-    if (!cartao.ok || !baralho.ok) {
+    if (!baralho.ok) {
       throw new Error("as criações do cenário deveriam ser aceitas");
     }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente: "To walk", verso: "Caminhar",
+    });
+    if (!cartao.ok) throw new Error("Cartão de prova não criado");
 
     navegarPara(`#/baralhos/${baralho.baralho.id}/estudo`);
     render(
@@ -109,24 +106,18 @@ describe("Aplicacao — rota de estudo", () => {
     expect(
       screen.getByRole("link", { name: "Baralhos" }),
     ).toHaveAttribute("aria-current", "page");
-    expect(
-      screen.getByRole("link", { name: "Cartões" }),
-    ).not.toHaveAttribute("aria-current");
   });
 
   it("navegar para fora no meio da Sessão pede confirmação; Cancelar mantém o mesmo Item", async () => {
     const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
-      frente: "To walk",
-      verso: "Caminhar",
-    });
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
-
-    if (!cartao.ok || !baralho.ok) {
+    if (!baralho.ok) {
       throw new Error("as criações do cenário deveriam ser aceitas");
     }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente: "To walk", verso: "Caminhar",
+    });
+    if (!cartao.ok) throw new Error("Cartão de prova não criado");
 
     navegarPara(`#/baralhos/${baralho.baralho.id}/estudo`);
     render(
@@ -177,17 +168,14 @@ describe("Aplicacao — rota de estudo", () => {
 
   it("confirmar a interrupção volta ao Baralho sem Resumo (FR-151)", async () => {
     const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
-      frente: "To walk",
-      verso: "Caminhar",
-    });
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
-
-    if (!cartao.ok || !baralho.ok) {
+    if (!baralho.ok) {
       throw new Error("as criações do cenário deveriam ser aceitas");
     }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente: "To walk", verso: "Caminhar",
+    });
+    if (!cartao.ok) throw new Error("Cartão de prova não criado");
 
     navegarPara(`#/baralhos/${baralho.baralho.id}/estudo`);
     render(
@@ -234,17 +222,14 @@ describe("Aplicacao — rota de estudo", () => {
 
   it("a rota pendente abre a modal «Revisar baralho» e Cancelar volta ao detalhe do Baralho (FR-383, FR-387)", async () => {
     const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
-      frente: "To walk",
-      verso: "Caminhar",
-    });
     const baralho = await cliente.criarBaralho({ nome: "Inglês" });
-
-    if (!cartao.ok || !baralho.ok) {
+    if (!baralho.ok) {
       throw new Error("as criações do cenário deveriam ser aceitas");
     }
-
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
+    const cartao = await cliente.criarCartao(baralho.baralho.id, {
+      frente: "To walk", verso: "Caminhar",
+    });
+    if (!cartao.ok) throw new Error("Cartão de prova não criado");
 
     navegarPara(`#/baralhos/${baralho.baralho.id}/estudo`);
     render(

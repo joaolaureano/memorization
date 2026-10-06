@@ -91,6 +91,39 @@ export function versaoCorrenteConhecida(): number {
 }
 
 /**
+ * Diz se a versão encontrada na base é aceitável no início (FR-397).
+ *
+ * Aceita a versão corrente — aquela em que todas as migrações foram aplicadas.
+ * Também aceita a versão imediatamente anterior **se** a última migração tiver
+ * `precondicao`, porque nesse caso é um estado **legítimo e transitório**: a
+ * migração não pôde rodar, e a base fica na versão anterior até que a
+ * precondição seja atendida (FR-121, SC-048).
+ *
+ * Qualquer outra versão é recusada: a base está atrasada demais e precisa rodar
+ * o comando de migração para avançar.
+ */
+export function versaoAceitaNoInicio(encontrada: number): boolean {
+  const corrente = versaoCorrenteConhecida();
+
+  // Versão corrente é sempre aceita.
+  if (encontrada === corrente) {
+    return true;
+  }
+
+  // Se a última migração tiver precondição, a versão anterior também é aceita.
+  const ultimaMigracao = MIGRACOES[MIGRACOES.length - 1];
+  if (
+    ultimaMigracao &&
+    ultimaMigracao.precondicao !== undefined &&
+    encontrada === ultimaMigracao.versao - 1
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Executa o corpo numa conexão exclusiva, dentro de uma transação que começa
  * com a trava consultiva das migrações. A trava sai no `COMMIT` ou no
  * `ROLLBACK`, e a conexão volta para o conjunto em qualquer desfecho.
@@ -153,6 +186,16 @@ async function aplicarMigracao(
       return versao;
     }
 
+    if (migracao.precondicao !== undefined) {
+      const { rows } = await cliente.query<{ pode_aplicar: boolean }>(
+        migracao.precondicao,
+      );
+
+      if (rows[0]?.pode_aplicar !== true) {
+        return versao;
+      }
+    }
+
     await cliente.query(migracao.sql);
     await cliente.query("UPDATE versao_do_esquema SET versao = $1;", [
       migracao.versao,
@@ -190,7 +233,13 @@ export async function aplicarMigracoes(
       continue;
     }
 
-    versao = await aplicarMigracao(piscina, migracao);
+    const novaVersao = await aplicarMigracao(piscina, migracao);
+
+    if (novaVersao < migracao.versao) {
+      break;
+    }
+
+    versao = novaVersao;
   }
 
   return versao;

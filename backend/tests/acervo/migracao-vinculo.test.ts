@@ -3,10 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
-  abrirBanco,
   aplicarMigracoes,
 } from "../../src/armazenamento/sqlite/esquema.ts";
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
@@ -19,16 +18,6 @@ import {
   gravarDono,
   gravarVinculo,
 } from "./banco-de-teste.ts";
-
-/**
- * A versão mais recente da lista de migrações — o que uma base nova registra
- * depois que todas rodam. Derivada, e não escrita à mão: acrescentar uma
- * migração não quebra estas asserções.
- */
-const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
-  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
-  0,
-);
 
 /**
  * T201 e T202 — a migração 3 cria a tabela `vinculo` com chave primária
@@ -56,26 +45,6 @@ function existeTabela(banco: DatabaseSync, nome: string): boolean {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(nome) !== undefined
   );
-}
-
-/**
- * O dono das linhas destes cenários. Todo Cartão e todo Baralho do acervo tem
- * dono desde a migração 5 (FR-092), e é por isso que as gravações diretas
- * começam pelo Usuário; as gravações da base **anterior** à migração, essas,
- * não têm dono algum.
- */
-let dono: string;
-
-function inserirCartao(banco: DatabaseSync, id: string): void {
-  gravarCartao(banco, dono, id);
-}
-
-function inserirBaralho(banco: DatabaseSync, id: string, nome: string): void {
-  gravarBaralho(banco, dono, id, nome);
-}
-
-function inserirVinculo(banco: DatabaseSync, cartaoId: string, baralhoId: string): void {
-  gravarVinculo(banco, cartaoId, baralhoId);
 }
 
 /** As gravações da base anterior à migração 5, quando não há dono a informar. */
@@ -108,23 +77,27 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
         banco.close();
       }
 
-      // A reabertura migra até a versão corrente: cria vinculo (3) e usuario
-      // (4), e a migração 5 recria as três tabelas do acervo com dono — o
-      // acervo da feature 002, que não tem dono, é descartado (FR-099).
-      banco = abrirBanco(caminho);
+      // Aplicar migrações apenas até versão 3 para verificar a criação de vinculo
+      // sem as mudanças posteriores de dono.
+      banco = new DatabaseSync(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+        aplicarMigracoes(
+          banco,
+          MIGRACOES.filter((m) => m.versao <= 3),
+        );
+
+        expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "cartao")).toBe(true);
         expect(existeTabela(banco, "baralho")).toBe(true);
         expect(existeTabela(banco, "vinculo")).toBe(true);
-        expect(existeTabela(banco, "usuario")).toBe(true);
-        expect(contarLinhas(banco, "cartao")).toBe(0);
-        expect(contarLinhas(banco, "baralho")).toBe(0);
+
+        // Os dados da feature 002 sem dono sobrevivem
+        expect(contarLinhas(banco, "cartao")).toBe(2);
+        expect(contarLinhas(banco, "baralho")).toBe(2);
         expect(contarLinhas(banco, "vinculo")).toBe(0);
 
-        // A tabela vinculo recriada é a mesma de antes: chave primária
-        // composta e cascata nas duas chaves estrangeiras.
+        // A tabela vinculo tem chave primária composta
         const colunas = banco.prepare("PRAGMA table_info(vinculo)").all();
 
         expect(colunas.map((coluna) => coluna.name)).toEqual([
@@ -136,12 +109,15 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
         banco.close();
       }
 
-      // Reabrir de novo não reaplica migração alguma: a versão permanece a
-      // corrente, e as tabelas continuam onde estavam.
-      banco = abrirBanco(caminho);
+      // Reabrir de novo e aplicar apenas até versão 3 novamente não reaplica a migração
+      banco = new DatabaseSync(caminho);
 
       try {
-        expect(versaoAtual(banco)).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+        aplicarMigracoes(
+          banco,
+          MIGRACOES.filter((m) => m.versao <= 3),
+        );
+        expect(versaoAtual(banco)).toBe(3);
         expect(existeTabela(banco, "vinculo")).toBe(true);
       } finally {
         banco.close();
@@ -152,120 +128,184 @@ describe("migração 3 — base da feature 002 com dados reais", () => {
   });
 });
 
-let banco: DatabaseSync;
-
-beforeEach(() => {
-  banco = abrirBanco(":memory:");
-  dono = gravarDono(banco);
-});
-
-afterEach(() => {
-  banco.close();
-});
-
 describe("tabela vinculo — forma do esquema", () => {
   it("tem chave primária composta (cartao_id, baralho_id)", () => {
-    const colunas = banco.prepare("PRAGMA table_info(vinculo)").all();
+    const banco = new DatabaseSync(":memory:");
 
-    expect(colunas).toHaveLength(2);
-    expect(colunas[0]).toMatchObject({
-      name: "cartao_id",
-      type: "TEXT",
-      notnull: 1,
-      pk: 1,
-    });
-    expect(colunas[1]).toMatchObject({
-      name: "baralho_id",
-      type: "TEXT",
-      notnull: 1,
-      pk: 2,
-    });
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
+
+      const colunas = banco.prepare("PRAGMA table_info(vinculo)").all();
+
+      expect(colunas).toHaveLength(2);
+      expect(colunas[0]).toMatchObject({
+        name: "cartao_id",
+        type: "TEXT",
+        notnull: 1,
+        pk: 1,
+      });
+      expect(colunas[1]).toMatchObject({
+        name: "baralho_id",
+        type: "TEXT",
+        notnull: 1,
+        pk: 2,
+      });
+    } finally {
+      banco.close();
+    }
   });
 
   it("declara ON DELETE CASCADE nas duas chaves estrangeiras", () => {
-    const chaves = banco.prepare("PRAGMA foreign_key_list(vinculo)").all();
+    const banco = new DatabaseSync(":memory:");
 
-    expect(chaves).toHaveLength(2);
-    expect(chaves).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          table: "cartao",
-          from: "cartao_id",
-          to: "id",
-          on_delete: "CASCADE",
-        }),
-        expect.objectContaining({
-          table: "baralho",
-          from: "baralho_id",
-          to: "id",
-          on_delete: "CASCADE",
-        }),
-      ]),
-    );
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
+
+      const chaves = banco.prepare("PRAGMA foreign_key_list(vinculo)").all();
+
+      expect(chaves).toHaveLength(2);
+      expect(chaves).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            table: "cartao",
+            from: "cartao_id",
+            to: "id",
+            on_delete: "CASCADE",
+          }),
+          expect.objectContaining({
+            table: "baralho",
+            from: "baralho_id",
+            to: "id",
+            on_delete: "CASCADE",
+          }),
+        ]),
+      );
+    } finally {
+      banco.close();
+    }
   });
 
   it("recusa inserção duplicada do mesmo par pela chave composta", () => {
-    inserirCartao(banco, "c1");
-    inserirBaralho(banco, "b1", "Inglês");
-    inserirVinculo(banco, "c1", "b1");
+    const banco = new DatabaseSync(":memory:");
 
-    expect(() => inserirVinculo(banco, "c1", "b1")).toThrow(
-      /UNIQUE constraint failed: vinculo\.cartao_id, vinculo\.baralho_id/,
-    );
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
+
+      const donoBanco = gravarDono(banco);
+      gravarCartao(banco, donoBanco, "c1");
+      gravarBaralho(banco, donoBanco, "b1", "Inglês");
+      gravarVinculo(banco, "c1", "b1");
+
+      expect(() => gravarVinculo(banco, "c1", "b1")).toThrow(
+        /UNIQUE constraint failed: vinculo\.cartao_id, vinculo\.baralho_id/,
+      );
+    } finally {
+      banco.close();
+    }
   });
 });
 
 describe("cascata — exclusão de um lado não destrói o outro", () => {
   it("liga PRAGMA foreign_keys na conexão", () => {
-    const pragma = banco.prepare("PRAGMA foreign_keys").get();
+    const banco = new DatabaseSync(":memory:");
 
-    expect(pragma?.foreign_keys).toBe(1);
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
+
+      const pragma = banco.prepare("PRAGMA foreign_keys").get();
+
+      expect(pragma?.foreign_keys).toBe(1);
+    } finally {
+      banco.close();
+    }
   });
 
   it("excluir um Cartão remove seus Vínculos, mas os dois Baralhos sobrevivem", () => {
-    inserirCartao(banco, "c1");
-    inserirBaralho(banco, "b1", "Inglês");
-    inserirBaralho(banco, "b2", "Espanhol");
-    inserirVinculo(banco, "c1", "b1");
-    inserirVinculo(banco, "c1", "b2");
+    const banco = new DatabaseSync(":memory:");
 
-    banco.prepare("DELETE FROM cartao WHERE id = ?").run("c1");
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
 
-    expect(
-      banco.prepare("SELECT count(*) AS total FROM vinculo WHERE cartao_id = ?").get("c1")
-        ?.total,
-    ).toBe(0);
-    expect(
-      banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
-    ).toBe(2);
-    expect(
-      banco
-        .prepare("SELECT id, nome FROM baralho ORDER BY id")
-        .all(),
-    ).toEqual([
-      { id: "b1", nome: "Inglês" },
-      { id: "b2", nome: "Espanhol" },
-    ]);
+      const donoBanco = gravarDono(banco);
+      gravarCartao(banco, donoBanco, "c1");
+      gravarBaralho(banco, donoBanco, "b1", "Inglês");
+      gravarBaralho(banco, donoBanco, "b2", "Espanhol");
+      gravarVinculo(banco, "c1", "b1");
+      gravarVinculo(banco, "c1", "b2");
+
+      banco.prepare("DELETE FROM cartao WHERE id = ?").run("c1");
+
+      expect(
+        banco.prepare("SELECT count(*) AS total FROM vinculo WHERE cartao_id = ?").get("c1")
+          ?.total,
+      ).toBe(0);
+      expect(
+        banco.prepare("SELECT count(*) AS total FROM baralho").get()?.total,
+      ).toBe(2);
+      expect(
+        banco
+          .prepare("SELECT id, nome FROM baralho ORDER BY id")
+          .all(),
+      ).toEqual([
+        { id: "b1", nome: "Inglês" },
+        { id: "b2", nome: "Espanhol" },
+      ]);
+    } finally {
+      banco.close();
+    }
   });
 
   it("excluir um Baralho remove seus Vínculos, mas os dois Cartões sobrevivem", () => {
-    inserirCartao(banco, "c1");
-    inserirCartao(banco, "c2");
-    inserirBaralho(banco, "b1", "Inglês");
-    inserirVinculo(banco, "c1", "b1");
-    inserirVinculo(banco, "c2", "b1");
+    const banco = new DatabaseSync(":memory:");
 
-    banco.prepare("DELETE FROM baralho WHERE id = ?").run("b1");
+    try {
+      // Aplicar apenas até versão 13 para que vinculo exista
+      aplicarMigracoes(
+        banco,
+        MIGRACOES.filter((m) => m.versao <= 13),
+      );
 
-    expect(
-      banco.prepare("SELECT count(*) AS total FROM vinculo WHERE baralho_id = ?").get("b1")
-        ?.total,
-    ).toBe(0);
-    expect(
-      banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,
-    ).toBe(2);
-    expect(
-      banco.prepare("SELECT id FROM cartao ORDER BY id").all().map((linha) => linha.id),
-    ).toEqual(["c1", "c2"]);
+      const donoBanco = gravarDono(banco);
+      gravarCartao(banco, donoBanco, "c1");
+      gravarCartao(banco, donoBanco, "c2");
+      gravarBaralho(banco, donoBanco, "b1", "Inglês");
+      gravarVinculo(banco, "c1", "b1");
+      gravarVinculo(banco, "c2", "b1");
+
+      banco.prepare("DELETE FROM baralho WHERE id = ?").run("b1");
+
+      expect(
+        banco.prepare("SELECT count(*) AS total FROM vinculo WHERE baralho_id = ?").get("b1")
+          ?.total,
+      ).toBe(0);
+      expect(
+        banco.prepare("SELECT count(*) AS total FROM cartao").get()?.total,
+      ).toBe(2);
+      expect(
+        banco.prepare("SELECT id FROM cartao ORDER BY id").all().map((linha) => linha.id),
+      ).toEqual(["c1", "c2"]);
+    } finally {
+      banco.close();
+    }
   });
 });

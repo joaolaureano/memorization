@@ -128,6 +128,25 @@ function prepararAcervoDaVersaoSeis(
     gravarVinculo(banco, "c1", "b1");
     gravarRegistroDaVersaoSeis(banco, dono, "r1", concluidaEm);
 
+    // Aplicar migrações até a versão corrente para preparar pertencimento
+    aplicarMigracoes(banco, MIGRACOES);
+
+    // Criar pertencimento para todos os Cartões para que a migração 14
+    // possa remover vinculo (pré-condição: NENHUM Cartão sem pertencimento)
+    const normalizarFrente = (frente: string) =>
+      frente.toLowerCase().replace(/\s+/g, " ").trim();
+
+    const inserirPertencimento = banco.prepare(
+      `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+       VALUES (?, ?, ?)`,
+    );
+
+    for (let indice = 1; indice <= QUANTIDADE_DE_CARTOES; indice += 1) {
+      const cartaoId = `c${indice}`;
+      const frente = indice === 1 ? "To walk" : `Cartão ${indice}`;
+      inserirPertencimento.run(cartaoId, "b1", normalizarFrente(frente));
+    }
+
     return dono;
   } finally {
     banco.close();

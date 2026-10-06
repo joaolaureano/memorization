@@ -5,7 +5,10 @@ import {
   UrlDeConexaoInvalidaError,
   type ConfiguracaoDaConexao,
 } from "../armazenamento/postgresql/conexao.ts";
-import { aplicarMigracoes } from "../armazenamento/postgresql/esquema.ts";
+import {
+  aplicarMigracoes,
+  versaoCorrenteConhecida,
+} from "../armazenamento/postgresql/esquema.ts";
 
 /**
  * O comando de migração da nuvem (FR-116, SC-048).
@@ -71,10 +74,19 @@ async function migrar(configuracao: ConfiguracaoDaConexao): Promise<void> {
 
   try {
     const versao = await aplicarMigracoes(piscina);
+    const corrente = versaoCorrenteConhecida();
 
-    console.log(
-      `Migração concluída: o esquema da base está na versão ${versao}.`,
-    );
+    if (versao < corrente) {
+      console.log(
+        `Migração concluída: o esquema da base está na versão ${versao}. ` +
+        "A migração final está adiada enquanto houver Cartões pendentes de transição. " +
+        "Execute este comando novamente depois que todos os Usuários concluírem.",
+      );
+    } else {
+      console.log(
+        `Migração concluída: o esquema da base está na versão ${versao}.`,
+      );
+    }
   } catch (erro) {
     console.error(mensagemDaFalha(erro));
     process.exitCode = 1;

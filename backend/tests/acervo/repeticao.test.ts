@@ -6,6 +6,7 @@ import {
   criarAcervo,
   type Acervo,
   type Avaliacao,
+  type Baralho,
   type Cartao,
   type DadosDeRegistro,
   type RegistroDeSessao,
@@ -69,6 +70,7 @@ const ALGORITMO_FALSO: AlgoritmoDeRepeticao = {
 let aberto: ArmazenamentoSqliteAberto;
 let usuarioId: string;
 let acervo: Acervo;
+let baralho: Baralho;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
@@ -79,6 +81,13 @@ beforeEach(async () => {
   // para que nenhuma infraestrutura de teste dependa do tempo falso.
   vi.useFakeTimers();
   vi.setSystemTime(INSTANTE_INICIAL);
+
+  // Cria um Baralho de testes
+  const resultadoBaralho = await acervo.criarBaralho({ nome: "Inglês" });
+  if (!resultadoBaralho.ok) {
+    throw new Error(`criação de Baralho recusada: ${resultadoBaralho.mensagem}`);
+  }
+  baralho = resultadoBaralho.baralho;
 });
 
 afterEach(async () => {
@@ -93,9 +102,9 @@ function avancar(segundos: number): void {
   );
 }
 
-/** Cria um Cartão válido pela Interface. */
+/** Cria um Cartão válido no Baralho de testes. */
 async function criarCartao(frente = FRENTE, verso = VERSO): Promise<Cartao> {
-  const resultado = await acervo.criarCartao({ frente, verso });
+  const resultado = await acervo.criarCartao(baralho.id, { frente, verso });
 
   if (!resultado.ok) {
     throw new Error(`criação recusada inesperadamente: ${resultado.mensagem}`);

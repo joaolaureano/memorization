@@ -18,14 +18,13 @@ import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
 
 /**
  * T006 — `Acervo` lista Cartões, inclusive dois com a mesma Frente; e T206 —
- * cada Cartão passa a trazer os Baralhos a que está vinculado.
+ * cada Cartão passa a trazer seu Baralho dono (Pertencimento, FR-389).
  *
- * Toda asserção atravessa a Interface (`criarCartao`, `criarBaralho`,
- * `vincular` e `listarCartoes`) sobre o Adapter do armazenamento local em
- * memória; nenhum teste inspeciona a tabela. A Frente não é identificador: dois
- * Cartões podem compartilhá-la e ambos devem aparecer (FR-003, FR-004;
- * invariante 2 de `spec.md`). Um Cartão sem Baralho devolve `baralhos: []` —
- * estado legítimo que garante SC-006.
+ * Toda asserção atravessa a Interface (`criarCartao`, `criarBaralho` e
+ * `listarCartoes`) sobre o Adapter do armazenamento local em memória; nenhum
+ * teste inspeciona a tabela. A Frente não é identificador: dois Cartões podem
+ * compartilhá-la e ambos devem aparecer (FR-003, FR-004; invariante 2 de
+ * `spec.md`). Cada Cartão pertence a exatamente UM Baralho (FR-389).
  *
  * A ordem não é pré-condição da Interface, portanto as asserções comparam
  * conjuntos de Cartões, nunca posições na lista.
@@ -39,6 +38,7 @@ const VERSO_DA_OUTRA_FRENTE = "Dormir";
 
 let aberto: ArmazenamentoSqliteAberto;
 let acervo: Acervo;
+let baralho: Baralho;
 
 beforeEach(async () => {
   aberto = await abrirArmazenamentoSqlite(":memory:");
@@ -49,6 +49,7 @@ beforeEach(async () => {
   const dono = await criarDonoDeTeste(aberto.usuarios);
 
   acervo = criarAcervo(aberto.armazenamento, dono);
+  baralho = baralhoDo(await acervo.criarBaralho({ nome: "Inglês" }));
 });
 
 afterEach(async () => {
@@ -73,9 +74,9 @@ function baralhoDo(resultado: ResultadoDeCriacaoDeBaralho): Baralho {
   return resultado.baralho;
 }
 
-/** Cria um Cartão válido pela Interface e devolve o Cartão criado. */
+/** Cria um Cartão válido no Baralho de testes e devolve o Cartão criado. */
 async function criar(frente: string, verso: string): Promise<Cartao> {
-  return cartaoDo(await acervo.criarCartao({ frente, verso }));
+  return cartaoDo(await acervo.criarCartao(baralho.id, { frente, verso }));
 }
 
 /** Cria um Baralho válido pela Interface e devolve o Baralho criado. */
@@ -85,10 +86,11 @@ async function criarBaralho(nome: string): Promise<Baralho> {
 
 describe("listarCartoes — leitura pela Interface", () => {
   it("devolve lista vazia quando nenhum Cartão existe", async () => {
+    // Sem criar Cartões, mas há Baralho de testes
     expect(await acervo.listarCartoes()).toEqual([]);
   });
 
-  it("devolve os dois Cartões de Frente idêntica, ambos presentes, sem Baralhos", async () => {
+  it("devolve os dois Cartões de Frente idêntica, ambos presentes, no mesmo Baralho", async () => {
     const primeiro = await criar(FRENTE_REPETIDA, VERSO_UM);
     const segundo = await criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
@@ -97,31 +99,30 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(listados).toHaveLength(2);
     expect(listados).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
-        { ...segundo, baralhos: [], proximaRevisaoEm: null },
+        { ...primeiro, baralho, proximaRevisaoEm: null },
+        { ...segundo, baralho, proximaRevisaoEm: null },
       ]),
     );
   });
 
-  it("não trata a Frente como identificador: cada Cartão mantém id e Verso próprios", async () => {
-    await criar(FRENTE_REPETIDA, VERSO_UM);
-    await criar(FRENTE_REPETIDA, VERSO_OUTRO);
+  it("não trata a Frente como identificador: cada Cartão mantém id, Verso e Frente numerada próprios", async () => {
+    const um = await criar(FRENTE_REPETIDA, VERSO_UM);
+    const dois = await criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
-    const deMesmaFrente = (await acervo.listarCartoes()).filter(
-      (cartao) => cartao.frente === FRENTE_REPETIDA,
-    );
+    const listados = await acervo.listarCartoes();
 
-    expect(deMesmaFrente).toHaveLength(2);
-    expect(new Set(deMesmaFrente.map((cartao) => cartao.id)).size).toBe(2);
-    expect(deMesmaFrente.map((cartao) => cartao.verso).sort()).toEqual(
+    expect(listados).toHaveLength(2);
+    expect(new Set(listados.map((cartao) => cartao.id)).size).toBe(2);
+    expect(listados.map((cartao) => cartao.verso).sort()).toEqual(
       [VERSO_UM, VERSO_OUTRO].sort(),
     );
-    expect(deMesmaFrente.every((cartao) => cartao.baralhos.length === 0)).toBe(
-      true,
-    );
+    // Verifica que as Frentes foram numeradas
+    expect(listados.find((c) => c.id === um.id)?.frente).toBe(FRENTE_REPETIDA);
+    expect(listados.find((c) => c.id === dois.id)?.frente).toBe(`${FRENTE_REPETIDA} (2)`);
+    expect(listados.every((cartao) => cartao.baralho.id === baralho.id)).toBe(true);
   });
 
-  it("devolve todos os Cartões existentes, cada um com sua Frente, seu Verso e baralhos vazios", async () => {
+  it("devolve todos os Cartões existentes, cada um com sua Frente, Verso e Baralho dono", async () => {
     const primeiro = await criar(FRENTE_REPETIDA, VERSO_UM);
     const segundo = await criar(FRENTE_REPETIDA, VERSO_OUTRO);
     const terceiro = await criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
@@ -131,22 +132,21 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(listados).toHaveLength(3);
     expect(listados).toEqual(
       expect.arrayContaining([
-        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
-        { ...segundo, baralhos: [], proximaRevisaoEm: null },
-        { ...terceiro, baralhos: [], proximaRevisaoEm: null },
+        { ...primeiro, baralho, proximaRevisaoEm: null },
+        { ...segundo, baralho, proximaRevisaoEm: null },
+        { ...terceiro, baralho, proximaRevisaoEm: null },
       ]),
     );
   });
 
-  it("devolve um Cartão em três Baralhos uma única vez, com os três Baralhos", async () => {
-    const cartao = await criar(FRENTE_REPETIDA, VERSO_UM);
-    const primeiroBaralho = await criarBaralho("Inglês");
-    const segundoBaralho = await criarBaralho("Espanhol");
-    const terceiroBaralho = await criarBaralho("Francês");
-
-    for (const baralho of [primeiroBaralho, segundoBaralho, terceiroBaralho]) {
-      expect(await acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
-    }
+  it("Cartão em outro Baralho devolve seu Baralho dono, não vários", async () => {
+    const outroBaralho = await criarBaralho("Espanhol");
+    const cartao = cartaoDo(
+      await acervo.criarCartao(outroBaralho.id, {
+        frente: FRENTE_REPETIDA,
+        verso: VERSO_UM,
+      }),
+    );
 
     const listados = await acervo.listarCartoes();
 
@@ -154,23 +154,7 @@ describe("listarCartoes — leitura pela Interface", () => {
     expect(listados[0].id).toBe(cartao.id);
     expect(listados[0].frente).toBe(FRENTE_REPETIDA);
     expect(listados[0].verso).toBe(VERSO_UM);
-    expect(listados[0].baralhos).toEqual(
-      expect.arrayContaining([
-        primeiroBaralho,
-        segundoBaralho,
-        terceiroBaralho,
-      ]),
-    );
-  });
-
-  it("mantém o Cartão órfão presente, com baralhos: []", async () => {
-    const cartao = await criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
-
-    await criarBaralho("Inglês");
-
-    expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [], proximaRevisaoEm: null },
-    ]);
+    expect(listados[0].baralho).toEqual(outroBaralho);
   });
 });
 
@@ -179,14 +163,13 @@ describe("listarCartoes — próxima revisão (022)", () => {
     const cartao = await criar(FRENTE_REPETIDA, VERSO_UM);
 
     expect(await acervo.listarCartoes()).toEqual([
-      { ...cartao, baralhos: [], proximaRevisaoEm: null },
+      { ...cartao, baralho, proximaRevisaoEm: null },
     ]);
   });
 
   it("devolve a próxima revisão do Agendamento depois de estudar o Cartão (FR-352)", async () => {
     const estudado = await criar(FRENTE_REPETIDA, VERSO_UM);
     const naoEstudado = await criar(OUTRA_FRENTE, VERSO_DA_OUTRA_FRENTE);
-    const baralho = await criarBaralho("Inglês");
 
     const resultado = await acervo.registrarSessao({
       id: randomUUID(),
@@ -225,15 +208,15 @@ describe("listarCartoes — próxima revisão (022)", () => {
       "bruno.souza",
     );
     const acervoDoDonoDois = criarAcervo(aberto.armazenamento, donoDois);
+    const baralhoDoDonoDois = baralhoDo(
+      await acervoDoDonoDois.criarBaralho({ nome: "Baralho do outro" }),
+    );
 
     const cartaoDoDonoDois = cartaoDo(
-      await acervoDoDonoDois.criarCartao({
+      await acervoDoDonoDois.criarCartao(baralhoDoDonoDois.id, {
         frente: OUTRA_FRENTE,
         verso: VERSO_DA_OUTRA_FRENTE,
       }),
-    );
-    const baralhoDoDonoDois = baralhoDo(
-      await acervoDoDonoDois.criarBaralho({ nome: "Inglês" }),
     );
 
     const resultado = await acervoDoDonoDois.registrarSessao({
@@ -256,7 +239,7 @@ describe("listarCartoes — próxima revisão (022)", () => {
     const listados = await acervo.listarCartoes();
 
     expect(listados).toEqual([
-      { ...cartaoDoPrimeiro, baralhos: [], proximaRevisaoEm: null },
+      { ...cartaoDoPrimeiro, baralho, proximaRevisaoEm: null },
     ]);
     expect(listados.map((cartao) => cartao.id)).not.toContain(
       cartaoDoDonoDois.id,

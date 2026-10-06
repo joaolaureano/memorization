@@ -95,6 +95,24 @@ async function comBaseVazia<T>(
   }
 }
 
+/** Cria uma base no corte de migração pedido, sem aplicar versões posteriores. */
+async function criarBaseNaVersao(titulo: string, versao: number): Promise<string> {
+  const servidor = await servidorDeTeste();
+  const nomeDaBase = await servidor.criarBase(titulo);
+  const piscina = await abrirPiscinaDaBase(nomeDaBase);
+
+  try {
+    await aplicarMigracoes(
+      piscina,
+      MIGRACOES.filter((migracao) => migracao.versao <= versao),
+    );
+  } finally {
+    await piscina.end();
+  }
+
+  return nomeDaBase;
+}
+
 /**
  * Grava um Usuário pela segunda Porta, sobre a base informada, e devolve o seu
  * `id`: é o dono das linhas do acervo dos cenários de esquema (FR-092), que
@@ -143,12 +161,12 @@ describe("base nova e vazia", () => {
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
+      "pertencimento",
         "preferencias",
         "registro_de_sessao",
         "rotina_de_estudo",
         "usuario",
         "versao_do_esquema",
-        "vinculo",
       ]);
 
       /** Um único inteiro, e uma única linha: a versão da base. */
@@ -186,6 +204,101 @@ describe("base nova e vazia", () => {
 
       expect(inserido).toEqual([{ id: "um" }]);
       expect(await versaoRegistrada(consultar)).toEqual([2]);
+    });
+  });
+});
+
+describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
+  it("mantém Vínculos enquanto qualquer Usuário tem Cartão pendente e limpa só após conclusão global", async () => {
+    await comBaseVazia("transicao-pertencimento", async (piscina, consultar) => {
+      await aplicarMigracoes(
+        piscina,
+        MIGRACOES.filter((migracao) => migracao.versao <= 12),
+      );
+
+      await piscina.query(
+        `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
+         VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10);`,
+        [
+          "dono-a",
+          "ana.silva",
+          Buffer.alloc(16),
+          Buffer.alloc(64),
+          "{}",
+          "dono-b",
+          "bia.souza",
+          Buffer.alloc(16),
+          Buffer.alloc(64),
+          "{}",
+        ],
+      );
+      await piscina.query(
+        `INSERT INTO baralho (id, nome, usuario_id)
+         VALUES ('b1', 'Inglês', 'dono-a'),
+                ('b2', 'Viagens', 'dono-a'),
+                ('b3', 'Espanhol', 'dono-b');`,
+      );
+      await piscina.query(
+        `INSERT INTO cartao (id, frente, verso, usuario_id)
+         VALUES ('c-unico', 'To walk', 'Caminhar', 'dono-a'),
+                ('c-avulso', 'To read', 'Ler', 'dono-a'),
+                ('c-compartilhado', 'To travel', 'Viajar', 'dono-b');`,
+      );
+      await piscina.query(
+        `INSERT INTO vinculo (cartao_id, baralho_id)
+         VALUES ('c-unico', 'b1'),
+                ('c-compartilhado', 'b2'),
+                ('c-compartilhado', 'b3');`,
+      );
+
+      await aplicarMigracoes(piscina);
+
+      expect(await lerVersaoDoEsquema(piscina)).toBe(13);
+      const backfill = await consultar<{ cartao_id: string; baralho_id: string }>(
+        `SELECT cartao_id, baralho_id FROM pertencimento ORDER BY cartao_id;`,
+      );
+      expect(backfill).toEqual([]);
+      expect(
+        await consultar<{ presente: string | null }>(
+          "SELECT to_regclass('vinculo')::text AS presente;",
+        ),
+      ).toEqual([{ presente: "vinculo" }]);
+
+      await piscina.query(
+        `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+         VALUES ('c-unico', 'b1', 'to walk'),
+                ('c-avulso', 'b2', 'to read');
+         DELETE FROM vinculo WHERE cartao_id = 'c-unico';`,
+      );
+      await aplicarMigracoes(piscina);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(13);
+      expect(
+        await consultar<{ presente: string | null }>(
+          "SELECT to_regclass('vinculo')::text AS presente;",
+        ),
+      ).toEqual([{ presente: "vinculo" }]);
+
+      await piscina.query(
+        `INSERT INTO cartao (id, frente, verso, usuario_id)
+         VALUES ('c-copia', 'To travel (2)', 'Viajar', 'dono-b');
+         INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+         VALUES ('c-compartilhado', 'b3', 'to travel'),
+                ('c-copia', 'b2', 'to travel (2)');
+         DELETE FROM vinculo WHERE cartao_id = 'c-compartilhado';`,
+      );
+      await aplicarMigracoes(piscina);
+
+      expect(await lerVersaoDoEsquema(piscina)).toBe(14);
+      expect(
+        await consultar<{ presente: string | null }>(
+          "SELECT to_regclass('vinculo')::text AS presente;",
+        ),
+      ).toEqual([{ presente: null }]);
+      expect(
+        await consultar<{ total: string }>(
+          "SELECT count(*)::text AS total FROM pertencimento;",
+        ),
+      ).toEqual([{ total: "4" }]);
     });
   });
 });
@@ -250,7 +363,7 @@ describe("as mesmas regras de conteúdo do Adapter local", () => {
   });
 
   it("tem chave primária composta em vinculo e as duas cascatas de exclusão", async () => {
-    const nomeDaBase = await criarBaseMigrada("restricoes");
+    const nomeDaBase = await criarBaseNaVersao("restricoes", 13);
 
     const restricoes = await (
       await servidorDeTeste()
@@ -281,7 +394,7 @@ describe("as mesmas regras de conteúdo do Adapter local", () => {
   });
 
   it("leva os Vínculos quando o Cartão ou o Baralho é excluído, sem levar a outra extremidade", async () => {
-    const nomeDaBase = await criarBaseMigrada("cascata");
+    const nomeDaBase = await criarBaseNaVersao("cascata", 13);
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
     try {
@@ -458,12 +571,12 @@ describe("falha no meio da migração — sem estado parcial", () => {
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
+        "pertencimento",
         "preferencias",
         "registro_de_sessao",
         "rotina_de_estudo",
         "usuario",
         "versao_do_esquema",
-        "vinculo",
       ]);
     });
   });
@@ -625,12 +738,12 @@ describe("migração 4 — tabela usuario", () => {
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
+        "pertencimento",
         "preferencias",
         "registro_de_sessao",
         "rotina_de_estudo",
         "usuario",
         "versao_do_esquema",
-        "vinculo",
       ]);
 
       /** A tabela `usuario` da migração 4 continua lá, com a mesma forma. */
@@ -655,11 +768,13 @@ describe("migração 4 — tabela usuario", () => {
        */
       const cartoes = await piscina.query("SELECT id FROM cartao;");
       const baralhos = await piscina.query("SELECT id FROM baralho;");
-      const vinculos = await piscina.query("SELECT cartao_id FROM vinculo;");
+      const vinculoLegado = await piscina.query<{ presente: string | null }>(
+        "SELECT to_regclass('vinculo')::text AS presente;",
+      );
 
       expect(cartoes.rows).toEqual([]);
       expect(baralhos.rows).toEqual([]);
-      expect(vinculos.rows).toEqual([]);
+      expect(vinculoLegado.rows).toEqual([{ presente: null }]);
 
       const versoes = await piscina.query<{ versao: number }>(
         "SELECT versao FROM versao_do_esquema;",
@@ -705,12 +820,12 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
+        "pertencimento",
         "preferencias",
         "registro_de_sessao",
         "rotina_de_estudo",
         "usuario",
         "versao_do_esquema",
-        "vinculo",
       ]);
 
       /** `concluida_em` é instante: ordena a listagem do mais recente. */
@@ -831,7 +946,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
+      expect(await aplicarMigracoes(piscina)).toBe(13);
 
       /** A migração só acrescenta tabelas: nada do acervo se perde (FR-165). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -843,6 +958,9 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
       expect(
         (await piscina.query("SELECT cartao_id FROM vinculo;")).rows,
       ).toEqual([{ cartao_id: "c1" }]);
+      expect(
+        (await piscina.query("SELECT cartao_id FROM pertencimento;")).rows,
+      ).toEqual([]);
       expect((await piscina.query("SELECT id FROM usuario;")).rows).toEqual([
         { id: dono },
       ]);
@@ -861,6 +979,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
+        "pertencimento",
         "preferencias",
         "registro_de_sessao",
         "rotina_de_estudo",
@@ -873,9 +992,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "SELECT versao FROM versao_do_esquema;",
       );
 
-      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
-        versaoCorrenteConhecida(),
-      ]);
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([13]);
     } finally {
       await piscina.end();
     }
@@ -1021,12 +1138,12 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
+        "pertencimento",
       "preferencias",
       "registro_de_sessao",
       "rotina_de_estudo",
       "usuario",
       "versao_do_esquema",
-      "vinculo",
     ]);
 
     const versoes = await servidor.consultar<{ versao: number }>(
@@ -1049,8 +1166,19 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     await servidor.consultar(
       nomeDaBase,
+      "INSERT INTO baralho (id, nome, usuario_id) VALUES ($1, $2, $3);",
+      ["b1", "Inglês", dono],
+    );
+    await servidor.consultar(
+      nomeDaBase,
       "INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ($1, $2, $3, $4);",
       ["c1", "To walk", "Caminhar", dono],
+    );
+    await servidor.consultar(
+      nomeDaBase,
+      `INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+       VALUES ($1, $2, $3);`,
+      ["c1", "b1", "to walk"],
     );
 
     const repeticao = await executarComando(ambiente(nomeDaBase));
@@ -1076,12 +1204,12 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
+      "pertencimento",
       "preferencias",
       "registro_de_sessao",
       "rotina_de_estudo",
       "usuario",
       "versao_do_esquema",
-      "vinculo",
     ]);
   }, 60_000);
 
@@ -1105,12 +1233,12 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
+      "pertencimento",
       "preferencias",
       "registro_de_sessao",
       "rotina_de_estudo",
       "usuario",
       "versao_do_esquema",
-      "vinculo",
     ]);
 
     const versoes = await servidor.consultar<{ versao: number }>(
@@ -1368,7 +1496,7 @@ describe("migração 7 — repetição espaçada", () => {
          VALUES ('r1', 0, 'To walk', 'Caminhar', 'acertou');`,
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(versaoCorrenteConhecida());
+      expect(await aplicarMigracoes(piscina)).toBe(13);
 
       /** O acervo e o Histórico sobrevivem intactos à migração (FR-220). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -1384,6 +1512,12 @@ describe("migração 7 — repetição espaçada", () => {
       );
 
       expect(Number(agendamentos.rows[0]?.total)).toBe(0);
+      expect(
+        (await piscina.query("SELECT cartao_id FROM pertencimento;")).rows,
+      ).toEqual([]);
+      expect(
+        (await piscina.query("SELECT cartao_id FROM vinculo;")).rows,
+      ).toEqual([{ cartao_id: "c1" }]);
 
       /** A linha antiga recebe o default `'baralho'` (FR-197, FR-214). */
       const registros = await piscina.query<{ origem: string }>(
@@ -1431,7 +1565,7 @@ describe("migração 7 — repetição espaçada", () => {
       );
 
       expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
-        versaoCorrenteConhecida(),
+        13,
       ]);
     } finally {
       await piscina.end();

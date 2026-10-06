@@ -66,10 +66,16 @@ function pedir(requisicao: InjectOptions) {
 }
 
 describe("CORS para o frontend local", () => {
-  it("responde ao pré-voo de POST /cartoes com 204 e os cabeçalhos de permissão", async () => {
+  it("responde ao pré-voo de POST /baralhos/{id}/cartoes com 204 e os cabeçalhos de permissão", async () => {
+    const baralho = await pedir({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+
     const resposta = await pedir({
       method: "OPTIONS",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.json().id}/cartoes`,
       headers: {
         origin: ORIGEM_DO_FRONTEND,
         "access-control-request-method": "POST",
@@ -130,10 +136,16 @@ describe("CORS para o frontend local", () => {
     );
   });
 
-  it("permite a leitura da criação concluída: POST 201 devolve access-control-allow-origin", async () => {
+  it("permite a leitura da criação concluída: POST /baralhos/{id}/cartoes 201 devolve access-control-allow-origin", async () => {
+    const baralho = await pedir({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+
     const resposta = await pedir({
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.json().id}/cartoes`,
       payload: { frente: "To walk", verso: "Caminhar" },
     });
 
@@ -143,10 +155,16 @@ describe("CORS para o frontend local", () => {
     );
   });
 
-  it("permite a leitura até da recusa: POST 400 devolve access-control-allow-origin", async () => {
+  it("permite a leitura até da recusa: POST /baralhos/{id}/cartoes 400 devolve access-control-allow-origin", async () => {
+    const baralho = await pedir({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+
     const resposta = await pedir({
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.json().id}/cartoes`,
       payload: { frente: "", verso: "Caminhar" },
     });
 
@@ -273,42 +291,6 @@ describe("CORS para o frontend local", () => {
     const resposta = await pedir({
       method: "OPTIONS",
       url: "/baralhos/b1",
-      headers: {
-        origin: ORIGEM_DO_FRONTEND,
-        "access-control-request-method": "DELETE",
-        "access-control-request-headers": "content-type",
-      },
-    });
-
-    expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-    expect(resposta.headers["access-control-allow-methods"]).toContain("DELETE");
-  });
-
-  it("responde ao pré-voo de POST /baralhos/{id}/vinculos com 204 e permissão de POST", async () => {
-    const resposta = await pedir({
-      method: "OPTIONS",
-      url: "/baralhos/b1/vinculos",
-      headers: {
-        origin: ORIGEM_DO_FRONTEND,
-        "access-control-request-method": "POST",
-        "access-control-request-headers": "content-type",
-      },
-    });
-
-    expect(resposta.statusCode).toBe(204);
-    expect(resposta.headers["access-control-allow-origin"]).toBe(
-      ORIGEM_DO_FRONTEND,
-    );
-    expect(resposta.headers["access-control-allow-methods"]).toContain("POST");
-  });
-
-  it("responde ao pré-voo de DELETE /baralhos/{id}/vinculos/{cartaoId} com 204 e permissão de DELETE", async () => {
-    const resposta = await pedir({
-      method: "OPTIONS",
-      url: "/baralhos/b1/vinculos/c1",
       headers: {
         origin: ORIGEM_DO_FRONTEND,
         "access-control-request-method": "DELETE",
@@ -719,9 +701,16 @@ describe("política de outra origem desligada (T1003, FR-128, SC-056)", () => {
   }
 
   it("não responde ao pré-voo de outra origem", async () => {
+    const baralhoResp = await pedirNaProducao({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+    const baralho = baralhoResp.json();
+
     const resposta = await pedirNaProducao({
       method: "OPTIONS",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.id}/cartoes`,
       headers: {
         origin: ORIGEM_DO_FRONTEND,
         "access-control-request-method": "POST",
@@ -742,9 +731,16 @@ describe("política de outra origem desligada (T1003, FR-128, SC-056)", () => {
   });
 
   it("não envia cabeçalho permissivo na criação concluída", async () => {
+    const baralhoResp = await pedirNaProducao({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+    const baralho = baralhoResp.json();
+
     const resposta = await pedirNaProducao({
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.id}/cartoes`,
       payload: { frente: "To walk", verso: "Caminhar" },
     });
 
@@ -753,9 +749,16 @@ describe("política de outra origem desligada (T1003, FR-128, SC-056)", () => {
   });
 
   it("não envia cabeçalho permissivo na recusa de forma", async () => {
+    const baralhoResp = await pedirNaProducao({
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+    const baralho = baralhoResp.json();
+
     const resposta = await pedirNaProducao({
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.id}/cartoes`,
       payload: { frente: "", verso: "Caminhar" },
     });
 

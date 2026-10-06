@@ -8,7 +8,7 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -17,7 +17,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   FUSO_DE_TESTE,
   INSTANTE_DE_TESTE,
@@ -98,16 +97,10 @@ async function prepararBaralho(
   );
 
   for (let i = 1; i <= n; i += 1) {
-    const cartao = await criarCartaoPelaApi(
+    await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
-      { frente: `Frente ${i}`, verso: `Verso ${i}` },
-      credencial,
-    );
-
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      cartao.id,
       baralho.id,
+      { frente: `Frente ${i}`, verso: `Verso ${i}` },
       credencial,
     );
   }

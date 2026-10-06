@@ -11,7 +11,7 @@ import {
   aguardarProntidao,
   cabecalhoDeCredencial,
   criarBaralhoPelaApi,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -20,7 +20,6 @@ import {
   iniciarFrontend,
   portaLivre,
   removerPastaTemporaria,
-  vincularCartaoPelaApi,
   AMBIENTE_COM_RELOGIO_FIXO,
   fixarRelogioDoContexto,
 } from "./servidores-locais";
@@ -113,16 +112,10 @@ async function prepararBaralho(
   const criados: { id: string; frente: string; verso: string }[] = [];
 
   for (const cartao of cartoes) {
-    const criado = await criarCartaoPelaApi(
+    const criado = await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
-      cartao,
-      credencial,
-    );
-
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      criado.id,
       baralho.id,
+      cartao,
       credencial,
     );
 
@@ -241,7 +234,7 @@ test("Baralhos: «algebra» encontra «Álgebra linear», e Limpar filtros resta
 
 // --- T2207/2: combinação de busca, Baralho e situação (SC-138–SC-140) -------
 
-test("Cartões: Verso, Baralho e Sem baralho combinados, sem duplicar; Baralhos: situação da revisão (FR-349, FR-351–FR-353, SC-138–SC-140; spec 024)", async ({ page, browserName }) => {
+test("Baralhos: busca e situação da revisão distinguem pendentes, revisados e vazios (FR-349, FR-351–FR-353, SC-138–SC-140; spec 024)", async ({ page, browserName }) => {
   expect(browserName).toBe("chromium");
 
   const ambiente = await subirAmbiente();
@@ -256,90 +249,26 @@ test("Cartões: Verso, Baralho e Sem baralho combinados, sem duplicar; Baralhos:
       { frente: "How are you?", verso: "Como você está?" },
       { frente: "Where is the station?", verso: "Onde fica a estação?" },
     ]);
-    const viagens = await prepararBaralho(ambiente, credencial, "Viagens", []);
+    const viagens = await prepararBaralho(ambiente, credencial, "Viagens", [
+      { frente: "Ticket, please", verso: "Uma passagem, por favor" },
+    ]);
     // O Baralho vazio sustenta a etiqueta "Sem cartões" e prova que o filtro
     // de situação não o confunde com "Revisado" (spec 024).
     await prepararBaralho(ambiente, credencial, "Vazio", []);
 
-    await vincularCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      ingles.cartoes[0].id,
-      viagens.id,
-      credencial,
-    );
+    const statusIngles = await registrarSessaoPelaApi(ambiente.enderecoDaApi, {
+      id: randomUUID(), origem: "baralho", baralhoId: ingles.id,
+      nomeDoBaralho: ingles.nome,
+      itens: [{ frente: "How are you?", verso: "Como você está?", cartaoId: ingles.cartoes[0].id, avaliacao: "bom" }],
+    }, credencial);
+    const statusViagens = await registrarSessaoPelaApi(ambiente.enderecoDaApi, {
+      id: randomUUID(), origem: "baralho", baralhoId: viagens.id,
+      nomeDoBaralho: viagens.nome,
+      itens: [{ frente: viagens.cartoes[0].frente, verso: viagens.cartoes[0].verso, cartaoId: viagens.cartoes[0].id, avaliacao: "bom" }],
+    }, credencial);
+    expect([200, 201]).toContain(statusIngles);
+    expect([200, 201]).toContain(statusViagens);
 
-    await criarCartaoPelaApi(
-      ambiente.enderecoDaApi,
-      { frente: "O que é osmose?", verso: "Passagem de água pela membrana." },
-      credencial,
-    );
-
-    // Um estudo de "bom" agenda o Cartão para o futuro: "Inglês cotidiano"
-    // fica Pendente (o outro Cartão segue novo) e "Viagens" fica Revisado
-    // (todos os Cartões em dia) — as duas situações da lista de Baralhos
-    // (spec 024).
-    const status = await registrarSessaoPelaApi(
-      ambiente.enderecoDaApi,
-      {
-        id: randomUUID(),
-        origem: "baralho",
-        baralhoId: ingles.id,
-        nomeDoBaralho: ingles.nome,
-        itens: [
-          {
-            frente: "How are you?",
-            verso: "Como você está?",
-            cartaoId: ingles.cartoes[0].id,
-            avaliacao: "bom",
-          },
-        ],
-      },
-      credencial,
-    );
-
-    expect([200, 201]).toContain(status);
-
-    await abrirTela(page, ambiente, "cartoes", credencial);
-
-    const busca = page.getByLabel("Buscar cartões");
-    const comboBaralho = page.getByLabel("Baralho");
-    const limpar = page.getByRole("button", { name: "Limpar filtros" }).first();
-
-    // A tela de Cartões não tem mais o filtro de situação: ele passou para a
-    // lista de Baralhos (spec 024).
-    await expect(page.getByLabel("Situação da revisão")).toHaveCount(0);
-    await expect(page.getByLabel("Baralho")).toBeVisible();
-    await expect(busca).toBeVisible();
-
-    // (a) busca pelo Verso.
-    await busca.fill("estação");
-    await expect(page.getByText("1 resultado")).toBeVisible();
-    await expect(page.getByText("Where is the station?")).toBeVisible();
-    await expect(page.getByText("How are you?")).toHaveCount(0);
-
-    // (b) filtro por Baralho, sem duplicar o Cartão em dois Baralhos.
-    await limpar.click();
-
-    await comboBaralho.selectOption({ label: "Viagens" });
-    await expect(page.getByRole("listitem")).toHaveCount(1);
-    await expect(page.getByText("How are you?")).toBeVisible();
-
-    await comboBaralho.selectOption({ label: "Inglês cotidiano" });
-    await expect(page.getByRole("listitem")).toHaveCount(2);
-    await expect(page.getByText("How are you?")).toHaveCount(1);
-
-    // (c) Cartões Sem baralho.
-    await comboBaralho.selectOption({ label: "Sem baralho" });
-    await expect(page.getByRole("listitem")).toHaveCount(1);
-    await expect(page.getByText("O que é osmose?")).toBeVisible();
-
-    // (d) combinação dos critérios restantes — busca e Baralho.
-    await busca.fill("how");
-    await comboBaralho.selectOption({ label: "Inglês cotidiano" });
-    await expect(page.getByText("1 resultado")).toBeVisible();
-
-    // (e) Baralhos: etiquetas de situação e filtro com as três opções. O
-    // filtro substitui o que a tela de Cartões oferecia até a spec 024.
     await abrirTela(page, ambiente, "baralhos", credencial);
 
     const filtroDeSituacao = page.getByLabel("Situação da revisão");
@@ -410,26 +339,11 @@ test("Isolamento: resultados e opções de Baralho são só do Usuário (FR-359)
       { frente: "Hello", verso: "Olá" },
     ]);
 
-    await abrirTela(pageDeB, ambiente, "cartoes", credencialB);
-
-    // As opções de Baralho chegam com a carga, então a prova espera a
-    // contagem antes de ler as opções do seletor.
-    await expect(pageDeB.getByText("1 resultado")).toBeVisible();
-
-    const opcoes = await pageDeB
-      .getByLabel("Baralho")
-      .locator("option")
-      .allTextContents();
-
-    expect(opcoes).not.toContain("Segredo de A");
-    expect(opcoes).toContain("Inglês");
-
-    await pageDeB.getByLabel("Buscar cartões").fill("Frente de A");
-    await expect(
-      pageDeB.getByRole("heading", { name: "Nenhum resultado encontrado" }),
-    ).toBeVisible();
-
     await abrirTela(pageDeB, ambiente, "baralhos", credencialB);
+
+    await expect(pageDeB.getByRole("listitem")).toHaveCount(1);
+    await expect(pageDeB.getByText("Inglês", { exact: true })).toBeVisible();
+    await expect(pageDeB.getByText("Segredo de A", { exact: true })).toHaveCount(0);
 
     await pageDeB.getByLabel("Buscar baralhos").fill("segredo");
     await expect(

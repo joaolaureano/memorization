@@ -146,15 +146,12 @@ async function entrarEmNovoNavegador(
     pagina.getByRole("heading", { level: 1, name: /^Olá, / }),
   ).toBeVisible();
 
-  // O Início ainda tem leituras em voo (Agenda e Cartões). Cada uma é
+  // O Início ainda tem leituras em voo (Agenda). Cada uma é
   // uma requisição autenticada: se o Acesso vencer antes de elas terminarem, a
   // recusa chega a uma delas e o servidor limpa o Cookie, e o que o teste
   // observa depois deixa de ser a expiração. Os Usuários destes testes não têm
   // acervo, então o estado final de cada bloco é conhecido.
   await expect(pagina.getByText("Nenhum estudo agendado para hoje")).toBeVisible();
-  await expect(
-    pagina.getByRole("link", { name: "Criar o primeiro Cartão" }),
-  ).toBeVisible();
 
   await aguardarRede();
 
@@ -265,11 +262,9 @@ test("uma operação depois da expiração é recusada com a mensagem, sem concl
 
     await pagina
       .getByRole("navigation", { name: "Principal" })
-      .getByRole("link", { name: "Cartões" })
+      .getByRole("link", { name: "Perfil" })
       .click();
-    await expect(
-      pagina.getByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeVisible();
+    await expect(pagina.getByRole("heading", { level: 1, name: "Perfil" })).toBeVisible();
     await aguardarRede();
 
     expirarOsAcessos(ambiente);

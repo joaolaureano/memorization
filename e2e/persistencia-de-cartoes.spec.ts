@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 import {
   aguardarProntidao,
   criarPastaTemporaria,
+  criarBaralhoPelaApi,
   criarUsuarioDeProva,
   descarregarPagina,
   encerrarProcesso,
@@ -97,6 +98,8 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     // O Usuário de prova é cadastrado antes de qualquer operação de acervo: a
     // Credencial dele acompanha toda requisição (FR-090).
     await criarUsuarioDeProva(enderecoDaApi);
+    const primeiroBaralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Geografia" });
+    const outroBaralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Matemática" });
 
     // A UI real abre sobre um acervo vazio — o arquivo é novo, sem Cartões — e
     // exige Entrar antes de mostrar qualquer coisa (FR-097); depois de Entrar
@@ -104,27 +107,35 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
     // "Principal".
     await page.goto(enderecoDoFrontend);
     await entrarSeNecessario(page);
-    await irParaCartoes(page);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${primeiroBaralho.id}`);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: "Geografia" }),
     ).toBeVisible();
-    await expect(page.getByRole("listitem")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(0);
     await expect(
-      page.getByText("Ainda não há Cartões. Crie o primeiro para começar."),
+      page.getByText("Este Baralho ainda não tem Cartões."),
     ).toBeVisible();
 
     // Exatamente dois Cartões criados pela UI, sem nenhuma interceptação de
     // rede: cada POST chega ao banco SQLite em arquivo.
-    await criarCartaoPelaUi(page, PRIMEIRO_CARTAO);
-    await expect(page.getByRole("listitem")).toHaveCount(1);
+    await criarCartaoPelaUi(page, PRIMEIRO_CARTAO, "Geografia");
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(1);
 
-    await criarCartaoPelaUi(page, SEGUNDO_CARTAO);
-    await expect(page.getByRole("listitem")).toHaveCount(2);
+    await criarCartaoPelaUi(page, SEGUNDO_CARTAO, "Geografia");
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(2);
+
+    await criarCartaoPelaUi(page, PRIMEIRO_CARTAO, "Geografia");
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(3);
+    await expect(page.getByRole("status").filter({ hasText: "A capital da França (2)" })).toBeVisible();
+
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${outroBaralho.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Matemática" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(0);
 
     const criados = await listarCartoesPelaApi(enderecoDaApi);
 
-    expect(criados).toHaveLength(2);
+    expect(criados).toHaveLength(3);
 
     // Sem documento do app aberto, o reinício não provoca recarga automática do cliente do Vite.
     await descarregarPagina(page);
@@ -176,22 +187,23 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
 
     await page.goto(enderecoDoFrontend);
     await entrarSeNecessario(page);
-    await irParaCartoes(page);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${primeiroBaralho.id}`);
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
+      page.getByRole("heading", { level: 1, name: "Geografia" }),
     ).toBeVisible();
-    await expect(page.getByRole("listitem")).toHaveCount(2);
+    await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByRole("listitem")).toHaveCount(3);
 
     await conferirCartaoNaLista(page, PRIMEIRO_CARTAO);
     await conferirCartaoNaLista(page, SEGUNDO_CARTAO);
+    await conferirCartaoNaLista(page, { frente: "A capital da França (2)", verso: "Paris" });
 
     // Persistência exata conferida também direto na API: os mesmos ids, as
     // mesmas Frentes e os mesmos Versos — os Cartões foram relidos do
     // arquivo, não recriados.
     const persistidos = await listarCartoesPelaApi(enderecoDaApi);
 
-    expect(persistidos).toHaveLength(2);
+    expect(persistidos).toHaveLength(3);
     expect(persistidos).toEqual(expect.arrayContaining(criados));
   } finally {
     // Encerrar sempre, mesmo quando a prova falha no meio, e remover o
@@ -206,13 +218,6 @@ test("Cartões criados pela UI persistem após reiniciar API e frontend (FR-040,
  * Vai para a lista de Cartões pela navegação principal: depois de Entrar o
  * destino é Baralhos, e a lista de Cartões é uma página própria.
  */
-async function irParaCartoes(page: Page): Promise<void> {
-  await page
-    .getByRole("navigation", { name: "Principal" })
-    .getByRole("link", { name: "Cartões" })
-    .click();
-}
-
 /**
  * Cria um Cartão pela tela real: abre a página "Criar cartão" a partir da
  * lista de Cartões, preenche Frente e Verso e salva; o sucesso volta para a
@@ -221,11 +226,12 @@ async function irParaCartoes(page: Page): Promise<void> {
 async function criarCartaoPelaUi(
   page: Page,
   cartao: { frente: string; verso: string },
+  nomeDoBaralho: string,
 ): Promise<void> {
   // Com a lista vazia, "Criar cartão" aparece duas vezes: no cabeçalho da
   // página e na ação do estado vazio. O primeiro (o do cabeçalho) é sempre
   // o caminho da criação.
-  await page.getByRole("link", { name: "Criar cartão" }).first().click();
+  await page.getByRole("link", { name: "Criar Cartão" }).first().click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Criar cartão" }),
   ).toBeVisible();
@@ -235,7 +241,7 @@ async function criarCartaoPelaUi(
   await page.getByRole("button", { name: "Salvar" }).click();
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Cartões" }),
+    page.getByRole("heading", { level: 1, name: nomeDoBaralho }),
   ).toBeVisible();
 }
 
@@ -247,10 +253,10 @@ async function conferirCartaoNaLista(
   page: Page,
   cartao: { frente: string; verso: string },
 ): Promise<void> {
-  const item = page
+  const item = page.getByRole("region", { name: "Cartões do Baralho" })
     .getByRole("listitem")
-    .filter({ hasText: cartao.frente });
+    .filter({ has: page.getByText(cartao.frente, { exact: true }) });
 
   await expect(item).toHaveCount(1);
-  await expect(item).not.toContainText(cartao.verso);
+  await expect(item).toContainText(cartao.verso);
 }

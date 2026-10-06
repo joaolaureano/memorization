@@ -33,14 +33,12 @@ export type Rota =
   | { nome: "central-de-estudo" }
   | { nome: "entrar" }
   | { nome: "registro"; id: string }
-  | { nome: "cartoes" }
-  | { nome: "novo-cartao" }
-  | { nome: "editar-cartao"; id: string }
   | { nome: "baralhos" }
   | { nome: "novo-baralho" }
   | { nome: "baralho"; id: string }
   | { nome: "editar-baralho"; id: string }
-  | { nome: "adicionar-cartoes"; id: string }
+  | { nome: "novo-cartao"; baralhoId: string }
+  | { nome: "editar-cartao"; baralhoId: string; id: string }
   | { nome: "estudo"; id: string }
   | { nome: "selecao-temporaria" }
   | { nome: "estudo-temporario" }
@@ -111,10 +109,6 @@ function interpretarCaminho(hash: string): Rota {
           return { nome: "entrar" };
         }
 
-        if (primeiro === "cartoes") {
-          return { nome: "cartoes" };
-        }
-
         if (primeiro === "baralhos") {
           return { nome: "baralhos" };
         }
@@ -126,7 +120,7 @@ function interpretarCaminho(hash: string): Rota {
         }
 
         // As Preferências (FR-212) são um destino de primeiro nível, como o
-        // Início, os Baralhos e os Cartões.
+        // Início e os Baralhos.
         if (primeiro === "preferencias") {
           return { nome: "preferencias" };
         }
@@ -158,10 +152,6 @@ function interpretarCaminho(hash: string): Rota {
           return segundo === "novo"
             ? { nome: "novo-baralho" }
             : { nome: "baralho", id: decodificar(segundo) };
-        }
-
-        if (colecao === "cartoes" && segundo === "novo") {
-          return { nome: "novo-cartao" };
         }
 
         // Agendar estudo (FR-242): `novo` é palavra reservada, nunca um id.
@@ -198,21 +188,49 @@ function interpretarCaminho(hash: string): Rota {
             return { nome: "editar-baralho", id: decodificar(id) };
           }
 
-          if (acao === "adicionar") {
-            return { nome: "adicionar-cartoes", id: decodificar(id) };
-          }
-
           if (acao === "estudo") {
             return { nome: "estudo", id: decodificar(id) };
           }
-        }
 
-        if (colecao === "cartoes" && acao === "editar") {
-          return { nome: "editar-cartao", id: decodificar(id) };
+          if (acao === "cartoes") {
+            // Cartões dentro de um Baralho (FR-025): `#/baralhos/{baralhoId}/cartoes`
+            // não é uma rota válida de dois segmentos; continuamos a três.
+            return { nome: "inicio" };
+          }
         }
 
         if (colecao === "agenda" && acao === "editar") {
           return { nome: "editar-rotina", id: decodificar(id) };
+        }
+
+        return { nome: "inicio" };
+      }
+
+      case 4: {
+        const [colecao, baralhoId, cartoes, acao] = segmentos;
+
+        if (colecao === "baralhos" && cartoes === "cartoes") {
+          if (acao === "novo") {
+            // FR-025: criar Cartão dentro de um Baralho.
+            return { nome: "novo-cartao", baralhoId: decodificar(baralhoId) };
+          }
+
+          return { nome: "inicio" };
+        }
+
+        return { nome: "inicio" };
+      }
+
+      case 5: {
+        const [colecao, baralhoId, cartoes, id, acao] = segmentos;
+
+        if (colecao === "baralhos" && cartoes === "cartoes" && acao === "editar") {
+          // FR-025: editar Cartão dentro de um Baralho.
+          return {
+            nome: "editar-cartao",
+            baralhoId: decodificar(baralhoId),
+            id: decodificar(id),
+          };
         }
 
         return { nome: "inicio" };
@@ -269,15 +287,6 @@ export function hashDaRota(rota: Rota): string {
     case "editar-rotina":
       return `#/agenda/${encodeURIComponent(rota.id)}/editar`;
 
-    case "cartoes":
-      return "#/cartoes";
-
-    case "novo-cartao":
-      return "#/cartoes/novo";
-
-    case "editar-cartao":
-      return `#/cartoes/${encodeURIComponent(rota.id)}/editar`;
-
     case "baralhos":
       return "#/baralhos";
 
@@ -290,8 +299,13 @@ export function hashDaRota(rota: Rota): string {
     case "editar-baralho":
       return `#/baralhos/${encodeURIComponent(rota.id)}/editar`;
 
-    case "adicionar-cartoes":
-      return `#/baralhos/${encodeURIComponent(rota.id)}/adicionar`;
+    case "novo-cartao":
+      // FR-025: criar Cartão dentro de um Baralho.
+      return `#/baralhos/${encodeURIComponent(rota.baralhoId)}/cartoes/novo`;
+
+    case "editar-cartao":
+      // FR-025: editar Cartão dentro de um Baralho.
+      return `#/baralhos/${encodeURIComponent(rota.baralhoId)}/cartoes/${encodeURIComponent(rota.id)}/editar`;
 
     case "estudo":
       return `#/baralhos/${encodeURIComponent(rota.id)}/estudo`;
@@ -313,7 +327,7 @@ export function hashDaRota(rota: Rota): string {
  */
 export function destinoAtivo(
   rota: Rota,
-): "inicio" | "estudo" | "baralhos" | "cartoes" | "preferencias" | null {
+): "inicio" | "estudo" | "baralhos" | "preferencias" | null {
   switch (rota.nome) {
     case "inicio":
       return "inicio";
@@ -326,16 +340,12 @@ export function destinoAtivo(
     case "estudo-da-agenda":
       return "estudo";
 
-    case "cartoes":
-    case "novo-cartao":
-    case "editar-cartao":
-      return "cartoes";
-
     case "baralhos":
     case "novo-baralho":
     case "baralho":
     case "editar-baralho":
-    case "adicionar-cartoes":
+    case "novo-cartao":
+    case "editar-cartao":
     case "estudo":
     case "selecao-temporaria":
     case "estudo-temporario":

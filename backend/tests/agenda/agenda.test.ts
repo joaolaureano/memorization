@@ -789,7 +789,7 @@ describe("US6: indisponibilidade, nomes e datas (FR-243–FR-247, SC-099)", () =
     await criarRotina(m.acervo, { baralhoId: frances.id, dias: [1] });
 
     for (const cartaoId of ingles.cartaoIds) {
-      await m.acervo.desvincular(cartaoId, ingles.id);
+      await m.acervo.excluirCartao(cartaoId);
     }
 
     await m.acervo.excluirBaralho(frances.id);

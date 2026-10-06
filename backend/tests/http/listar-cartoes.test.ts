@@ -12,16 +12,17 @@ import { registrarRotasDeCartoes } from "../../src/http/rotas.ts";
 
 /**
  * T007 — contrato HTTP de `GET /cartoes`
- * (specs/001-criar-cartao/contracts/api-cartoes.md), com a adição aditiva da
- * feature `003` (specs/003-vincular-cartao-baralho/contracts/api-vinculos.md):
- * cada Cartão agora traz também `baralhos`.
+ * (specs/001-criar-cartao/contracts/api-cartoes.md), com a mudança da feature 025:
+ * cada Cartão agora traz um único `baralho` (não mais um array `baralhos`).
  *
  * Toda asserção atravessa `inject` sobre o Adapter HTTP registrado com o
  * `Acervo` sobre o Adapter do armazenamento local em memória. A Frente não é
- * identificador: dois Cartões com a mesma Frente são ambos devolvidos (FR-003;
- * invariante 2 de `spec.md`), e a ordem não é pré-condição do contrato, então
+ * identificador: dois Cartões com a mesma Frente no mesmo Baralho recebem numeração,
+ * mas em Baralhos diferentes não. A ordem não é pré-condição do contrato, então
  * as asserções comparam conjuntos de Cartões, nunca posições.
  */
+
+import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
 
 const FRENTE_REPETIDA = "To walk";
 const VERSO_UM = "Caminhar";
@@ -29,6 +30,7 @@ const VERSO_OUTRO = "Andar";
 
 let servidor: FastifyInstance;
 let contrato: ServidorDeContrato;
+let baralhoId: string;
 
 beforeEach(async () => {
   /**
@@ -36,9 +38,16 @@ beforeEach(async () => {
    * cada arquivo registra as suas rotas sobre o `Acervo` do Usuário que entrou.
    */
   contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+  registrarRotasDeBaralhos(servidor, acervoDe);
   registrarRotasDeCartoes(servidor, acervoDe);
   });
   servidor = contrato.servidor;
+  const respostaBaralho = await pedirComCredencial(servidor, contrato.credencial, {
+    method: "POST",
+    url: "/baralhos",
+    payload: { nome: "Teste" },
+  });
+  baralhoId = respostaBaralho.json().id as string;
 });
 
 afterEach(async () => {
@@ -54,14 +63,14 @@ function pedir(requisicao: InjectOptions) {
   return pedirComCredencial(servidor, contrato.credencial, requisicao);
 }
 
-/** Cria um Cartão pela rota de criação; falha se a criação for recusada. */
+/** Cria um Cartão no Baralho de teste; falha se a criação for recusada. */
 async function criar(
   frente: string,
   verso: string,
 ): Promise<{ id: string; frente: string; verso: string }> {
   const resposta = await pedir({
     method: "POST",
-    url: "/cartoes",
+    url: `/baralhos/${baralhoId}/cartoes`,
     payload: { frente, verso },
   });
 
@@ -80,22 +89,21 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
     expect(resposta.json()).toEqual([]);
   });
 
-  it("responde 200 com os dois Cartões de Frente idêntica, ambos presentes", async () => {
-    const primeiro = await criar(FRENTE_REPETIDA, VERSO_UM);
-    const segundo = await criar(FRENTE_REPETIDA, VERSO_OUTRO);
+  it("responde 200 com os dois Cartões de Frente idêntica com numeração", async () => {
+    await criar(FRENTE_REPETIDA, VERSO_UM);
+    await criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
     const resposta = await pedir({ method: "GET", url: "/cartoes" });
 
     expect(resposta.statusCode).toBe(200);
-    expect(resposta.json()).toEqual(
-      expect.arrayContaining([
-        { ...primeiro, baralhos: [], proximaRevisaoEm: null },
-        { ...segundo, baralhos: [], proximaRevisaoEm: null },
-      ]),
-    );
+    const cartoes = resposta.json();
+    expect(cartoes).toHaveLength(2);
+    expect(cartoes[0].frente).toBe(FRENTE_REPETIDA);
+    expect(cartoes[1].frente).toBe(`${FRENTE_REPETIDA} (2)`);
+    expect(cartoes.every((c: { baralho?: { id: string } }) => c.baralho?.id === baralhoId)).toBe(true);
   });
 
-  it("devolve cada Cartão com id, Frente, Verso e baralhos vazios (FR-003, FR-004)", async () => {
+  it("devolve cada Cartão com id, Frente, Verso e baralho (FR-003, FR-004)", async () => {
     await criar(FRENTE_REPETIDA, VERSO_UM);
     await criar(FRENTE_REPETIDA, VERSO_OUTRO);
 
@@ -104,22 +112,24 @@ describe("GET /cartoes — leitura conforme o contrato", () => {
       id: string;
       frente: string;
       verso: string;
-      baralhos: unknown[];
+      baralho: { id: string; nome: string };
       proximaRevisaoEm: string | null;
     }[];
 
     expect(listados).toHaveLength(2);
     for (const cartao of listados) {
       expect(Object.keys(cartao).sort()).toEqual([
-        "baralhos",
+        "baralho",
         "frente",
         "id",
         "proximaRevisaoEm",
         "verso",
       ]);
       expect(cartao.id).toEqual(expect.any(String));
-      expect(cartao.frente).toBe(FRENTE_REPETIDA);
-      expect(cartao.baralhos).toEqual([]);
+      expect(cartao.baralho).toEqual({
+        id: baralhoId,
+        nome: "Teste",
+      });
     }
   });
 

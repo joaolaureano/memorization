@@ -211,9 +211,10 @@ describe("Excluir conta (FR-272..FR-279)", () => {
   }
 
   it("anuncia a irreversibilidade e as contagens do servidor", async () => {
-    await cliente.criarCartao({ frente: "To walk", verso: "Caminhar" });
-    await cliente.criarCartao({ frente: "To run", verso: "Correr" });
-    await cliente.criarBaralho({ nome: "Inglês" });
+    const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+    if (!baralho.ok) throw new Error("Baralho não criado");
+    await cliente.criarCartao(baralho.baralho.id, { frente: "To walk", verso: "Caminhar" });
+    await cliente.criarCartao(baralho.baralho.id, { frente: "To run", verso: "Correr" });
     renderizar();
 
     const dialogo = await abrirDialogo();
@@ -259,7 +260,9 @@ describe("Excluir conta (FR-272..FR-279)", () => {
 
   it("exclui com a Senha certa, avisa a casca e remove o Usuário sem tocar no outro", async () => {
     const bruno = cliente.comoUsuario(BRUNO);
-    await bruno.criarCartao({ frente: "To run", verso: "Correr" });
+    const baralho = await bruno.criarBaralho({ nome: "Espanhol" });
+    if (!baralho.ok) throw new Error("Baralho não criado");
+    await bruno.criarCartao(baralho.baralho.id, { frente: "To run", verso: "Correr" });
     renderizar();
     const dialogo = await abrirDialogo();
 

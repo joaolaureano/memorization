@@ -84,7 +84,7 @@ async function semearBaralho(
   }
 
   for (const frente of frentes) {
-    const cartao = await cliente.criarCartao({
+    const cartao = await cliente.criarCartao(criacao.baralho.id, {
       frente,
       verso: `Verso de ${frente}`,
     });
@@ -93,11 +93,6 @@ async function semearBaralho(
       throw new Error(`Cartão de prova "${frente}" não foi criado.`);
     }
 
-    const vinculo = await cliente.vincular(cartao.cartao.id, criacao.baralho.id);
-
-    if (!vinculo.ok) {
-      throw new Error(`Vínculo de prova "${frente}" não foi criado.`);
-    }
   }
 }
 

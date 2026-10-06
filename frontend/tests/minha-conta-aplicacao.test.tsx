@@ -109,7 +109,9 @@ describe("Minha conta na casca", () => {
   it("excluir a conta descarta a Credencial e leva a Entrar com «Conta excluída» (FR-276, SC-105, SC-111)", async () => {
     const servidor = await abrirPreferencias();
 
-    await servidor.comoUsuario(CREDENCIAL_DE_PROVA).criarCartao({
+    const baralho = await servidor.comoUsuario(CREDENCIAL_DE_PROVA).criarBaralho({ nome: "Inglês" });
+    if (!baralho.ok) throw new Error("Baralho não criado");
+    await servidor.comoUsuario(CREDENCIAL_DE_PROVA).criarCartao(baralho.baralho.id, {
       frente: "To walk",
       verso: "Caminhar",
     });

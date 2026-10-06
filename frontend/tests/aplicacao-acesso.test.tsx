@@ -338,7 +338,9 @@ describe("expiração durante o uso e renovação por atividade", () => {
     const servidor = clienteDeProva();
 
     await servidor.entrar({ ...CREDENCIAL_DE_PROVA, continuarConectado: true });
-    await servidor.comoUsuario(null).criarCartao({
+    const baralho = await servidor.comoUsuario(null).criarBaralho({ nome: "Inglês" });
+    if (!baralho.ok) throw new Error("Baralho não criado");
+    await servidor.comoUsuario(null).criarCartao(baralho.baralho.id, {
       frente: "To walk",
       verso: "Caminhar",
     });
@@ -349,7 +351,7 @@ describe("expiração durante o uso e renovação por atividade", () => {
     // O Acesso vence enquanto a pessoa está parada.
     servidor.avancarRelogio(301_000);
 
-    fireEvent.click(screen.getByRole("link", { name: "Cartões" }));
+    fireEvent.click(screen.getByRole("link", { name: "Baralhos" }));
 
     const alerta = await screen.findByRole("alert", {
       name: "Credencial recusada",

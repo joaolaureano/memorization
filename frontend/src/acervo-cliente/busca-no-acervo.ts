@@ -33,20 +33,20 @@ export interface BaralhoPesquisavel {
   nome: string;
 }
 
-/** O Cartão como a busca o enxerga: texto, Vínculos e Agendamento (FR-349). */
+/** O Cartão como a busca o enxerga: texto, Baralho e Agendamento (FR-349). */
 export interface CartaoPesquisavel {
   id: string;
   frente: string;
   verso: string;
-  baralhos: readonly { id: string }[];
+  baralho: { id: string };
   proximaRevisaoEm: string | null;
 }
 
 /** A situação derivada da revisão de um Cartão (FR-352, SC-140). */
 export type SituacaoDaRevisao = "novos" | "revisao-pendente" | "em-dia";
 
-/** O filtro de Baralho dos Cartões: `todos`, `sem-baralho` ou um id (FR-351). */
-export type FiltroDeBaralho = "todos" | "sem-baralho" | string;
+/** O filtro de Baralho dos Cartões: `todos` ou um id (FR-351). */
+export type FiltroDeBaralho = "todos" | string;
 
 /** Os critérios da consulta de Cartões, combinados por interseção (FR-353). */
 export interface CriteriosDeCartoes {
@@ -77,8 +77,8 @@ export function filtrarBaralhos<B extends BaralhoPesquisavel>(
  * FR-382).
  *
  * Os critérios se combinam por interseção: a consulta casa na Frente **ou** no
- * Verso; o Baralho é `todos` (não restringe), `sem-baralho` (sem Vínculos) ou
- * o id de um Baralho entre os Vínculos. O filtro de Situação da revisão não
+ * Verso; o Baralho é `todos` (não restringe) ou o id do Baralho dono.
+ * O filtro de Situação da revisão não
  * pertence mais aos Cartões (FR-382): ele vive nos Baralhos, em
  * `filtrarBaralhosPorSituacao`. A ordem recebida é preservada e cada Cartão
  * aparece no máximo uma vez — é um `filter`, não um `flatMap`.
@@ -173,13 +173,11 @@ export function classificarBaralhos(
   const proximasPorBaralho = new Map<string, (string | null)[]>();
 
   for (const cartao of cartoes) {
-    for (const vinculo of cartao.baralhos) {
-      const proximas = proximasPorBaralho.get(vinculo.id);
-      if (proximas === undefined) {
-        proximasPorBaralho.set(vinculo.id, [cartao.proximaRevisaoEm]);
-      } else {
-        proximas.push(cartao.proximaRevisaoEm);
-      }
+    const proximas = proximasPorBaralho.get(cartao.baralho.id);
+    if (proximas === undefined) {
+      proximasPorBaralho.set(cartao.baralho.id, [cartao.proximaRevisaoEm]);
+    } else {
+      proximas.push(cartao.proximaRevisaoEm);
     }
   }
 
@@ -224,9 +222,7 @@ export function cartoesDoBaralho<C extends CartaoPesquisavel>(
   cartoes: readonly C[],
   baralhoId: string,
 ): C[] {
-  return cartoes.filter((cartao) =>
-    cartao.baralhos.some((vinculo) => vinculo.id === baralhoId),
-  );
+  return cartoes.filter((cartao) => cartao.baralho.id === baralhoId);
 }
 
 /**
@@ -300,9 +296,5 @@ function correspondeAoBaralho(
     return true;
   }
 
-  if (filtro === "sem-baralho") {
-    return cartao.baralhos.length === 0;
-  }
-
-  return cartao.baralhos.some((baralho) => baralho.id === filtro);
+  return cartao.baralho.id === filtro;
 }

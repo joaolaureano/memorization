@@ -96,8 +96,8 @@ export function PaginaDeInicio({
 
         {acervoVazio ? (
           <p>
-            <a className="botao botao--primario" href="#/cartoes/novo">
-              Criar o primeiro Cartão
+            <a className="botao botao--primario" href="#/baralhos">
+              Ver Baralhos
             </a>
           </p>
         ) : null}

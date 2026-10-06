@@ -64,13 +64,12 @@ describe("persistência entre duas aberturas do mesmo armazenamento", () => {
       "bruno.souza",
     );
 
-    await primeira.armazenamento.inserirCartao(dono, {
+    await primeira.armazenamento.inserirBaralho(dono, { id: "b1", nome: "Inglês" });
+    await primeira.armazenamento.inserirCartaoNoBaralho(dono, "b1", {
       id: "c1",
       frente: "To walk",
       verso: "Caminhar",
     });
-    await primeira.armazenamento.inserirBaralho(dono, { id: "b1", nome: "Inglês" });
-    await primeira.armazenamento.vincular(dono, "c1", "b1");
 
     /** Encerrar em dobro não falha: o conjunto já fechado não se fecha de novo. */
     await primeira.encerrar();
@@ -80,13 +79,13 @@ describe("persistência entre duas aberturas do mesmo armazenamento", () => {
 
     try {
       expect(await segunda.armazenamento.listarCartoes(dono)).toEqual([
-        { id: "c1", frente: "To walk", verso: "Caminhar" },
+        { id: "c1", frente: "To walk", verso: "Caminhar", baralho: { id: "b1", nome: "Inglês" } },
       ]);
       expect(await segunda.armazenamento.listarBaralhos(dono)).toEqual([
         { id: "b1", nome: "Inglês" },
       ]);
-      expect(await segunda.armazenamento.listarBaralhosDoCartao(dono, "c1")).toEqual([
-        { id: "b1", nome: "Inglês" },
+      expect(await segunda.armazenamento.listarCartoesDoBaralho(dono, "b1")).toEqual([
+        { id: "c1", frente: "To walk", verso: "Caminhar" },
       ]);
       expect(
         await segunda.armazenamento.contarCartoesPorBaralho(dono),

@@ -523,6 +523,30 @@ export async function criarCartaoPelaApi(
   };
 }
 
+/** Cria um Cartão já pertencente ao Baralho indicado pelo contrato atual. */
+export async function criarCartaoNoBaralhoPelaApi(
+  enderecoDaApi: string,
+  baralhoId: string,
+  cartao: { frente: string; verso: string },
+  credencial: CredencialDeProva = credencialDeProva(),
+): Promise<{ id: string; frente: string; verso: string }> {
+  const resposta = await fetch(
+    `${enderecoDaApi}/baralhos/${encodeURIComponent(baralhoId)}/cartoes`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...cabecalhoDeCredencial(credencial),
+      },
+      body: JSON.stringify(cartao),
+    },
+  );
+  if (resposta.status !== 201) {
+    throw new Error(`POST /baralhos/${baralhoId}/cartoes respondeu ${resposta.status}`);
+  }
+  return (await resposta.json()) as { id: string; frente: string; verso: string };
+}
+
 /**
  * Cria um Baralho direto pela API — usado quando a prova não quer depender da
  * UI para preparar o acervo. Recebe o mesmo corpo do contrato `POST /baralhos`
@@ -790,6 +814,20 @@ export async function prepararEntradaInterceptada(
   };
 
   await prepararAcessoAusente(page);
+
+  // Estes cenários usam o transporte interceptado e não têm dados legados.
+  // A casca consulta a transição após Entrar antes de exibir o acervo.
+  await page.route(/\/acervo\/transicao-cartoes$/, async (rota) => {
+    if (rota.request().method() === "GET") {
+      await rota.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ cartoes: [], baralhos: [] }),
+      });
+      return;
+    }
+    await rota.fallback();
+  });
 
   await page.route(/\/entrar$/, async (rota) => {
     if (rota.request().method() === "POST") {

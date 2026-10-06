@@ -43,7 +43,7 @@ const PROTECAO_DE_PENDENCIA: Protecao = {
 };
 
 beforeEach(() => {
-  window.location.hash = "#/cartoes";
+  window.location.hash = "#/inicio";
 });
 
 /** Muda o hash e entrega o `hashchange` que o navegador dispararia. */
@@ -110,7 +110,7 @@ describe("ProvedorDeProtecaoDeSaida", () => {
   it("sem proteção, aceita a navegação e atualiza a rota exibida", () => {
     render(<Prova />);
 
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
 
     navegarPara("#/baralhos");
 
@@ -142,8 +142,8 @@ describe("ProvedorDeProtecaoDeSaida", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
+    expect(window.location.hash).toBe("#/inicio");
   });
 
   it("confirmar descarta a proteção e navega", () => {
@@ -164,8 +164,8 @@ describe("ProvedorDeProtecaoDeSaida", () => {
     navegarPara("#/baralhos");
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
+    expect(window.location.hash).toBe("#/inicio");
   });
 
   it("com pendência, bloqueia sem diálogo e anuncia o motivo", () => {
@@ -177,8 +177,8 @@ describe("ProvedorDeProtecaoDeSaida", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "Salvando… aguarde o fim da operação.",
     );
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
+    expect(window.location.hash).toBe("#/inicio");
   });
 
   it("anuncia o mesmo motivo de pendência de novo, com um nó novo", () => {
@@ -208,7 +208,7 @@ describe("ProvedorDeProtecaoDeSaida", () => {
 
     rerender(<Prova temCredencial={true} protecao={PROTECAO_DE_DESCARTE} />);
 
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
   });
 
   it("limpa a proteção ao desmontar a página", () => {
@@ -254,7 +254,7 @@ describe("ProvedorDeProtecaoDeSaida", () => {
         name: "Descartar rascunho?",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("rota")).toHaveTextContent("cartoes");
+    expect(screen.getByTestId("rota")).toHaveTextContent("inicio");
   });
 });
 

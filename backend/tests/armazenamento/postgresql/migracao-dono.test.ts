@@ -30,10 +30,7 @@ import {
  */
 
 /** A última versão da lista de migrações — nunca um número escrito à mão. */
-const ULTIMA_VERSAO_DO_ESQUEMA = MIGRACOES.reduce(
-  (maisRecente, migracao) => Math.max(maisRecente, migracao.versao),
-  0,
-);
+const VERSAO_COM_VINCULOS = 13;
 
 /** A versão da base instalada que este cenário prepara: a da feature `007`. */
 const VERSAO_INSTALADA = 4;
@@ -118,12 +115,12 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
     let versao = 0;
 
     try {
-      versao = await aplicarMigracoes(piscina);
+      versao = await aplicarMigracoes(piscina, MIGRACOES.filter((m) => m.versao <= VERSAO_COM_VINCULOS));
     } finally {
       await piscina.end();
     }
 
-    expect(versao).toBe(ULTIMA_VERSAO_DO_ESQUEMA);
+    expect(versao).toBe(VERSAO_COM_VINCULOS);
 
     const versoes = await servidor.consultar<{ versao: number }>(
       nomeDaBase,
@@ -131,7 +128,7 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
     );
 
     expect(versoes.map((linha) => Number(linha.versao))).toEqual([
-      ULTIMA_VERSAO_DO_ESQUEMA,
+      VERSAO_COM_VINCULOS,
     ]);
 
     /** Nenhum Cartão, Baralho ou Vínculo sem dono existe (FR-099). */
@@ -161,7 +158,7 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
     try {
-      await aplicarMigracoes(piscina);
+      await aplicarMigracoes(piscina, MIGRACOES.filter((m) => m.versao <= VERSAO_COM_VINCULOS));
     } finally {
       await piscina.end();
     }
@@ -293,8 +290,14 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
     const aberto = await abrirArmazenamentoDaBase(nomeDaBase);
 
     try {
+      // Criar um Baralho primeiro
+      await aberto.armazenamento.inserirBaralho("usuario-um", {
+        id: "b-novo",
+        nome: "Novo Baralho",
+      });
+
       expect(
-        await aberto.armazenamento.inserirCartao("usuario-um", {
+        await aberto.armazenamento.inserirCartaoNoBaralho("usuario-um", "b-novo", {
           id: "c-novo",
           frente: "To walk",
           verso: "Caminhar",
@@ -305,7 +308,7 @@ describe("migração 5 — base instalada na versão 4, com Usuários e acervo s
       });
 
       expect(await aberto.armazenamento.listarCartoes("usuario-um")).toEqual([
-        { id: "c-novo", frente: "To walk", verso: "Caminhar" },
+        { id: "c-novo", frente: "To walk", verso: "Caminhar", baralho: { id: "b-novo", nome: "Novo Baralho" } },
       ]);
       expect(await aberto.armazenamento.listarCartoes("usuario-dois")).toEqual(
         [],

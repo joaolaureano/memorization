@@ -47,9 +47,16 @@ function como(
 
 describe("GET /conta (§3.1)", () => {
   it("devolve o Nome de usuário e as contagens, sem Senha nem derivado", async () => {
+    const baralhoResp = await como(contrato.credencial, {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+    const baralho = baralhoResp.json();
+
     await como(contrato.credencial, {
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralho.id}/cartoes`,
       payload: { frente: "To walk", verso: "Caminhar" },
     });
 
@@ -61,7 +68,7 @@ describe("GET /conta (§3.1)", () => {
     expect(resposta.statusCode).toBe(200);
     expect(resposta.json()).toEqual({
       nomeDeUsuario: "ana.silva",
-      contagens: { cartoes: 1, baralhos: 0, registrosDeSessao: 0, agenda: 0 },
+      contagens: { cartoes: 1, baralhos: 1, registrosDeSessao: 0, agenda: 0 },
     });
     expect(resposta.body).not.toContain(contrato.credencial.senha);
     expect(resposta.body).not.toMatch(/sal|hash|parametros/);
@@ -224,14 +231,29 @@ describe("PUT /conta/senha (§3.3)", () => {
 
 describe("DELETE /conta (§3.4)", () => {
   it("responde 204, remove tudo do Usuário e preserva o outro (FR-274, FR-275)", async () => {
+    const baralhoAnaResp = await como(contrato.credencial, {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Inglês" },
+    });
+    const baralhoAna = baralhoAnaResp.json();
+
     await como(contrato.credencial, {
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralhoAna.id}/cartoes`,
       payload: { frente: "To walk", verso: "Caminhar" },
     });
+
+    const baralhoBrunoResp = await como(bruno, {
+      method: "POST",
+      url: "/baralhos",
+      payload: { nome: "Português" },
+    });
+    const baralhoBruno = baralhoBrunoResp.json();
+
     await como(bruno, {
       method: "POST",
-      url: "/cartoes",
+      url: `/baralhos/${baralhoBruno.id}/cartoes`,
       payload: { frente: "To run", verso: "Correr" },
     });
 
@@ -252,7 +274,7 @@ describe("DELETE /conta (§3.4)", () => {
     expect(depois.statusCode).toBe(401);
     expect(intacto.json()).toEqual({
       nomeDeUsuario: "bruno.souza",
-      contagens: { cartoes: 1, baralhos: 0, registrosDeSessao: 0, agenda: 0 },
+      contagens: { cartoes: 1, baralhos: 1, registrosDeSessao: 0, agenda: 0 },
     });
   });
 

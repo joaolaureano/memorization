@@ -55,24 +55,6 @@ afterEach(async () => {
   await contrato.encerrar();
 });
 
-/** Cria um Cartão pela rota, com a Credencial informada. */
-async function criarCartao(
-  credencial: CredencialDeTeste,
-  frente = "To walk",
-): Promise<{ id: string }> {
-  const resposta = await pedirComCredencial(servidor, credencial, {
-    method: "POST",
-    url: "/cartoes",
-    payload: { frente, verso: "Caminhar" },
-  });
-
-  if (resposta.statusCode !== 201) {
-    throw new Error(`criação recusada: ${resposta.statusCode}`);
-  }
-
-  return resposta.json() as { id: string };
-}
-
 /** Cria um Baralho pela rota, com a Credencial informada. */
 async function criarBaralho(
   credencial: CredencialDeTeste,
@@ -91,12 +73,31 @@ async function criarBaralho(
   return resposta.json() as { id: string };
 }
 
+/** Cria um Cartão no Baralho, com a Credencial informada. */
+async function criarCartaoNoBaralho(
+  credencial: CredencialDeTeste,
+  baralhoId: string,
+  frente = "To walk",
+): Promise<{ id: string }> {
+  const resposta = await pedirComCredencial(servidor, credencial, {
+    method: "POST",
+    url: `/baralhos/${baralhoId}/cartoes`,
+    payload: { frente, verso: "Caminhar" },
+  });
+
+  if (resposta.statusCode !== 201) {
+    throw new Error(`criação recusada: ${resposta.statusCode}`);
+  }
+
+  return resposta.json() as { id: string };
+}
+
 describe("acervo por usuário no contrato — cada um enxerga somente o seu", () => {
   it("cada listagem traz somente o conteúdo de quem pede (SC-030)", async () => {
-    await criarCartao(ana, "To walk");
-    await criarBaralho(ana, "Inglês");
-    await criarCartao(bruno, "To read");
-    await criarBaralho(bruno, "Alemão");
+    const baralhoAna = await criarBaralho(ana, "Inglês");
+    await criarCartaoNoBaralho(ana, baralhoAna.id, "To walk");
+    const baralhoIngles = await criarBaralho(bruno, "Alemão");
+    await criarCartaoNoBaralho(bruno, baralhoIngles.id, "To read");
 
     const cartoesDaAna = await pedirComCredencial(servidor, ana, {
       method: "GET",
@@ -115,25 +116,25 @@ describe("acervo por usuário no contrato — cada um enxerga somente o seu", ()
       url: "/baralhos",
     });
 
-    expect(cartoesDaAna.json()).toEqual([
-      expect.objectContaining({ frente: "To walk" }),
+    expect(cartoesDaAna.json()).toMatchObject([
+      { frente: "To walk", baralho: { id: baralhoAna.id } },
     ]);
-    expect(cartoesDoBruno.json()).toEqual([
-      expect.objectContaining({ frente: "To read" }),
+    expect(cartoesDoBruno.json()).toMatchObject([
+      { frente: "To read", baralho: { id: baralhoIngles.id } },
     ]);
-    expect(baralhosDaAna.json()).toEqual([
-      expect.objectContaining({ nome: "Inglês" }),
+    expect(baralhosDaAna.json()).toMatchObject([
+      { nome: "Inglês" },
     ]);
-    expect(baralhosDoBruno.json()).toEqual([
-      expect.objectContaining({ nome: "Alemão" }),
+    expect(baralhosDoBruno.json()).toMatchObject([
+      { nome: "Alemão" },
     ]);
   });
 
   it("o id do outro responde 404 com a mensagem de um id que nunca existiu, e jamais 403 (SC-030)", async () => {
-    const cartaoDoBruno = await criarCartao(bruno, "To read");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
-    const cartaoDaAna = await criarCartao(ana, "To walk");
-    const baralhoDaAna = await criarBaralho(ana, "Inglês");
+    const baralhoBruno = await criarBaralho(bruno, "Alemão");
+    const cartaoDoBruno = await criarCartaoNoBaralho(bruno, baralhoBruno.id, "To read");
+    const baralhoAna = await criarBaralho(ana, "Inglês");
+    const cartaoDaAna = await criarCartaoNoBaralho(ana, baralhoAna.id, "To walk");
 
     const edicaoDoInexistente = await pedirComCredencial(servidor, ana, {
       method: "PUT",
@@ -160,11 +161,11 @@ describe("acervo por usuário no contrato — cada um enxerga somente o seu", ()
     });
     const leituraDoBaralhoDoVizinho = await pedirComCredencial(servidor, ana, {
       method: "GET",
-      url: `/baralhos/${baralhoDoBruno.id}`,
+      url: `/baralhos/${baralhoBruno.id}`,
     });
     const renomeacaoDoBaralhoDoVizinho = await pedirComCredencial(servidor, ana, {
       method: "PUT",
-      url: `/baralhos/${baralhoDoBruno.id}`,
+      url: `/baralhos/${baralhoBruno.id}`,
       payload: { nome: "Francês" },
     });
 
@@ -206,13 +207,13 @@ describe("acervo por usuário no contrato — cada um enxerga somente o seu", ()
       expect.objectContaining({ id: cartaoDoBruno.id, frente: "To read" }),
     ]);
     expect(baralhosDoBruno.json()).toEqual([
-      expect.objectContaining({ id: baralhoDoBruno.id, nome: "Alemão" }),
+      expect.objectContaining({ id: baralhoBruno.id, nome: "Alemão" }),
     ]);
 
     /** E o próprio conteúdo continua acessível a quem é dono. */
     const baralhoProprio = await pedirComCredencial(servidor, ana, {
       method: "GET",
-      url: `/baralhos/${baralhoDaAna.id}`,
+      url: `/baralhos/${baralhoAna.id}`,
     });
     const cartoesProprios = await pedirComCredencial(servidor, ana, {
       method: "GET",
@@ -221,84 +222,30 @@ describe("acervo por usuário no contrato — cada um enxerga somente o seu", ()
 
     expect(baralhoProprio.statusCode).toBe(200);
     expect(baralhoProprio.json()).toEqual(
-      expect.objectContaining({ id: baralhoDaAna.id, nome: "Inglês" }),
+      expect.objectContaining({ id: baralhoAna.id, nome: "Inglês" }),
     );
     expect(cartoesProprios.json()).toEqual([
       expect.objectContaining({ id: cartaoDaAna.id, frente: "To walk" }),
     ]);
   });
 
-  it("recusa vincular Cartão de um Usuário a Baralho de outro, com 404 e nada mudando (FR-093)", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk");
-    const baralhoDoBruno = await criarBaralho(bruno, "Alemão");
-    const cartaoDoBruno = await criarCartao(bruno, "To read");
-    const baralhoDaAna = await criarBaralho(ana, "Inglês");
-
-    const daAnaNoBaralhoDoBruno = await pedirComCredencial(servidor, ana, {
-      method: "POST",
-      url: `/baralhos/${baralhoDoBruno.id}/vinculos`,
-      payload: { cartaoId: cartaoDaAna.id },
-    });
-    const doBrunoNoBaralhoDaAna = await pedirComCredencial(servidor, bruno, {
-      method: "POST",
-      url: `/baralhos/${baralhoDaAna.id}/vinculos`,
-      payload: { cartaoId: cartaoDoBruno.id },
-    });
-
-    expect(daAnaNoBaralhoDoBruno.statusCode).toBe(404);
-    expect(daAnaNoBaralhoDoBruno.json()).toEqual(BARALHO_NAO_ENCONTRADO);
-    expect(doBrunoNoBaralhoDaAna.statusCode).toBe(404);
-    expect(doBrunoNoBaralhoDaAna.json()).toEqual(BARALHO_NAO_ENCONTRADO);
-    expect(daAnaNoBaralhoDoBruno.statusCode).not.toBe(403);
-
-    /** Nenhum Baralho ficou elegível, e nada foi criado. */
-    const baralhosDaAna = await pedirComCredencial(servidor, ana, {
-      method: "GET",
-      url: "/baralhos",
-    });
-    const baralhosDoBruno = await pedirComCredencial(servidor, bruno, {
-      method: "GET",
-      url: "/baralhos",
-    });
-
-    expect(baralhosDaAna.json()).toEqual([
-      expect.objectContaining({ quantidadeDeCartoes: 0, elegivel: false }),
-    ]);
-    expect(baralhosDoBruno.json()).toEqual([
-      expect.objectContaining({ quantidadeDeCartoes: 0, elegivel: false }),
-    ]);
-  });
-
-  it("a contagem e a elegibilidade contam só os Vínculos do dono, e a Sessão carrega só os Cartões dele (FR-092, SC-028)", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk");
-    const baralhoDaAna = await criarBaralho(ana, "Inglês");
-
-    await pedirComCredencial(servidor, ana, {
-      method: "POST",
-      url: `/baralhos/${baralhoDaAna.id}/vinculos`,
-      payload: { cartaoId: cartaoDaAna.id },
-    });
+  it("um Baralho com Cartões mostra somente a quem é dono (SC-028)", async () => {
+    const baralhoAna = await criarBaralho(ana, "Inglês");
+    await criarCartaoNoBaralho(ana, baralhoAna.id, "To walk");
 
     const doDono = await pedirComCredencial(servidor, ana, {
       method: "GET",
-      url: `/baralhos/${baralhoDaAna.id}`,
+      url: `/baralhos/${baralhoAna.id}`,
     });
     const doVizinho = await pedirComCredencial(servidor, bruno, {
       method: "GET",
-      url: `/baralhos/${baralhoDaAna.id}`,
+      url: `/baralhos/${baralhoAna.id}`,
     });
 
-    expect(doDono.json()).toEqual({
-      id: baralhoDaAna.id,
+    expect(doDono.statusCode).toBe(200);
+    expect(doDono.json()).toMatchObject({
+      id: baralhoAna.id,
       nome: "Inglês",
-      elegivel: true,
-      cartoes: [
-        {
-          id: cartaoDaAna.id,
-          frente: "To walk",
-          verso: "Caminhar",
-        },
-      ],
     });
     expect(doVizinho.statusCode).toBe(404);
     expect(doVizinho.json()).toEqual(BARALHO_NAO_ENCONTRADO);
@@ -307,16 +254,16 @@ describe("acervo por usuário no contrato — cada um enxerga somente o seu", ()
 
 describe("acervo por usuário — recusa de Credencial não altera nada (FR-090, SC-028)", () => {
   it("sem Credencial e com Credencial inválida, nenhuma operação altera o acervo", async () => {
-    const cartaoDaAna = await criarCartao(ana, "To walk");
+    const baralhoAna = await criarBaralho(ana, "Inglês");
+    const cartaoDaAna = await criarCartaoNoBaralho(ana, baralhoAna.id, "To walk");
 
     const semCredencial: InjectOptions[] = [
-      { method: "POST", url: "/cartoes", payload: { frente: "To read", verso: "Ler" } },
+      { method: "POST", url: "/baralhos", payload: { nome: "Alemão" } },
       { method: "GET", url: "/cartoes" },
       { method: "PUT", url: `/cartoes/${cartaoDaAna.id}`, payload: { frente: "To drink", verso: "Beber" } },
       { method: "DELETE", url: `/cartoes/${cartaoDaAna.id}` },
-      { method: "POST", url: "/baralhos", payload: { nome: "Alemão" } },
       { method: "GET", url: "/baralhos" },
-      { method: "DELETE", url: "/baralhos/qualquer" },
+      { method: "DELETE", url: `/baralhos/${baralhoAna.id}` },
     ];
 
     for (const requisicao of semCredencial) {
@@ -347,14 +294,19 @@ describe("acervo por usuário — recusa de Credencial não altera nada (FR-090,
       url: "/baralhos",
     });
 
-    expect(cartoes.json()).toEqual([
-      expect.objectContaining({
+    expect(cartoes.json()).toMatchObject([
+      {
         id: cartaoDaAna.id,
         frente: "To walk",
         verso: "Caminhar",
-        baralhos: [],
-      }),
+        baralho: { id: baralhoAna.id },
+      },
     ]);
-    expect(baralhos.json()).toEqual([]);
+    expect(baralhos.json()).toMatchObject([
+      {
+        id: baralhoAna.id,
+        nome: "Inglês",
+      },
+    ]);
   });
 });

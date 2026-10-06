@@ -5,6 +5,7 @@ import type {
   ArmazenamentoDoAcervo,
   Baralho,
   Cartao,
+  CartaoComDono,
   CompromissoPersistido,
   ItemRegistrado,
   Preferencias,
@@ -24,6 +25,9 @@ import type {
 } from "../repeticao/algoritmo.ts";
 import { aplicarAvaliacoes, reconstruir } from "../repeticao/revisao.ts";
 import {
+  LIMITE_DE_CARACTERES_DE_CARTAO,
+  normalizarFrente,
+  numerarFrente,
   validarFrente,
   validarNomeDeBaralho,
   validarVerso,
@@ -40,7 +44,6 @@ import type {
 import type {
   CodigoDeErroDeBaralho,
   CodigoDeErroDeCartao,
-  CodigoDeErroDeVinculo,
 } from "./invariantes.ts";
 
 /**
@@ -113,7 +116,7 @@ export type ResultadoDeCriacaoDeCartao =
   | { ok: true; cartao: Cartao }
   | {
       ok: false;
-      erro: CodigoDeErroDeCartao | "indisponivel";
+      erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
       mensagem: string;
     };
 
@@ -188,14 +191,42 @@ export type ResultadoDeSalvarSelecao =
   | { ok: false; erro: "indisponivel"; mensagem: string };
 
 /**
- * Cartão como devolvido por `listarCartoes`: o Cartão mais os Baralhos a que
- * está vinculado e a próxima revisão do seu Agendamento. O Cartão sem nenhum
- * Baralho devolve `baralhos: []` — estado legítimo, e não ausência de campo.
+ * Cartão com seus Baralhos legados para a transição (FR-397).
+ */
+export interface CartaoDaTransicao extends Cartao {
+  baralhos: Baralho[];
+}
+
+/**
+ * Resultado de `obterTransicao` (FR-397).
+ */
+export type ResultadoDeObterTransicao =
+  | {
+      ok: true;
+      cartoes: CartaoDaTransicao[];
+      baralhos: Baralho[];
+    }
+  | { ok: false; erro: "indisponivel"; mensagem: string };
+
+/**
+ * Resultado de `concluirTransicao` (FR-397).
+ */
+export type ResultadoDeConcluirTransicao =
+  | { ok: true }
+  | {
+      ok: false;
+      erro: "escolhas_invalidas" | "conflito" | "indisponivel";
+      mensagem: string;
+    };
+
+/**
+ * Cartão como devolvido por `listarCartoes`: o Cartão com o seu único Baralho
+ * dono (Pertencimento) e a próxima revisão do seu Agendamento (FR-389).
  * `criarCartao` continua devolvendo apenas `Cartao`, sem carregar campos que a
  * criação não exige.
  */
 export interface CartaoListado extends Cartao {
-  baralhos: Baralho[];
+  baralho: Baralho;
   /**
    * ISO-8601 da próxima revisão do Agendamento do Cartão, ou `null` sem
    * Agendamento (FR-352); só Agendamentos do dono (FR-359).
@@ -216,38 +247,14 @@ export interface BaralhoListado extends Baralho {
 
 /**
  * Baralho como devolvido por `obterBaralho`: o Baralho com a elegibilidade
- * derivada e os Cartões vinculados, conforme o contrato de
- * `GET /baralhos/{id}` (FR-014).
+ * derivada, os Cartões vinculados e a quantidade de Agendamentos dos Cartões
+ * do Baralho (FR-402).
  */
 export interface BaralhoComCartoes extends Baralho {
   elegivel: boolean;
   cartoes: Cartao[];
+  quantidadeDeAgendamentos: number;
 }
-
-/**
- * Resultado de `vincular`. Falha de domínio é resultado previsto, não exceção:
- * o caller distingue `ok` e, na recusa, recebe o código estável e a mensagem
- * em português (FR-046).
- */
-export type ResultadoDeVinculacao =
-  | { ok: true }
-  | {
-      ok: false;
-      erro: CodigoDeErroDeVinculo | "indisponivel";
-      mensagem: string;
-    };
-
-/**
- * Resultado de `desvincular`. Mesma forma de `vincular`: sucesso sem carga, ou
- * recusa com código estável e mensagem em português.
- */
-export type ResultadoDeDesvinculacao =
-  | { ok: true }
-  | {
-      ok: false;
-      erro: CodigoDeErroDeVinculo | "indisponivel";
-      mensagem: string;
-    };
 
 /**
  * Resultado de `obterBaralho`. Sucesso devolve o Baralho com seus Cartões;
@@ -257,7 +264,7 @@ export type ResultadoDeObterBaralho =
   | { ok: true; baralho: BaralhoComCartoes }
   | {
       ok: false;
-      erro: CodigoDeErroDeVinculo | "indisponivel";
+      erro: "nao_encontrado" | "indisponivel";
       mensagem: string;
     };
 
@@ -480,7 +487,10 @@ export type ResultadoDeSalvarPreferencias =
  * (FR-044, FR-045, FR-107).
  */
 export interface Acervo {
-  criarCartao(dados: DadosDeCartao): Promise<ResultadoDeCriacaoDeCartao>;
+  criarCartao(
+    baralhoId: string,
+    dados: DadosDeCartao,
+  ): Promise<ResultadoDeCriacaoDeCartao>;
 
   /**
    * Cria um Baralho com o nome informado. Nome vazio ou composto só de
@@ -528,27 +538,6 @@ export interface Acervo {
   obterBaralho(id: string): Promise<ResultadoDeObterBaralho>;
 
   /**
-   * Vincula um Cartão existente a um Baralho existente (FR-019). O par
-   * repetido é recusado como `vinculo_duplicado` pela unicidade do esquema do
-   * Adapter — o desfecho chega à Porta como `vinculo_duplicado` e é traduzido
-   * aqui, nunca vazando para o caller. Cartão ou Baralho inexistente é
-   * recusado como `nao_encontrado`.
-   */
-  vincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeVinculacao>;
-
-  /**
-   * Desfaz o Vínculo, preservando Cartão e Baralho (FR-021). Vínculo
-   * inexistente é recusado como `vinculo_nao_encontrado`.
-   */
-  desvincular(
-    cartaoId: string,
-    baralhoId: string,
-  ): Promise<ResultadoDeDesvinculacao>;
-
-  /**
    * Edita a Frente e o Verso de um Cartão existente, reaplicando exatamente
    * as regras da criação (FR-002, FR-051, FR-052) e preservando todos os
    * Vínculos do Cartão (FR-005). Cartão inexistente é recusado como
@@ -571,20 +560,33 @@ export interface Acervo {
   ): Promise<ResultadoDeEdicaoDeBaralho>;
 
   /**
-   * Exclui um Cartão existente (FR-007). Os Vínculos do Cartão são removidos
-   * pela cascata do esquema e todos os Baralhos são preservados (FR-008);
-   * Baralhos que dependiam do Cartão deixam de ser elegíveis na leitura
-   * seguinte. Cartão inexistente é recusado como `nao_encontrado`.
+   * Exclui um Cartão existente (FR-007, FR-401). O Pertencimento e o
+   * Agendamento do Cartão caem pela cascata do esquema; os Registros de
+   * sessão ficam intactos. Cartão inexistente é recusado como `nao_encontrado`.
    */
   excluirCartao(id: string): Promise<ResultadoDeExclusaoDeCartao>;
 
   /**
-   * Exclui um Baralho existente (FR-016). Os Vínculos do Baralho são
-   * removidos pela cascata do esquema e todos os Cartões são preservados
-   * (FR-017), inclusive os que ficarem sem Baralho. Baralho inexistente é
-   * recusado como `nao_encontrado`.
+   * Exclui um Baralho existente (FR-402). Os Pertencimentos dos Cartões do
+   * Baralho caem pela cascata do esquema, assim como os seus Agendamentos;
+   * os Cartões são preservados; os Registros de sessão ficam intactos.
+   * Baralho inexistente é recusado como `nao_encontrado`.
    */
   excluirBaralho(id: string): Promise<ResultadoDeExclusaoDeBaralho>;
+
+  /**
+   * Obtém o estado da transição de Cartões legados (FR-397): Cartões pendentes
+   * com múltiplos Baralhos legados (exigem escolha do Usuário) e a lista de
+   * Baralhos disponíveis para destino.
+   */
+  obterTransicao(): Promise<ResultadoDeObterTransicao>;
+
+  /**
+   * Conclui a transição de Cartões legados (FR-397): resolve os pendentes com
+   * uma única Frente distribuindo-os entre Baralhos (Pertencimento) e criando
+   * cópias nos outros Baralhos legados.
+   */
+  concluirTransicao(dados: unknown): Promise<ResultadoDeConcluirTransicao>;
 
   /**
    * Registra a Sessão **concluída** no Histórico do usuário do `Acervo` e
@@ -701,14 +703,9 @@ const BARALHO_NAO_ENCONTRADO = {
   mensagem: "Baralho não encontrado.",
 } as const;
 
-const VINCULO_DUPLICADO = {
-  erro: "vinculo_duplicado",
-  mensagem: "O vínculo já existe.",
-} as const;
-
-const VINCULO_NAO_ENCONTRADO = {
-  erro: "vinculo_nao_encontrado",
-  mensagem: "O vínculo não existe.",
+const FRENTE_DUPLICADA = {
+  erro: "frente_duplicada",
+  mensagem: "Já existe um cartão com esta frente neste baralho.",
 } as const;
 
 /**
@@ -1168,6 +1165,72 @@ export function criarAcervo(
   }
 
   /**
+   * Resolve automaticamente os Cartões pendentes com exatamente um Baralho
+   * legado (FR-397).
+   */
+  async function resolverAutomaticos(): Promise<boolean> {
+    const pendentesRaw = await armazenamento.listarCartoesPendentes(usuarioId);
+
+    if (!pendentesRaw.ok) {
+      return false;
+    }
+
+    const pendentes = pendentesRaw.valor;
+    const paraSolver = pendentes.filter((p) => p.baralhos.length === 1);
+
+    if (paraSolver.length === 0) {
+      return true;
+    }
+
+    // Ordena por normalizarFrente e depois por id
+    const ordenados = paraSolver.sort((a, b) => {
+      const chavea = normalizarFrente(a.cartao.frente);
+      const chaveb = normalizarFrente(b.cartao.frente);
+      if (chavea !== chaveb) {
+        return chavea.localeCompare(chaveb);
+      }
+      return a.cartao.id.localeCompare(b.cartao.id);
+    });
+
+    const pertencimentos: Array<{ cartaoId: string; baralhoId: string; frente: string }> = [];
+    const chavesAcumuladas = new Map<string, Set<string>>();
+
+    for (const pendente of ordenados) {
+      const baralhoId = pendente.baralhos[0].id;
+      const cartoesDoBaralho = await armazenamento.listarCartoesDoBaralho(
+        usuarioId,
+        baralhoId,
+      );
+
+      let chavesUsadas = chavesAcumuladas.get(baralhoId);
+      if (!chavesUsadas) {
+        chavesUsadas = new Set(
+          cartoesDoBaralho.map((c) => normalizarFrente(c.frente)),
+        );
+        chavesAcumuladas.set(baralhoId, chavesUsadas);
+      }
+
+      const frenteFinal = numerarFrente(pendente.cartao.frente, chavesUsadas);
+      chavesUsadas.add(normalizarFrente(frenteFinal));
+
+      pertencimentos.push({
+        cartaoId: pendente.cartao.id,
+        baralhoId,
+        frente: frenteFinal,
+      });
+    }
+
+    // Uma corrida com outra resolução (`conflito`) não é falha: a releitura
+    // seguinte encontra o estado já resolvido.
+    const aplicado = await armazenamento.aplicarTransicao(usuarioId, {
+      pertencimentos,
+      copias: [],
+    });
+
+    return aplicado.ok || aplicado.erro === "conflito";
+  }
+
+  /**
    * Conclui a Sessão iniciada pela Agenda (FR-233–FR-236, FR-254, FR-256).
    *
    * Tudo o que prova a Sessão vem do **Início autorizado** guardado no
@@ -1304,26 +1367,91 @@ export function criarAcervo(
   }
 
   return {
-    async criarCartao(dados) {
+    async criarCartao(baralhoId, dados) {
       const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
 
       if (falha !== null) {
         return { ok: false, ...falha };
       }
 
-      const cartao: Cartao = {
-        id: randomUUID(),
-        frente: dados.frente,
-        verso: dados.verso,
-      };
+      const encontrado = await armazenamento.obterBaralho(usuarioId, baralhoId);
 
-      const gravado = await armazenamento.inserirCartao(usuarioId, cartao);
-
-      if (!gravado.ok) {
+      if (!encontrado.ok) {
+        if (encontrado.erro === "nao_encontrado") {
+          return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+        }
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      return { ok: true, cartao: gravado.valor };
+      const cartoesDoBaralho = await armazenamento.listarCartoesDoBaralho(
+        usuarioId,
+        baralhoId,
+      );
+
+      const chavesOcupadas = new Set(
+        cartoesDoBaralho.map((c) => normalizarFrente(c.frente)),
+      );
+      let frente = numerarFrente(dados.frente, chavesOcupadas);
+
+      if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
+        return {
+          ok: false,
+          erro: "frente_muito_longa",
+          mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
+        };
+      }
+
+      let tentativas = 0;
+
+      while (tentativas < 3) {
+        tentativas++;
+
+        const cartao: Cartao = {
+          id: randomUUID(),
+          frente,
+          verso: dados.verso,
+        };
+
+        const gravado = await armazenamento.inserirCartaoNoBaralho(
+          usuarioId,
+          baralhoId,
+          cartao,
+        );
+
+        if (gravado.ok) {
+          return { ok: true, cartao: gravado.valor };
+        }
+
+        if (gravado.erro === "frente_duplicada") {
+          // Corrida concorrente: relê as chaves e tenta de novo
+          const cartoesAtualizados = await armazenamento.listarCartoesDoBaralho(
+            usuarioId,
+            baralhoId,
+          );
+          const novasChaves = new Set(
+            cartoesAtualizados.map((c) => normalizarFrente(c.frente)),
+          );
+          frente = numerarFrente(dados.frente, novasChaves);
+
+          if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
+            return {
+              ok: false,
+              erro: "frente_muito_longa",
+              mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
+            };
+          }
+
+          continue;
+        }
+
+        if (gravado.erro === "nao_encontrado") {
+          return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+        }
+
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
     },
 
     async criarBaralho(dados) {
@@ -1370,39 +1498,89 @@ export function criarAcervo(
         return { ok: false, ...DADOS_INVALIDOS };
       }
 
-      const resultado = await armazenamento.inserirBaralhoComVinculos(
-        usuarioId,
-        { id, nome },
-        cartoesDaSelecao,
-      );
+      // a) Verifica se o Baralho já existe (reenvio idempotente)
+      const baralhoExistente = await armazenamento.obterBaralho(usuarioId, id);
 
-      if (resultado.ok) {
+      if (baralhoExistente.ok) {
         return {
           ok: true,
-          baralho: resultado.valor.baralho,
-          novo: resultado.valor.novo,
+          baralho: baralhoExistente.valor,
+          novo: false,
         };
       }
 
-      if (resultado.erro === "cartoes_indisponiveis") {
+      // b) Lê os Cartões da seleção e verifica disponibilidade
+      const todosOsCartoes = await armazenamento.listarCartoes(usuarioId);
+      const cartoesDisponiveisPorId = new Map(
+        todosOsCartoes.map((c) => [c.id, c]),
+      );
+
+      const indisponiveisNaOrdem: string[] = [];
+      const cartoesOrigemNaOrdem: CartaoComDono[] = [];
+
+      for (const cartaoId of cartoesDaSelecao) {
+        const cartao = cartoesDisponiveisPorId.get(cartaoId);
+        if (!cartao) {
+          indisponiveisNaOrdem.push(cartaoId);
+        } else {
+          cartoesOrigemNaOrdem.push(cartao);
+        }
+      }
+
+      if (indisponiveisNaOrdem.length > 0) {
         return {
           ok: false,
           erro: "cartoes_indisponiveis",
-          cartaoIds: resultado.cartaoIds,
+          cartaoIds: indisponiveisNaOrdem,
         };
       }
 
-      if (resultado.erro === "conflito") {
-        return { ok: false, erro: "conflito" };
+      // c) Monta as cópias na ordem da seleção, numerando as frentes
+      const copias: Cartao[] = [];
+      const chavesJaUsadas = new Set<string>();
+
+      for (const origem of cartoesOrigemNaOrdem) {
+        const frente = numerarFrente(
+          origem.frente,
+          chavesJaUsadas,
+        );
+
+        if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
+          return { ok: false, erro: "dados_invalidos" };
+        }
+
+        chavesJaUsadas.add(normalizarFrente(frente));
+
+        copias.push({
+          id: randomUUID(),
+          frente,
+          verso: origem.verso,
+        });
       }
 
-      return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      // d) Insere o Baralho com as cópias
+      const resultado = await armazenamento.inserirBaralhoComCopias(
+        usuarioId,
+        { id, nome },
+        copias,
+      );
+
+      if (!resultado.ok) {
+        if (resultado.erro === "conflito") {
+          return { ok: false, erro: "conflito" };
+        }
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return {
+        ok: true,
+        baralho: resultado.valor.baralho,
+        novo: resultado.valor.novo,
+      };
     },
 
     async listarCartoes() {
-      const cartoes: CartaoListado[] = (
-        await armazenamento.listarCartoes(usuarioId)
-      ).map((cartao) => ({ ...cartao, baralhos: [], proximaRevisaoEm: null }));
+      const cartoesComDono = await armazenamento.listarCartoes(usuarioId);
 
       /**
        * Os Agendamentos do dono são lidos UMA única vez e indexados por Cartão:
@@ -1418,15 +1596,10 @@ export function criarAcervo(
         ),
       );
 
-      for (const cartao of cartoes) {
-        cartao.baralhos = await armazenamento.listarBaralhosDoCartao(
-          usuarioId,
-          cartao.id,
-        );
-        cartao.proximaRevisaoEm = proximaPorCartao.get(cartao.id) ?? null;
-      }
-
-      return cartoes;
+      return cartoesComDono.map((cartao) => ({
+        ...cartao,
+        proximaRevisaoEm: proximaPorCartao.get(cartao.id) ?? null,
+      }));
     },
 
     async listarBaralhos() {
@@ -1465,7 +1638,14 @@ export function criarAcervo(
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      const cartoes = await armazenamento.listarCartoesDoBaralho(usuarioId, id);
+      const [cartoes, agendamentos] = await Promise.all([
+        armazenamento.listarCartoesDoBaralho(usuarioId, id),
+        armazenamento.listarAgendamentos(usuarioId),
+      ]);
+
+      const quantidadeDeAgendamentosDoBaralho = agendamentos.filter((ag) =>
+        cartoes.some((c) => c.id === ag.cartaoId),
+      ).length;
 
       return {
         ok: true,
@@ -1473,61 +1653,9 @@ export function criarAcervo(
           ...encontrado.valor,
           elegivel: cartoes.length > 0,
           cartoes,
+          quantidadeDeAgendamentos: quantidadeDeAgendamentosDoBaralho,
         },
       };
-    },
-
-    async vincular(cartaoId, baralhoId) {
-      /**
-       * A existência dos dois lados é conferida aqui, e não deixada para o
-       * esquema: só o Module sabe dizer ao usuário **qual** extremidade não
-       * existe, e a Porta reporta a ausência sem distinguir as duas.
-       */
-      const cartao = await armazenamento.obterCartao(usuarioId, cartaoId);
-
-      if (!cartao.ok) {
-        return cartao.erro === "nao_encontrado"
-          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
-      }
-
-      const baralho = await armazenamento.obterBaralho(usuarioId, baralhoId);
-
-      if (!baralho.ok) {
-        return baralho.erro === "nao_encontrado"
-          ? { ok: false, ...BARALHO_NAO_ENCONTRADO }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
-      }
-
-      const vinculado = await armazenamento.vincular(
-        usuarioId,
-        cartaoId,
-        baralhoId,
-      );
-
-      if (!vinculado.ok) {
-        return vinculado.erro === "vinculo_duplicado"
-          ? { ok: false, ...VINCULO_DUPLICADO }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
-      }
-
-      return { ok: true };
-    },
-
-    async desvincular(cartaoId, baralhoId) {
-      const removido = await armazenamento.desvincular(
-        usuarioId,
-        cartaoId,
-        baralhoId,
-      );
-
-      if (!removido.ok) {
-        return removido.erro === "nao_encontrado"
-          ? { ok: false, ...VINCULO_NAO_ENCONTRADO }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
-      }
-
-      return { ok: true };
     },
 
     async editarCartao(id, dados) {
@@ -1544,9 +1672,13 @@ export function criarAcervo(
       });
 
       if (!gravado.ok) {
-        return gravado.erro === "nao_encontrado"
-          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
-          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        if (gravado.erro === "nao_encontrado") {
+          return { ok: false, ...CARTAO_NAO_ENCONTRADO };
+        }
+        if (gravado.erro === "frente_duplicada") {
+          return { ok: false, ...FRENTE_DUPLICADA };
+        }
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
       return { ok: true, cartao: gravado.valor };
@@ -1592,6 +1724,269 @@ export function criarAcervo(
         return excluido.erro === "nao_encontrado"
           ? { ok: false, ...BARALHO_NAO_ENCONTRADO }
           : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      return { ok: true };
+    },
+
+    async obterTransicao() {
+      if (!(await resolverAutomaticos())) {
+        return { ok: false, erro: "indisponivel", mensagem: ARMAZENAMENTO_INDISPONIVEL.mensagem };
+      }
+
+      const pendentesRaw = await armazenamento.listarCartoesPendentes(usuarioId);
+
+      if (!pendentesRaw.ok) {
+        return { ok: false, erro: "indisponivel", mensagem: ARMAZENAMENTO_INDISPONIVEL.mensagem };
+      }
+
+      const pendentes = pendentesRaw.valor;
+      // Avulsos (nenhum Baralho legado) e compartilhados (dois ou mais) exigem escolha.
+      const exigemEscolha = pendentes.filter((p) => p.baralhos.length !== 1);
+
+      // Ordena por normalizarFrente e depois por id
+      const ordenados = exigemEscolha.sort((a, b) => {
+        const chavea = normalizarFrente(a.cartao.frente);
+        const chaveb = normalizarFrente(b.cartao.frente);
+        if (chavea !== chaveb) {
+          return chavea.localeCompare(chaveb);
+        }
+        return a.cartao.id.localeCompare(b.cartao.id);
+      });
+
+      const cartoesDaTransicao: CartaoDaTransicao[] = ordenados.map((p) => ({
+        ...p.cartao,
+        baralhos: p.baralhos,
+      }));
+
+      const todosOsBaralhos = await armazenamento.listarBaralhos(usuarioId);
+      const baralhos = todosOsBaralhos.sort((a, b) => a.nome.localeCompare(b.nome));
+
+      return {
+        ok: true,
+        cartoes: cartoesDaTransicao,
+        baralhos,
+      };
+    },
+
+    async concluirTransicao(dados) {
+      if (typeof dados !== "object" || dados === null) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Dados inválidos.",
+        };
+      }
+
+      const { escolhas } = dados as { escolhas?: unknown };
+
+      if (!Array.isArray(escolhas)) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: "Escolhas deve ser uma lista.",
+        };
+      }
+
+      const resolvidos = await resolverAutomaticos();
+      const pendentesRaw = await armazenamento.listarCartoesPendentes(usuarioId);
+
+      if (!resolvidos || !pendentesRaw.ok) {
+        return {
+          ok: false,
+          erro: "indisponivel",
+          mensagem: ARMAZENAMENTO_INDISPONIVEL.mensagem,
+        };
+      }
+
+      const pendentes = pendentesRaw.valor;
+
+      if (pendentes.length === 0) {
+        return { ok: true };
+      }
+
+      // Valida a forma das escolhas
+      const escolhasMap = new Map<string, string>();
+
+      for (const escolha of escolhas) {
+        if (typeof escolha !== "object" || escolha === null) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: "Cada escolha deve ser um objeto.",
+          };
+        }
+
+        const { cartaoId, baralhoId } = escolha as { cartaoId?: unknown; baralhoId?: unknown };
+
+        if (typeof cartaoId !== "string" || typeof baralhoId !== "string") {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: "Cartão e baralho devem ser strings.",
+          };
+        }
+
+        if (escolhasMap.has(cartaoId)) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: "Cartão repetido nas escolhas.",
+          };
+        }
+
+        escolhasMap.set(cartaoId, baralhoId);
+      }
+
+      // Valida que há exatamente uma escolha por pendente
+      // Avulsos (nenhum Baralho legado) e compartilhados (dois ou mais) exigem escolha.
+      const exigemEscolha = pendentes.filter((p) => p.baralhos.length !== 1);
+
+      if (escolhasMap.size !== exigemEscolha.length) {
+        return {
+          ok: false,
+          erro: "escolhas_invalidas",
+          mensagem: `Esperado ${exigemEscolha.length} escolhas, obtido ${escolhasMap.size}.`,
+        };
+      }
+
+      // Valida que todos os ids nas escolhas correspondem a pendentes
+      for (const cartaoId of escolhasMap.keys()) {
+        if (!exigemEscolha.some((p) => p.cartao.id === cartaoId)) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Cartão ${cartaoId} não está pendente.`,
+          };
+        }
+      }
+
+      // Monta o plano de transição
+      const todosOsBaralhos = await armazenamento.listarBaralhos(usuarioId);
+      const baralhosPorId = new Map(todosOsBaralhos.map((b) => [b.id, b]));
+
+      // Ordena os pendentes para processamento
+      const ordenados = exigemEscolha.sort((a, b) => {
+        const chavea = normalizarFrente(a.cartao.frente);
+        const chaveb = normalizarFrente(b.cartao.frente);
+        if (chavea !== chaveb) {
+          return chavea.localeCompare(chaveb);
+        }
+        return a.cartao.id.localeCompare(b.cartao.id);
+      });
+
+      const pertencimentos: Array<{ cartaoId: string; baralhoId: string; frente: string }> = [];
+      const copias: Array<{ baralhoId: string; cartao: Cartao }> = [];
+      const chavesAcumuladasPorBaralho = new Map<string, Set<string>>();
+
+      for (const pendente of ordenados) {
+        const baralhoEscolhido = escolhasMap.get(pendente.cartao.id);
+
+        if (!baralhoEscolhido) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Nenhuma escolha para cartão ${pendente.cartao.id}.`,
+          };
+        }
+
+        // Valida se a escolha é válida
+        if (!baralhosPorId.has(baralhoEscolhido)) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Baralho ${baralhoEscolhido} não existe.`,
+          };
+        }
+
+        // Para Cartão compartilhado, o baralho deve ser um dos seus legados;
+        // o avulso aceita qualquer Baralho do Usuário, conferido acima.
+        if (
+          pendente.baralhos.length > 0 &&
+          !pendente.baralhos.some((b) => b.id === baralhoEscolhido)
+        ) {
+          return {
+            ok: false,
+            erro: "escolhas_invalidas",
+            mensagem: `Baralho ${baralhoEscolhido} não é um dos baralhos legados do cartão.`,
+          };
+        }
+
+        // Calcula a frente numerada para o Pertencimento
+        const cartoesDoBaralhoEscolhido = await armazenamento.listarCartoesDoBaralho(
+          usuarioId,
+          baralhoEscolhido,
+        );
+
+        let chavesUsadas = chavesAcumuladasPorBaralho.get(baralhoEscolhido);
+        if (!chavesUsadas) {
+          chavesUsadas = new Set(
+            cartoesDoBaralhoEscolhido.map((c) => normalizarFrente(c.frente)),
+          );
+          chavesAcumuladasPorBaralho.set(baralhoEscolhido, chavesUsadas);
+        }
+
+        const frenteFinal = numerarFrente(pendente.cartao.frente, chavesUsadas);
+        chavesUsadas.add(normalizarFrente(frenteFinal));
+
+        pertencimentos.push({
+          cartaoId: pendente.cartao.id,
+          baralhoId: baralhoEscolhido,
+          frente: frenteFinal,
+        });
+
+        // Para cada outro Baralho legado, cria uma cópia
+        const outrosBaralhos = pendente.baralhos
+          .filter((b) => b.id !== baralhoEscolhido)
+          .sort((a, b) => a.nome.localeCompare(b.nome));
+
+        for (const baralho of outrosBaralhos) {
+          const cartoesDoOutroBaralho = await armazenamento.listarCartoesDoBaralho(
+            usuarioId,
+            baralho.id,
+          );
+
+          let chavesDoOutro = chavesAcumuladasPorBaralho.get(baralho.id);
+          if (!chavesDoOutro) {
+            chavesDoOutro = new Set(
+              cartoesDoOutroBaralho.map((c) => normalizarFrente(c.frente)),
+            );
+            chavesAcumuladasPorBaralho.set(baralho.id, chavesDoOutro);
+          }
+
+          const frenteDaCopia = numerarFrente(pendente.cartao.frente, chavesDoOutro);
+          chavesDoOutro.add(normalizarFrente(frenteDaCopia));
+
+          copias.push({
+            baralhoId: baralho.id,
+            cartao: {
+              id: randomUUID(),
+              frente: frenteDaCopia,
+              verso: pendente.cartao.verso,
+            },
+          });
+        }
+      }
+
+      const aplicado = await armazenamento.aplicarTransicao(usuarioId, {
+        pertencimentos,
+        copias,
+      });
+
+      if (!aplicado.ok) {
+        if (aplicado.erro === "conflito") {
+          return {
+            ok: false,
+            erro: "conflito",
+            mensagem: "O acervo mudou; recarregue as escolhas e tente de novo.",
+          };
+        }
+
+        return {
+          ok: false,
+          erro: "indisponivel",
+          mensagem: ARMAZENAMENTO_INDISPONIVEL.mensagem,
+        };
       }
 
       return { ok: true };

@@ -8,7 +8,6 @@ import {
   MENSAGEM_DE_INDISPONIBILIDADE,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
   MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS,
-  MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
   MENSAGEM_DE_NAO_AUTENTICADO,
   NAO_AUTENTICADO,
 } from "../../src/acervo-cliente/cliente";
@@ -139,13 +138,9 @@ function criarAmbienteEmMemoria(): AmbienteDeCliente {
  * contrato em um só Adapter.
  */
 function criarAmbienteHttp(): AmbienteDeCliente {
-  const cartoesNoServidor: CartaoDoDono[] = [];
+  type CartaoDoDono025 = CartaoDoDono & { baralhoId: string };
+  const cartoesNoServidor: CartaoDoDono025[] = [];
   const baralhosNoServidor: BaralhoDoDono[] = [];
-  const vinculosNoServidor: {
-    usuarioId: string;
-    cartaoId: string;
-    baralhoId: string;
-  }[] = [];
   const usuariosNoServidor: {
     id: string;
     nomeDeUsuario: string;
@@ -166,36 +161,23 @@ function criarAmbienteHttp(): AmbienteDeCliente {
     return { id: baralho.id, nome: baralho.nome };
   }
 
-  function baralhosDoCartao(usuarioId: string, cartaoId: string): Baralho[] {
-    return vinculosNoServidor
-      .filter(
-        (vinculo) =>
-          vinculo.usuarioId === usuarioId && vinculo.cartaoId === cartaoId,
-      )
-      .map((vinculo) =>
-        baralhosNoServidor.find(
-          (baralho) =>
-            baralho.id === vinculo.baralhoId &&
-            baralho.usuarioId === usuarioId,
-        ),
-      )
-      .filter((baralho): baralho is BaralhoDoDono => baralho !== undefined)
-      .map(baralhoPublicado);
+  function baralhoDoCartao(usuarioId: string, cartaoId: string): Baralho | null {
+    const cartao = cartoesNoServidor.find(
+      (c) => c.id === cartaoId && c.usuarioId === usuarioId,
+    );
+    if (!cartao) return null;
+    const baralho = baralhosNoServidor.find(
+      (b) => b.id === cartao.baralhoId && b.usuarioId === usuarioId,
+    );
+    return baralho ? baralhoPublicado(baralho) : null;
   }
 
   function cartoesDoBaralho(usuarioId: string, baralhoId: string): Cartao[] {
-    return vinculosNoServidor
+    return cartoesNoServidor
       .filter(
-        (vinculo) =>
-          vinculo.usuarioId === usuarioId && vinculo.baralhoId === baralhoId,
+        (cartao) =>
+          cartao.usuarioId === usuarioId && cartao.baralhoId === baralhoId,
       )
-      .map((vinculo) =>
-        cartoesNoServidor.find(
-          (cartao) =>
-            cartao.id === vinculo.cartaoId && cartao.usuarioId === usuarioId,
-        ),
-      )
-      .filter((cartao): cartao is CartaoDoDono => cartao !== undefined)
       .map(cartaoPublicado);
   }
 
@@ -333,13 +315,22 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
     const cartaoPorId = caminho.match(/^\/cartoes\/([^/]+)$/);
     const baralhoPorId = caminho.match(/^\/baralhos\/([^/]+)$/);
-    const vinculoEmBaralho = caminho.match(/^\/baralhos\/([^/]+)\/vinculos$/);
-    const vinculoEspecifico = caminho.match(
-      /^\/baralhos\/([^/]+)\/vinculos\/([^/]+)$/,
-    );
+    const criarCartaoEmBaralho = caminho.match(/^\/baralhos\/([^/]+)\/cartoes$/);
 
-    if (caminho === "/cartoes" && metodo === "POST") {
+    if (criarCartaoEmBaralho !== null && metodo === "POST") {
+      const baralhoId = decodeURIComponent(criarCartaoEmBaralho[1]);
       const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
+
+      const baralho = baralhosNoServidor.find(
+        (b) => b.id === baralhoId && b.usuarioId === donoId,
+      );
+
+      if (baralho === undefined) {
+        return respostaDeTeste(404, {
+          erro: "nao_encontrado",
+          mensagem: "Baralho não encontrado.",
+        });
+      }
 
       const falha =
         validarFrente(corpo.frente as string) ??
@@ -352,11 +343,38 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const cartao: CartaoDoDono = {
+      // Normalize frente and check for duplicates in the same baralho
+      const normalizarFrente = (f: string): string =>
+        f.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase();
+
+      const frenteTrimmed = (corpo.frente as string).trim();
+      const frenteNormalizada = normalizarFrente(frenteTrimmed);
+
+      const duplicadasNoBaralho = cartoesNoServidor.filter(
+        (c) =>
+          c.baralhoId === baralhoId &&
+          c.usuarioId === donoId &&
+          normalizarFrente(c.frente) === frenteNormalizada,
+      );
+
+      let frenteFinal = frenteTrimmed;
+      if (duplicadasNoBaralho.length > 0) {
+        // Find the smallest available number >= 2
+        let num = 2;
+        while (
+          duplicadasNoBaralho.some((c) => c.frente === `${frenteTrimmed} (${num})`)
+        ) {
+          num += 1;
+        }
+        frenteFinal = `${frenteTrimmed} (${num})`;
+      }
+
+      const cartao: CartaoDoDono025 = {
         id: `s${++sequencia}`,
         usuarioId: donoId,
-        frente: corpo.frente as string,
+        frente: frenteFinal,
         verso: corpo.verso as string,
+        baralhoId,
       };
 
       cartoesNoServidor.push(cartao);
@@ -371,7 +389,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
           .filter((cartao) => cartao.usuarioId === donoId)
           .map((cartao) => ({
             ...cartaoPublicado(cartao),
-            baralhos: baralhosDoCartao(donoId, cartao.id),
+            baralho: baralhoDoCartao(donoId, cartao.id),
             proximaRevisaoEm: null,
           })),
       );
@@ -406,90 +424,20 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         baralhosNoServidor
           .filter((baralho) => baralho.usuarioId === donoId)
           .map((baralho) => {
-            const quantidadeDeCartoes = vinculosNoServidor.filter(
-              (vinculo) =>
-                vinculo.usuarioId === donoId &&
-                vinculo.baralhoId === baralho.id,
+            const quantidadeDeCartoes = cartoesNoServidor.filter(
+              (cartao) =>
+                cartao.usuarioId === donoId &&
+                cartao.baralhoId === baralho.id,
             ).length;
 
             return {
               ...baralhoPublicado(baralho),
               quantidadeDeCartoes,
+              quantidadeDeAgendamentos: 0,
               elegivel: quantidadeDeCartoes > 0,
             };
           }),
       );
-    }
-
-    if (vinculoEmBaralho !== null && metodo === "POST") {
-      const baralhoId = decodeURIComponent(vinculoEmBaralho[1]);
-      const corpo = JSON.parse(String(opcoes?.body)) as Record<string, unknown>;
-      const cartaoId = corpo.cartaoId as string;
-
-      // Cartão e Baralho precisam existir no escopo de quem pede: o Vínculo
-      // entre donos diferentes é o mesmo `nao_encontrado` (FR-092, FR-093).
-      if (
-        !cartoesNoServidor.some(
-          (cartao) => cartao.id === cartaoId && cartao.usuarioId === donoId,
-        )
-      ) {
-        return respostaDeTeste(404, {
-          erro: "nao_encontrado",
-          mensagem: "Cartão não encontrado.",
-        });
-      }
-
-      if (
-        !baralhosNoServidor.some(
-          (baralho) =>
-            baralho.id === baralhoId && baralho.usuarioId === donoId,
-        )
-      ) {
-        return respostaDeTeste(404, {
-          erro: "nao_encontrado",
-          mensagem: "Baralho não encontrado.",
-        });
-      }
-
-      if (
-        vinculosNoServidor.some(
-          (vinculo) =>
-            vinculo.usuarioId === donoId &&
-            vinculo.cartaoId === cartaoId &&
-            vinculo.baralhoId === baralhoId,
-        )
-      ) {
-        return respostaDeTeste(409, {
-          erro: "vinculo_duplicado",
-          mensagem: "O vínculo já existe.",
-        });
-      }
-
-      vinculosNoServidor.push({ usuarioId: donoId, cartaoId, baralhoId });
-
-      return respostaDeTeste(201, null);
-    }
-
-    if (vinculoEspecifico !== null && metodo === "DELETE") {
-      const baralhoId = decodeURIComponent(vinculoEspecifico[1]);
-      const cartaoId = decodeURIComponent(vinculoEspecifico[2]);
-      const indice = vinculosNoServidor.findIndex(
-        (vinculo) =>
-          vinculo.usuarioId === donoId &&
-          vinculo.cartaoId === cartaoId &&
-          vinculo.baralhoId === baralhoId,
-      );
-
-      if (indice === -1) {
-        return respostaDeTeste(404, {
-          erro: "vinculo_nao_encontrado",
-          mensagem: "O vínculo não existe.",
-        });
-      }
-
-      vinculosNoServidor.splice(indice, 1);
-
-      return respostaDeTeste(204, null);
     }
 
     if (baralhoPorId !== null && metodo === "GET") {
@@ -509,6 +457,7 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
       return respostaDeTeste(200, {
         ...baralhoPublicado(baralho),
+        quantidadeDeAgendamentos: 0,
         elegivel: cartoes.length > 0,
         cartoes,
       });
@@ -516,11 +465,11 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
     if (cartaoPorId !== null && metodo === "PUT") {
       const id = decodeURIComponent(cartaoPorId[1]);
-      const indice = cartoesNoServidor.findIndex(
+      const cartaoIndice = cartoesNoServidor.findIndex(
         (cartao) => cartao.id === id && cartao.usuarioId === donoId,
       );
 
-      if (indice === -1) {
+      if (cartaoIndice === -1) {
         return respostaDeTeste(404, {
           erro: "nao_encontrado",
           mensagem: "Cartão não encontrado.",
@@ -539,14 +488,33 @@ function criarAmbienteHttp(): AmbienteDeCliente {
         });
       }
 
-      const cartao: CartaoDoDono = {
+      // Check for duplicate frente in the same baralho
+      const novaFrente = corpo.frente as string;
+      const baralhoId = cartoesNoServidor[cartaoIndice].baralhoId;
+      const temDuplicada = cartoesNoServidor.some(
+        (cartao) =>
+          cartao.id !== id &&
+          cartao.usuarioId === donoId &&
+          cartao.baralhoId === baralhoId &&
+          cartao.frente === novaFrente,
+      );
+
+      if (temDuplicada) {
+        return respostaDeTeste(409, {
+          erro: "frente_duplicada",
+          mensagem: "Um cartão com essa frente já existe neste baralho.",
+        });
+      }
+
+      const cartao: CartaoDoDono025 = {
         id,
         usuarioId: donoId,
-        frente: corpo.frente as string,
+        frente: novaFrente,
         verso: corpo.verso as string,
+        baralhoId,
       };
 
-      cartoesNoServidor[indice] = cartao;
+      cartoesNoServidor[cartaoIndice] = cartao;
 
       return respostaDeTeste(200, cartaoPublicado(cartao));
     }
@@ -600,14 +568,6 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
       cartoesNoServidor.splice(indice, 1);
 
-      for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
-        const vinculo = vinculosNoServidor[i];
-
-        if (vinculo.usuarioId === donoId && vinculo.cartaoId === id) {
-          vinculosNoServidor.splice(i, 1);
-        }
-      }
-
       return respostaDeTeste(204, null);
     }
 
@@ -626,11 +586,12 @@ function criarAmbienteHttp(): AmbienteDeCliente {
 
       baralhosNoServidor.splice(indice, 1);
 
-      for (let i = vinculosNoServidor.length - 1; i >= 0; i -= 1) {
-        const vinculo = vinculosNoServidor[i];
+      // Remove all cartões that belong to this baralho
+      for (let i = cartoesNoServidor.length - 1; i >= 0; i -= 1) {
+        const cartao = cartoesNoServidor[i];
 
-        if (vinculo.usuarioId === donoId && vinculo.baralhoId === id) {
-          vinculosNoServidor.splice(i, 1);
+        if (cartao.usuarioId === donoId && cartao.baralhoId === id) {
+          cartoesNoServidor.splice(i, 1);
         }
       }
 
@@ -671,7 +632,13 @@ function executarBateriaDoContrato(
     it("cria um Cartão válido com id, Frente e Verso (FR-001)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -686,10 +653,16 @@ function executarBateriaDoContrato(
       });
     });
 
-    it("lista o Cartão criado, agora com baralhos vazio (FR-001, FR-003)", async () => {
+    it("lista o Cartão criado, agora com baralho único (FR-001, FR-003)", async () => {
       const { cliente } = criarAmbiente();
 
-      const criacao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const criacao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -700,7 +673,7 @@ function executarBateriaDoContrato(
 
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...criacao.cartao, baralhos: [], proximaRevisaoEm: null }],
+        cartoes: [{ ...criacao.cartao, baralho: baralho.baralho, proximaRevisaoEm: null }],
       });
     });
 
@@ -713,14 +686,21 @@ function executarBateriaDoContrato(
       });
     });
 
-    it("aceita dois Cartões com a mesma Frente, ambos presentes (invariante 2)", async () => {
+    it("aceita dois Cartões com a mesma Frente em baralhos diferentes, ambos presentes (invariante 2)", async () => {
       const { cliente } = criarAmbiente();
 
-      const primeiro = await cliente.criarCartao({
+      const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+      const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
+
+      if (!primeiroBaralho.ok || !segundoBaralho.ok) {
+        throw new Error("as criações de baralho deveriam ser aceitas");
+      }
+
+      const primeiro = await cliente.criarCartao(primeiroBaralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const segundo = await cliente.criarCartao({
+      const segundo = await cliente.criarCartao(segundoBaralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: "Andar",
       });
@@ -732,16 +712,22 @@ function executarBateriaDoContrato(
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
         cartoes: expect.arrayContaining([
-          { ...primeiro.cartao, baralhos: [], proximaRevisaoEm: null },
-          { ...segundo.cartao, baralhos: [], proximaRevisaoEm: null },
+          { ...primeiro.cartao, baralho: primeiroBaralho.baralho, proximaRevisaoEm: null },
+          { ...segundo.cartao, baralho: segundoBaralho.baralho, proximaRevisaoEm: null },
         ]),
       });
     });
 
-    it("devolve cada Cartão com exatamente id, Frente, Verso e baralhos (FR-004)", async () => {
+    it("devolve cada Cartão com exatamente id, Frente, Verso e baralho (FR-004)", async () => {
       const { cliente } = criarAmbiente();
 
-      await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -755,7 +741,7 @@ function executarBateriaDoContrato(
 
       for (const cartao of listagem.cartoes) {
         expect(Object.keys(cartao).sort()).toEqual([
-          "baralhos",
+          "baralho",
           "frente",
           "id",
           "proximaRevisaoEm",
@@ -764,12 +750,18 @@ function executarBateriaDoContrato(
         expect(cartao.id).toEqual(expect.any(String));
         expect(cartao.frente).toBe(FRENTE_VALIDA);
         expect(cartao.verso).toBe(VERSO_VALIDO);
-        expect(cartao.baralhos).toEqual([]);
+        expect(cartao.baralho).toEqual(baralho.baralho);
       }
     });
 
     it("ignora propriedade extra e ela não retorna nas leituras (FR-009)", async () => {
       const { cliente } = criarAmbiente();
+
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
 
       const dadosComPropriedadeExtra = {
         frente: FRENTE_VALIDA,
@@ -777,7 +769,7 @@ function executarBateriaDoContrato(
         titulo: "propriedade que não existe em Cartão",
       };
 
-      const criacao = await cliente.criarCartao(dadosComPropriedadeExtra);
+      const criacao = await cliente.criarCartao(baralho.baralho.id, dadosComPropriedadeExtra);
 
       if (!criacao.ok) {
         throw new Error("a criação deveria ser aceita");
@@ -790,14 +782,20 @@ function executarBateriaDoContrato(
       ]);
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...criacao.cartao, baralhos: [], proximaRevisaoEm: null }],
+        cartoes: [{ ...criacao.cartao, baralho: baralho.baralho, proximaRevisaoEm: null }],
       });
     });
 
     it("aceita Frente e Verso com exatamente 1000 caracteres: limite inclusivo (FR-052)", async () => {
       const { cliente } = criarAmbiente();
 
-      const criacao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const criacao = await cliente.criarCartao(baralho.baralho.id, {
         frente: "a".repeat(1000),
         verso: "b".repeat(1000),
       });
@@ -808,7 +806,13 @@ function executarBateriaDoContrato(
     it("recusa Frente vazia com frente_vazia e mensagem exata, sem criar nada (FR-002)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: "",
         verso: VERSO_VALIDO,
       });
@@ -827,7 +831,13 @@ function executarBateriaDoContrato(
     it("trata Frente composta só de espaços como vazia (FR-051)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: "   ",
         verso: VERSO_VALIDO,
       });
@@ -846,7 +856,13 @@ function executarBateriaDoContrato(
     it("recusa Verso vazio com verso_vazio e mensagem exata, sem criar nada (FR-002)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: "",
       });
@@ -865,7 +881,13 @@ function executarBateriaDoContrato(
     it("recusa Frente acima de 1000 caracteres, informando limite e tamanho (FR-052)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: "a".repeat(1001),
         verso: VERSO_VALIDO,
       });
@@ -885,7 +907,13 @@ function executarBateriaDoContrato(
     it("recusa Verso acima de 1000 caracteres, informando limite e tamanho (FR-052)", async () => {
       const { cliente } = criarAmbiente();
 
-      const resultado = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: "a".repeat(1001),
       });
@@ -904,9 +932,16 @@ function executarBateriaDoContrato(
 
     it("com o transporte indisponível, criarCartao falha com indisponivel (FR-044)", async () => {
       const { cliente, indisponibilizar } = criarAmbiente();
+
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
       indisponibilizar();
 
-      const resultado = await cliente.criarCartao({
+      const resultado = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -920,9 +955,16 @@ function executarBateriaDoContrato(
 
     it("criação falha por indisponibilidade não aparece como concluída: nada é criado (FR-044)", async () => {
       const { cliente, indisponibilizar, restaurar } = criarAmbiente();
+
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
       indisponibilizar();
 
-      const criacao = await cliente.criarCartao({
+      const criacao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -1185,249 +1227,6 @@ function executarBateriaDeBaralhos(
   });
 }
 
-/**
- * Bateria compartilhada de Vínculos (T208; specs/003-vincular-cartao-baralho/contracts/api-vinculos.md).
- */
-function executarBateriaDeVinculos(
-  nomeDoAdapter: string,
-  criarAmbiente: () => AmbienteDeCliente,
-): void {
-  describe(`${nomeDoAdapter} — bateria do contrato de Vínculos`, () => {
-    it("vincula um Cartão a um Baralho e o Baralho torna-se elegível (FR-019, FR-024)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      expect(
-        await cliente.vincular(cartao.cartao.id, baralho.baralho.id),
-      ).toEqual({ ok: true });
-      expect(await cliente.listarBaralhos()).toEqual({
-        ok: true,
-        baralhos: [
-          {
-            ...baralho.baralho,
-            quantidadeDeCartoes: 1,
-            elegivel: true,
-          },
-        ],
-      });
-    });
-
-    it("obterBaralho devolve o Baralho com seus Cartões vinculados (FR-014)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-
-      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
-        ok: true,
-        baralho: {
-          id: baralho.baralho.id,
-          nome: baralho.baralho.nome,
-          elegivel: true,
-          cartoes: [cartao.cartao],
-        },
-      });
-    });
-
-    it("listarCartoes devolve os Baralhos de cada Cartão; Cartão sem Baralho traz lista vazia (FR-003)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const cartaoSemBaralho = await cliente.criarCartao({
-        frente: "To run",
-        verso: "Correr",
-      });
-      const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-      const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
-
-      if (
-        !cartao.ok ||
-        !cartaoSemBaralho.ok ||
-        !primeiroBaralho.ok ||
-        !segundoBaralho.ok
-      ) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
-      await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
-
-      expect(await cliente.listarCartoes()).toEqual({
-        ok: true,
-        cartoes: [
-          {
-            ...cartao.cartao,
-            baralhos: [primeiroBaralho.baralho, segundoBaralho.baralho],
-            proximaRevisaoEm: null,
-          },
-          { ...cartaoSemBaralho.cartao, baralhos: [], proximaRevisaoEm: null },
-        ],
-      });
-    });
-
-    it("recusa vincular Cartão inexistente como nao_encontrado (FR-022)", async () => {
-      const { cliente } = criarAmbiente();
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!baralho.ok) {
-        throw new Error("a criação deveria ser aceita");
-      }
-
-      expect(
-        await cliente.vincular("c-inexistente", baralho.baralho.id),
-      ).toEqual({
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Cartão não encontrado.",
-      });
-    });
-
-    it("recusa vincular Baralho inexistente como nao_encontrado (FR-022)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-
-      if (!cartao.ok) {
-        throw new Error("a criação deveria ser aceita");
-      }
-
-      expect(
-        await cliente.vincular(cartao.cartao.id, "b-inexistente"),
-      ).toEqual({
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
-      });
-    });
-
-    it("recusa Vínculo duplicado com vinculo_duplicado (FR-020)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-
-      expect(
-        await cliente.vincular(cartao.cartao.id, baralho.baralho.id),
-      ).toEqual({
-        ok: false,
-        erro: "vinculo_duplicado",
-        mensagem: "O vínculo já existe.",
-      });
-    });
-
-    it("desvincular preserva Cartão e Baralho, e o Baralho perde a elegibilidade (FR-021, FR-024)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-      expect(
-        await cliente.desvincular(cartao.cartao.id, baralho.baralho.id),
-      ).toEqual({ ok: true });
-      expect(await cliente.listarBaralhos()).toEqual({
-        ok: true,
-        baralhos: [
-          {
-            ...baralho.baralho,
-            quantidadeDeCartoes: 0,
-            elegivel: false,
-          },
-        ],
-      });
-      expect(await cliente.listarCartoes()).toEqual({
-        ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
-      });
-      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
-        ok: true,
-        baralho: {
-          id: baralho.baralho.id,
-          nome: baralho.baralho.nome,
-          elegivel: false,
-          cartoes: [],
-        },
-      });
-    });
-
-    it("recusa desvincular Vínculo inexistente com vinculo_nao_encontrado (FR-021)", async () => {
-      const { cliente } = criarAmbiente();
-
-      expect(
-        await cliente.desvincular("c-inexistente", "b-inexistente"),
-      ).toEqual({
-        ok: false,
-        erro: "vinculo_nao_encontrado",
-        mensagem: "O vínculo não existe.",
-      });
-    });
-
-    it("obterBaralho inexistente é recusado como nao_encontrado (FR-014)", async () => {
-      const { cliente } = criarAmbiente();
-
-      expect(await cliente.obterBaralho("b-inexistente")).toEqual({
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
-      });
-    });
-
-    it("com o transporte indisponível, Vínculos falham com a mensagem própria", async () => {
-      const { cliente, indisponibilizar } = criarAmbiente();
-      indisponibilizar();
-
-      expect(await cliente.vincular("c1", "b1")).toEqual({
-        ok: false,
-        erro: INDISPONIVEL,
-        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-      });
-      expect(await cliente.desvincular("c1", "b1")).toEqual({
-        ok: false,
-        erro: INDISPONIVEL,
-        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-      });
-      expect(await cliente.obterBaralho("b1")).toEqual({
-        ok: false,
-        erro: INDISPONIVEL,
-        mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
-      });
-    });
-  });
-}
 
 /**
  * Bateria compartilhada de edição (T403; specs/005-editar-cartao-e-baralho/contracts/api-edicao.md).
@@ -1439,7 +1238,14 @@ function executarBateriaDeEdicao(
   describe(`${nomeDoAdapter} — bateria do contrato de Edição`, () => {
     it("edita Frente e Verso e a alteração aparece nas leituras (FR-005)", async () => {
       const { cliente } = criarAmbiente();
-      const criacao = await cliente.criarCartao({
+
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const criacao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -1465,26 +1271,30 @@ function executarBateriaDeEdicao(
             id: criacao.cartao.id,
             frente: "To run",
             verso: "Correr",
-            baralhos: [],
+            baralho: baralho.baralho,
             proximaRevisaoEm: null,
           },
         ],
       });
     });
 
-    it("edita Cartão vinculado sem alterar o Vínculo (FR-005)", async () => {
+    it("edita Cartão no Baralho sem alterar seu Baralho (FR-005)", async () => {
       const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
+      if (!cartao.ok) {
+        throw new Error("a criação deveria ser aceita");
       }
 
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
       await cliente.editarCartao(cartao.cartao.id, "To run", "Correr");
 
       expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
@@ -1492,6 +1302,7 @@ function executarBateriaDeEdicao(
         baralho: {
           id: baralho.baralho.id,
           nome: baralho.baralho.nome,
+          quantidadeDeAgendamentos: 0,
           elegivel: true,
           cartoes: [
             {
@@ -1506,7 +1317,14 @@ function executarBateriaDeEdicao(
 
     it("recusa edição com Frente vazia, com as mesmas regras da criação (FR-005)", async () => {
       const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
+
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
@@ -1524,7 +1342,7 @@ function executarBateriaDeEdicao(
       });
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
+        cartoes: [{ ...cartao.cartao, baralho: baralho.baralho, proximaRevisaoEm: null }],
       });
     });
 
@@ -1540,19 +1358,22 @@ function executarBateriaDeEdicao(
       });
     });
 
-    it("renomeia Baralho preservando Vínculos e elegibilidade (FR-015)", async () => {
+    it("renomeia Baralho preservando elegibilidade (FR-015)", async () => {
       const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
+      if (!cartao.ok) {
+        throw new Error("a criação deveria ser aceita");
       }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
 
       expect(
         await cliente.renomearBaralho(baralho.baralho.id, "Espanhol"),
@@ -1581,6 +1402,7 @@ function executarBateriaDeEdicao(
           nome: "Espanhol",
           elegivel: true,
           cartoes: [cartao.cartao],
+          quantidadeDeAgendamentos: 0,
         },
       });
     });
@@ -1650,21 +1472,22 @@ function executarBateriaDeExclusao(
   criarAmbiente: () => AmbienteDeCliente,
 ): void {
   describe(`${nomeDoAdapter} — bateria do contrato de Exclusão`, () => {
-    it("excluir Cartão remove seus Vínculos e preserva os Baralhos (FR-007, FR-008)", async () => {
+    it("excluir Cartão preserva o Baralho (FR-007, FR-008)", async () => {
       const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-      const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
 
-      if (!cartao.ok || !primeiroBaralho.ok || !segundoBaralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
+      if (!cartao.ok) {
+        throw new Error("a criação do cartão deveria ser aceita");
       }
-
-      await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
-      await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
 
       expect(await cliente.excluirCartao(cartao.cartao.id)).toEqual({
         ok: true,
@@ -1675,48 +1498,46 @@ function executarBateriaDeExclusao(
       });
       expect(await cliente.listarBaralhos()).toEqual({
         ok: true,
-        baralhos: expect.arrayContaining([
+        baralhos: [
           {
-            ...primeiroBaralho.baralho,
+            ...baralho.baralho,
             quantidadeDeCartoes: 0,
             elegivel: false,
           },
-          {
-            ...segundoBaralho.baralho,
-            quantidadeDeCartoes: 0,
-            elegivel: false,
-          },
-        ]),
+        ],
       });
-      expect(await cliente.obterBaralho(primeiroBaralho.baralho.id)).toEqual({
+      expect(await cliente.obterBaralho(baralho.baralho.id)).toEqual({
         ok: true,
         baralho: {
-          id: primeiroBaralho.baralho.id,
-          nome: primeiroBaralho.baralho.nome,
+          id: baralho.baralho.id,
+          nome: baralho.baralho.nome,
           elegivel: false,
           cartoes: [],
+          quantidadeDeAgendamentos: 0,
         },
       });
     });
 
-    it("excluir Baralho remove seus Vínculos e preserva os Cartões (FR-016, FR-017)", async () => {
+    it("excluir Baralho remove também seus Cartões (FR-016, FR-017)", async () => {
       const { cliente } = criarAmbiente();
-      const primeiroCartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const primeiroCartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const segundoCartao = await cliente.criarCartao({
+      const segundoCartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: "To run",
         verso: "Correr",
       });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-      if (!primeiroCartao.ok || !segundoCartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
+      if (!primeiroCartao.ok || !segundoCartao.ok) {
+        throw new Error("as criações dos cartões deveriam ser aceitas");
       }
-
-      await cliente.vincular(primeiroCartao.cartao.id, baralho.baralho.id);
-      await cliente.vincular(segundoCartao.cartao.id, baralho.baralho.id);
 
       expect(await cliente.excluirBaralho(baralho.baralho.id)).toEqual({
         ok: true,
@@ -1727,31 +1548,7 @@ function executarBateriaDeExclusao(
       });
       expect(await cliente.listarCartoes()).toEqual({
         ok: true,
-        cartoes: expect.arrayContaining([
-          { ...primeiroCartao.cartao, baralhos: [], proximaRevisaoEm: null },
-          { ...segundoCartao.cartao, baralhos: [], proximaRevisaoEm: null },
-        ]),
-      });
-    });
-
-    it("Cartão que fica sem Baralho continua acessível pela lista (SC-006)", async () => {
-      const { cliente } = criarAmbiente();
-      const cartao = await cliente.criarCartao({
-        frente: FRENTE_VALIDA,
-        verso: VERSO_VALIDO,
-      });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
-
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações deveriam ser aceitas");
-      }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-      await cliente.excluirBaralho(baralho.baralho.id);
-
-      expect(await cliente.listarCartoes()).toEqual({
-        ok: true,
-        cartoes: [{ ...cartao.cartao, baralhos: [], proximaRevisaoEm: null }],
+        cartoes: [],
       });
     });
 
@@ -2058,9 +1855,6 @@ executarBateriaDoContrato("ClienteEmMemoria", criarAmbienteEmMemoria);
 executarBateriaDeBaralhos("ClienteHttp", criarAmbienteHttp);
 executarBateriaDeBaralhos("ClienteEmMemoria", criarAmbienteEmMemoria);
 
-executarBateriaDeVinculos("ClienteHttp", criarAmbienteHttp);
-executarBateriaDeVinculos("ClienteEmMemoria", criarAmbienteEmMemoria);
-
 executarBateriaDeEdicao("ClienteHttp", criarAmbienteHttp);
 executarBateriaDeEdicao("ClienteEmMemoria", criarAmbienteEmMemoria);
 
@@ -2174,14 +1968,19 @@ function executarBateriaDeEntrada(
 
       // O acervo do dono: é ele que precisa permanecer exatamente como está
       // depois de cada recusa.
-      const cartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações do cenário deveriam ser aceitas");
+      if (!cartao.ok) {
+        throw new Error("a criação do cartão deveria ser aceita");
       }
 
       const semCredencial = clienteComo(null);
@@ -2192,7 +1991,7 @@ function executarBateriaDeEntrada(
       };
 
       expect(
-        await semCredencial.criarCartao({
+        await semCredencial.criarCartao(baralho.baralho.id, {
           frente: FRENTE_VALIDA,
           verso: VERSO_VALIDO,
         }),
@@ -2205,12 +2004,6 @@ function executarBateriaDeEntrada(
       expect(await semCredencial.obterBaralho(baralho.baralho.id)).toEqual(
         recusa,
       );
-      expect(
-        await semCredencial.vincular(cartao.cartao.id, baralho.baralho.id),
-      ).toEqual(recusa);
-      expect(
-        await semCredencial.desvincular(cartao.cartao.id, baralho.baralho.id),
-      ).toEqual(recusa);
       expect(
         await semCredencial.editarCartao(cartao.cartao.id, "To run", "Correr"),
       ).toEqual(recusa);
@@ -2232,7 +2025,7 @@ function executarBateriaDeEntrada(
             id: cartao.cartao.id,
             frente: FRENTE_VALIDA,
             verso: VERSO_VALIDO,
-            baralhos: [],
+            baralho: baralho.baralho,
             proximaRevisaoEm: null,
           },
         ],
@@ -2243,8 +2036,8 @@ function executarBateriaDeEntrada(
           {
             id: baralho.baralho.id,
             nome: NOME_VALIDO,
-            quantidadeDeCartoes: 0,
-            elegivel: false,
+            quantidadeDeCartoes: 1,
+            elegivel: true,
           },
         ],
       });
@@ -2257,8 +2050,13 @@ function executarBateriaDeEntrada(
         senha: SENHA_ERRADA,
       });
 
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
       expect(
-        await comCredencialInvalida.criarCartao({
+        await comCredencialInvalida.criarCartao(baralho.baralho.id, {
           frente: FRENTE_VALIDA,
           verso: VERSO_VALIDO,
         }),
@@ -2287,7 +2085,7 @@ function executarBateriaDeEntrada(
       // A mesma Credencial válida, com o transporte parado, é reportada como
       // indisponibilidade — nunca como recusa por Credencial.
       expect(
-        await cliente.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
+        await cliente.criarCartao(baralho.baralho.id, { frente: FRENTE_VALIDA, verso: VERSO_VALIDO }),
       ).toEqual({
         ok: false,
         erro: INDISPONIVEL,
@@ -2322,17 +2120,20 @@ function executarBateriaDeEntrada(
         },
       });
 
-      const cartao = await cliente.criarCartao({
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+      if (!baralho.ok) {
+        throw new Error("a criação do baralho deveria ser aceita");
+      }
+
+      const cartao = await cliente.criarCartao(baralho.baralho.id, {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       });
-      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-      if (!cartao.ok || !baralho.ok) {
-        throw new Error("as criações do cenário deveriam ser aceitas");
+      if (!cartao.ok) {
+        throw new Error("a criação do cartão deveria ser aceita");
       }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
 
       // O acervo do outro Usuário está vazio: nada do primeiro lhe aparece.
       expect(await outro.listarCartoes()).toEqual({ ok: true, cartoes: [] });
@@ -2361,21 +2162,13 @@ function executarBateriaDeEntrada(
         mensagem: "Cartão não encontrado.",
       });
 
-      // O Vínculo entre donos diferentes é impossível (FR-093), e o Baralho do
-      // outro continua sem Cartão algum.
+      // Outro usuário cria seu próprio baralho
       const baralhoDoOutro = await outro.criarBaralho({ nome: "Espanhol" });
 
       if (!baralhoDoOutro.ok) {
         throw new Error("a criação do cenário deveria ser aceita");
       }
 
-      expect(
-        await outro.vincular(cartao.cartao.id, baralhoDoOutro.baralho.id),
-      ).toEqual({
-        ok: false,
-        erro: "nao_encontrado",
-        mensagem: "Cartão não encontrado.",
-      });
       expect(await outro.listarBaralhos()).toEqual({
         ok: true,
         baralhos: [
@@ -2396,7 +2189,7 @@ function executarBateriaDeEntrada(
             id: cartao.cartao.id,
             frente: FRENTE_VALIDA,
             verso: VERSO_VALIDO,
-            baralhos: [{ id: baralho.baralho.id, nome: NOME_VALIDO }],
+            baralho: { id: baralho.baralho.id, nome: NOME_VALIDO },
             proximaRevisaoEm: null,
           },
         ],
@@ -2418,7 +2211,9 @@ function executarBateriaDeEntrada(
       const { cliente } = criarAmbiente();
 
       await cliente.entrar(CREDENCIAL_DE_PROVA);
-      await cliente.criarCartao({ frente: FRENTE_VALIDA, verso: VERSO_VALIDO });
+      const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+      if (!baralho.ok) throw new Error("Baralho de prova não criado");
+      await cliente.criarCartao(baralho.baralho.id, { frente: FRENTE_VALIDA, verso: VERSO_VALIDO });
       await cliente.listarCartoes();
 
       // Nada é gravado no navegador — nem `localStorage`, nem
@@ -2484,26 +2279,32 @@ describe("resultados idênticos entre os dois Adapters", () => {
 async function cenarioCompleto(ambiente: AmbienteDeCliente) {
   const { cliente, indisponibilizar, restaurar } = ambiente;
 
-  const criado = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+  if (!baralho.ok) {
+    throw new Error("a criação do baralho deveria ser aceita");
+  }
+
+  const criado = await cliente.criarCartao(baralho.baralho.id, {
     frente: FRENTE_VALIDA,
     verso: VERSO_VALIDO,
   });
-  const repetido = await cliente.criarCartao({
+  const repetido = await cliente.criarCartao(baralho.baralho.id, {
     frente: FRENTE_VALIDA,
     verso: "Andar",
   });
-  const frenteVazia = await cliente.criarCartao({
+  const frenteVazia = await cliente.criarCartao(baralho.baralho.id, {
     frente: "",
     verso: VERSO_VALIDO,
   });
-  const frenteLonga = await cliente.criarCartao({
+  const frenteLonga = await cliente.criarCartao(baralho.baralho.id, {
     frente: "a".repeat(1001),
     verso: VERSO_VALIDO,
   });
   const lista = await cliente.listarCartoes();
 
   indisponibilizar();
-  const criacaoIndisponivel = await cliente.criarCartao({
+  const criacaoIndisponivel = await cliente.criarCartao(baralho.baralho.id, {
     frente: "Never",
     verso: "Nunca",
   });
@@ -2558,48 +2359,39 @@ async function cenarioDeBaralhos(ambiente: AmbienteDeCliente) {
 }
 
 /**
- * Sequência de Vínculos que atravessa sucesso, recusas e indisponibilidade.
+ * Sequência de criação de Cartões em Baralhos que atravessa sucesso, recusas e indisponibilidade.
  */
 async function cenarioDeVinculos(ambiente: AmbienteDeCliente) {
   const { cliente, indisponibilizar, restaurar } = ambiente;
 
-  const cartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+  if (!baralho.ok) {
+    throw new Error("a criação do baralho deveria ser aceita");
+  }
+
+  const cartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: FRENTE_VALIDA,
     verso: VERSO_VALIDO,
   });
-  const outroCartao = await cliente.criarCartao({
+  const outroCartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: "To run",
     verso: "Correr",
   });
-  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-  if (!cartao.ok || !outroCartao.ok || !baralho.ok) {
+  if (!cartao.ok || !outroCartao.ok) {
     throw new Error("as criações deveriam ser aceitas");
   }
 
-  const vinculado = await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-  const duplicado = await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
   const baralhoObtido = await cliente.obterBaralho(baralho.baralho.id);
   const cartoesComBaralhos = await cliente.listarCartoes();
   const baralhos = await cliente.listarBaralhos();
-  const desvinculado = await cliente.desvincular(
-    cartao.cartao.id,
-    baralho.baralho.id,
-  );
-  const desvinculadoDeNovo = await cliente.desvincular(
-    cartao.cartao.id,
-    baralho.baralho.id,
-  );
 
   indisponibilizar();
-  const vinculoIndisponivel = await cliente.vincular(
-    outroCartao.cartao.id,
-    baralho.baralho.id,
-  );
-  const desvinculoIndisponivel = await cliente.desvincular(
-    cartao.cartao.id,
-    baralho.baralho.id,
-  );
+  const criacaoIndisponivel = await cliente.criarCartao(baralho.baralho.id, {
+    frente: "Never",
+    verso: "Nunca",
+  });
   const obterIndisponivel = await cliente.obterBaralho(baralho.baralho.id);
 
   restaurar();
@@ -2609,15 +2401,10 @@ async function cenarioDeVinculos(ambiente: AmbienteDeCliente) {
     cartao,
     outroCartao,
     baralho,
-    vinculado,
-    duplicado,
     baralhoObtido,
     cartoesComBaralhos,
     baralhos,
-    desvinculado,
-    desvinculadoDeNovo,
-    vinculoIndisponivel,
-    desvinculoIndisponivel,
+    criacaoIndisponivel,
     obterIndisponivel,
     baralhosAposRestaurar,
   };
@@ -2629,17 +2416,20 @@ async function cenarioDeVinculos(ambiente: AmbienteDeCliente) {
 async function cenarioDeEdicao(ambiente: AmbienteDeCliente) {
   const { cliente, indisponibilizar, restaurar } = ambiente;
 
-  const cartao = await cliente.criarCartao({
+  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
+
+  if (!baralho.ok) {
+    throw new Error("a criação do baralho deveria ser aceita");
+  }
+
+  const cartao = await cliente.criarCartao(baralho.baralho.id, {
     frente: FRENTE_VALIDA,
     verso: VERSO_VALIDO,
   });
-  const baralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
 
-  if (!cartao.ok || !baralho.ok) {
-    throw new Error("as criações deveriam ser aceitas");
+  if (!cartao.ok) {
+    throw new Error("a criação do cartão deveria ser aceita");
   }
-
-  await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
 
   const edicao = await cliente.editarCartao(cartao.cartao.id, "To run", "Correr");
   const edicaoInvalida = await cliente.editarCartao(cartao.cartao.id, "", "Correr");
@@ -2696,29 +2486,25 @@ async function cenarioDeEdicao(ambiente: AmbienteDeCliente) {
 async function cenarioDeExclusao(ambiente: AmbienteDeCliente) {
   const { cliente, indisponibilizar, restaurar } = ambiente;
 
-  const cartao = await cliente.criarCartao({
-    frente: FRENTE_VALIDA,
-    verso: VERSO_VALIDO,
-  });
-  const outroCartao = await cliente.criarCartao({
-    frente: "To run",
-    verso: "Correr",
-  });
   const primeiroBaralho = await cliente.criarBaralho({ nome: NOME_VALIDO });
   const segundoBaralho = await cliente.criarBaralho({ nome: "Espanhol" });
 
-  if (
-    !cartao.ok ||
-    !outroCartao.ok ||
-    !primeiroBaralho.ok ||
-    !segundoBaralho.ok
-  ) {
-    throw new Error("as criações deveriam ser aceitas");
+  if (!primeiroBaralho.ok || !segundoBaralho.ok) {
+    throw new Error("as criações de baralho deveriam ser aceitas");
   }
 
-  await cliente.vincular(cartao.cartao.id, primeiroBaralho.baralho.id);
-  await cliente.vincular(cartao.cartao.id, segundoBaralho.baralho.id);
-  await cliente.vincular(outroCartao.cartao.id, primeiroBaralho.baralho.id);
+  const cartao = await cliente.criarCartao(primeiroBaralho.baralho.id, {
+    frente: FRENTE_VALIDA,
+    verso: VERSO_VALIDO,
+  });
+  const outroCartao = await cliente.criarCartao(primeiroBaralho.baralho.id, {
+    frente: "To run",
+    verso: "Correr",
+  });
+
+  if (!cartao.ok || !outroCartao.ok) {
+    throw new Error("as criações de cartão deveriam ser aceitas");
+  }
 
   const exclusaoDeCartao = await cliente.excluirCartao(cartao.cartao.id);
   const exclusaoDeCartaoInexistente = await cliente.excluirCartao(
@@ -2865,7 +2651,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
     );
 
     expect(
-      await cliente.criarCartao({
+      await cliente.criarCartao("baralho-de-prova", {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       }),
@@ -2888,7 +2674,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
           id: "c1",
           frente: "To walk",
           verso: "Caminhar",
-          baralhos: [],
+          baralho: { id: "b1", nome: "Inglês" },
         },
       ]),
     );
@@ -2906,14 +2692,14 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
         id: "c1",
         frente: "To walk",
         verso: "Caminhar",
-        baralhos: [],
+        baralho: { id: "b1", nome: "Inglês" },
         proximaRevisaoEm: "2026-10-04T15:00:00.000Z",
       },
       {
         id: "c2",
         frente: "To read",
         verso: "Ler",
-        baralhos: [],
+        baralho: { id: "b1", nome: "Inglês" },
         proximaRevisaoEm: null,
       },
     ];
@@ -2931,7 +2717,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
           id: "c3",
           frente: "To write",
           verso: "Escrever",
-          baralhos: [],
+          baralho: { id: "b1", nome: "Inglês" },
           proximaRevisaoEm: 42,
         },
       ]),
@@ -2953,7 +2739,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
     }));
 
     expect(
-      await cliente.criarCartao({
+      await cliente.criarCartao("baralho-de-prova", {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       }),
@@ -2973,7 +2759,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
     );
 
     expect(
-      await cliente.criarCartao({
+      await cliente.criarCartao("baralho-de-prova", {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       }),
@@ -2990,7 +2776,7 @@ describe("ClienteHttp — resposta fora do contrato nunca aparece como sucesso (
     });
 
     expect(
-      await cliente.criarCartao({
+      await cliente.criarCartao("baralho-de-prova", {
         frente: FRENTE_VALIDA,
         verso: VERSO_VALIDO,
       }),
@@ -3063,32 +2849,7 @@ describe("ClienteHttp — resposta fora do contrato de Baralhos nunca aparece co
   });
 });
 
-describe("ClienteHttp — resposta fora do contrato de Vínculos, edição e exclusão (FR-044)", () => {
-  it("trata 200 em vincular como indisponivel", async () => {
-    const cliente = clienteHttpCom(async () => respostaDeTeste(200, null));
-
-    expect(await cliente.vincular("c1", "b1")).toEqual({
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-    });
-  });
-
-  it("trata 409 com código fora do contrato em vincular como indisponivel", async () => {
-    const cliente = clienteHttpCom(async () =>
-      respostaDeTeste(409, {
-        erro: "corpo_invalido",
-        mensagem: "O corpo da requisição não é válido.",
-      }),
-    );
-
-    expect(await cliente.vincular("c1", "b1")).toEqual({
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_VINCULOS,
-    });
-  });
-
+describe("ClienteHttp — resposta fora do contrato de edição e exclusão (FR-044)", () => {
   it("trata 200 com corpo inválido em obterBaralho como indisponivel", async () => {
     const cliente = clienteHttpCom(async () =>
       respostaDeTeste(200, {
@@ -3102,23 +2863,6 @@ describe("ClienteHttp — resposta fora do contrato de Vínculos, edição e exc
       ok: false,
       erro: INDISPONIVEL,
       mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS,
-    });
-  });
-
-  it("trata 404 com código de Vínculo em editarCartao como indisponivel", async () => {
-    const cliente = clienteHttpCom(async () =>
-      respostaDeTeste(404, {
-        erro: "vinculo_nao_encontrado",
-        mensagem: "O vínculo não existe.",
-      }),
-    );
-
-    expect(
-      await cliente.editarCartao("c1", FRENTE_VALIDA, VERSO_VALIDO),
-    ).toEqual({
-      ok: false,
-      erro: INDISPONIVEL,
-      mensagem: MENSAGEM_DE_INDISPONIBILIDADE,
     });
   });
 

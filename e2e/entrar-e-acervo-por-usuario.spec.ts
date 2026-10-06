@@ -6,6 +6,8 @@ import {
   aguardarApiPronta,
   aguardarProntidao,
   cabecalhoDeCredencial,
+  criarBaralhoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -93,9 +95,7 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
       0,
     );
 
-    // Ana entra e cria o Cartão dela pela tela real. Depois de Entrar o
-    // destino é Início (spec 013); o Cartão nasce no formulário dedicado,
-    // alcançado pelo link "Criar cartão" da lista de Cartões.
+    // Ana entra; o Cartão dela pertence ao Baralho desde a criação (spec 025).
     //
     // 018: a continuidade é desmarcada — esta prova é a da Credencial que vive
     // só na memória da página (FR-089, SC-031); o Acesso temporário tem a sua
@@ -109,34 +109,12 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
       }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Cartões", exact: true }).click();
-
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeVisible();
-
-    // O cabeçalho tem "Criar cartão" e o estado vazio repete o mesmo link; o
-    // `.first()` escolhe o do cabeçalho sem depender de a lista já ter
-    // carregado, evitando a violação de strict mode.
-    await page
-      .getByRole("link", { name: "Criar cartão" })
-      .first()
-      .click();
-
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Criar cartão" }),
-    ).toBeVisible();
-
-    await page.getByLabel("Frente").fill(CARTAO_DA_ANA.frente);
-    await page.getByLabel("Verso").fill(CARTAO_DA_ANA.verso);
-    await page.getByRole("button", { name: "Salvar" }).click();
-
-    // O sucesso volta para a lista de Cartões.
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Cartões" }),
-    ).toBeVisible();
-
-    await expect(page.getByRole("listitem")).toHaveCount(1);
+    const baralhoDaAna = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Inglês" }, credencialDaAna);
+    const cartaoDaAna = await criarCartaoNoBaralhoPelaApi(
+      enderecoDaApi, baralhoDaAna.id, CARTAO_DA_ANA, credencialDaAna,
+    );
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralhoDaAna.id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "Inglês" })).toBeVisible();
     await expect(page.getByText(CARTAO_DA_ANA.frente)).toBeVisible();
 
     // O acervo é por Usuário: cada Credencial alcança apenas o seu (SC-030).
@@ -151,6 +129,7 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
 
     expect(cartoesDaAna).toHaveLength(1);
     expect(cartoesDaAna[0].frente).toBe(CARTAO_DA_ANA.frente);
+    expect(cartoesDaAna[0].id).toBe(cartaoDaAna.id);
     expect(cartoesDoBruno).toEqual([]);
 
     // O id do vizinho responde como inexistente: mesmo status, mesmo corpo de
@@ -238,7 +217,7 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
     // Entrar de novo devolve o acervo como estava (FR-094): a Credencial volta
     // a valer e a navegação principal reaparece. O destino depois de Entrar é
     // Início (spec 013) — mas a aplicação Entra mostrando a rota que estiver no
-    // hash, e o reload conservou `#/cartoes` da navegação anterior; voltar à
+    // hash, e o reload conservou o detalhe anterior; voltar à
     // raiz antes de Entrar é o que põe o destino em Início sob teste. Depois,
     // navegar por Baralhos e de volta a Cartões confirma que o acervo continua
     // o mesmo, com o Cartão da Ana.
@@ -259,8 +238,7 @@ test("dois Usuários não se enxergam, recarregar exige Entrar, Sair com o volta
       page.getByRole("heading", { level: 1, name: "Baralhos" }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Cartões", exact: true }).click();
-
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralhoDaAna.id}`);
     await expect(page.getByText(CARTAO_DA_ANA.frente)).toBeVisible();
     await expect(page.getByRole("listitem")).toHaveCount(1);
 

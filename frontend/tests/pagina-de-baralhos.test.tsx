@@ -44,7 +44,7 @@ async function semearBaralho(
   }
 
   for (const frente of frentes) {
-    const cartao = await cliente.criarCartao({
+    const cartao = await cliente.criarCartao(criacao.baralho.id, {
       frente,
       verso: `Verso de ${frente}`,
     });
@@ -53,11 +53,6 @@ async function semearBaralho(
       throw new Error(`Cartão de prova "${frente}" não foi criado.`);
     }
 
-    const vinculo = await cliente.vincular(cartao.cartao.id, criacao.baralho.id);
-
-    if (!vinculo.ok) {
-      throw new Error(`Vínculo de prova "${frente}" não foi criado.`);
-    }
   }
 
   return criacao.baralho.id;
@@ -505,7 +500,7 @@ async function agendarTodosParaOFuturo(
   }
 
   const vinculados = listagem.cartoes.filter((cartao) =>
-    cartao.baralhos.some((baralho) => baralho.id === baralhoId),
+    cartao.baralho.id === baralhoId,
   );
 
   const registro = await cliente.registrarSessao({

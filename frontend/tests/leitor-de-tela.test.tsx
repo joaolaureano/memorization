@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
+import { MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS } from "../src/acervo-cliente/cliente";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoFormularioDeCartao } from "../src/ui/PaginaDoFormularioDeCartao";
-import { PaginaDeCartoes } from "../src/ui/PaginaDeCartoes";
+import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
 /**
  * T012 — Erros e estado vazio perceptíveis por leitor de tela
@@ -63,14 +63,21 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
   },
 ];
 
-function renderizarLista(): void {
-  render(<PaginaDeCartoes cliente={clienteDeProva()} />);
+async function renderizarLista(indisponivel = false): Promise<void> {
+  const cliente = clienteDeProva();
+  const resultado = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!resultado.ok) throw new Error("Baralho de prova não criado");
+  if (indisponivel) cliente.simularIndisponibilidade();
+  render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={resultado.baralho.id} />, true));
 }
 
-function renderizarFormulario(): void {
+async function renderizarFormulario(): Promise<void> {
+  const cliente = clienteDeProva();
+  const resultado = await cliente.criarBaralho({ nome: "Inglês" });
+  if (!resultado.ok) throw new Error("Baralho de prova não criado");
   render(
     comProtecaoDeSaida(
-      <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+      <PaginaDoFormularioDeCartao cliente={cliente} baralhoId={resultado.baralho.id} />,
       true,
     ),
   );
@@ -99,9 +106,9 @@ function formulario(): HTMLFormElement {
   return elemento;
 }
 
-describe("PaginaDeCartoes para leitor de tela", () => {
+describe("Cartões no Baralho para leitor de tela", () => {
   it("o estado vazio é uma região ativa polida, com nome, papel e estado acessíveis (FR-056, FR-153)", async () => {
-    renderizarLista();
+    await renderizarLista();
 
     // Pelo nome acessível, e não por um `getByRole("status")` solto: a página
     // tem mais de uma região viva (o carregamento e a proteção de saída).
@@ -111,21 +118,19 @@ describe("PaginaDeCartoes para leitor de tela", () => {
 
     expect(estadoVazio).toHaveAttribute("aria-live", "polite");
     expect(estadoVazio).toHaveAttribute("aria-atomic", "true");
-    expect(estadoVazio).toHaveTextContent(/ainda não há Cartões/i);
-    expect(estadoVazio).toHaveTextContent(/crie o primeiro/i);
+    expect(estadoVazio).toHaveTextContent(/ainda não tem Cartões/i);
+    expect(estadoVazio).toHaveTextContent(/Criar Cartão/i);
 
     // O estado vazio é a única região ativa: nenhum alerta convive com ele.
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("a falha de listagem é um alerta assertivo com nova tentativa (FR-056, FR-144)", async () => {
-    const cliente = clienteDeProva();
-    cliente.simularIndisponibilidade();
-    render(<PaginaDeCartoes cliente={cliente} />);
+    await renderizarLista(true);
 
     const alerta = await screen.findByRole("alert");
 
-    expect(alerta).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE);
+    expect(alerta).toHaveTextContent(MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS);
     expect(alerta).not.toHaveAttribute("aria-live");
     expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeInTheDocument();
     // A faixa de contagem (role="status") existe sempre, mas deve ficar vazia durante a falha para não competir com o alerta.
@@ -137,7 +142,7 @@ describe("PaginaDeCartoes para leitor de tela", () => {
   it.each(CASOS_DE_RECUSA)(
     "a recusa $descricao é um alerta nomeado no formulário (FR-056, FR-155)",
     async (caso) => {
-      renderizarFormulario();
+      await renderizarFormulario();
 
       digitar("Frente", caso.frente);
       digitar("Verso", caso.verso);
@@ -153,7 +158,7 @@ describe("PaginaDeCartoes para leitor de tela", () => {
   );
 
   it("cada nova tentativa recusada insere um alerta novo, reanunciável (FR-056)", async () => {
-    renderizarFormulario();
+    await renderizarFormulario();
 
     digitar("Frente", "   ");
     digitar("Verso", "Caminhar");

@@ -6,8 +6,9 @@ import type { Browser, Page } from "@playwright/test";
 import {
   aguardarApiPronta,
   aguardarProntidao,
+  criarBaralhoPelaApi,
   cabecalhoDeCredencial,
-  criarCartaoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -196,18 +197,23 @@ test("excluir a conta remove tudo do Usuário, preserva o outro e libera o nome 
       "bruno.souza",
     );
 
-    await criarCartaoPelaApi(
+    const baralhoAna = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Inglês" }, ana);
+    const baralhoBruno = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Espanhol" }, bruno);
+    await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
+      baralhoAna.id,
       { frente: "To walk", verso: "Caminhar" },
       ana,
     );
-    await criarCartaoPelaApi(
+    await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
+      baralhoAna.id,
       { frente: "To run", verso: "Correr" },
       ana,
     );
-    await criarCartaoPelaApi(
+    await criarCartaoNoBaralhoPelaApi(
       ambiente.enderecoDaApi,
+      baralhoBruno.id,
       { frente: "To eat", verso: "Comer" },
       bruno,
     );
@@ -221,7 +227,7 @@ test("excluir a conta remove tudo do Usuário, preserva o outro e libera o nome 
     await expect(dialogo).toContainText("irreversível");
     // As contagens vêm do servidor e conferem com o que será removido.
     await expect(dialogo.getByText("2 Cartões")).toBeVisible();
-    await expect(dialogo.getByText("0 Baralhos")).toBeVisible();
+    await expect(dialogo.getByText("1 Baralho")).toBeVisible();
     await expect(dialogo.getByText("0 itens da Agenda")).toBeVisible();
 
     // Senha errada: mensagem única, nada excluído.

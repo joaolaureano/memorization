@@ -8,6 +8,7 @@ import {
   type CodigoDeErroDeCartao,
 } from "../acervo-cliente/validacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
+import { guardarAvisoDeCartao } from "./aviso-de-cartao";
 import { irParaRota } from "./navegacao";
 import {
   useNavegarSemProtecao,
@@ -16,23 +17,26 @@ import {
 
 /**
  * Página do formulário de Cartão — criação e edição (T1113;
- * specs/012-interface-visual-navegavel/tasks.md; FR-140, FR-141, FR-144,
- * FR-146, FR-147, FR-148, FR-153, FR-154, FR-155, FR-156).
+ * specs/025-criar-cartoes-baralho/contracts/ui.md; FR-025, FR-388, FR-393,
+ * FR-394, FR-396, FR-398, FR-399, FR-148, FR-153, FR-154, FR-155, FR-156).
  *
- * Sem `id`, é a criação (`#/cartoes/novo`); com `id`, é a edição do Cartão
- * correspondente. Concentra as mesmas regras, limites e mensagens das features
- * 001 e 005 — o limite de caracteres é comunicado durante a digitação
- * (FR-053), mas quem recusa conteúdo continua sendo o `ClienteDoAcervo`, e a
- * mensagem exibida é exatamente a devolvida pela Interface (FR-046).
+ * A criação e edição ocorrem dentro de um Baralho (`baralhoId` obrigatório).
+ * Sem `id`, é a criação (`#/baralhos/{baralhoId}/cartoes/novo`); com `id`, é a
+ * edição do Cartão correspondente. Concentra as mesmas regras, limites e
+ * mensagens das features 001 e 005 — o limite de caracteres é comunicado
+ * durante a digitação (FR-053), mas quem recusa conteúdo continua sendo o
+ * `ClienteDoAcervo`, e a mensagem exibida é exatamente a devolvida pela
+ * Interface (FR-046).
  *
- * Cartão inexistente ou de outro Usuário não é encontrado — a página
- * apresenta a mensagem de não encontrado (FR-156). Cancelar volta para a
+ * Na criação, `criarCartao(baralhoId, dados)` devolve a Frente final (pode
+ * ser numerada como "X (2)" se houver colisão; FR-398). Na edição, colisão de
+ * Frente é recusada com `frente_duplicada` (FR-399). Cancelar volta para a
  * página anterior, de onde quer que o formulário tenha sido aberto.
  *
  * A proteção de saída (FR-148, FR-154) vem de `protecao-de-saida`: com o
  * formulário sujo, sair exige confirmação; com um salvamento em andamento, a
  * navegação é bloqueada e o motivo é anunciado. Concluído o salvamento, a
- * proteção é descartada e a interface volta para a lista.
+ * proteção é descartada e a interface volta para o detalhe do Baralho.
  */
 
 /**
@@ -71,11 +75,13 @@ const PROTECAO_DE_DESCARTE = {
 
 interface PropriedadesDoFormularioDeCartao {
   cliente: ClienteDoAcervo;
+  baralhoId: string;
   id?: string;
 }
 
 export function PaginaDoFormularioDeCartao({
   cliente,
+  baralhoId,
   id,
 }: PropriedadesDoFormularioDeCartao) {
   const emEdicao = id !== undefined;
@@ -91,6 +97,7 @@ export function PaginaDoFormularioDeCartao({
   const [falhaDeSalvamento, setFalhaDeSalvamento] = useState<string | null>(
     null,
   );
+  const [campoComErro, setCampoComErro] = useState<"frente" | "verso" | null>(null);
 
   const campoDeFrente = useRef<HTMLTextAreaElement>(null);
   const campoDeVerso = useRef<HTMLTextAreaElement>(null);
@@ -173,25 +180,35 @@ export function PaginaDoFormularioDeCartao({
     evento.preventDefault();
     setSalvando(true);
     setFalhaDeSalvamento(null);
+    setCampoComErro(null);
 
     const resultado = emEdicao
       ? await cliente.editarCartao(id, frente, verso)
-      : await cliente.criarCartao({ frente, verso });
+      : await cliente.criarCartao(baralhoId, { frente, verso });
 
     if (resultado.ok) {
       setReferencia({ frente, verso });
-      navegarSemProtecao("#/cartoes");
+      if (!emEdicao) {
+        guardarAvisoDeCartao(baralhoId, `Cartão criado: ${resultado.cartao.frente}.`);
+      }
+      // Sucesso na criação ou edição: volta para o detalhe do Baralho.
+      navegarSemProtecao(
+        `#/baralhos/${encodeURIComponent(baralhoId)}`
+      );
       return;
     }
 
     setFalhaDeSalvamento(resultado.mensagem);
 
-    // FR-055, FR-155: numa recusa, o foco vai ao campo que precisa de
+    // FR-055, FR-155, FR-399: numa recusa, o foco vai ao campo que precisa de
     // correção. A direção vem só do código devolvido pela Interface — a
     // página não decide qual conteúdo é inválido, apenas para onde mover o
     // foco. Na falha de transporte, nenhum campo é apontado.
-    if (ehCodigoDeErroDeCartao(resultado.erro)) {
-      const campo = CAMPO_PARA_CORRECAO[resultado.erro];
+    if (resultado.erro === "frente_duplicada" || ehCodigoDeErroDeCartao(resultado.erro)) {
+      const campo = resultado.erro === "frente_duplicada"
+        ? "frente"
+        : CAMPO_PARA_CORRECAO[resultado.erro];
+      setCampoComErro(campo);
       const alvo = campo === "frente" ? campoDeFrente : campoDeVerso;
 
       alvo.current?.focus();
@@ -247,11 +264,12 @@ export function PaginaDoFormularioDeCartao({
               id="campo-frente"
               ref={campoDeFrente}
               value={frente}
-              onChange={(evento) => setFrente(evento.target.value)}
+              onChange={(evento) => { setFrente(evento.target.value); setCampoComErro(null); }}
+              aria-invalid={campoComErro === "frente" ? true : undefined}
               aria-describedby={
                 avisoDeLimite(frente.length) === null
-                  ? "contador-da-frente"
-                  : "contador-da-frente aviso-da-frente"
+                  ? `contador-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
+                  : `contador-da-frente aviso-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
               }
             />
             <p id="contador-da-frente" className="contador">
@@ -272,11 +290,12 @@ export function PaginaDoFormularioDeCartao({
               id="campo-verso"
               ref={campoDeVerso}
               value={verso}
-              onChange={(evento) => setVerso(evento.target.value)}
+              onChange={(evento) => { setVerso(evento.target.value); setCampoComErro(null); }}
+              aria-invalid={campoComErro === "verso" ? true : undefined}
               aria-describedby={
                 avisoDeLimite(verso.length) === null
-                  ? "contador-do-verso"
-                  : "contador-do-verso aviso-do-verso"
+                  ? `contador-do-verso${campoComErro === "verso" ? " erro-do-formulario" : ""}`
+                  : `contador-do-verso aviso-do-verso${campoComErro === "verso" ? " erro-do-formulario" : ""}`
               }
             />
             <p id="contador-do-verso" className="contador">
@@ -291,6 +310,7 @@ export function PaginaDoFormularioDeCartao({
 
           {falhaDeSalvamento !== null && (
             <p
+              id="erro-do-formulario"
               className="erro"
               role="alert"
               aria-label={
@@ -314,7 +334,7 @@ export function PaginaDoFormularioDeCartao({
             <button
               className="botao botao--secundario"
               type="button"
-              onClick={voltarParaAPaginaAnterior}
+              onClick={() => voltarParaAPaginaAnterior(baralhoId)}
             >
               Cancelar
             </button>
@@ -351,16 +371,17 @@ function avisoDeLimite(comprimento: number): string | null {
 }
 
 /**
- * Cancelar volta para a página de onde o formulário foi aberto (Cartões ou um
- * Baralho). Sem página anterior no histórico — o formulário aberto direto pela
- * URL —, a volta é para Cartões. A volta passa por `hashchange`, e por isso a
- * proteção de saída continua valendo com o formulário sujo.
+ * Cancelar volta para a página de onde o formulário foi aberto (Baralho).
+ * Sem página anterior no histórico — o formulário aberto direto pela URL —,
+ * a volta é para o detalhe do Baralho. A volta passa por `hashchange`, e por
+ * isso a proteção de saída continua valendo com o formulário sujo.
  */
-function voltarParaAPaginaAnterior(): void {
+function voltarParaAPaginaAnterior(baralhoId: string): void {
   if (window.history.length > 1) {
     window.history.back();
     return;
   }
 
-  irParaRota("#/cartoes");
+  // Fallback se não houver histórico — vai para o detalhe do Baralho.
+  irParaRota(`#/baralhos/${encodeURIComponent(baralhoId)}`);
 }

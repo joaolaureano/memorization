@@ -12,6 +12,7 @@ import type {
   ClienteDoAcervo,
   Credencial,
   InicioDeCompromisso,
+  ResultadoDeObterTransicao,
   ResultadoDeObterAcesso,
 } from "../acervo-cliente/cliente";
 import { decidirRenovacao } from "../acesso/atividade";
@@ -22,10 +23,8 @@ import type { Rota } from "./navegacao";
 import { PaginaDaAgenda } from "./PaginaDaAgenda";
 import { PaginaDaCentralDeEstudo } from "./PaginaDaCentralDeEstudo";
 import { PaginaDoFormularioDeRotina } from "./PaginaDoFormularioDeRotina";
-import { PaginaDeAdicionarCartoes } from "./PaginaDeAdicionarCartoes";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
-import { PaginaDeCartoes } from "./PaginaDeCartoes";
 import {
   MENSAGEM_DE_CONTA_EXCLUIDA,
   MENSAGEM_DE_SAIDA,
@@ -34,6 +33,7 @@ import {
 import type { AvisoDaEntrada, EscolhaDeEntrada } from "./PaginaDeEntrada";
 import { PaginaDeEstudo } from "./PaginaDeEstudo";
 import { PaginaDaSelecaoTemporaria } from "./PaginaDaSelecaoTemporaria";
+import { PaginaDaTransicaoDeCartoes } from "./PaginaDaTransicaoDeCartoes";
 import type { Cartao } from "../acervo-cliente/cliente";
 import { PaginaDeInicio } from "./PaginaDeInicio";
 import { PaginaDePreferencias } from "./PaginaDePreferencias";
@@ -67,8 +67,8 @@ import {
  * Credencial e envolve a de dentro no `ProvedorDeProtecaoDeSaida`; a de dentro
  * lê a rota **exibida** (`useRotaExibida`) e passa toda troca de tela pela
  * proteção de saída (FR-148, FR-151, FR-154). Sem Credencial não há moldura de
- * navegação (FR-098): só a marca. Com ela, a `Moldura` oferece Baralhos,
- * Cartões e "Sair" (FR-139) — "Sair" passa por `useAcaoProtegida` e, quando há
+ * navegação (FR-098): só a marca. Com ela, a `Moldura` oferece Baralhos
+ * e "Sair" (FR-139) — "Sair" passa por `useAcaoProtegida` e, quando há
  * algo a perder, pede confirmação antes (FR-151). Numa mudança de rota, o foco
  * é movido para o título da tela — o destino que usuários de teclado e leitor
  * de tela esperam depois de ativar um link de navegação. Uma recusa de
@@ -333,6 +333,7 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
     // saída e é quem decide moldura, tela e guarda do cliente.
     <ProvedorDeProtecaoDeSaida temCredencial={temCredencial}>
       <CascaDaAplicacao
+        key={sessao?.nomeDeUsuario ?? "sem-sessao"}
         temCredencial={temCredencial}
         usaAcesso={usaAcesso}
         nomeDeUsuarioDaCredencial={sessao?.nomeDeUsuario ?? ""}
@@ -391,6 +392,7 @@ function CascaDaAplicacao({
 
   const principal = useRef<HTMLElement>(null);
   const rotaAnterior = useRef(rota);
+  const transicaoAnterior = useRef<string>("carregando");
 
   /**
    * O início autorizado de uma Sessão da Agenda (016, FR-231): o snapshot dos
@@ -473,6 +475,21 @@ function CascaDaAplicacao({
     () => comGuardaDeCredencial(clienteDaCredencial, recusarCredencial),
     [clienteDaCredencial, recusarCredencial],
   );
+
+  const [transicao, setTransicao] = useState<
+    ResultadoDeObterTransicao | "carregando" | "concluida"
+  >("carregando");
+  const [tentativaDaTransicao, setTentativaDaTransicao] = useState(0);
+
+  useEffect(() => {
+    if (!temCredencial) return;
+    let ativo = true;
+    void cliente.obterTransicao().then((resultado) => {
+      if (!ativo) return;
+      setTransicao(resultado.ok && resultado.cartoes.length === 0 ? "concluida" : resultado);
+    });
+    return () => { ativo = false; };
+  }, [cliente, temCredencial, tentativaDaTransicao]);
 
   /**
    * FR-276 e FR-282: excluir a conta e «Ir para Entrar» são decisões explícitas
@@ -564,7 +581,10 @@ function CascaDaAplicacao({
   useLayoutEffect(() => {
     // Na montagem o foco permanece onde o navegador o colocou; a partir da
     // primeira mudança de rota, ele passa ao título da tela de destino.
-    if (rotaAnterior.current === rota) {
+    const rotaMudou = rotaAnterior.current !== rota;
+    const acabouDeLiberar = transicaoAnterior.current !== "concluida" && transicao === "concluida";
+    transicaoAnterior.current = typeof transicao === "string" ? transicao : "pendente";
+    if (!rotaMudou && !acabouDeLiberar) {
       return;
     }
 
@@ -578,11 +598,11 @@ function CascaDaAplicacao({
       titulo.tabIndex = -1;
       titulo.focus();
     }
-  }, [rota]);
+  }, [rota, transicao]);
 
   return (
     <>
-      {temCredencial ? (
+      {temCredencial && transicao === "concluida" ? (
         // FR-139: com Credencial, a moldura traz a marca, a navegação principal
         // e "Sair" em toda tela alcançável.
         <Moldura rota={rota} aoSair={sair} />
@@ -606,7 +626,27 @@ function CascaDaAplicacao({
           </p>
         )}
 
-        <TelaDaRota
+        {temCredencial && transicao !== "concluida" ? (
+          transicao === "carregando" ? (
+            <p role="status">Verificando Cartões existentes…</p>
+          ) : transicao.ok ? (
+            <PaginaDaTransicaoDeCartoes
+              cliente={cliente}
+              cartoes={transicao.cartoes}
+              baralhos={transicao.baralhos}
+              aoConcluir={() => setTransicao("concluida")}
+            />
+          ) : (
+            <section className="pagina">
+              <h1>Organizar Cartões existentes</h1>
+              <p role="alert">{transicao.mensagem}</p>
+              <button type="button" onClick={() => {
+                setTransicao("carregando");
+                setTentativaDaTransicao((atual) => atual + 1);
+              }}>Tentar novamente</button>
+            </section>
+          )
+        ) : <TelaDaRota
           rota={rota}
           cliente={cliente}
           clienteSemGuarda={clienteDaCredencial}
@@ -623,7 +663,7 @@ function CascaDaAplicacao({
           nomeDoBaralhoTemporario={nomeDoBaralhoTemporario}
           aoIniciarEstudoTemporario={iniciarEstudoTemporario}
           aoSairDoEstudoTemporario={sairDoEstudoTemporario}
-        />
+        />}
       </main>
     </>
   );
@@ -750,8 +790,24 @@ function TelaDaRota({
       // FR-141: a renomeação de Baralho ganha tela própria.
       return <PaginaDoFormularioDeBaralho cliente={cliente} id={rota.id} />;
 
-    case "adicionar-cartoes":
-      return <PaginaDeAdicionarCartoes cliente={cliente} id={rota.id} />;
+    case "novo-cartao":
+      // FR-025: a criação de Cartão ganha tela própria, dentro de um Baralho.
+      return (
+        <PaginaDoFormularioDeCartao
+          cliente={cliente}
+          baralhoId={rota.baralhoId}
+        />
+      );
+
+    case "editar-cartao":
+      // FR-025: a edição de Cartão ganha tela própria, dentro de um Baralho.
+      return (
+        <PaginaDoFormularioDeCartao
+          cliente={cliente}
+          baralhoId={rota.baralhoId}
+          id={rota.id}
+        />
+      );
 
     case "estudo":
       return <PaginaDeEstudo cliente={cliente} id={rota.id} />;
@@ -780,17 +836,6 @@ function TelaDaRota({
           aoSair={aoSairDoEstudoTemporario}
         />
       );
-
-    case "cartoes":
-      return <PaginaDeCartoes cliente={cliente} />;
-
-    case "novo-cartao":
-      // FR-140: a criação de Cartão ganha tela própria.
-      return <PaginaDoFormularioDeCartao cliente={cliente} />;
-
-    case "editar-cartao":
-      // FR-141: a edição de Cartão ganha tela própria.
-      return <PaginaDoFormularioDeCartao cliente={cliente} id={rota.id} />;
 
     case "preferencias":
       // FR-212: as Preferências têm tela própria, alcançável pela Moldura.

@@ -185,12 +185,8 @@ async function percursoPorTeclado(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();
 
-  // Do detalhe para a lista de Cartões, pela navegação Principal.
-  await acionarPorTab(page, linkExato(page, "Cartões"));
-  await expect(linkExato(page, "Criar cartão")).toBeVisible();
-
-  // Criar cartão.
-  await acionarPorTab(page, linkExato(page, "Criar cartão"));
+  // Criar o Cartão dentro do Baralho dono.
+  await acionarPorTab(page, linkExato(page, "Criar Cartão"));
   await expect(
     page.getByRole("heading", { level: 1, name: "Criar cartão", exact: true }),
   ).toBeVisible();
@@ -207,45 +203,6 @@ async function percursoPorTeclado(
     page,
     page.getByRole("button", { name: "Salvar", exact: true }),
   );
-  await expect(linkExato(page, "Criar cartão")).toBeVisible();
-
-  // De volta ao Baralho: navegação Principal → lista → nome do Baralho.
-  await acionarPorTab(page, linkExato(page, "Baralhos"));
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
-  ).toBeVisible();
-
-  await acionarPorTab(page, linkExato(page, `Editar ${NOME_DO_BARALHO}`));
-  await expect(
-    page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
-  ).toBeVisible();
-
-  // Adicionar o Cartão existente e vinculá-lo (Space aciona o botão).
-  await acionarPorTab(page, linkExato(page, "Adicionar cartões existentes"));
-
-  const botaoVincular = page.getByRole("button", {
-    name: `Vincular ${FRENTE_DO_CARTAO}`,
-    exact: true,
-  });
-  await expect(botaoVincular).toBeVisible();
-  await focarPorTab(page, botaoVincular);
-  await page.keyboard.press("Space");
-
-  // A vinculação é assíncrona: enquanto ela corre, sair da tela fica bloqueado
-  // e o motivo é anunciado (FR-154), então navegar agora perderia a corrida —
-  // o acionamento do link da navegação seria barrado, a tela continuaria em
-  // "Adicionar cartões" e `Ver baralho` não existiria na lista. O Cartão
-  // desaparecer de "Cartões disponíveis" é o estado que só existe depois da
-  // releitura confirmada (FR-044); nesse mesmo render `vinculando` volta a
-  // nulo e a saída da tela é liberada.
-  await expect(botaoVincular).toHaveCount(0);
-
-  // De volta ao Baralho e à Sessão.
-  await acionarPorTab(page, linkExato(page, "Baralhos"));
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
-  ).toBeVisible();
-  await acionarPorTab(page, linkExato(page, `Editar ${NOME_DO_BARALHO}`));
   await expect(
     page.getByRole("heading", { level: 1, name: NOME_DO_BARALHO, exact: true }),
   ).toBeVisible();

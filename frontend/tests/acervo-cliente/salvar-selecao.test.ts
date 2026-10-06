@@ -39,19 +39,16 @@ function clienteDeProva(): ClienteEmMemoria {
 const OUTRA_CREDENCIAL = { nomeDeUsuario: "bruno.souza", senha: CREDENCIAL_DE_PROVA.senha };
 
 describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
-  it("cria o Baralho com os Cartões escolhidos e preserva os Baralhos de origem (FR-371, FR-372)", async () => {
+  it("cria o Baralho com cópias dos Cartões escolhidos e preserva os Cartões de origem (FR-371, FR-372, 025)", async () => {
     const cliente = clienteDeProva();
 
     const origem = await cliente.criarBaralho({ nome: "Baralho de origem" });
     exigirSucesso(origem);
 
-    const primeiro = await cliente.criarCartao({ frente: "Frente 1", verso: "Verso 1" });
+    const primeiro = await cliente.criarCartao(origem.baralho.id, { frente: "Frente 1", verso: "Verso 1" });
     exigirSucesso(primeiro);
-    const segundo = await cliente.criarCartao({ frente: "Frente 2", verso: "Verso 2" });
+    const segundo = await cliente.criarCartao(origem.baralho.id, { frente: "Frente 2", verso: "Verso 2" });
     exigirSucesso(segundo);
-
-    await cliente.vincular(primeiro.cartao.id, origem.baralho.id);
-    await cliente.vincular(segundo.cartao.id, origem.baralho.id);
 
     const id = crypto.randomUUID();
     const resultado = await cliente.salvarSelecaoComoBaralho({
@@ -74,16 +71,22 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
     const cartoes = await cliente.listarCartoes();
     exigirSucesso(cartoes);
 
+    // Os cartões originais ainda estão no baralho de origem
     const primeiroListado = cartoes.cartoes.find((cartao) => cartao.id === primeiro.cartao.id);
-    expect(primeiroListado?.baralhos.map((baralho) => baralho.id).sort()).toEqual(
-      [id, origem.baralho.id].sort(),
-    );
+    expect(primeiroListado?.baralho.id).toBe(origem.baralho.id);
+
+    // Devem haver cópias no novo baralho
+    const copiasNoNovo = cartoes.cartoes.filter((cartao) => cartao.baralho.id === id);
+    expect(copiasNoNovo).toHaveLength(2);
   });
 
   it("reenviar o mesmo id devolve o mesmo Baralho sem duplicar (FR-373)", async () => {
     const cliente = clienteDeProva();
 
-    const cartao = await cliente.criarCartao({ frente: "Frente", verso: "Verso" });
+    const origem = await cliente.criarBaralho({ nome: "Origem" });
+    exigirSucesso(origem);
+
+    const cartao = await cliente.criarCartao(origem.baralho.id, { frente: "Frente", verso: "Verso" });
     exigirSucesso(cartao);
 
     const id = crypto.randomUUID();
@@ -117,7 +120,10 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
   it("recusa nome vazio com erro nome_vazio", async () => {
     const cliente = clienteDeProva();
 
-    const cartao = await cliente.criarCartao({ frente: "Frente", verso: "Verso" });
+    const origem = await cliente.criarBaralho({ nome: "Origem" });
+    exigirSucesso(origem);
+
+    const cartao = await cliente.criarCartao(origem.baralho.id, { frente: "Frente", verso: "Verso" });
     exigirSucesso(cartao);
 
     const resultado = await cliente.salvarSelecaoComoBaralho({
@@ -135,9 +141,14 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
       OUTRA_CREDENCIAL,
     ]);
 
+    const baralhoDoOutro = await cliente
+      .comoUsuario(OUTRA_CREDENCIAL)
+      .criarBaralho({ nome: "Baralho do outro" });
+    exigirSucesso(baralhoDoOutro);
+
     const doOutro = await cliente
       .comoUsuario(OUTRA_CREDENCIAL)
-      .criarCartao({ frente: "Frente", verso: "Verso" });
+      .criarCartao(baralhoDoOutro.baralho.id, { frente: "Frente", verso: "Verso" });
     exigirSucesso(doOutro);
 
     const antes = await cliente.listarBaralhos();
@@ -174,7 +185,10 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
       .criarBaralho({ nome: "Baralho do outro" });
     exigirSucesso(doOutro);
 
-    const meuCartao = await cliente.criarCartao({ frente: "Frente", verso: "Verso" });
+    const meuBaralho = await cliente.criarBaralho({ nome: "Meu baralho" });
+    exigirSucesso(meuBaralho);
+
+    const meuCartao = await cliente.criarCartao(meuBaralho.baralho.id, { frente: "Frente", verso: "Verso" });
     exigirSucesso(meuCartao);
 
     const resultado = await cliente.salvarSelecaoComoBaralho({
@@ -202,7 +216,10 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
   it("registrarSessao temporária devolve baralhoId vazio e o nome Baralho temporário (FR-369)", async () => {
     const cliente = clienteDeProva();
 
-    const cartao = await cliente.criarCartao({ frente: "Frente", verso: "Verso" });
+    const baralho = await cliente.criarBaralho({ nome: "Baralho" });
+    exigirSucesso(baralho);
+
+    const cartao = await cliente.criarCartao(baralho.baralho.id, { frente: "Frente", verso: "Verso" });
     exigirSucesso(cartao);
 
     const resultado = await cliente.registrarSessao({

@@ -69,11 +69,9 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   const idsPorBaralho = useMemo(() => {
     const mapa = new Map<string, string[]>();
     for (const cartao of cartoes) {
-      for (const baralho of cartao.baralhos) {
-        const ids = mapa.get(baralho.id);
-        if (ids) ids.push(cartao.id);
-        else mapa.set(baralho.id, [cartao.id]);
-      }
+      const ids = mapa.get(cartao.baralho.id);
+      if (ids) ids.push(cartao.id);
+      else mapa.set(cartao.baralho.id, [cartao.id]);
     }
     return mapa;
   }, [cartoes]);
@@ -152,8 +150,8 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           estado="vazio"
           mensagem="Seu acervo está vazio. Crie cartões para montar um estudo."
           acao={
-            <a className="botao botao--primario" href="#/cartoes/novo">
-              Criar cartão
+            <a className="botao botao--primario" href="#/baralhos">
+              Ver baralhos
             </a>
           }
         />
@@ -341,7 +339,6 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                 }
               >
                 <option value="todos">Todos</option>
-                <option value="sem-baralho">Sem baralho</option>
                 {baralhos.map((baralho) => (
                   <option key={baralho.id} value={baralho.id}>
                     {baralho.nome}

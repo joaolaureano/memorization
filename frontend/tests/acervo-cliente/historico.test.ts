@@ -671,8 +671,10 @@ describe("ClienteEmMemoria — histórico", () => {
   it("conta os Cartões e Baralhos atuais e filtra a janela por desde (FR-164)", async () => {
     const cliente = clienteEmMemoria();
 
-    await cliente.criarCartao({ frente: "To walk", verso: "Caminhar" });
-    await cliente.criarBaralho({ nome: "Inglês" });
+    const baralho = await cliente.criarBaralho({ nome: "Inglês" });
+    if (baralho.ok) {
+      await cliente.criarCartao(baralho.baralho.id, { frente: "To walk", verso: "Caminhar" });
+    }
     await cliente.registrarSessao(dadosValidos());
 
     const dentro = await cliente.obterEstatisticas(desdeAmplo());

@@ -39,30 +39,24 @@ function idDoBaralho(
 }
 
 async function semear(cliente: Cliente) {
+  const a = idDoBaralho(await cliente.criarBaralho({ nome: "Inglês" }));
+  const b = idDoBaralho(await cliente.criarBaralho({ nome: "Viagem" }));
+  const vazio = idDoBaralho(await cliente.criarBaralho({ nome: "Vazio" }));
   const c1 = idDoCartao(
-    await cliente.criarCartao({
+    await cliente.criarCartao(a, {
       frente: "How are you?",
       verso: "Como você está?",
     }),
   );
   const c2 = idDoCartao(
-    await cliente.criarCartao({ frente: "Good morning", verso: "Bom dia" }),
+    await cliente.criarCartao(a, { frente: "Good morning", verso: "Bom dia" }),
   );
   const c3 = idDoCartao(
-    await cliente.criarCartao({ frente: "Thank you", verso: "Obrigado" }),
+    await cliente.criarCartao(b, { frente: "Thank you", verso: "Obrigado" }),
   );
   const c4 = idDoCartao(
-    await cliente.criarCartao({ frente: "See you", verso: "Até mais" }),
+    await cliente.criarCartao(b, { frente: "See you", verso: "Até mais" }),
   );
-
-  const a = idDoBaralho(await cliente.criarBaralho({ nome: "Inglês" }));
-  const b = idDoBaralho(await cliente.criarBaralho({ nome: "Viagem" }));
-  const vazio = idDoBaralho(await cliente.criarBaralho({ nome: "Vazio" }));
-
-  exigirOk(await cliente.vincular(c1, a));
-  exigirOk(await cliente.vincular(c2, a));
-  exigirOk(await cliente.vincular(c2, b));
-  exigirOk(await cliente.vincular(c3, b));
 
   return { c1, c2, c3, c4, a, b, vazio };
 }
@@ -147,7 +141,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     ).toBeInTheDocument();
   });
 
-  it("A + B dão 3 Cartões únicos na ordem C1, C2, C3, com o anúncio; os dois Baralhos passam a «Adicionado» (FR-363, FR-364, SC-143)", async () => {
+  it("A + B dão 4 Cartões na ordem de cada Baralho; os dois Baralhos passam a «Adicionado» (FR-363, FR-364, SC-143)", async () => {
     const cliente = clienteDeProva();
     await semear(cliente);
     renderizar(cliente);
@@ -157,7 +151,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adicionar Viagem" }));
 
     await screen.findByText(
-      "3 Cartões na seleção. Cartões repetidos entram uma só vez.",
+      "4 Cartões na seleção. Cartões repetidos entram uma só vez.",
     );
 
     expect(
@@ -168,7 +162,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     ).toBeDisabled();
 
     const selecao = regiaoDaSelecao();
-    expect(within(selecao).getByText("3 Cartões")).toBeInTheDocument();
+    expect(within(selecao).getByText("4 Cartões")).toBeInTheDocument();
     expect(
       within(selecao).getByRole("button", { name: "Remover How are you?" }),
     ).toBeInTheDocument();
@@ -188,16 +182,15 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     );
   });
 
-  it("na fonte Cartões, C1 aparece «Adicionado» e o avulso C4 (sem Baralho) entra: 4 Cartões (FR-361)", async () => {
+  it("na fonte Cartões, C1 aparece «Adicionado» e C4 pode entrar separadamente (FR-361)", async () => {
     const cliente = clienteDeProva();
     await semear(cliente);
     renderizar(cliente);
     await aguardarAcervo();
 
     fireEvent.click(screen.getByRole("button", { name: "Adicionar Inglês" }));
-    fireEvent.click(screen.getByRole("button", { name: "Adicionar Viagem" }));
     await screen.findByText(
-      "3 Cartões na seleção. Cartões repetidos entram uma só vez.",
+      "2 Cartões na seleção. Cartões repetidos entram uma só vez.",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Adicionar cartões" }));
@@ -210,7 +203,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
 
     await waitFor(() =>
       expect(
-        within(regiaoDaSelecao()).getByText("4 Cartões"),
+        within(regiaoDaSelecao()).getByText("3 Cartões"),
       ).toBeInTheDocument(),
     );
     expect(
@@ -315,7 +308,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adicionar Inglês" }));
     fireEvent.click(screen.getByRole("button", { name: "Adicionar Viagem" }));
     await screen.findByText(
-      "3 Cartões na seleção. Cartões repetidos entram uma só vez.",
+      "4 Cartões na seleção. Cartões repetidos entram uma só vez.",
     );
 
     fireEvent.click(
@@ -324,7 +317,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
 
     await waitFor(() =>
       expect(
-        within(regiaoDaSelecao()).getByText("2 Cartões"),
+        within(regiaoDaSelecao()).getByText("3 Cartões"),
       ).toBeInTheDocument(),
     );
     expect(
@@ -416,7 +409,7 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
     ]);
   });
 
-  it("Baralho de origem excluído depois da adição não impede: Revisar entrega os 2 Cartões (FR-363)", async () => {
+  it("Baralho de origem excluído depois da adição torna seus Cartões indisponíveis", async () => {
     const cliente = clienteDeProva();
     const { a, c1, c2 } = await semear(cliente);
     const aoEstudar = renderizar(cliente);
@@ -433,14 +426,10 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Revisar" }));
 
-    await waitFor(() => expect(aoEstudar).toHaveBeenCalledTimes(1));
-    expect(cartoesEntregues(aoEstudar)).toEqual([
-      { id: c1, frente: "How are you?", verso: "Como você está?" },
-      { id: c2, frente: "Good morning", verso: "Bom dia" },
-    ]);
-    await waitFor(() =>
-      expect(window.location.hash).toBe("#/baralhos/temporario/estudo"),
-    );
+    await screen.findByText("2 Cartões não estão mais disponíveis.");
+    expect(aoEstudar).not.toHaveBeenCalled();
+    expect(c1).toBeTruthy();
+    expect(c2).toBeTruthy();
   });
 
   it("Revisar entrega os textos atuais depois de editar a Frente, na ordem da seleção (FR-366, FR-367)", async () => {

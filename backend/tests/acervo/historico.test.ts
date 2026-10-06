@@ -161,8 +161,12 @@ function baralhoDo(resultado: ResultadoDeCriacaoDeBaralho): Baralho {
 }
 
 /** Cria um Cartão válido pela Interface. */
-async function criarCartao(frente = FRENTE, verso = VERSO): Promise<Cartao> {
-  return cartaoDo(await acervo.criarCartao({ frente, verso }));
+async function criarCartao(
+  baralhoId: string,
+  frente = FRENTE,
+  verso = VERSO,
+): Promise<Cartao> {
+  return cartaoDo(await acervo.criarCartao(baralhoId, { frente, verso }));
 }
 
 /** Cria um Baralho válido pela Interface. */
@@ -429,9 +433,7 @@ describe("obterRegistroDeSessao — registro imutável", () => {
 
   it("preserva os textos e o nome do Baralho depois de editar o Cartão e excluir o Baralho (FR-165, FR-178)", async () => {
     const baralho = await criarBaralho(BARALHO);
-    const cartao = await criarCartao();
-
-    expect(await acervo.vincular(cartao.id, baralho.id)).toEqual({ ok: true });
+    const cartao = await criarCartao(baralho.id);
 
     const registro = registroDo(
       await acervo.registrarSessao(
@@ -475,7 +477,8 @@ describe("obterRegistroDeSessao — registro imutável", () => {
   });
 
   it("preserva o registro mesmo quando o Cartão estudado é excluído (FR-165)", async () => {
-    const cartao = await criarCartao();
+    const baralho = await criarBaralho(BARALHO);
+    const cartao = await criarCartao(baralho.id);
 
     const registro = registroDo(
       await acervo.registrarSessao(
@@ -511,8 +514,8 @@ describe("obterEstatisticas — números de Início", () => {
   it("conta Cartões e Baralhos atuais e os registros da janela, do mais novo ao mais antigo (FR-169)", async () => {
     const baralho = await criarBaralho(BARALHO);
 
-    await criarCartao();
-    await criarCartao("To run", "Correr");
+    await criarCartao(baralho.id);
+    await criarCartao(baralho.id, "To run", "Correr");
 
     const primeiro = registroDo(
       await acervo.registrarSessao(

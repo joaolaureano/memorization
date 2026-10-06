@@ -393,13 +393,12 @@ async function clienteComBaralho(
   const cartaoIds: string[] = [];
 
   for (let i = 1; i <= n; i += 1) {
-    const cartao = await cliente.criarCartao({ frente: `F${i}`, verso: `V${i}` });
+    const cartao = await cliente.criarCartao(baralho.baralho.id, { frente: `F${i}`, verso: `V${i}` });
 
     if (!cartao.ok) {
       throw new Error("Cartão");
     }
 
-    await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
     cartaoIds.push(cartao.cartao.id);
   }
 

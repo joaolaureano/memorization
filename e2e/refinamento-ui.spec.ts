@@ -310,9 +310,7 @@ async function percorrerCaso(
         name: `Olá, ${credencial.nomeDeUsuario}`,
       }),
     ).toBeVisible();
-    await expect(
-      pagina.getByRole("link", { name: "Criar o primeiro Cartão" }),
-    ).toBeVisible();
+    await expect(pagina.getByRole("link", { name: "Ver Baralhos" })).toBeVisible();
     await expect(pagina.getByText("Revisão do dia")).toHaveCount(0);
     await expect(pagina.getByText("Seu estudo")).toHaveCount(0);
     await expect(pagina.locator("p.resumo-de-sete-dias")).toHaveCount(0);

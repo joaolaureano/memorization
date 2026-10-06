@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
@@ -14,7 +14,19 @@ import {
   MOTIVO_DE_PENDENCIA,
   PaginaDoFormularioDeCartao,
 } from "../src/ui/PaginaDoFormularioDeCartao";
+import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
+
+let clienteDeTeste: ClienteEmMemoria;
+let baralhoId: string;
+
+beforeEach(async () => {
+  clienteDeTeste = clienteDeProva();
+  const baralho = await clienteDeTeste.criarBaralho({ nome: "Inglês" });
+  if (!baralho.ok) throw new Error("Baralho de prova não criado");
+  baralhoId = baralho.baralho.id;
+  window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
+});
 
 /**
  * T1113 — criação e edição de Cartão na página do formulário
@@ -53,12 +65,31 @@ function formulario(): HTMLFormElement {
 }
 
 describe("PaginaDoFormularioDeCartao — criação", () => {
+  it("numera a Frente repetida e anuncia o texto final no detalhe do Baralho", async () => {
+    const cliente = clienteDeTeste;
+    const primeiro = await cliente.criarCartao(baralhoId, { frente: "To walk", verso: "Caminhar" });
+    if (!primeiro.ok) throw new Error("não criou o primeiro Cartão");
+    const { unmount } = render(comProtecaoDeSaida(
+      <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} />, true,
+    ));
+
+    fireEvent.change(campoDeFrente(), { target: { value: "to walk" } });
+    fireEvent.change(campoDeVerso(), { target: { value: "Andar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`));
+    unmount();
+
+    render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={baralhoId} />, true));
+    expect(await screen.findByText("to walk (2)")).toBeInTheDocument();
+    expect(screen.getByText("Cartão criado: to walk (2).")).toHaveAttribute("role", "status");
+  });
+
   it("cria o Cartão, anuncia e volta para a lista (FR-001, FR-140, FR-141)", async () => {
-    const cliente = clienteDeProva();
+    const cliente = clienteDeTeste;
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} />,
         true,
       ),
     );
@@ -81,13 +112,13 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
       expect(cartoes.cartoes[0].verso).toBe("Caminhar");
     }
 
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
   });
 
   it("comunica a contagem e o limite durante a digitação (FR-053)", () => {
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} />,
         true,
       ),
     );
@@ -113,7 +144,7 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   it("recusa de domínio exibe a mensagem do cliente, preserva o texto e foca o campo (FR-046, FR-055)", async () => {
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} />,
         true,
       ),
     );
@@ -132,7 +163,7 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   it("submete conteúdo acima do limite e exibe a recusa do cliente (FR-053)", async () => {
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} />,
         true,
       ),
     );
@@ -158,11 +189,11 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   });
 
   it("com o cliente indisponível, a falha é anunciada e o conteúdo permanece (FR-044, FR-045, SC-012)", async () => {
-    const cliente = clienteDeProva();
+    const cliente = clienteDeTeste;
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} />,
         true,
       ),
     );
@@ -182,11 +213,11 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   });
 
   it("a nova tentativa reaproveita o conteúdo preservado (FR-045, SC-012)", async () => {
-    const cliente = clienteDeProva();
+    const cliente = clienteDeTeste;
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} />,
         true,
       ),
     );
@@ -213,7 +244,7 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   it("formulário sujo pede confirmação de descarte ao sair (FR-148)", async () => {
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} />,
         true,
       ),
     );
@@ -228,7 +259,7 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
   });
 
   it("durante o salvamento, a navegação é bloqueada e o motivo é anunciado (FR-154)", async () => {
-    const cliente = clienteDeProva();
+    const cliente = clienteDeTeste;
     const criarCartaoOriginal = cliente.criarCartao.bind(cliente);
 
     // O salvamento fica pendente até a prova liberar: é justamente enquanto
@@ -238,18 +269,18 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
       liberarSalvamento = resolver;
     });
 
-    cliente.criarCartao = async (dados) => {
+    cliente.criarCartao = async (donoId, dados) => {
       await salvamentoEmAndamento;
-      return criarCartaoOriginal(dados);
+      return criarCartaoOriginal(donoId, dados);
     };
 
     // Hash conhecido antes da montagem: a URL restaurada pela proteção é
     // previsível.
-    window.location.hash = "#/cartoes";
+    window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} />,
         true,
       ),
     );
@@ -265,13 +296,13 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
     window.location.hash = "#/baralhos";
 
     expect(await screen.findByText(MOTIVO_DE_PENDENCIA)).toBeInTheDocument();
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(window.location.hash).toBe(`#/baralhos/${baralhoId}/cartoes/novo`);
 
     // Liberado o salvamento, a operação conclui e o Cartão é criado (FR-001).
     liberarSalvamento();
 
     await waitFor(() => {
-      expect(window.location.hash).toBe("#/cartoes");
+      expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
     });
 
     const cartoes = await cliente.listarCartoes();
@@ -285,12 +316,33 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
 });
 
 describe("PaginaDoFormularioDeCartao — edição", () => {
+  it("recusa Frente conflitante, preserva os campos e não altera o Cartão", async () => {
+    const cliente = clienteDeTeste;
+    const original = await cliente.criarCartao(baralhoId, { frente: "To walk", verso: "Caminhar" });
+    const outro = await cliente.criarCartao(baralhoId, { frente: "To run", verso: "Correr" });
+    if (!original.ok || !outro.ok) throw new Error("não criou os Cartões");
+    render(comProtecaoDeSaida(
+      <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} id={outro.cartao.id} />, true,
+    ));
+    await screen.findByDisplayValue("To run");
+    fireEvent.change(campoDeFrente(), { target: { value: "to walk" } });
+    fireEvent.change(campoDeVerso(), { target: { value: "Andar" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/frente/i);
+    expect(campoDeFrente()).toHaveValue("to walk");
+    expect(campoDeFrente()).toHaveFocus();
+    expect(campoDeVerso()).toHaveValue("Andar");
+    const listado = await cliente.listarCartoes();
+    if (!listado.ok) throw new Error("não listou os Cartões");
+    expect(listado.cartoes.find((cartao) => cartao.id === outro.cartao.id)).toMatchObject({ frente: "To run", verso: "Correr" });
+  });
+
   async function clienteComCartao(): Promise<{
     cliente: ClienteEmMemoria;
     id: string;
   }> {
-    const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
+    const cliente = clienteDeTeste;
+    const cartao = await cliente.criarCartao(baralhoId, {
       frente: "To walk",
       verso: "Caminhar",
     });
@@ -303,8 +355,8 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
   }
 
   it("exibe os valores atuais, sem aviso de alcance (FR-005)", async () => {
-    const cliente = clienteDeProva();
-    const cartao = await cliente.criarCartao({
+    const cliente = clienteDeTeste;
+    const cartao = await cliente.criarCartao(baralhoId, {
       frente: "To walk",
       verso: "Caminhar",
     });
@@ -313,19 +365,9 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
       throw new Error("a criação do Cartão deveria ser aceita");
     }
 
-    for (const nome of ["Inglês", "Espanhol", "Francês"]) {
-      const baralho = await cliente.criarBaralho({ nome });
-
-      if (!baralho.ok) {
-        throw new Error("a criação do Baralho deveria ser aceita");
-      }
-
-      await cliente.vincular(cartao.cartao.id, baralho.baralho.id);
-    }
-
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} id={cartao.cartao.id} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} id={cartao.cartao.id} />,
         true,
       ),
     );
@@ -348,7 +390,7 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
 
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={cliente} id={id} />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} id={id} />,
         true,
       ),
     );
@@ -368,7 +410,7 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
       expect(cartoes.cartoes[0].verso).toBe("Correr");
     }
 
-    expect(window.location.hash).toBe("#/cartoes");
+    expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
   });
 
   it("Cancelar volta para a página anterior", async () => {
@@ -379,7 +421,7 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
     try {
       render(
         comProtecaoDeSaida(
-          <PaginaDoFormularioDeCartao cliente={cliente} id={id} />,
+          <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={cliente} id={id} />,
           true,
         ),
       );
@@ -396,20 +438,20 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
   });
 
   it("Cancelar sem página anterior leva a Cartões", async () => {
-    window.location.hash = "#/cartoes/novo";
+    window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
     vi.spyOn(window.history, "length", "get").mockReturnValue(1);
 
     try {
       render(
         comProtecaoDeSaida(
-          <PaginaDoFormularioDeCartao cliente={clienteDeProva()} />,
+          <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} />,
           true,
         ),
       );
 
       fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 
-      expect(window.location.hash).toBe("#/cartoes");
+      expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`);
     } finally {
       vi.restoreAllMocks();
     }
@@ -418,7 +460,7 @@ describe("PaginaDoFormularioDeCartao — edição", () => {
   it("Cartão inexistente apresenta não encontrado (FR-156)", async () => {
     render(
       comProtecaoDeSaida(
-        <PaginaDoFormularioDeCartao cliente={clienteDeProva()} id="inexistente" />,
+        <PaginaDoFormularioDeCartao baralhoId={baralhoId} cliente={clienteDeTeste} id="inexistente" />,
         true,
       ),
     );

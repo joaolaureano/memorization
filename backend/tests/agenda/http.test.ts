@@ -69,17 +69,10 @@ async function criarBaralho(cartoes = 2, credencial = contrato.credencial) {
   const id = (baralho.json() as { id: string }).id;
 
   for (let indice = 0; indice < cartoes; indice += 1) {
-    const cartao = await pedir(
-      "POST",
-      "/cartoes",
-      { frente: `F${indice}`, verso: `V${indice}` },
-      credencial,
-    );
-
     await pedir(
       "POST",
-      `/baralhos/${id}/vinculos`,
-      { cartaoId: (cartao.json() as { id: string }).id },
+      `/baralhos/${id}/cartoes`,
+      { frente: `F${indice}`, verso: `V${indice}` },
       credencial,
     );
   }

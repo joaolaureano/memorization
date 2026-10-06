@@ -43,8 +43,9 @@ afterEach(async () => {
 describe("obterConta (FR-257, FR-258)", () => {
   it("devolve o Nome de usuário e as contagens, sem nada da Senha", async () => {
     const acervo = criarAcervo(aberto.armazenamento, ana.id);
-    await acervo.criarCartao({ frente: "To walk", verso: "Caminhar" });
-    await acervo.criarBaralho({ nome: "Inglês" });
+    const criarBaralhoResult = await acervo.criarBaralho({ nome: "Inglês" });
+    if (!criarBaralhoResult.ok) throw new Error("Falha ao criar baralho");
+    await acervo.criarCartao(criarBaralhoResult.baralho.id, { frente: "To walk", verso: "Caminhar" });
 
     const resultado = await identidade.obterConta(ana.id);
 
@@ -178,11 +179,18 @@ describe("trocarSenha (FR-266..FR-271)", () => {
 
 describe("excluirConta (FR-272..FR-278)", () => {
   it("remove o Usuário e o que é dele, sem tocar no outro (FR-274, FR-275)", async () => {
-    await criarAcervo(aberto.armazenamento, ana.id).criarCartao({
+    const acervoAna = criarAcervo(aberto.armazenamento, ana.id);
+    const resultadoAna = await acervoAna.criarBaralho({ nome: "Inglês" });
+    if (!resultadoAna.ok) throw new Error("Falha ao criar baralho de Ana");
+    await acervoAna.criarCartao(resultadoAna.baralho.id, {
       frente: "To walk",
       verso: "Caminhar",
     });
-    await criarAcervo(aberto.armazenamento, bruno.id).criarCartao({
+
+    const acervoBruno = criarAcervo(aberto.armazenamento, bruno.id);
+    const resultadoBruno = await acervoBruno.criarBaralho({ nome: "Português" });
+    if (!resultadoBruno.ok) throw new Error("Falha ao criar baralho de Bruno");
+    await acervoBruno.criarCartao(resultadoBruno.baralho.id, {
       frente: "To run",
       verso: "Correr",
     });
@@ -214,7 +222,10 @@ describe("excluirConta (FR-272..FR-278)", () => {
   });
 
   it("permite novo Cadastro com o nome excluído, sem dado anterior (FR-277)", async () => {
-    await criarAcervo(aberto.armazenamento, ana.id).criarCartao({
+    const acervo = criarAcervo(aberto.armazenamento, ana.id);
+    const resultado = await acervo.criarBaralho({ nome: "Inglês" });
+    if (!resultado.ok) throw new Error("Falha ao criar baralho");
+    await acervo.criarCartao(resultado.baralho.id, {
       frente: "To walk",
       verso: "Caminhar",
     });

@@ -10,6 +10,7 @@ import {
   type ServidorDeContrato,
 } from "./apoio-de-contrato.ts";
 import {
+  registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
   registrarRotasDeRevisao,
 } from "../../src/http/rotas.ts";
@@ -30,6 +31,7 @@ let contrato: ServidorDeContrato;
 
 beforeEach(async () => {
   contrato = await montarServidorDeContrato(({ servidor, acervoDe }) => {
+    registrarRotasDeBaralhos(servidor, acervoDe);
     registrarRotasDeCartoes(servidor, acervoDe);
     registrarRotasDeRevisao(servidor, acervoDe);
   });
@@ -45,11 +47,23 @@ function pedir(requisicao: InjectOptions) {
   return pedirComCredencial(servidor, contrato.credencial, requisicao);
 }
 
-/** Cria um Cartão real e devolve o seu identificador. */
-async function criarCartao(): Promise<string> {
+/** Cria um Baralho para armazenar Cartões. */
+async function criarBaralho(): Promise<string> {
   const resposta = await pedir({
     method: "POST",
-    url: "/cartoes",
+    url: "/baralhos",
+    payload: { nome: "Estudo" },
+  });
+  expect(resposta.statusCode).toBe(201);
+  return resposta.json().id as string;
+}
+
+/** Cria um Cartão real e devolve o seu identificador. */
+async function criarCartao(): Promise<string> {
+  const baralho = await criarBaralho();
+  const resposta = await pedir({
+    method: "POST",
+    url: `/baralhos/${baralho}/cartoes`,
     payload: { frente: "casa", verso: "house" },
   });
   expect(resposta.statusCode).toBe(201);
