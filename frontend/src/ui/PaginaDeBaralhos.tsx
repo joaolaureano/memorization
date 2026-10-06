@@ -154,7 +154,7 @@ export function PaginaDeBaralhos({
   const listaCarregada = !carregando && falhaDeListagem === null;
 
   return (
-    <div className="pagina">
+    <div className="pagina pagina--baralhos">
       <header className="cabecalho-da-pagina">
         <div>
           <h1>Baralhos</h1>

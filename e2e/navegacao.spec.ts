@@ -36,3 +36,45 @@ test('a navegação autenticada não oferece uma tela global de Cartões', async
   await page.goto(`http://127.0.0.1:${porta}/#/cartoes`);
   await expect(page.getByRole('heading', { level: 1, name: 'Cartões' })).toHaveCount(0);
 });
+
+test('a lista de Baralhos fica centralizada verticalmente quando há pouco conteúdo', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const porta = Number(process.env.E2E_PORTA_DO_FRONTEND ?? 5173);
+  const credencial = await prepararEntradaInterceptada(page);
+
+  await page.route(/\/baralhos$/, async (rota) => {
+    if (rota.request().method() === 'GET') {
+      await rota.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    await rota.fallback();
+  });
+  await page.route(/\/cartoes$/, async (rota) => {
+    if (rota.request().method() === 'GET') {
+      await rota.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    await rota.fallback();
+  });
+
+  await page.goto(`http://127.0.0.1:${porta}/#/baralhos`);
+  await entrarPelaUi(page, credencial);
+  await expect(page.getByRole('heading', { level: 1, name: 'Baralhos' })).toBeVisible();
+  await expect(page.getByText('Ainda não há Baralhos.', { exact: false })).toBeVisible();
+
+  const espacos = await page.locator('.pagina--baralhos').evaluate((pagina) => {
+    const primeiro = pagina.firstElementChild?.getBoundingClientRect();
+    const ultimo = pagina.lastElementChild?.getBoundingClientRect();
+    const area = pagina.getBoundingClientRect();
+
+    if (!primeiro || !ultimo) throw new Error('Conteúdo de Baralhos ausente');
+
+    return {
+      superior: primeiro.top - area.top,
+      inferior: area.bottom - ultimo.bottom,
+    };
+  });
+
+  expect(espacos.superior).toBeGreaterThan(0);
+  expect(Math.abs(espacos.superior - espacos.inferior)).toBeLessThanOrEqual(2);
+});
