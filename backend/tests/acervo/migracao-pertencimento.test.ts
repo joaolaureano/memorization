@@ -32,14 +32,16 @@ import {
  * - Reenviar após sucesso → idempotente
  */
 
-let caminhoDoArquivo: string;
+let diretorioTemporario: string;
 
 beforeEach(() => {
-  caminhoDoArquivo = join(mkdtempSync(tmpdir()), "teste.db");
+  diretorioTemporario = mkdtempSync(
+    join(tmpdir(), "acervo-pertencimento-"),
+  );
 });
 
 afterEach(() => {
-  rmSync(caminhoDoArquivo, { recursive: true, force: true });
+  rmSync(diretorioTemporario, { recursive: true, force: true });
 });
 
 /** Diz se a tabela existe, consultando o catálogo do SQLite. */
@@ -56,7 +58,7 @@ function existeTabela(banco: DatabaseSync, nome: string): boolean {
  * Retorna o caminho do arquivo para que o teste abra-o com `abrirArmazenamentoSqlite`.
  */
 function prepararBaseVersao13(): string {
-  const caminho = join(mkdtempSync(tmpdir()), "v13.db");
+  const caminho = join(diretorioTemporario, "v13.db");
   const banco = new DatabaseSync(caminho);
 
   try {
