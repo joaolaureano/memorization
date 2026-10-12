@@ -166,95 +166,95 @@ export function PaginaDePreferencias({
     <div className="pagina perfil">
       <h1>Perfil</h1>
 
-      {carregando ? (
-        <p className="carregando">Carregando Perfil…</p>
-      ) : falhaDeCarregamento !== null ? (
-        <section className="cartao">
-          <p
-            className="erro"
-            role="alert"
-            aria-label="Falha ao carregar a Configuração"
-          >
-            {falhaDeCarregamento}
-          </p>
-          <div className="acoes">
-            <button
-              className="botao botao--primario"
-              type="button"
-              onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
+        {carregando ? (
+          <p className="carregando">Carregando Perfil…</p>
+        ) : falhaDeCarregamento !== null ? (
+          <section className="cartao">
+            <p
+              className="erro"
+              role="alert"
+              aria-label="Falha ao carregar a Configuração"
             >
-              Tentar novamente
-            </button>
-          </div>
-        </section>
-      ) : preferencias !== null ? (
-        <section className="cartao" aria-labelledby="titulo-configuracao">
-          <h2 id="titulo-configuracao">Configuração</h2>
-          <form
-            className="formulario"
-            noValidate
-            onSubmit={(evento) => void salvar(evento)}
-          >
-            <div className="campo">
-              <label className="rotulo" htmlFor="campo-algoritmo">
-                Algoritmo de repetição espaçada
-              </label>
-              <select
-                id="campo-algoritmo"
-                ref={campoDeAlgoritmo}
-                value={algoritmo}
-                onChange={(evento) => {
-                  setAlgoritmo(evento.target.value);
-                  setSucesso(null);
-                }}
-              >
-                {preferencias.algoritmos.map((opcao) => (
-                  <option key={opcao.id} value={opcao.id}>
-                    {opcao.rotulo}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {falha !== null && (
-              <p
-                className="erro"
-                role="alert"
-                aria-label="Falha ao salvar a Configuração"
-              >
-                {falha}
-              </p>
-            )}
-
-            {sucesso !== null && (
-              <p role="status" className="contador">
-                {sucesso}
-              </p>
-            )}
-
+              {falhaDeCarregamento}
+            </p>
             <div className="acoes">
               <button
                 className="botao botao--primario"
-                type="submit"
-                disabled={salvando}
+                type="button"
+                onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
               >
-                {salvando ? "Salvando…" : "Salvar"}
+                Tentar novamente
               </button>
             </div>
-          </form>
-        </section>
-      ) : null}
+          </section>
+        ) : preferencias !== null ? (
+          <section className="cartao" aria-labelledby="titulo-configuracao">
+            <h2 id="titulo-configuracao">Configuração</h2>
+            <form
+              className="formulario"
+              noValidate
+              onSubmit={(evento) => void salvar(evento)}
+            >
+              <div className="campo">
+                <label className="rotulo" htmlFor="campo-algoritmo">
+                  Algoritmo de repetição espaçada
+                </label>
+                <select
+                  id="campo-algoritmo"
+                  ref={campoDeAlgoritmo}
+                  value={algoritmo}
+                  onChange={(evento) => {
+                    setAlgoritmo(evento.target.value);
+                    setSucesso(null);
+                  }}
+                >
+                  {preferencias.algoritmos.map((opcao) => (
+                    <option key={opcao.id} value={opcao.id}>
+                      {opcao.rotulo}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-      {aoSubstituirCredencial !== undefined &&
-        aoExcluirConta !== undefined &&
-        aoIrParaEntrar !== undefined && (
-          <SecaoMinhaConta
-            cliente={cliente}
-            aoSubstituirCredencial={aoSubstituirCredencial}
-            aoExcluirConta={aoExcluirConta}
-            aoIrParaEntrar={aoIrParaEntrar}
-          />
-        )}
+              {falha !== null && (
+                <p
+                  className="erro"
+                  role="alert"
+                  aria-label="Falha ao salvar a Configuração"
+                >
+                  {falha}
+                </p>
+              )}
+
+              {sucesso !== null && (
+                <p role="status" className="contador">
+                  {sucesso}
+                </p>
+              )}
+
+              <div className="acoes">
+                <button
+                  className="botao botao--primario"
+                  type="submit"
+                  disabled={salvando}
+                >
+                  {salvando ? "Salvando…" : "Salvar"}
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {aoSubstituirCredencial !== undefined &&
+          aoExcluirConta !== undefined &&
+          aoIrParaEntrar !== undefined && (
+            <SecaoMinhaConta
+              cliente={cliente}
+              aoSubstituirCredencial={aoSubstituirCredencial}
+              aoExcluirConta={aoExcluirConta}
+              aoIrParaEntrar={aoIrParaEntrar}
+            />
+          )}
     </div>
   );
 }

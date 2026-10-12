@@ -47,12 +47,14 @@ export function OpcoesDeTags({
   return (
     <fieldset className="filtro-de-tags">
       <legend>Tags</legend>
-      {opcoes.map((tag) => (
-        <label key={tag}>
-          <input type="checkbox" checked={selecionadas.includes(tag)} onChange={(e) => aoAlterar(e.target.checked ? [...selecionadas, tag] : selecionadas.filter((item) => item !== tag))} />
-          {tag}
-        </label>
-      ))}
+      <div className="filtro-de-tags__opcoes">
+        {opcoes.map((tag) => (
+          <label key={tag}>
+            <input type="checkbox" checked={selecionadas.includes(tag)} onChange={(e) => aoAlterar(e.target.checked ? [...selecionadas, tag] : selecionadas.filter((item) => item !== tag))} />
+            {tag}
+          </label>
+        ))}
+      </div>
     </fieldset>
   );
 }
