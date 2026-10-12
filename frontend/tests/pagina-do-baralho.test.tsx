@@ -211,6 +211,12 @@ describe("PaginaDoBaralho", () => {
     expect(
       within(cartoes[0]).getByRole("button", { name: "Excluir To walk" }),
     ).toBeInTheDocument();
+    expect(
+      within(cartoes[0]).getByText("Pendente", { selector: "span.etiqueta" }),
+    ).toHaveClass("etiqueta--pendente");
+    expect(
+      within(cartoes[1]).getByText("Pendente", { selector: "span.etiqueta" }),
+    ).toHaveClass("etiqueta--pendente");
   });
 
   it("exclui Cartão com confirmação explícita que menciona Agendamento (FR-401, FR-396)", async () => {

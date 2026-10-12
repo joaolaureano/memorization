@@ -368,12 +368,16 @@ export function PaginaDoBaralho({
       (baralho?.cartoes ?? []).flatMap((cartao) => cartao.tags ?? []),
     ),
   ].sort();
+  const agora = new Date();
   const cartoesComRevisao = (baralho?.cartoes ?? []).map((cartao) => ({
     ...cartao,
     baralho: { id },
     proximaRevisaoEm:
       cartoesListados.find((listado) => listado.id === cartao.id)
         ?.proximaRevisaoEm ?? null,
+  })).map((cartao) => ({
+    ...cartao,
+    situacaoDaRevisao: situacaoDaRevisao(cartao.proximaRevisaoEm, agora),
   }));
   const cartoesFiltradosPorTextoETags = filtrarPorTags(
     filtrarCartoes(cartoesComRevisao, { consulta, baralho: id }),
@@ -383,10 +387,9 @@ export function PaginaDoBaralho({
     if (filtroDeSituacao === "todos") {
       return true;
     }
-    const situacao = situacaoDaRevisao(cartao.proximaRevisaoEm, new Date());
     return filtroDeSituacao === "pendente"
-      ? situacao !== "em-dia"
-      : situacao === "em-dia";
+      ? cartao.situacaoDaRevisao !== "em-dia"
+      : cartao.situacaoDaRevisao === "em-dia";
   });
 
   function limparFiltros(): void {
@@ -607,12 +610,26 @@ export function PaginaDoBaralho({
             ) : (
               <ul className="lista lista--compacta">
                 {cartoesFiltrados.map((cartao) => (
-                  <li key={cartao.id} className="linha-da-lista">
+                  <li
+                    key={cartao.id}
+                    className="linha-da-lista linha-da-lista--com-etiqueta"
+                  >
                     <div className="linha-da-lista__texto">
                       <p className="linha-da-lista__titulo">{cartao.frente}</p>
                       <p className="linha-da-lista__verso">{cartao.verso}</p>
                       <EtiquetasDeTags tags={cartao.tags} />
                     </div>
+                    <span
+                      className={`etiqueta etiqueta--${
+                        cartao.situacaoDaRevisao === "em-dia"
+                          ? "revisado"
+                          : "pendente"
+                      }`}
+                    >
+                      {cartao.situacaoDaRevisao === "em-dia"
+                        ? "Revisado"
+                        : "Pendente"}
+                    </span>
                     <div className="linha-da-lista__acoes">
                       <a
                         className="botao botao--secundario"
