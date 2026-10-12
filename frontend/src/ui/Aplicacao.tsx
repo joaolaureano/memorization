@@ -296,7 +296,10 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
     return (
       <>
         <header className="moldura">
-          <span className="marca">memorization</span>
+          <span className="marca">
+            <img src="/icon.svg" alt="" aria-hidden="true" />
+            memorization
+          </span>
         </header>
         <main className="aplicacao">
           {verificacao === "verificando" ? (
@@ -609,7 +612,10 @@ function CascaDaAplicacao({
       ) : (
         // FR-098: sem Credencial não há navegação nem "Sair" — só a marca.
         <header className="moldura">
-          <span className="marca">memorization</span>
+          <span className="marca">
+            <img src="/icon.svg" alt="" aria-hidden="true" />
+            memorization
+          </span>
         </header>
       )}
 

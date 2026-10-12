@@ -36,6 +36,7 @@ export function Moldura({
   return (
     <header className="moldura">
       <a className="marca" href={hashDaRota({ nome: "inicio" })}>
+        <img src="/icon.svg" alt="" aria-hidden="true" />
         memorization
       </a>
 

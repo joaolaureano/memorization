@@ -154,6 +154,7 @@ summary:focus-visible {
 .marca {
   display: inline-flex;
   align-items: center;
+  gap: 9px;
   min-height: 44px;
   font-size: 22px;
   font-weight: 750;
@@ -162,16 +163,11 @@ summary:focus-visible {
   text-decoration: none;
 }
 
-/* Ponto de destaque da marca: decorativo, desenhado sem markup extra. */
-.marca::after {
-  content: "";
-  display: inline-block;
-  width: 0.45em;
-  height: 0.45em;
-  margin-left: 0.12em;
-  border-radius: 50%;
-  background: var(--accent);
-  vertical-align: baseline;
+.marca img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
 }
 
 .navegacao-principal {
