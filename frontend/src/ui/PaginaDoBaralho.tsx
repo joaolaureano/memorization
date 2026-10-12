@@ -9,12 +9,18 @@ import {
 import type {
   BaralhoComCartoes,
   Cartao,
+  CartaoListado,
   ClienteDoAcervo,
 } from "../acervo-cliente/cliente";
+import {
+  filtrarCartoes,
+  filtrarPorTags,
+  situacaoDaRevisao,
+} from "../acervo-cliente/busca-no-acervo";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { consumirAvisoDeCartao } from "./aviso-de-cartao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
-import { EtiquetasDeTags } from "./CampoDeTags";
+import { EtiquetasDeTags, OpcoesDeTags } from "./CampoDeTags";
 import { hashDaRota } from "./navegacao";
 import {
   useNavegarSemProtecao,
@@ -79,6 +85,7 @@ export function PaginaDoBaralho({
   id,
 }: PropriedadesDaPaginaDoBaralho) {
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
+  const [cartoesListados, setCartoesListados] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [falhaDeCarregamento, setFalhaDeCarregamento] = useState<string | null>(
     null,
@@ -103,6 +110,12 @@ export function PaginaDoBaralho({
   >(null);
   const [focoAposExclusaoDoBaralho, setFocoAposExclusaoDoBaralho] =
     useState(false);
+  const [consulta, setConsulta] = useState("");
+  const [filtroDeSituacao, setFiltroDeSituacao] = useState<
+    "todos" | "pendente" | "revisado"
+  >("todos");
+  const [tagsSelecionadas, setTagsSelecionadas] = useState<string[]>([]);
+  const campoDeBusca = useRef<HTMLInputElement>(null);
 
   const botoesDeExcluir = useRef(new Map<string, HTMLButtonElement>());
   const tituloDaPagina = useRef<HTMLHeadingElement>(null);
@@ -128,13 +141,24 @@ export function PaginaDoBaralho({
     setBaralhoNaoEncontrado(null);
     setAnuncio(null);
 
-    void cliente.obterBaralho(id).then((resultado) => {
+    void Promise.all([
+      cliente.obterBaralho(id),
+      cliente.listarCartoes(),
+    ]).then(([resultado, resultadoDosCartoes]) => {
       if (minha !== requisicao.current) {
         return;
       }
 
       if (resultado.ok) {
         setBaralho(resultado.baralho);
+        if (resultadoDosCartoes.ok) {
+          setCartoesListados(resultadoDosCartoes.cartoes);
+        } else {
+          setBaralho(null);
+          setFalhaDeCarregamento(resultadoDosCartoes.mensagem);
+          setCarregando(false);
+          return;
+        }
         const aviso = consumirAvisoDeCartao(id);
         if (aviso !== null) {
           setAnuncio(aviso);
@@ -142,6 +166,7 @@ export function PaginaDoBaralho({
         }
       } else {
         setBaralho(null);
+        setCartoesListados([]);
 
         if (resultado.erro === "nao_encontrado") {
           setBaralhoNaoEncontrado(resultado.mensagem);
@@ -338,6 +363,38 @@ export function PaginaDoBaralho({
   }
 
   const quantidadeDeCartoes = baralho?.cartoes.length ?? 0;
+  const tagsDisponiveis = [
+    ...new Set(
+      (baralho?.cartoes ?? []).flatMap((cartao) => cartao.tags ?? []),
+    ),
+  ].sort();
+  const cartoesComRevisao = (baralho?.cartoes ?? []).map((cartao) => ({
+    ...cartao,
+    baralho: { id },
+    proximaRevisaoEm:
+      cartoesListados.find((listado) => listado.id === cartao.id)
+        ?.proximaRevisaoEm ?? null,
+  }));
+  const cartoesFiltradosPorTextoETags = filtrarPorTags(
+    filtrarCartoes(cartoesComRevisao, { consulta, baralho: id }),
+    tagsSelecionadas,
+  );
+  const cartoesFiltrados = cartoesFiltradosPorTextoETags.filter((cartao) => {
+    if (filtroDeSituacao === "todos") {
+      return true;
+    }
+    const situacao = situacaoDaRevisao(cartao.proximaRevisaoEm, new Date());
+    return filtroDeSituacao === "pendente"
+      ? situacao !== "em-dia"
+      : situacao === "em-dia";
+  });
+
+  function limparFiltros(): void {
+    setConsulta("");
+    setFiltroDeSituacao("todos");
+    setTagsSelecionadas([]);
+    campoDeBusca.current?.focus();
+  }
 
   return (
     <div className="pagina">
@@ -413,6 +470,70 @@ export function PaginaDoBaralho({
         )}
       </div>
 
+      {baralho !== null && quantidadeDeCartoes > 0 && (
+        <>
+          <section className="filtros" aria-label="Busca e filtros dos Cartões">
+            <div className="campo">
+              <label
+                className="rotulo"
+                htmlFor="busca-de-cartoes-do-baralho"
+              >
+                Buscar Cartões
+              </label>
+              <input
+                id="busca-de-cartoes-do-baralho"
+                ref={campoDeBusca}
+                type="search"
+                autoComplete="off"
+                placeholder="Digite o nome ou conteúdo do Cartão"
+                value={consulta}
+                onChange={(evento) => setConsulta(evento.target.value)}
+              />
+            </div>
+            <OpcoesDeTags
+              opcoes={tagsDisponiveis}
+              selecionadas={tagsSelecionadas}
+              aoAlterar={setTagsSelecionadas}
+            />
+            <div className="campo">
+              <label
+                className="rotulo"
+                htmlFor="filtro-de-situacao-dos-cartoes"
+              >
+                Situação da revisão
+              </label>
+              <select
+                id="filtro-de-situacao-dos-cartoes"
+                value={filtroDeSituacao}
+                onChange={(evento) =>
+                  setFiltroDeSituacao(
+                    evento.target.value as "todos" | "pendente" | "revisado",
+                  )
+                }
+              >
+                <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="revisado">Revisado</option>
+              </select>
+            </div>
+          </section>
+          <div className="resultado-cabecalho">
+            <p role="status" aria-live="polite" aria-atomic="true">
+              {cartoesFiltrados.length === 1
+                ? "1 Cartão encontrado."
+                : `${cartoesFiltrados.length} Cartões encontrados.`}
+            </p>
+            <button
+              type="button"
+              className="botao botao--secundario"
+              onClick={limparFiltros}
+            >
+              Limpar filtros
+            </button>
+          </div>
+        </>
+      )}
+
       {carregando ? (
         <EstadoDaCarga estado="carregando" mensagem="Carregando Baralho…" />
       ) : baralhoNaoEncontrado !== null ? (
@@ -453,7 +574,13 @@ export function PaginaDoBaralho({
             {baralho.cartoes.length === 0 ? (
               // FR-153, FR-392: o Baralho vazio tem a sua própria apresentação,
               // e a ação que o destrava é criar Cartões neste Baralho.
-              <div className="estado-vazio" role="status" aria-label="Lista de Cartões vazia" aria-live="polite" aria-atomic="true">
+              <div
+                className="estado-vazio"
+                role="status"
+                aria-label="Lista de Cartões vazia"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <p>Este Baralho ainda não tem Cartões.</p>
                 <a
                   className="botao botao--primario"
@@ -462,9 +589,24 @@ export function PaginaDoBaralho({
                   Criar Cartão
                 </a>
               </div>
+            ) : cartoesFiltrados.length === 0 ? (
+              <div className="estado-vazio" role="status">
+                <h2>Nenhum Cartão encontrado</h2>
+                <p>
+                  Altere a busca ou limpe os filtros para ver os Cartões deste
+                  Baralho.
+                </p>
+                <button
+                  type="button"
+                  className="botao botao--secundario"
+                  onClick={limparFiltros}
+                >
+                  Limpar filtros
+                </button>
+              </div>
             ) : (
               <ul className="lista lista--compacta">
-                {baralho.cartoes.map((cartao) => (
+                {cartoesFiltrados.map((cartao) => (
                   <li key={cartao.id} className="linha-da-lista">
                     <div className="linha-da-lista__texto">
                       <p className="linha-da-lista__titulo">{cartao.frente}</p>
