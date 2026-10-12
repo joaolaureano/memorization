@@ -1176,6 +1176,19 @@ export async function abrirArmazenamentoSqlite(
       });
     },
 
+    async inserirBaralhosComCopias(usuarioId, grupos) {
+      return comDesfecho(() => emTransacaoComDesfecho(banco, () => {
+        for (const { baralho, copias } of grupos) {
+          inserirBaralho.run(baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? []));
+          for (const copia of copias) {
+            inserirCartaoComDono.run(copia.id, copia.frente, copia.verso, usuarioId, new Date().toISOString(), JSON.stringify(copia.tags ?? []));
+            inserirPertencimento.run(copia.id, baralho.id, normalizarFrente(copia.frente));
+          }
+        }
+        return { ok: true, valor: undefined };
+      }));
+    },
+
     async listarBaralhos(usuarioId) {
       return listarBaralhos.all(usuarioId).map(baralhoDaLinha);
     },

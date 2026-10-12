@@ -1230,6 +1230,20 @@ dialog .acoes {
   color: var(--muted);
 }
 
+.etiqueta--adicionado { border-color: var(--success); color: var(--success); }
+.etiqueta--modificado { border-color: var(--amber); color: var(--amber-text); background: var(--amber-bg); }
+.linha-importacao { display: grid; grid-template-columns: auto minmax(160px, 1fr) auto; gap: 12px; align-items: center; padding: 16px; border: 1px solid var(--border); border-radius: 14px; }
+.linha-importacao--modificado { border-color: var(--amber-border); background: var(--amber-bg); }
+.linha-importacao--editando { grid-template-columns: auto repeat(3, minmax(130px, 1fr)) auto; }
+.linha-importacao textarea { width: 100%; min-height: 72px; }
+.grupo-importacao { margin-block: 24px; }
+.editor-do-titulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.importacao-cartao__texto { min-width: 0; overflow-wrap: anywhere; }
+.importacao-cartao__texto p { white-space: pre-wrap; }
+.aviso { padding: 14px; border-radius: 12px; background: var(--surface-2); }
+.pagina--importacao-anki .acoes-da-pagina { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
+@media (max-width: 600px) { .linha-importacao, .linha-importacao--editando { grid-template-columns: 1fr; } }
+
 /* Botões compactos, mas com o alvo mínimo de 44px (FR-346), para que a linha
  * continue fina e as ações caibam ao lado do texto a partir de 360px. */
 .linha-da-lista__acoes > .botao {
@@ -1962,7 +1976,7 @@ label.campo--opcao {
     flex-wrap: wrap;
   }
 
-  /* Em telefone, as duas ações ocupam a mesma faixa de 44 px que Criar baralho ocupava sozinho (FR-360, SC-079). */
+  /* Em telefone, as três ações ocupam a mesma faixa de 44 px que Criar baralho ocupava sozinho; rótulos longos quebram em duas linhas dentro dos 44 px, sem rolagem horizontal (FR-360, SC-079). */
   .cabecalho-da-pagina .acoes--criacao {
     flex-wrap: nowrap;
     gap: 8px;
@@ -1975,7 +1989,10 @@ label.campo--opcao {
     min-height: 44px;
     height: 44px;
     padding-inline: 8px;
-    white-space: nowrap;
+    padding-block: 4px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
     font-size: 14px;
   }
 }

@@ -384,6 +384,15 @@ export function registrarRotasDeCartoes(
   });
 }
 
+/** Decodifica o nome enviado percent-encoded pelo cliente; mantém o valor cru quando não decodifica. */
+function decodificarNome(valor: string): string {
+  try {
+    return decodeURIComponent(valor);
+  } catch {
+    return valor;
+  }
+}
+
 /**
  * Registra as rotas de Baralho do contrato sobre o `Acervo` de quem Entrou:
  * `POST /baralhos`, `GET /baralhos`, `GET /baralhos/{id}`, `PUT /baralhos/{id}`,
@@ -398,7 +407,35 @@ export function registrarRotasDeCartoes(
 export function registrarRotasDeBaralhos(
   servidor: FastifyInstance,
   acervoDe: AcervoDeUsuario,
+  lerAnki?: (bytes: Buffer) => Promise<unknown>,
 ): void {
+  servidor.post("/baralhos/importacoes/previa", async (requisicao, resposta) => {
+    if (!Buffer.isBuffer(requisicao.body)) return resposta.status(400).send({ mensagem: "Envie um arquivo .apkg válido." });
+    const cabecalhoDoNome = requisicao.headers["x-file-name"];
+    const nomeBruto = (Array.isArray(cabecalhoDoNome) ? cabecalhoDoNome[0] : cabecalhoDoNome) ?? "";
+    const nomeDoArquivo = decodificarNome(nomeBruto).toLowerCase();
+    if (nomeDoArquivo.endsWith(".colpkg") || nomeDoArquivo === "collection.apkg") return resposta.status(400).send({ mensagem: "Pacotes de coleção do Anki não são aceitos." });
+    if (!nomeDoArquivo.endsWith(".apkg")) return resposta.status(400).send({ mensagem: "Envie um arquivo .apkg válido." });
+    if (!lerAnki) return resposta.status(501).send({ mensagem: "Importação Anki indisponível." });
+    try { return resposta.send(await lerAnki(requisicao.body)); }
+    catch (erro) { return resposta.status(400).send({ mensagem: erro instanceof Error ? erro.message : "Não foi possível ler este arquivo Anki." }); }
+  });
+
+  servidor.post("/baralhos/importacoes", async (requisicao, resposta) => {
+    const corpo = z.object({
+      baralhos: z.array(z.object({
+        nome: z.string(),
+        cartoes: z.array(z.object({
+          frente: z.string(), verso: z.string(), tags: z.array(z.string()).optional(),
+        })),
+      })),
+    }).safeParse(requisicao.body);
+    if (!corpo.success) return resposta.status(400).send(CORPO_INVALIDO);
+    const resultado = await acervoDe(requisicao.usuarioQueEntrou.id).importarBaralhos(corpo.data.baralhos.map((b) => ({ nome: b.nome, cartoes: b.cartoes.map((c) => ({ ...c, tags: c.tags ?? [] })) })));
+    if (!resultado.ok && resultado.erro === "indisponivel") return resposta.status(503).send({ mensagem: resultado.mensagem });
+    return resultado.ok ? resposta.status(201).send({ ok: true }) : resposta.status(400).send({ erro: resultado.erro, mensagem: resultado.mensagem });
+  });
+
   servidor.post("/baralhos", async (requisicao, resposta) => {
     const corpo = corpoDeBaralho.safeParse(requisicao.body);
 

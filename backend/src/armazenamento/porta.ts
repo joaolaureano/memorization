@@ -695,6 +695,12 @@ export interface ArmazenamentoDoAcervo {
     copias: readonly Cartao[],
   ): Promise<DesfechoDeBaralhoComCopias>;
 
+  /** Grava vários baralhos importados e todos os cartões numa transação única. */
+  inserirBaralhosComCopias(
+    usuarioId: string,
+    grupos: readonly { baralho: Baralho; copias: readonly Cartao[] }[],
+  ): Promise<Desfecho<void>>;
+
   /** Devolve os Baralhos de `usuarioId`, sem prometer ordem alguma. */
   listarBaralhos(usuarioId: string): Promise<Baralho[]>;
 

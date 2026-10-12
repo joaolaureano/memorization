@@ -28,6 +28,8 @@ import {
   type AcervoDeUsuario,
 } from "./rotas.ts";
 
+const LIMITE_APKG = 4 * 1024 * 1024;
+
 /**
  * Servidor HTTP local.
  *
@@ -188,7 +190,7 @@ function permitirPreVoo(
       .header("access-control-allow-credentials", "true")
       .header("vary", "origin")
       .header("access-control-allow-methods", "GET, POST, PUT, DELETE, OPTIONS")
-      .header("access-control-allow-headers", "content-type, authorization")
+      .header("access-control-allow-headers", "content-type, authorization, x-file-name")
       .header("access-control-max-age", "86400");
 
     return resposta.code(204).send();
@@ -251,7 +253,8 @@ export function criarServidor(
   identidade: Identidade,
   opcoes: OpcoesDoServidor = {},
 ): FastifyInstance {
-  const servidor = Fastify();
+  const servidor = Fastify({ bodyLimit: LIMITE_APKG });
+  servidor.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_requisicao, corpo, concluir) => concluir(null, corpo));
 
   /**
    * A guarda do segredo de origem é o **primeiro** hook: a requisição que não
@@ -339,6 +342,8 @@ export function criarServidor(
       CAMINHO_DOS_CARTOES,
       "/cartoes/:id",
       CAMINHO_DOS_BARALHOS,
+      "/baralhos/importacoes/previa",
+      "/baralhos/importacoes",
       "/baralhos/:id",
       "/baralhos/:baralhoId/cartoes",
       CAMINHO_DA_TRANSICAO_DE_CARTOES,
@@ -448,9 +453,10 @@ export function registrarRotasDaAplicacao(
   identidade: Identidade,
   acervoDe: AcervoDeUsuario,
   acessos: Acessos,
+  lerAnki?: (bytes: Buffer) => Promise<unknown>,
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
-  registrarRotasDeBaralhos(servidor, acervoDe);
+  registrarRotasDeBaralhos(servidor, acervoDe, lerAnki);
   registrarRotasDeTransicao(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
   registrarRotasDeRevisao(servidor, acervoDe);
@@ -475,6 +481,7 @@ export async function iniciarServidor(
   identidade: Identidade,
   acervoDe: AcervoDeUsuario,
   armazenamentoDeAcessos: ArmazenamentoDeAcessos,
+  lerAnki?: (bytes: Buffer) => Promise<unknown>,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
   const acessos = criarAcessos(armazenamentoDeAcessos, {
@@ -485,7 +492,7 @@ export async function iniciarServidor(
     origemDoFrontend: env.ORIGEM_DO_FRONTEND ?? ORIGEM_PADRAO_DO_FRONTEND,
     qualquerOrigemLocal: env.ORIGENS_LOCAIS_DE_TESTE === "sim",
   });
-  registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
+  registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos, lerAnki);
 
   await servidor.listen(opcoes);
 

@@ -470,6 +470,14 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     return { ok: true, baralho: baralhoSemDono(baralho) };
   }
 
+  async preverImportacaoAnki() {
+    return { ok: false as const, mensagem: "A importação Anki exige conexão com o servidor." };
+  }
+
+  async confirmarImportacaoAnki() {
+    return { ok: false, mensagem: "A importação Anki exige conexão com o servidor." };
+  }
+
   /**
    * Cria o Baralho e os Vínculos com os Cartões escolhidos num gesto único
    * (FR-371). O `id` vem do cliente: o mesmo `id` já usado por um Baralho do

@@ -1046,6 +1046,8 @@ export type ResultadoDeConcluirTransicao =
  * com resultados idênticos.
  */
 export interface ClienteDoAcervo {
+  preverImportacaoAnki(arquivo: File): Promise<{ ok: true; previa: PreviaDeImportacao } | { ok: false; mensagem: string }>;
+  confirmarImportacaoAnki(baralhos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[] }> }>): Promise<{ ok: boolean; mensagem?: string }>;
   /**
    * Apresenta a Credencial e devolve o Usuário que Entrou (FR-086). Espaços ao
    * redor do Nome de usuário são descartados e a comparação não distingue
@@ -1282,4 +1284,9 @@ export interface ClienteDoAcervo {
   concluirTransicao(
     escolhas: EscolhaDeTransicao[],
   ): Promise<ResultadoDeConcluirTransicao>;
+}
+
+export interface PreviaDeImportacao {
+  baralhos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[]; estado: "adicionado" | "modificado" }> }>;
+  avisos: { notasIgnoradas: number; conteudoIgnorado: number };
 }

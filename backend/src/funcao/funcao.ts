@@ -6,6 +6,7 @@ import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
 } from "../armazenamento/postgresql/armazenamento.ts";
+import { lerPacoteAnki } from "../importacao/anki.ts";
 import {
   codigoSqlState,
   configuracaoDaConexao,
@@ -286,7 +287,7 @@ export function criarFuncao(
     const acervoDe = (usuarioId: string) =>
       criarAcervo(aberto.armazenamento, usuarioId);
 
-    registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos);
+    registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos, lerPacoteAnki);
 
     /**
      * O Adaptador do evento é criado **antes** do `ready()`: ele decora a

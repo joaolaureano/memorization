@@ -34,6 +34,7 @@ export type Rota =
   | { nome: "entrar" }
   | { nome: "registro"; id: string }
   | { nome: "baralhos" }
+  | { nome: "importar-baralho" }
   | { nome: "novo-baralho" }
   | { nome: "baralho"; id: string }
   | { nome: "editar-baralho"; id: string }
@@ -143,6 +144,8 @@ function interpretarCaminho(hash: string): Rota {
 
       case 2: {
         const [colecao, segundo] = segmentos;
+
+        if (colecao === "baralhos" && segundo === "importar") return { nome: "importar-baralho" };
 
         if (colecao === "baralhos") {
           if (segundo === "temporario") {
@@ -290,6 +293,9 @@ export function hashDaRota(rota: Rota): string {
     case "baralhos":
       return "#/baralhos";
 
+    case "importar-baralho":
+      return "#/baralhos/importar";
+
     case "novo-baralho":
       return "#/baralhos/novo";
 
@@ -341,6 +347,7 @@ export function destinoAtivo(
       return "estudo";
 
     case "baralhos":
+    case "importar-baralho":
     case "novo-baralho":
     case "baralho":
     case "editar-baralho":

@@ -106,6 +106,7 @@ describe("PaginaDeBaralhos por teclado", () => {
 
     const controles = controlesInterativos();
     expect(controles).toEqual([
+      screen.getByRole("link", { name: "Importar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
@@ -136,6 +137,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     const controles = controlesInterativos();
     expect(controles).not.toContain(botaoDeRevisao);
     expect(controles).toEqual([
+      screen.getByRole("link", { name: "Importar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
@@ -166,6 +168,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     // filtros), a nova tentativa é a única ação.
     const controles = controlesInterativos();
     expect(controles).toEqual([
+      screen.getByRole("link", { name: "Importar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
@@ -180,7 +183,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     }
 
     cliente.restaurarDisponibilidade();
-    apertarEnter(controles[5]);
+    apertarEnter(screen.getByRole("button", { name: "Tentar novamente" }));
 
     expect(
       await screen.findByText(/ainda não há Baralhos/i),

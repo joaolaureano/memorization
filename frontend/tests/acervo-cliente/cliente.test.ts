@@ -2991,3 +2991,13 @@ function clienteHttpCom(fetchDeTeste: unknown): ClienteDoAcervo {
   vi.stubGlobal("fetch", fetchDeTeste);
   return new ClienteHttp(ENDERECO_DA_API);
 }
+
+describe("ClienteHttp — importação Anki", () => {
+  it("envia o nome do arquivo codificado, inclusive com acento decomposto do macOS", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ baralhos: [], avisos: { notasIgnoradas: 0, conteudoIgnorado: 0 } }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const resultado = await new ClienteHttp("http://api.teste").preverImportacaoAnki(new File([new Uint8Array([1])], "Inglês.apkg"));
+    expect(resultado.ok).toBe(true);
+    expect((fetchMock.mock.calls[0][1]!.headers as Record<string, string>)["x-file-name"]).toBe(encodeURIComponent("Inglês.apkg"));
+  });
+});

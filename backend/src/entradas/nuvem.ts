@@ -3,6 +3,7 @@ import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
 } from "../armazenamento/postgresql/armazenamento.ts";
+import { lerPacoteAnki } from "../importacao/anki.ts";
 import {
   codigoSqlState,
   configuracaoDaConexao,
@@ -208,6 +209,7 @@ if (
       identidade,
       (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId),
       aberto.acessos,
+      lerPacoteAnki,
     );
   }
 }

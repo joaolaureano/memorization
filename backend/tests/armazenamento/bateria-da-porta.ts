@@ -491,6 +491,17 @@ export function bateriaDaPorta(
           valor: { baralho: { id: "b2", nome: "Inglês" }, novo: true },
         });
       });
+
+      it("reverte todos os baralhos quando uma gravação do lote falha", async () => {
+        const porta = armazenamento();
+        const resultado = await porta.inserirBaralhosComCopias(DONO_UM, [
+          { baralho: baralhoDe("importacao-1", "Primeiro"), copias: [cartaoDe("importacao-cartao")] },
+          { baralho: baralhoDe("importacao-2", "Segundo"), copias: [cartaoDe("importacao-cartao")] },
+        ]);
+        expect(resultado.ok).toBe(false);
+        expect((await porta.listarBaralhos(DONO_UM)).filter((b) => b.id.startsWith("importacao-"))).toHaveLength(0);
+        expect(await porta.listarCartoes(DONO_UM)).toHaveLength(0);
+      });
     });
 
     describe("Pertencimento (025)", () => {

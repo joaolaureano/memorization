@@ -3,6 +3,7 @@ import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
 } from "../armazenamento/sqlite/armazenamento.ts";
+import { lerPacoteAnki } from "../importacao/anki.ts";
 import { iniciarServidor } from "../http/servidor.ts";
 import { relogioDeTeste } from "./relogio-de-teste.ts";
 import { criarIdentidade } from "../identidade/identidade.ts";
@@ -105,6 +106,7 @@ if (segredo !== null) {
       identidade,
       (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId, { agora }),
       aberto.acessos,
+      lerPacoteAnki,
     );
   }
 }

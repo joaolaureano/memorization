@@ -168,6 +168,7 @@ export function PaginaDeBaralhos({
           </p>
         </div>
         <div className="acoes acoes--criacao">
+          <a className="botao botao--secundario" href="#/baralhos/importar">Importar</a>
           <a className="botao botao--primario" href="#/baralhos/novo">
             Criar baralho
           </a>

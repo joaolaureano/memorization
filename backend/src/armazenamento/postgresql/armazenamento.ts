@@ -1684,6 +1684,19 @@ export async function abrirArmazenamentoPostgresql(
       );
     },
 
+    async inserirBaralhosComCopias(usuarioId, grupos) {
+      return comDesfecho(() => emTransacaoComDesfecho<Desfecho<void>>(piscina, async (cliente) => {
+        for (const { baralho, copias } of grupos) {
+          await cliente.query(INSERIR_BARALHO, [baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? [])]);
+          for (const copia of copias) {
+            await cliente.query(INSERIR_CARTAO_NO_BARALHO, [copia.id, copia.frente, copia.verso, usuarioId, new Date().toISOString(), JSON.stringify(copia.tags ?? [])]);
+            await cliente.query(INSERIR_PERTENCIMENTO, [copia.id, baralho.id, normalizarFrente(copia.frente)]);
+          }
+        }
+        return { ok: true, valor: undefined };
+      }));
+    },
+
     async listarBaralhos(usuarioId) {
       const { rows } = await piscina.query<LinhaDeBaralho>(LISTAR_BARALHOS, [
         usuarioId,

@@ -497,6 +497,7 @@ export type ResultadoDeSalvarPreferencias =
  * (FR-044, FR-045, FR-107).
  */
 export interface Acervo {
+  importarBaralhos(grupos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[] }> }>): Promise<{ ok: boolean; erro?: string; mensagem?: string }>;
   criarCartao(
     baralhoId: string,
     dados: DadosDeCartao,
@@ -1485,6 +1486,26 @@ export function criarAcervo(
       }
 
       return { ok: true, baralho: gravado.valor };
+    },
+
+    async importarBaralhos(grupos) {
+      if (!Array.isArray(grupos) || grupos.length < 1 || grupos.length > 100) return { ok: false, erro: "dados_invalidos", mensagem: "A importação não contém baralhos válidos." };
+      const preparados = [];
+      for (const grupo of grupos) {
+        if (!grupo || validarNomeDeBaralho(grupo.nome) !== null || !Array.isArray(grupo.cartoes) || grupo.cartoes.length > 1000) return { ok: false, erro: "dados_invalidos", mensagem: "Revise os nomes e cartões importados." };
+        const usados = new Set<string>();
+        const copias: Cartao[] = [];
+        for (const entrada of grupo.cartoes) {
+          if (!entrada || typeof entrada.frente !== "string" || typeof entrada.verso !== "string" || validarFrente(entrada.frente) !== null || validarVerso(entrada.verso) !== null) return { ok: false, erro: "dados_invalidos", mensagem: "Revise as frentes e os versos dos cartões." };
+          const chave = normalizarFrente(entrada.frente);
+          if (usados.has(chave)) return { ok: false, erro: "frente_duplicada", mensagem: "Há cartões com frentes repetidas na prévia." };
+          usados.add(chave);
+          copias.push({ id: randomUUID(), frente: entrada.frente.trim(), verso: entrada.verso.trim(), tags: normalizarTags(entrada.tags) });
+        }
+        preparados.push({ baralho: { id: randomUUID(), nome: grupo.nome.trim() }, copias });
+      }
+      const gravado = await armazenamento.inserirBaralhosComCopias(usuarioId, preparados);
+      return gravado.ok ? { ok: true } : { ok: false, erro: "indisponivel", mensagem: "Não foi possível concluir a importação." };
     },
 
     async salvarSelecaoComoBaralho(dados) {

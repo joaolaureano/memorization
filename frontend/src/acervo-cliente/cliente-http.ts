@@ -483,6 +483,22 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  async preverImportacaoAnki(arquivo: File) {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/baralhos/importacoes/previa`, { method: "POST", headers: { "content-type": "application/octet-stream", "x-file-name": encodeURIComponent(arquivo.name) }, body: await arquivo.arrayBuffer() });
+      const corpo = await resposta.json();
+      return resposta.ok ? { ok: true as const, previa: corpo } : { ok: false as const, mensagem: corpo.mensagem ?? MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS };
+    } catch { return { ok: false as const, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS }; }
+  }
+
+  async confirmarImportacaoAnki(baralhos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[] }> }>) {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/baralhos/importacoes`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baralhos }) });
+      const corpo = await resposta.json();
+      return resposta.ok ? { ok: true } : { ok: false, mensagem: corpo.mensagem ?? MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS };
+    } catch { return { ok: false, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS }; }
+  }
+
   /**
    * Salva uma seleção de cartões como um novo baralho (FR-371–FR-374).
    *
