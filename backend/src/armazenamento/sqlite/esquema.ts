@@ -94,7 +94,7 @@ export function aplicarMigracoes(
 
         if (Number(resultado?.pode_aplicar) !== 1) {
           banco.exec("ROLLBACK");
-          break;
+          continue;
         }
       }
       banco.exec(migracao.sql);

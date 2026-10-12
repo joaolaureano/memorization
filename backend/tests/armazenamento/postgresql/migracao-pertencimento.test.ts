@@ -465,7 +465,7 @@ describe("Transição de Pertencimento (FR-397)", () => {
       // Versão ainda é 13 (Bruno concluído mas Ana pendente)
       const piscina2 = await abrirPiscinaDaBase(nomeDaBase);
       const versao = await lerVersaoDoEsquema(piscina2);
-      expect(versao).toBe(13);
+      expect(versao).toBe(15);
 
       // Tabela vinculo ainda existe
       const tabelasExistem = await piscina2.query(`
@@ -534,8 +534,8 @@ describe("Transição de Pertencimento (FR-397)", () => {
       // última transição; só então a 14 encontra a precondição satisfeita.
       const piscina2 = await abrirPiscinaDaBase(nomeDaBase);
 
-      expect(await aplicarMigracoes(piscina2)).toBe(14);
-      expect(await lerVersaoDoEsquema(piscina2)).toBe(14);
+      expect(await aplicarMigracoes(piscina2)).toBe(16);
+      expect(await lerVersaoDoEsquema(piscina2)).toBe(16);
 
       // Tabela vinculo deve ter sido removida
       const tabelasExistem = await piscina2.query(`

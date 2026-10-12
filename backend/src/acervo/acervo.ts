@@ -31,6 +31,7 @@ import {
   validarFrente,
   validarNomeDeBaralho,
   validarVerso,
+  normalizarTags,
 } from "./invariantes.ts";
 import { criarAgenda } from "../agenda/agenda.ts";
 import type {
@@ -69,6 +70,12 @@ export type {
  */
 export type { Avaliacao };
 
+/** Mantém a forma legada das entidades quando a lista de tags está vazia. */
+function campoDeTags(tags: readonly string[] | undefined): { tags?: string[] } {
+  const normalizadas = normalizarTags(tags);
+  return normalizadas.length > 0 ? { tags: normalizadas } : {};
+}
+
 /**
  * Os tipos públicos da Agenda (FR-248, FR-250) são reexportados na Interface do
  * `Acervo`, como os tipos da Porta e da repetição: quem consome o acervo não
@@ -103,6 +110,7 @@ export type {
 export interface DadosDeCartao {
   frente: string;
   verso: string;
+  tags?: string[];
 }
 
 /**
@@ -130,6 +138,7 @@ export type ResultadoDeCriacaoDeCartao =
  */
 export interface DadosDeBaralho {
   nome: string;
+  tags?: string[];
 }
 
 /**
@@ -162,6 +171,7 @@ export interface DadosDeSelecaoParaBaralho {
   id: unknown;
   nome: unknown;
   cartaoIds: unknown;
+  tags?: unknown;
 }
 
 /**
@@ -1410,6 +1420,7 @@ export function criarAcervo(
           id: randomUUID(),
           frente,
           verso: dados.verso,
+          ...campoDeTags(dados.tags),
         };
 
         const gravado = await armazenamento.inserirCartaoNoBaralho(
@@ -1464,6 +1475,7 @@ export function criarAcervo(
       const baralho: Baralho = {
         id: randomUUID(),
         nome: dados.nome,
+        ...campoDeTags(dados.tags),
       };
 
       const gravado = await armazenamento.inserirBaralho(usuarioId, baralho);
@@ -1477,6 +1489,7 @@ export function criarAcervo(
 
     async salvarSelecaoComoBaralho(dados) {
       const { id, nome, cartaoIds } = dados;
+      const tags = normalizarTags(Array.isArray(dados.tags) ? dados.tags.filter((tag): tag is string => typeof tag === "string") : []);
 
       if (typeof id !== "string" || !IDENTIFICADOR_UNICO_UNIVERSAL.test(id)) {
         return { ok: false, ...DADOS_INVALIDOS };
@@ -1555,13 +1568,14 @@ export function criarAcervo(
           id: randomUUID(),
           frente,
           verso: origem.verso,
+          tags: origem.tags ?? [],
         });
       }
 
       // d) Insere o Baralho com as cópias
       const resultado = await armazenamento.inserirBaralhoComCopias(
         usuarioId,
-        { id, nome },
+        { id, nome, ...campoDeTags(tags) },
         copias,
       );
 
@@ -1669,6 +1683,7 @@ export function criarAcervo(
         id,
         frente: dados.frente,
         verso: dados.verso,
+        ...campoDeTags(dados.tags),
       });
 
       if (!gravado.ok) {
@@ -1694,6 +1709,7 @@ export function criarAcervo(
       const gravado = await armazenamento.atualizarBaralho(usuarioId, {
         id,
         nome: dados.nome,
+        ...campoDeTags(dados.tags),
       });
 
       if (!gravado.ok) {

@@ -10,9 +10,11 @@ import {
   filtrarBaralhos,
   filtrarBaralhosPorSituacao,
   rotuloDaSituacaoDoBaralho,
+  filtrarPorTags,
   type FiltroDeSituacaoDoBaralho,
   type SituacaoDoBaralho,
 } from "../acervo-cliente/busca-no-acervo";
+import { EtiquetasDeTags, OpcoesDeTags } from "./CampoDeTags";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { hashDaRota } from "./navegacao";
 
@@ -81,6 +83,7 @@ export function PaginaDeBaralhos({
   const [consulta, setConsulta] = useState("");
   const [filtroDeSituacao, setFiltroDeSituacao] =
     useState<FiltroDeSituacaoDoBaralho>("todos");
+  const [tagsSelecionadas, setTagsSelecionadas] = useState<string[]>([]);
 
   const campoDeBusca = useRef<HTMLInputElement>(null);
 
@@ -137,6 +140,7 @@ export function PaginaDeBaralhos({
   function limparFiltros() {
     setConsulta("");
     setFiltroDeSituacao("todos");
+    setTagsSelecionadas([]);
     campoDeBusca.current?.focus();
   }
 
@@ -146,8 +150,9 @@ export function PaginaDeBaralhos({
    * local; um Baralho sem Cartões fica `sem-cartoes` (FR-380).
    */
   const situacoesDosBaralhos = classificarBaralhos(baralhos, cartoes, new Date());
+  const tagsDisponiveis = [...new Set(baralhos.flatMap((item) => item.tags ?? []))].sort();
   const baralhosFiltrados = filtrarBaralhosPorSituacao(
-    filtrarBaralhos(baralhos, consulta),
+    filtrarPorTags(filtrarBaralhos(baralhos, consulta), tagsSelecionadas),
     situacoesDosBaralhos,
     filtroDeSituacao,
   );
@@ -190,6 +195,7 @@ export function PaginaDeBaralhos({
             ref={campoDeBusca}
           />
         </div>
+        <OpcoesDeTags opcoes={tagsDisponiveis} selecionadas={tagsSelecionadas} aoAlterar={setTagsSelecionadas} />
         <div className="campo">
           <label className="rotulo" htmlFor="filtro-de-situacao">
             Situação da revisão
@@ -302,6 +308,7 @@ function ItemDeBaralho({
     <li className="linha-da-lista linha-da-lista--com-etiqueta">
       <div className="linha-da-lista__texto">
         <p className="linha-da-lista__titulo">{baralho.nome}</p>
+                  <EtiquetasDeTags tags={baralho.tags} />
         <p className="linha-da-lista__detalhe">
           {contagemDeCartoes(baralho.quantidadeDeCartoes)}
         </p>

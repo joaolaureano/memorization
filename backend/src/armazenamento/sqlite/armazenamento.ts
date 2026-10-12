@@ -252,27 +252,33 @@ function ehFrenteDuplicada(erro: unknown): boolean {
 
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: Record<string, unknown>): Cartao {
+  const tags = JSON.parse((linha.tags_json as string | undefined) ?? "[]") as string[];
   return {
     id: linha.id as string,
     frente: linha.frente as string,
     verso: linha.verso as string,
+    ...(tags.length > 0 ? { tags } : {}),
   };
 }
 
 /** Lê a linha como Baralho, sem deixar a forma do driver atravessar a Porta. */
 function baralhoDaLinha(linha: Record<string, unknown>): Baralho {
+  const tags = JSON.parse((linha.tags_json as string | undefined) ?? "[]") as string[];
   return {
     id: linha.id as string,
     nome: linha.nome as string,
+    ...(tags.length > 0 ? { tags } : {}),
   };
 }
 
 /** Lê a linha como Cartão com seu único Baralho dono (FR-389). */
 function cartaoComDonoDaLinha(linha: Record<string, unknown>): CartaoComDono {
+  const tags = JSON.parse((linha.tags_json as string | undefined) ?? "[]") as string[];
   return {
     id: linha.id as string,
     frente: linha.frente as string,
     verso: linha.verso as string,
+    ...(tags.length > 0 ? { tags } : {}),
     baralho: {
       id: linha.baralho_id as string,
       nome: linha.baralho_nome as string,
@@ -522,7 +528,7 @@ export async function abrirArmazenamentoSqlite(
    * Devolve apenas Cartões com Pertencimento (FR-389), cada um com seu Baralho.
    */
   const listarCartoes = banco.prepare(
-    `SELECT cartao.id, cartao.frente, cartao.verso, baralho.id AS baralho_id,
+    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, baralho.id AS baralho_id,
             baralho.nome AS baralho_nome
        FROM cartao
        JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -531,7 +537,7 @@ export async function abrirArmazenamentoSqlite(
       ORDER BY cartao.criado_em IS NOT NULL, cartao.criado_em, cartao.rowid`,
   );
   const obterCartaoPorId = banco.prepare(
-    "SELECT id, frente, verso FROM cartao WHERE id = ? AND usuario_id = ?",
+    "SELECT id, frente, verso, tags_json FROM cartao WHERE id = ? AND usuario_id = ?",
   );
   /**
    * Insere um Cartão com o dono já especificado (FR-389). O `criado_em`é o
@@ -539,14 +545,14 @@ export async function abrirArmazenamentoSqlite(
    * Cartões novos por criação (FR-201).
    */
   const inserirCartaoComDono = banco.prepare(
-    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const obterPertencimentoDoCartao = banco.prepare(
     `SELECT baralho_id FROM pertencimento WHERE cartao_id = ?`,
   );
   const atualizarCartaoEPertencimento = banco.prepare(
-    `UPDATE cartao SET frente = ?, verso = ? WHERE id = ? AND usuario_id = ?`,
+    `UPDATE cartao SET frente = ?, verso = ?, tags_json = ? WHERE id = ? AND usuario_id = ?`,
   );
   const atualizarFrenteChave = banco.prepare(
     `UPDATE pertencimento SET frente_chave = ? WHERE cartao_id = ?`,
@@ -556,13 +562,13 @@ export async function abrirArmazenamentoSqlite(
   );
 
   const inserirBaralho = banco.prepare(
-    "INSERT INTO baralho (id, nome, usuario_id) VALUES (?, ?, ?)",
+    "INSERT INTO baralho (id, nome, usuario_id, tags_json) VALUES (?, ?, ?, ?)",
   );
   const listarBaralhos = banco.prepare(
-    "SELECT id, nome FROM baralho WHERE usuario_id = ?",
+    "SELECT id, nome, tags_json FROM baralho WHERE usuario_id = ?",
   );
   const obterBaralhoPorId = banco.prepare(
-    "SELECT id, nome FROM baralho WHERE id = ? AND usuario_id = ?",
+    "SELECT id, nome, tags_json FROM baralho WHERE id = ? AND usuario_id = ?",
   );
   /**
    * A busca por `id` **sem** escopo de dono é deliberada em
@@ -572,10 +578,10 @@ export async function abrirArmazenamentoSqlite(
    * — só o booleano do dono atravessa.
    */
   const obterBaralhoPorIdDeQualquerDono = banco.prepare(
-    "SELECT id, nome, usuario_id FROM baralho WHERE id = ?",
+    "SELECT id, nome, usuario_id, tags_json FROM baralho WHERE id = ?",
   );
   const atualizarBaralho = banco.prepare(
-    "UPDATE baralho SET nome = ? WHERE id = ? AND usuario_id = ?",
+    "UPDATE baralho SET nome = ?, tags_json = ? WHERE id = ? AND usuario_id = ?",
   );
   /**
    * Exclui os Cartões do dono cujo Pertencimento aponta para o Baralho, e depois
@@ -599,7 +605,7 @@ export async function abrirArmazenamentoSqlite(
      VALUES (?, ?, ?)`,
   );
   const listarCartoesDoBaralho = banco.prepare(
-    `SELECT cartao.id, cartao.frente, cartao.verso
+    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json
        FROM pertencimento
        JOIN cartao ON cartao.id = pertencimento.cartao_id
        JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -626,7 +632,7 @@ export async function abrirArmazenamentoSqlite(
    * consulta `vinculo` se a tabela existir (robustez para v14+).
    */
   const listarCartoesPendentesCartoes = banco.prepare(
-    `SELECT cartao.id, cartao.frente, cartao.verso
+    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json
        FROM cartao
       WHERE cartao.usuario_id = ?
         AND NOT EXISTS (
@@ -1002,6 +1008,7 @@ export async function abrirArmazenamentoSqlite(
               cartao.verso,
               usuarioId,
               new Date().toISOString(),
+              JSON.stringify(cartao.tags ?? []),
             );
 
             inserirPertencimento.run(
@@ -1048,6 +1055,7 @@ export async function abrirArmazenamentoSqlite(
             const alteradas = atualizarCartaoEPertencimento.run(
               cartao.frente,
               cartao.verso,
+              JSON.stringify(cartao.tags ?? []),
               cartao.id,
               usuarioId,
             );
@@ -1091,7 +1099,7 @@ export async function abrirArmazenamentoSqlite(
 
     async inserirBaralho(usuarioId, baralho) {
       return comDesfecho(() => {
-        inserirBaralho.run(baralho.id, baralho.nome, usuarioId);
+        inserirBaralho.run(baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? []));
 
         return { ok: true, valor: baralho };
       });
@@ -1137,7 +1145,7 @@ export async function abrirArmazenamentoSqlite(
            * (FR-400). Violação de UNIQUE(baralho_id, frente_chave) →
            * ROLLBACK automático via emTransacao.
            */
-          inserirBaralho.run(baralho.id, baralho.nome, usuarioId);
+          inserirBaralho.run(baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? []));
 
           for (const copia of copias) {
             /**
@@ -1150,6 +1158,7 @@ export async function abrirArmazenamentoSqlite(
               copia.verso,
               usuarioId,
               new Date().toISOString(),
+              JSON.stringify(copia.tags ?? []),
             );
 
             /**
@@ -1185,6 +1194,7 @@ export async function abrirArmazenamentoSqlite(
       return comDesfecho(() => {
         const alteradas = atualizarBaralho.run(
           baralho.nome,
+          JSON.stringify(baralho.tags ?? []),
           baralho.id,
           usuarioId,
         );
@@ -2024,6 +2034,7 @@ export async function abrirArmazenamentoSqlite(
               copia.cartao.verso,
               usuarioId,
               new Date().toISOString(),
+              JSON.stringify(copia.cartao.tags ?? []),
             );
 
             // Insere o Pertencimento

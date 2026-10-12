@@ -19,6 +19,11 @@ export function normalizarFrente(frente: string): string {
     .toLowerCase();
 }
 
+/** Normaliza as tags como listas sem espaços externos, vazios ou duplicatas. */
+export function normalizarTags(tags: readonly string[] | undefined): string[] {
+  return [...new Set((tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+}
+
 /**
  * Código estável de erro de regra de Cartão, consumido pelo cliente. Exaustivo
  * nesta feature: não há outro modo de falha de domínio.

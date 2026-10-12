@@ -236,7 +236,7 @@ export async function aplicarMigracoes(
     const novaVersao = await aplicarMigracao(piscina, migracao);
 
     if (novaVersao < migracao.versao) {
-      break;
+      continue;
     }
 
     versao = novaVersao;

@@ -397,6 +397,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       baralhoId,
       frente: frenteFinal,
       verso: dados.verso,
+      tags: normalizarTags(dados.tags),
     };
 
     this.base.cartoes.push(cartao);
@@ -461,6 +462,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       id: `b${++this.base.sequenciaDeBaralhos}`,
       usuarioId: dono.id,
       nome: dados.nome,
+      tags: normalizarTags(dados.tags),
     };
 
     this.base.baralhos.push(baralho);
@@ -537,6 +539,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       id: dados.id,
       usuarioId: dono.id,
       nome: dados.nome,
+      tags: normalizarTags(dados.tags),
     };
 
     this.base.baralhos.push(baralho);
@@ -571,6 +574,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
           baralhoId: baralho.id,
           frente: frenteFinal,
           verso: cartaoOriginal.verso,
+          tags: cartaoOriginal.tags ?? [],
         };
 
         this.base.cartoes.push(copia);
@@ -673,6 +677,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     id: string,
     frente: string,
     verso: string,
+    tags?: string[],
   ): Promise<ResultadoDeEdicaoDeCartao> {
     if (this.indisponivel) {
       return {
@@ -731,6 +736,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       ...cartaoAtual,
       frente,
       verso,
+      tags: tags === undefined ? cartaoAtual.tags ?? [] : normalizarTags(tags),
     };
 
     const indice = this.base.cartoes.indexOf(cartaoAtual);
@@ -742,6 +748,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   async renomearBaralho(
     id: string,
     nome: string,
+    tags?: string[],
   ): Promise<ResultadoDeRenomeacaoDeBaralho> {
     if (this.indisponivel) {
       return {
@@ -775,7 +782,10 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return { ok: false, ...falha };
     }
 
-    const baralho: BaralhoDoDono = { id, usuarioId: dono.id, nome };
+    const baralho: BaralhoDoDono = {
+      id, usuarioId: dono.id, nome,
+      tags: tags === undefined ? this.base.baralhos[indice].tags ?? [] : normalizarTags(tags),
+    };
 
     this.base.baralhos[indice] = baralho;
 
@@ -2288,12 +2298,18 @@ function novaBaseEmMemoria(
 
 /** O Cartão como a Interface o devolve: sem o dono, que é Implementation. */
 function cartaoSemDono(cartao: CartaoDoDono): Cartao {
-  return { id: cartao.id, frente: cartao.frente, verso: cartao.verso };
+  const tags = cartao.tags ?? [];
+  return { id: cartao.id, frente: cartao.frente, verso: cartao.verso, ...(tags.length > 0 ? { tags } : {}) };
 }
 
 /** O Baralho como a Interface o devolve: sem o dono, que é Implementation. */
 function baralhoSemDono(baralho: BaralhoDoDono): Baralho {
-  return { id: baralho.id, nome: baralho.nome };
+  const tags = baralho.tags ?? [];
+  return { id: baralho.id, nome: baralho.nome, ...(tags.length > 0 ? { tags } : {}) };
+}
+
+function normalizarTags(tags: readonly string[] | undefined): string[] {
+  return [...new Set((tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
 }
 
 /**

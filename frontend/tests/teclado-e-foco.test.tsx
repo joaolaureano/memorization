@@ -23,7 +23,7 @@ async function clienteComBaralho() {
  * `ClienteEmMemoria`, sem servidor. Três provas:
  *
  * 1. O percurso do primeiro campo ao salvamento é concluído só por teclado, na
- *    ordem visual — Frente, Verso, Criar Cartão — com o elemento focado
+ *    ordem visual — Frente, Verso, Tags, Criar Cartão — com o elemento focado
  *    conferido a cada passo por `document.activeElement`.
  * 2. Numa recusa, o foco vai ao campo que precisa de correção, guiado apenas
  *    pelo código de erro devolvido pela Interface (nunca por regra de domínio
@@ -130,7 +130,7 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 ];
 
 describe("PaginaDoFormularioDeCartao por teclado", () => {
-  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Salvar (FR-054, SC-017)", async () => {
+  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Tags → Salvar (FR-054, SC-017)", async () => {
     const { cliente, baralhoId } = await clienteComBaralho();
     window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
     render(
@@ -144,12 +144,14 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
     const campoVerso = screen.getByLabelText("Verso");
     const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
 
-    // A ordem de tabulação acompanha a disposição visual da coluna única: os
-    // dois campos e o salvamento (FR-054, SC-017).
+    const campoDeTags = screen.getByLabelText("Tags");
+
+    // A ordem de tabulação acompanha a disposição visual da coluna única.
     const controles = controlesInterativos();
     expect(controles[0]).toBe(campoFrente);
     expect(controles[1]).toBe(campoVerso);
-    expect(controles[2]).toBe(botaoDeSalvar);
+    expect(controles[2]).toBe(campoDeTags);
+    expect(controles[3]).toBe(botaoDeSalvar);
 
     apertarTab();
     expect(document.activeElement).toBe(campoFrente);
@@ -158,6 +160,9 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
     apertarTab();
     expect(document.activeElement).toBe(campoVerso);
     digitarPeloTeclado(campoVerso, "Caminhar");
+
+    apertarTab();
+    expect(document.activeElement).toBe(campoDeTags);
 
     apertarTab();
     expect(document.activeElement).toBe(botaoDeSalvar);
@@ -189,6 +194,7 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
       // salvamento.
       apertarTab(); // Frente
       apertarTab(); // Verso
+      apertarTab(); // Tags
       apertarTab(); // Salvar
       const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
       expect(document.activeElement).toBe(botaoDeSalvar);
@@ -222,6 +228,7 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
 
     apertarTab(); // Frente
     apertarTab(); // Verso
+    apertarTab(); // Tags
     apertarTab(); // Salvar
     const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
     apertarEnter(botaoDeSalvar);

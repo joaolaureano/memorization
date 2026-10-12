@@ -137,6 +137,7 @@ describe("edição por teclado", () => {
     // Recusa de domínio: o foco vai ao campo recusado e o conteúdo permanece.
     digitarPeloTeclado(campoDeFrente, "   ");
     apertarTab(); // Verso
+    apertarTab(); // Tags
     apertarTab(); // Salvar
 
     const botaoSalvar = screen.getByRole("button", { name: "Salvar" });
@@ -152,6 +153,7 @@ describe("edição por teclado", () => {
     // Salva um conteúdo válido pelo teclado e volta para a lista.
     digitarPeloTeclado(campoDeFrente, "To run");
     apertarTab(); // Verso
+    apertarTab(); // Tags
     apertarTab(); // Salvar
 
     expect(document.activeElement).toBe(
@@ -192,6 +194,7 @@ describe("edição por teclado", () => {
 
     // Recusa de domínio: o foco vai ao campo recusado e o conteúdo permanece.
     digitarPeloTeclado(campoDeNome, "   ");
+    apertarTab(); // Tags
     apertarTab(); // Salvar
 
     const botaoSalvar = screen.getByRole("button", { name: "Salvar" });
@@ -207,6 +210,7 @@ describe("edição por teclado", () => {
     // Sai de uma renomeação suja: a navegação pela proteção de saída pede a
     // confirmação de descarte, operada só por teclado.
     digitarPeloTeclado(campoDeNome, "Idiomas alterado");
+    apertarTab(); // Tags
     apertarTab(); // Salvar
     apertarTab(); // Cancelar
 
@@ -237,6 +241,7 @@ describe("edição por teclado", () => {
     // Salva um nome válido pelo teclado.
     digitarPeloTeclado(campoDeNome, "Idiomas");
     campoDeNome.focus();
+    apertarTab(); // Tags
     apertarTab(); // Salvar
 
     const botaoSalvarFinal = screen.getByRole("button", { name: "Salvar" });

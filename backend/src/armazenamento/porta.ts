@@ -48,6 +48,7 @@ export interface Cartao {
   id: string;
   frente: string;
   verso: string;
+  tags?: string[];
 }
 
 /**
@@ -57,6 +58,7 @@ export interface Cartao {
 export interface Baralho {
   id: string;
   nome: string;
+  tags?: string[];
 }
 
 /**

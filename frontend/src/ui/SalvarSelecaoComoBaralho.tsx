@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Baralho, ClienteDoAcervo } from "../acervo-cliente/cliente";
 import { LIMITE_DE_CARACTERES_DE_BARALHO } from "../acervo-cliente/validacao";
+import { CampoDeTags } from "./CampoDeTags";
 
 type Props = {
   cliente: ClienteDoAcervo;
@@ -31,6 +32,7 @@ export function SalvarSelecaoComoBaralho({
   nomeInicial,
 }: Props) {
   const [nome, setNome] = useState(nomeInicial ?? "Baralho temporário");
+  const [tags, setTags] = useState<string[]>([]);
   const [restantes, setRestantes] = useState<string[]>([...cartaoIds]);
   const [salvando, setSalvando] = useState(false);
   const [erroDeNome, setErroDeNome] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function SalvarSelecaoComoBaralho({
       id: idDaTentativa.current,
       nome,
       cartaoIds: restantes,
+      tags,
     });
     setSalvando(false);
     if (resultado.ok) {
@@ -122,6 +125,7 @@ export function SalvarSelecaoComoBaralho({
             </p>
           )}
         </div>
+        <CampoDeTags tags={tags} aoAlterar={setTags} />
         <p>{textoDaContagem(restantes.length)}</p>
         {indisponiveis.length > 0 && (
           <div className="aviso aviso--erro" role="alert">

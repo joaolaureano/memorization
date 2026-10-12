@@ -1265,6 +1265,15 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
   it("aceita uma base na versão 13 (transitória) com cartão pendente", async () => {
     const baseV13 = await criarBaseNaVersao("funcao-v13", 13);
     await inserirCartaoSemPertencimento(baseV13, "cartao-pendente");
+    const piscinaDeMigracao = criarPiscina({
+      url: servidor.urlDaBase(baseV13),
+      ca: servidor.configuracao.certificadoDaAutoridade,
+    });
+    try {
+      await aplicarMigracoes(piscinaDeMigracao);
+    } finally {
+      await piscinaDeMigracao.end();
+    }
     const alvo = criarFuncao(leitorDaBase(baseV13), {
       prefixo: PREFIXO_DE_TESTE,
       caminhoDoCertificado: certificado.caminho,
@@ -1277,13 +1286,13 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     expect(resposta.status).toBe(200);
     expect(resposta.bruto).toContain("ok");
 
-    // Verifica que a base continua na versão 13 (a migração 14 não foi aplicada).
+    // Tags avançam para 15; a migração 16 aguarda a transição dos Cartões.
     const versaoAtual = await servidor.consultar<{ versao: number }>(
       baseV13,
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(13);
+    expect(versaoAtual[0]?.versao).toBe(15);
   }, 60_000);
 
   it("recusa uma base na versão 12 (muito atrasada)", async () => {

@@ -607,6 +607,15 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
   it("sobe quando a base está na versão 13 (transitória) com cartão pendente", async () => {
     const nomeDaBase = await criarBaseNaVersao("transicao-v13", 13);
     await inserirCartaoSemPertencimento(nomeDaBase, "cartao-pendente");
+    const piscinaDeMigracao = criarPiscina({
+      url: urlDaBase(nomeDaBase),
+      ca: servidor.configuracao.certificadoDaAutoridade,
+    });
+    try {
+      await aplicarMigracoes(piscinaDeMigracao);
+    } finally {
+      await piscinaDeMigracao.end();
+    }
     const pasta = mkdtempSync(join(pastaTemporaria, "v13-"));
     const porta = await portaLivre();
 
@@ -628,13 +637,13 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       await nuvem.encerrar();
     }
 
-    // Verifica que a base continua na versão 13 (a migração 14 não foi aplicada).
+    // Tags avançam para 15; a migração 16 aguarda a transição dos Cartões.
     const versaoAtual = await servidor.consultar<{ versao: number }>(
       nomeDaBase,
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(13);
+    expect(versaoAtual[0]?.versao).toBe(15);
   }, PRAZO_DA_ENTRADA);
 
   it("recusa iniciar quando a base está na versão 12 (muito atrasada)", async () => {

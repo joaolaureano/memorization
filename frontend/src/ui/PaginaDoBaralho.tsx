@@ -14,6 +14,7 @@ import type {
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { consumirAvisoDeCartao } from "./aviso-de-cartao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
+import { EtiquetasDeTags } from "./CampoDeTags";
 import { hashDaRota } from "./navegacao";
 import {
   useNavegarSemProtecao,
@@ -352,6 +353,7 @@ export function PaginaDoBaralho({
               {descricaoDaContagemDeCartoes(quantidadeDeCartoes)}
             </p>
           )}
+          {baralho !== null && <EtiquetasDeTags tags={baralho.tags} />}
         </div>
 
         {baralho !== null && (
@@ -467,6 +469,7 @@ export function PaginaDoBaralho({
                     <div className="linha-da-lista__texto">
                       <p className="linha-da-lista__titulo">{cartao.frente}</p>
                       <p className="linha-da-lista__verso">{cartao.verso}</p>
+                      <EtiquetasDeTags tags={cartao.tags} />
                     </div>
                     <div className="linha-da-lista__acoes">
                       <a

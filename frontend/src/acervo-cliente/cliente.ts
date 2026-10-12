@@ -35,6 +35,7 @@ export interface Cartao {
   id: string;
   frente: string;
   verso: string;
+  tags?: string[];
 }
 
 /**
@@ -63,6 +64,7 @@ export interface CartaoListado extends Cartao {
 export interface DadosDeCartao {
   frente: string;
   verso: string;
+  tags?: string[];
 }
 
 /**
@@ -247,6 +249,7 @@ export type ResultadoDeListagemDeCartoes =
 export interface Baralho {
   id: string;
   nome: string;
+  tags?: string[];
 }
 
 /**
@@ -258,6 +261,7 @@ export interface Baralho {
  */
 export interface DadosDeBaralho {
   nome: string;
+  tags?: string[];
 }
 
 /**
@@ -308,6 +312,7 @@ export interface DadosDeSelecaoParaBaralho {
   id: string;
   nome: string;
   cartaoIds: readonly string[];
+  tags?: string[];
 }
 
 /**
@@ -1115,6 +1120,7 @@ export interface ClienteDoAcervo {
     id: string,
     frente: string,
     verso: string,
+    tags?: string[],
   ): Promise<ResultadoDeEdicaoDeCartao>;
 
   /**
@@ -1124,6 +1130,7 @@ export interface ClienteDoAcervo {
   renomearBaralho(
     id: string,
     nome: string,
+    tags?: string[],
   ): Promise<ResultadoDeRenomeacaoDeBaralho>;
 
   /**

@@ -1862,6 +1862,56 @@ label.campo--opcao {
   margin-bottom: 12px;
 }
 
+.lista-de-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-strong, #eef0ed);
+  color: var(--text, #252925);
+  font-size: 13px;
+}
+
+.tag button {
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.filtro-de-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #d7dbd6);
+  border-radius: 10px;
+}
+
+.filtro-de-tags label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+}
+
 @media (max-width: 850px) {
   .montagem {
     grid-template-columns: 1fr;

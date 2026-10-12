@@ -167,7 +167,7 @@ const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
  * mesmo instante.
  */
 const LISTAR_CARTOES = `
-SELECT cartao.id, cartao.frente, cartao.verso, baralho.id AS baralho_id,
+SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, baralho.id AS baralho_id,
        baralho.nome AS baralho_nome
   FROM cartao
   JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -177,11 +177,11 @@ SELECT cartao.id, cartao.frente, cartao.verso, baralho.id AS baralho_id,
 `;
 
 const OBTER_CARTAO = `
-SELECT id, frente, verso FROM cartao WHERE id = $1 AND usuario_id = $2;
+SELECT id, frente, verso, tags_json FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
 const ATUALIZAR_CARTAO = `
-UPDATE cartao SET frente = $1, verso = $2 WHERE id = $3 AND usuario_id = $4;
+UPDATE cartao SET frente = $1, verso = $2, tags_json = $3 WHERE id = $4 AND usuario_id = $5;
 `;
 
 const EXCLUIR_CARTAO = `
@@ -189,15 +189,15 @@ DELETE FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
 const INSERIR_BARALHO = `
-INSERT INTO baralho (id, nome, usuario_id) VALUES ($1, $2, $3);
+INSERT INTO baralho (id, nome, usuario_id, tags_json) VALUES ($1, $2, $3, $4);
 `;
 
 const LISTAR_BARALHOS = `
-SELECT id, nome FROM baralho WHERE usuario_id = $1;
+SELECT id, nome, tags_json FROM baralho WHERE usuario_id = $1;
 `;
 
 const OBTER_BARALHO = `
-SELECT id, nome FROM baralho WHERE id = $1 AND usuario_id = $2;
+SELECT id, nome, tags_json FROM baralho WHERE id = $1 AND usuario_id = $2;
 `;
 
 /**
@@ -207,11 +207,11 @@ SELECT id, nome FROM baralho WHERE id = $1 AND usuario_id = $2;
  * `id` tomado por **outro** dono, que é `conflito`, e não `nao_encontrado`.
  */
 const OBTER_BARALHO_DE_QUALQUER_DONO = `
-SELECT id, nome, usuario_id AS "usuarioId" FROM baralho WHERE id = $1;
+SELECT id, nome, usuario_id AS "usuarioId", tags_json FROM baralho WHERE id = $1;
 `;
 
 const ATUALIZAR_BARALHO = `
-UPDATE baralho SET nome = $1 WHERE id = $2 AND usuario_id = $3;
+UPDATE baralho SET nome = $1, tags_json = $2 WHERE id = $3 AND usuario_id = $4;
 `;
 
 /**
@@ -236,8 +236,8 @@ DELETE FROM baralho WHERE id = $1 AND usuario_id = $2;
  * UNIQUE(baralho_id, frente_chave) é reconhecida e traduzida em `frente_duplicada`.
  */
 const INSERIR_CARTAO_NO_BARALHO = `
-INSERT INTO cartao (id, frente, verso, usuario_id, criado_em)
-VALUES ($1, $2, $3, $4, $5::timestamptz);
+INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6);
 `;
 
 /**
@@ -250,7 +250,7 @@ VALUES ($1, $2, $3);
 `;
 
 const LISTAR_CARTOES_DO_BARALHO = `
-SELECT cartao.id, cartao.frente, cartao.verso
+SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json
   FROM pertencimento
   JOIN cartao ON cartao.id = pertencimento.cartao_id
   JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -769,12 +769,14 @@ type LinhaDeCartao = {
   id: string;
   frente: string;
   verso: string;
+  tags_json?: string;
 };
 
 /** Linha de `baralho` como o Adapter a lê. */
 type LinhaDeBaralho = {
   id: string;
   nome: string;
+  tags_json?: string;
 };
 
 /**
@@ -1103,12 +1105,14 @@ async function temTabelaVinculo(conexao: Conexao): Promise<boolean> {
 
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
-  return { id: linha.id, frente: linha.frente, verso: linha.verso };
+  const tags = JSON.parse(linha.tags_json ?? "[]") as string[];
+  return { id: linha.id, frente: linha.frente, verso: linha.verso, ...(tags.length > 0 ? { tags } : {}) };
 }
 
 /** Lê a linha como Baralho, sem deixar a forma do driver atravessar a Porta. */
 function baralhoDaLinha(linha: LinhaDeBaralho): Baralho {
-  return { id: linha.id, nome: linha.nome };
+  const tags = JSON.parse(linha.tags_json ?? "[]") as string[];
+  return { id: linha.id, nome: linha.nome, ...(tags.length > 0 ? { tags } : {}) };
 }
 
 /** Lê a linha como CartaoPendente: Cartão sem Pertencimento com Baralhos legados (FR-397). */
@@ -1120,10 +1124,12 @@ function cartaoPendenteDaLinha(linha: LinhaDeCartaoPendente): CartaoPendente {
 
 /** Lê a linha como CartaoComDono: Cartão com seu Baralho dono (FR-389). */
 function cartaoComDonoDaLinha(linha: LinhaDeCartaoComDono): CartaoComDono {
+  const tags = JSON.parse(linha.tags_json ?? "[]") as string[];
   return {
     id: linha.id,
     frente: linha.frente,
     verso: linha.verso,
+    ...(tags.length > 0 ? { tags } : {}),
     baralho: { id: linha.baralho_id, nome: linha.baralho_nome },
   };
 }
@@ -1481,6 +1487,7 @@ export async function abrirArmazenamentoPostgresql(
                 cartao.verso,
                 usuarioId,
                 new Date().toISOString(),
+                JSON.stringify(cartao.tags ?? []),
               ]);
 
               await cliente.query(INSERIR_PERTENCIMENTO, [
@@ -1540,7 +1547,7 @@ export async function abrirArmazenamentoPostgresql(
             async (cliente) => {
               const { rowCount: alteradas } = await cliente.query(
                 ATUALIZAR_CARTAO,
-                [cartao.frente, cartao.verso, cartao.id, usuarioId],
+                [cartao.frente, cartao.verso, JSON.stringify(cartao.tags ?? []), cartao.id, usuarioId],
               );
 
               if ((alteradas ?? 0) === 0) {
@@ -1595,6 +1602,7 @@ export async function abrirArmazenamentoPostgresql(
           baralho.id,
           baralho.nome,
           usuarioId,
+          JSON.stringify(baralho.tags ?? []),
         ]);
 
         return { ok: true, valor: baralho };
@@ -1644,6 +1652,7 @@ export async function abrirArmazenamentoPostgresql(
             baralho.id,
             baralho.nome,
             usuarioId,
+            JSON.stringify(baralho.tags ?? []),
           ]);
 
           for (const copia of copias) {
@@ -1657,6 +1666,7 @@ export async function abrirArmazenamentoPostgresql(
               copia.verso,
               usuarioId,
               new Date().toISOString(),
+              JSON.stringify(copia.tags ?? []),
             ]);
 
             /**
@@ -1699,6 +1709,7 @@ export async function abrirArmazenamentoPostgresql(
       return comDesfecho(async () => {
         const { rowCount } = await piscina.query(ATUALIZAR_BARALHO, [
           baralho.nome,
+          JSON.stringify(baralho.tags ?? []),
           baralho.id,
           usuarioId,
         ]);
@@ -1857,6 +1868,7 @@ export async function abrirArmazenamentoPostgresql(
                   copia.cartao.verso,
                   usuarioId,
                   new Date().toISOString(),
+                  JSON.stringify(copia.cartao.tags ?? []),
                 ]);
 
                 await cliente.query(INSERIR_PERTENCIMENTO, [

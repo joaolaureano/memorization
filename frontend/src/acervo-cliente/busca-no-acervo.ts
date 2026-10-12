@@ -31,6 +31,7 @@
 export interface BaralhoPesquisavel {
   id: string;
   nome: string;
+  tags?: readonly string[];
 }
 
 /** O Cartão como a busca o enxerga: texto, Baralho e Agendamento (FR-349). */
@@ -40,6 +41,7 @@ export interface CartaoPesquisavel {
   verso: string;
   baralho: { id: string };
   proximaRevisaoEm: string | null;
+  tags?: readonly string[];
 }
 
 /** A situação derivada da revisão de um Cartão (FR-352, SC-140). */
@@ -70,6 +72,14 @@ export function filtrarBaralhos<B extends BaralhoPesquisavel>(
   return baralhos.filter(
     (baralho) => alvo === "" || normalizar(baralho.nome).includes(alvo),
   );
+}
+
+/** Filtra entidades que contenham todas as tags selecionadas. */
+export function filtrarPorTags<T extends { tags?: readonly string[] }>(
+  itens: readonly T[],
+  selecionadas: readonly string[],
+): T[] {
+  return itens.filter((item) => selecionadas.every((tag) => item.tags?.includes(tag)));
 }
 
 /**

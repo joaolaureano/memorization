@@ -5,9 +5,11 @@ import {
   filtrarBaralhos,
   filtrarBaralhosPorSituacao,
   filtrarCartoes,
+  filtrarPorTags,
   type FiltroDeBaralho,
   type FiltroDeSituacaoDoBaralho,
 } from "../acervo-cliente/busca-no-acervo";
+import { EtiquetasDeTags, OpcoesDeTags } from "./CampoDeTags";
 import {
   cartoesAusentes,
   type SelecaoTemporaria,
@@ -59,6 +61,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   const [consultaDeCartoes, setConsultaDeCartoes] = useState("");
   const [filtroDeBaralho, setFiltroDeBaralho] =
     useState<FiltroDeBaralho>("todos");
+  const [tagsSelecionadas, setTagsSelecionadas] = useState<string[]>([]);
   const [filtroDeSituacao, setFiltroDeSituacao] =
     useState<FiltroDeSituacaoDoBaralho>("todos");
 
@@ -89,20 +92,20 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   const baralhosFiltrados = useMemo(
     () =>
       filtrarBaralhosPorSituacao(
-        filtrarBaralhos(baralhos, consultaDeBaralhos),
+        filtrarPorTags(filtrarBaralhos(baralhos, consultaDeBaralhos), tagsSelecionadas),
         situacoesDosBaralhos,
         filtroDeSituacao,
       ),
-    [baralhos, consultaDeBaralhos, situacoesDosBaralhos, filtroDeSituacao],
+    [baralhos, consultaDeBaralhos, situacoesDosBaralhos, filtroDeSituacao, tagsSelecionadas],
   );
 
   const cartoesFiltrados = useMemo(
     () =>
-      filtrarCartoes(cartoes, {
+      filtrarPorTags(filtrarCartoes(cartoes, {
         consulta: consultaDeCartoes,
         baralho: filtroDeBaralho,
-      }),
-    [cartoes, consultaDeCartoes, filtroDeBaralho],
+      }), tagsSelecionadas),
+    [cartoes, consultaDeCartoes, filtroDeBaralho, tagsSelecionadas],
   );
 
   const quantidadeDeResultados =
@@ -112,16 +115,19 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
     setFonte(novaFonte);
     setConsultaDeBaralhos("");
     setConsultaDeCartoes("");
+    setTagsSelecionadas([]);
   }
 
   function limparFiltrosDaFonteAtiva() {
     if (fonte === "baralhos") {
       setConsultaDeBaralhos("");
       setFiltroDeSituacao("todos");
+      setTagsSelecionadas([]);
       return;
     }
     setConsultaDeCartoes("");
     setFiltroDeBaralho("todos");
+    setTagsSelecionadas([]);
   }
 
   function montarConteudo() {
@@ -228,6 +234,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
             <li className="linha-da-lista" key={cartao.id}>
               <div className="linha-da-lista__texto">
                 <p className="linha-da-lista__titulo">{cartao.frente}</p>
+                <EtiquetasDeTags tags={cartao.tags} />
               </div>
               <div className="linha-da-lista__acoes">
                 <button
@@ -290,6 +297,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                 onChange={(evento) => setConsultaDeBaralhos(evento.target.value)}
               />
             </div>
+            <OpcoesDeTags opcoes={[...new Set(baralhos.flatMap((item) => item.tags ?? []))].sort()} selecionadas={tagsSelecionadas} aoAlterar={setTagsSelecionadas} />
             <div className="campo">
               <label
                 className="rotulo"
@@ -346,6 +354,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                 ))}
               </select>
             </div>
+            <OpcoesDeTags opcoes={[...new Set(cartoes.flatMap((item) => item.tags ?? []))].sort()} selecionadas={tagsSelecionadas} aoAlterar={setTagsSelecionadas} />
           </>
         )}
       </div>

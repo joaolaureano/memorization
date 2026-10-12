@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { CampoDeTags } from "./CampoDeTags";
 
 import type { ClienteDoAcervo } from "../acervo-cliente/cliente";
 import {
@@ -92,7 +93,8 @@ export function PaginaDoFormularioDeCartao({
 
   const [frente, setFrente] = useState("");
   const [verso, setVerso] = useState("");
-  const [referencia, setReferencia] = useState({ frente: "", verso: "" });
+  const [tags, setTags] = useState<string[]>([]);
+  const [referencia, setReferencia] = useState({ frente: "", verso: "", tags: [] as string[] });
   const [salvando, setSalvando] = useState(false);
   const [falhaDeSalvamento, setFalhaDeSalvamento] = useState<string | null>(
     null,
@@ -103,7 +105,7 @@ export function PaginaDoFormularioDeCartao({
   const campoDeVerso = useRef<HTMLTextAreaElement>(null);
 
   const estaSujo =
-    frente !== referencia.frente || verso !== referencia.verso;
+    frente !== referencia.frente || verso !== referencia.verso || JSON.stringify(tags) !== JSON.stringify(referencia.tags);
 
   const navegarSemProtecao = useNavegarSemProtecao();
 
@@ -151,9 +153,11 @@ export function PaginaDoFormularioDeCartao({
 
       setFrente(encontrado.frente);
       setVerso(encontrado.verso);
+      setTags(encontrado.tags ?? []);
       setReferencia({
         frente: encontrado.frente,
         verso: encontrado.verso,
+        tags: encontrado.tags ?? [],
       });
       setCarregando(false);
     })();
@@ -183,11 +187,11 @@ export function PaginaDoFormularioDeCartao({
     setCampoComErro(null);
 
     const resultado = emEdicao
-      ? await cliente.editarCartao(id, frente, verso)
-      : await cliente.criarCartao(baralhoId, { frente, verso });
+      ? await cliente.editarCartao(id, frente, verso, tags)
+      : await cliente.criarCartao(baralhoId, { frente, verso, tags });
 
     if (resultado.ok) {
-      setReferencia({ frente, verso });
+      setReferencia({ frente, verso, tags });
       if (!emEdicao) {
         guardarAvisoDeCartao(baralhoId, `Cartão criado: ${resultado.cartao.frente}.`);
       }
@@ -307,6 +311,8 @@ export function PaginaDoFormularioDeCartao({
               </p>
             )}
           </div>
+
+          <CampoDeTags tags={tags} aoAlterar={setTags} />
 
           {falhaDeSalvamento !== null && (
             <p

@@ -253,7 +253,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(13);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(15);
       const backfill = await consultar<{ cartao_id: string; baralho_id: string }>(
         `SELECT cartao_id, baralho_id FROM pertencimento ORDER BY cartao_id;`,
       );
@@ -271,7 +271,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
          DELETE FROM vinculo WHERE cartao_id = 'c-unico';`,
       );
       await aplicarMigracoes(piscina);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(13);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(15);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -288,7 +288,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
       );
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(14);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(16);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -946,7 +946,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(13);
+      expect(await aplicarMigracoes(piscina)).toBe(15);
 
       /** A migração só acrescenta tabelas: nada do acervo se perde (FR-165). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -992,7 +992,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "SELECT versao FROM versao_do_esquema;",
       );
 
-      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([13]);
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([15]);
     } finally {
       await piscina.end();
     }
@@ -1496,7 +1496,7 @@ describe("migração 7 — repetição espaçada", () => {
          VALUES ('r1', 0, 'To walk', 'Caminhar', 'acertou');`,
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(13);
+      expect(await aplicarMigracoes(piscina)).toBe(15);
 
       /** O acervo e o Histórico sobrevivem intactos à migração (FR-220). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -1556,6 +1556,7 @@ describe("migração 7 — repetição espaçada", () => {
         "frente",
         "id",
         "ordem_de_insercao",
+        "tags_json",
         "usuario_id",
         "verso",
       ]);
@@ -1565,7 +1566,7 @@ describe("migração 7 — repetição espaçada", () => {
       );
 
       expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
-        13,
+        15,
       ]);
     } finally {
       await piscina.end();

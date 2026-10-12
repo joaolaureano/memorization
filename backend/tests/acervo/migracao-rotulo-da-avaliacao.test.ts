@@ -130,7 +130,7 @@ describe("migração 12 — rótulo da Avaliação", () => {
     expect(indice12).toBeGreaterThanOrEqual(0);
     expect(indice13).toBe(indice12 + 1);
     expect(indice14).toBe(indice12 + 2);
-    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(14);
+    expect(MIGRACOES[MIGRACOES.length - 1]?.versao).toBe(16);
   });
 
   it("mantém a chave estrangeira de item_de_registro apontando para registro_de_sessao", () => {

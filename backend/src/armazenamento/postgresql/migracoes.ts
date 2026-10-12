@@ -479,6 +479,11 @@ SELECT NOT EXISTS (
 `;
 
 const ESQUEMA_REMOVER_VINCULO = "DROP TABLE vinculo;";
+const ESQUEMA_FINALIZAR_TRANSICAO = "DROP TABLE IF EXISTS vinculo;";
+const ESQUEMA_TAGS = `
+ALTER TABLE cartao ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE baralho ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+`;
 
 /**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
@@ -502,6 +507,12 @@ export const MIGRACOES: readonly Migracao[] = [
   {
     versao: 14,
     sql: ESQUEMA_REMOVER_VINCULO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
+  { versao: 15, sql: ESQUEMA_TAGS },
+  {
+    versao: 16,
+    sql: ESQUEMA_FINALIZAR_TRANSICAO,
     precondicao: PODE_REMOVER_VINCULO,
   },
 ];

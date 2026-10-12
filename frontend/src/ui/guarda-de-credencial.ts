@@ -82,11 +82,11 @@ export function comGuardaDeCredencial(
 
     obterBaralho: async (id: string) => vigiar(await cliente.obterBaralho(id)),
 
-    editarCartao: async (id: string, frente: string, verso: string) =>
-      vigiar(await cliente.editarCartao(id, frente, verso)),
+    editarCartao: async (id: string, frente: string, verso: string, tags?: string[]) =>
+      vigiar(await cliente.editarCartao(id, frente, verso, tags)),
 
-    renomearBaralho: async (id: string, nome: string) =>
-      vigiar(await cliente.renomearBaralho(id, nome)),
+    renomearBaralho: async (id: string, nome: string, tags?: string[]) =>
+      vigiar(await cliente.renomearBaralho(id, nome, tags)),
 
     excluirCartao: async (id: string) => vigiar(await cliente.excluirCartao(id)),
 

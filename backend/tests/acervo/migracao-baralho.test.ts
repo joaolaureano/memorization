@@ -220,10 +220,10 @@ afterEach(() => {
 });
 
 describe("tabela baralho — forma do esquema", () => {
-  it("tem exatamente id, nome e usuario_id, sem coluna de elegibilidade, contagem ou vínculo", () => {
+  it("tem id, nome, usuario_id e tags_json, sem coluna de elegibilidade, contagem ou vínculo", () => {
     const colunas = banco.prepare("PRAGMA table_info(baralho)").all();
 
-    expect(colunas).toHaveLength(3);
+    expect(colunas).toHaveLength(4);
     expect(colunas[0]).toMatchObject({
       name: "id",
       type: "TEXT",
@@ -242,10 +242,12 @@ describe("tabela baralho — forma do esquema", () => {
       notnull: 1,
       pk: 0,
     });
+    expect(colunas[3].name).toBe("tags_json");
     expect(colunas.map((coluna) => coluna.name)).toEqual([
       "id",
       "nome",
       "usuario_id",
+      "tags_json",
     ]);
 
     /** O dono é indexado: é por ele que toda leitura do acervo é restrita. */

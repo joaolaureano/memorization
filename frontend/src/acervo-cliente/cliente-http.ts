@@ -374,7 +374,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         {
           method: "POST",
           headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ frente: dados.frente, verso: dados.verso }),
+          body: JSON.stringify({ frente: dados.frente, verso: dados.verso, tags: dados.tags ?? [] }),
         },
       );
 
@@ -456,7 +456,7 @@ export class ClienteHttp implements ClienteDoAcervo {
       const resposta = await this.pedir(`${this.endereco}/baralhos`, {
         method: "POST",
         headers: { "content-type": "application/json", ...this.cabecalho() },
-        body: JSON.stringify({ nome: dados.nome }),
+        body: JSON.stringify({ nome: dados.nome, tags: dados.tags ?? [] }),
       });
 
       if (resposta.status === 401) {
@@ -502,6 +502,7 @@ export class ClienteHttp implements ClienteDoAcervo {
           id: dados.id,
           nome: dados.nome,
           cartaoIds: dados.cartaoIds,
+          tags: dados.tags ?? [],
         }),
       });
 
@@ -635,6 +636,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     id: string,
     frente: string,
     verso: string,
+    tags: string[] = [],
   ): Promise<ResultadoDeEdicaoDeCartao> {
     try {
       const resposta = await this.pedir(
@@ -642,7 +644,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         {
           method: "PUT",
           headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ frente, verso }),
+          body: JSON.stringify({ frente, verso, tags }),
         },
       );
 
@@ -689,6 +691,7 @@ export class ClienteHttp implements ClienteDoAcervo {
   async renomearBaralho(
     id: string,
     nome: string,
+    tags: string[] = [],
   ): Promise<ResultadoDeRenomeacaoDeBaralho> {
     try {
       const resposta = await this.pedir(
@@ -696,7 +699,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         {
           method: "PUT",
           headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ nome }),
+          body: JSON.stringify({ nome, tags }),
         },
       );
 
@@ -1554,7 +1557,6 @@ function ehCorpoDeRecusaDeRegraDeCadastro(
   }
 
   const campos = corpo as Record<string, unknown>;
-
   const ehCodigoDeRegra =
     campos.erro === "nome_de_usuario_invalido" ||
     campos.erro === "senha_invalida";
@@ -1701,11 +1703,12 @@ function lerCartao(corpo: unknown): Cartao | null {
   }
 
   const campos = corpo as Record<string, unknown>;
+  const tags = lerTags(campos.tags);
 
   if (
     typeof campos.id !== "string" ||
     typeof campos.frente !== "string" ||
-    typeof campos.verso !== "string"
+    typeof campos.verso !== "string" || tags === null
   ) {
     return null;
   }
@@ -1714,6 +1717,7 @@ function lerCartao(corpo: unknown): Cartao | null {
     id: campos.id,
     frente: campos.frente,
     verso: campos.verso,
+    ...(tags.length > 0 ? { tags } : {}),
   };
 }
 
@@ -1746,15 +1750,23 @@ function lerBaralho(corpo: unknown): Baralho | null {
   }
 
   const campos = corpo as Record<string, unknown>;
+  const tags = lerTags(campos.tags);
 
-  if (typeof campos.id !== "string" || typeof campos.nome !== "string") {
+  if (typeof campos.id !== "string" || typeof campos.nome !== "string" || tags === null) {
     return null;
   }
 
   return {
     id: campos.id,
     nome: campos.nome,
+    ...(tags.length > 0 ? { tags } : {}),
   };
+}
+
+function lerTags(valor: unknown): string[] | null {
+  if (valor === undefined) return [];
+  if (!Array.isArray(valor) || valor.some((tag) => typeof tag !== "string")) return null;
+  return valor as string[];
 }
 
 function lerCartaoListado(corpo: unknown): CartaoListado | null {

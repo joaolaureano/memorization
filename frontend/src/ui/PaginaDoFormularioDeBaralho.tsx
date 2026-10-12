@@ -15,6 +15,7 @@ import {
   useProtecaoDeSaida,
 } from "./protecao-de-saida";
 import type { Protecao } from "./protecao-de-saida";
+import { CampoDeTags } from "./CampoDeTags";
 
 /**
  * Tela do formulário de Baralho (T1108, T1109;
@@ -65,6 +66,8 @@ export function PaginaDoFormularioDeBaralho({
 
   const [nome, setNome] = useState("");
   const [nomeInicial, setNomeInicial] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagsIniciais, setTagsIniciais] = useState<string[]>([]);
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
   const [carregando, setCarregando] = useState(renomeando);
   const [naoEncontrado, setNaoEncontrado] = useState<string | null>(null);
@@ -96,6 +99,8 @@ export function PaginaDoFormularioDeBaralho({
         setBaralho(resultado.baralho);
         setNome(resultado.baralho.nome);
         setNomeInicial(resultado.baralho.nome);
+        setTags(resultado.baralho.tags ?? []);
+        setTagsIniciais(resultado.baralho.tags ?? []);
       } else if (resultado.erro === "nao_encontrado") {
         setNaoEncontrado(resultado.mensagem);
       } else {
@@ -115,7 +120,7 @@ export function PaginaDoFormularioDeBaralho({
     !carregando &&
     !recursoAusente &&
     falhaDeCarregamento === null &&
-    nome !== nomeInicial;
+    nome !== nomeInicial || JSON.stringify(tags) !== JSON.stringify(tagsIniciais);
 
   // FR-153/FR-154 vencem FR-148: enquanto salva, a navegação é bloqueada (e o
   // motivo anunciado); só depois de estabilizar a operação a proteção volta a
@@ -142,8 +147,8 @@ export function PaginaDoFormularioDeBaralho({
 
     const resultado =
       id === undefined
-        ? await cliente.criarBaralho({ nome })
-        : await cliente.renomearBaralho(id, nome);
+        ? await cliente.criarBaralho({ nome, tags })
+        : await cliente.renomearBaralho(id, nome, tags);
 
     if (resultado.ok) {
       const idDoBaralho = id === undefined ? resultado.baralho.id : id;
@@ -231,6 +236,8 @@ export function PaginaDoFormularioDeBaralho({
                 </p>
               )}
             </div>
+
+            <CampoDeTags tags={tags} aoAlterar={setTags} />
 
             {renomeando && baralho !== null && (
               <p className="alcance-da-edicao">

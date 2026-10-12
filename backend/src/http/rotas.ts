@@ -48,6 +48,7 @@ export type AcervoDeUsuario = (usuarioId: string) => Acervo;
 const corpoDeCartao = z.object({
   frente: z.string(),
   verso: z.string(),
+  tags: z.array(z.string()).optional(),
 });
 
 /**
@@ -60,6 +61,7 @@ const corpoDeSelecaoParaBaralho = z.object({
   id: z.string(),
   nome: z.string(),
   cartaoIds: z.array(z.string()),
+  tags: z.array(z.string()).optional(),
 });
 
 /**
@@ -96,6 +98,7 @@ const CONFLITO_DE_BARALHO = {
  */
 const corpoDeBaralho = z.object({
   nome: z.string(),
+  tags: z.array(z.string()).optional(),
 });
 
 /**
