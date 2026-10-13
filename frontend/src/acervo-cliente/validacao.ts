@@ -24,6 +24,11 @@ export const CODIGOS_DE_ERRO_DE_CARTAO = [
   "verso_vazio",
   "frente_muito_longa",
   "verso_muito_longo",
+  // Cartão do tipo Imagem (026, FR-409, FR-412, FR-420).
+  "imagem_ausente",
+  "descricao_muito_longa",
+  "imagem_invalida",
+  "tipo_imutavel",
 ] as const;
 
 export type CodigoDeErroDeCartao =

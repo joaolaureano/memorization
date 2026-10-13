@@ -158,6 +158,7 @@ describe("base nova e vazia", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "imagem_a_remover",
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
@@ -253,7 +254,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(15);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(17);
       const backfill = await consultar<{ cartao_id: string; baralho_id: string }>(
         `SELECT cartao_id, baralho_id FROM pertencimento ORDER BY cartao_id;`,
       );
@@ -271,7 +272,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
          DELETE FROM vinculo WHERE cartao_id = 'c-unico';`,
       );
       await aplicarMigracoes(piscina);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(15);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(17);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -288,7 +289,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
       );
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(16);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(18);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -568,6 +569,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "imagem_a_remover",
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
@@ -735,6 +737,7 @@ describe("migração 4 — tabela usuario", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "imagem_a_remover",
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
@@ -817,6 +820,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "imagem_a_remover",
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
@@ -946,7 +950,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1');",
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(15);
+      expect(await aplicarMigracoes(piscina)).toBe(17);
 
       /** A migração só acrescenta tabelas: nada do acervo se perde (FR-165). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -976,6 +980,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "imagem_a_remover",
         "inicio_de_compromisso",
         "item_de_registro",
         "operacao_de_rotina",
@@ -992,7 +997,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "SELECT versao FROM versao_do_esquema;",
       );
 
-      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([15]);
+      expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([17]);
     } finally {
       await piscina.end();
     }
@@ -1135,6 +1140,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "imagem_a_remover",
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
@@ -1201,6 +1207,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "imagem_a_remover",
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
@@ -1230,6 +1237,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "imagem_a_remover",
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
@@ -1496,7 +1504,7 @@ describe("migração 7 — repetição espaçada", () => {
          VALUES ('r1', 0, 'To walk', 'Caminhar', 'acertou');`,
       );
 
-      expect(await aplicarMigracoes(piscina)).toBe(15);
+      expect(await aplicarMigracoes(piscina)).toBe(17);
 
       /** O acervo e o Histórico sobrevivem intactos à migração (FR-220). */
       expect((await piscina.query("SELECT id FROM cartao;")).rows).toEqual([
@@ -1555,8 +1563,11 @@ describe("migração 7 — repetição espaçada", () => {
         "criado_em",
         "frente",
         "id",
+        "imagem_chave",
         "ordem_de_insercao",
         "tags_json",
+        "texto_alternativo",
+        "tipo",
         "usuario_id",
         "verso",
       ]);
@@ -1566,7 +1577,7 @@ describe("migração 7 — repetição espaçada", () => {
       );
 
       expect(versoes.rows.map((linha) => Number(linha.versao))).toEqual([
-        15,
+        17,
       ]);
     } finally {
       await piscina.end();

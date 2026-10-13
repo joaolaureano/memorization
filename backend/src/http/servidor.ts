@@ -10,6 +10,7 @@ import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
 import type { Acessos } from "../acesso/acesso.ts";
 import type { ArmazenamentoDeAcessos } from "../armazenamento/porta.ts";
 import type { Identidade } from "../identidade/identidade.ts";
+import type { ArmazemDeImagens } from "../imagens/armazem.ts";
 import { exigirCredencial } from "./credencial.ts";
 import { exigirSegredoDeOrigem } from "./origem.ts";
 import {
@@ -20,6 +21,8 @@ import {
   registrarRotasDeAgenda,
   registrarRotasDeCartoes,
   registrarRotasDeConta,
+  registrarRotasDeImagens,
+  CAMINHO_DOS_ENVIOS_DE_IMAGEM,
   registrarRotasDePreferencias,
   registrarRotasDeRevisao,
   registrarRotasDeSessoes,
@@ -362,6 +365,7 @@ export function criarServidor(
       CAMINHO_DO_ACESSO,
       CAMINHO_DA_RENOVACAO_DO_ACESSO,
       CAMINHO_DE_SAIR,
+      CAMINHO_DOS_ENVIOS_DE_IMAGEM,
     ]) {
       permitirPreVoo(servidor, caminho, origemDa);
     }
@@ -388,7 +392,9 @@ export function criarServidor(
         caminho === "/conta/senha" ||
         caminho === CAMINHO_DO_ACESSO ||
         caminho === CAMINHO_DA_RENOVACAO_DO_ACESSO ||
-        caminho === CAMINHO_DE_SAIR
+        caminho === CAMINHO_DE_SAIR ||
+        caminho === CAMINHO_DOS_ENVIOS_DE_IMAGEM ||
+        caminho.startsWith("/imagens-locais/")
       ) {
         resposta
           .header("access-control-allow-origin", origemDa(requisicao))
@@ -454,8 +460,10 @@ export function registrarRotasDaAplicacao(
   acervoDe: AcervoDeUsuario,
   acessos: Acessos,
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
+  imagens?: ArmazemDeImagens,
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
+  registrarRotasDeImagens(servidor, imagens);
   registrarRotasDeBaralhos(servidor, acervoDe, lerAnki);
   registrarRotasDeTransicao(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
@@ -482,6 +490,8 @@ export async function iniciarServidor(
   acervoDe: AcervoDeUsuario,
   armazenamentoDeAcessos: ArmazenamentoDeAcessos,
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
+  imagens?: ArmazemDeImagens,
+  registrarRotasLocais?: (servidor: FastifyInstance) => void,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
   const acessos = criarAcessos(armazenamentoDeAcessos, {
@@ -492,7 +502,8 @@ export async function iniciarServidor(
     origemDoFrontend: env.ORIGEM_DO_FRONTEND ?? ORIGEM_PADRAO_DO_FRONTEND,
     qualquerOrigemLocal: env.ORIGENS_LOCAIS_DE_TESTE === "sim",
   });
-  registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos, lerAnki);
+  registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos, lerAnki, imagens);
+  registrarRotasLocais?.(servidor);
 
   await servidor.listen(opcoes);
 

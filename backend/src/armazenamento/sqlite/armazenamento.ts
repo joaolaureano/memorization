@@ -31,6 +31,7 @@ import type {
   VersaoDaRotina,
 } from "../porta.ts";
 import { normalizarFrente } from "../../acervo/invariantes.ts";
+import { chaveDaFrenteDo as chaveDaFrente } from "../../acervo/tipos-de-cartao.ts";
 import { abrirBanco } from "./esquema.ts";
 
 /**
@@ -250,6 +251,48 @@ function ehFrenteDuplicada(erro: unknown): boolean {
   return candidato.code === "ERR_SQLITE_ERROR" && candidato.errcode === 2067;
 }
 
+/**
+ * As colunas de `INSERT INTO cartao`, na ordem da instrução preparada. O
+ * `criado_em` é o instante corrente e não faz parte de `Cartao`: existe só
+ * para ordenar Cartões novos por criação (FR-201).
+ */
+function colunasDeInsercao(
+  cartao: Cartao,
+  usuarioId: string,
+): [string, string, string, string, string, string, string, string | null, string | null] {
+  return [
+    cartao.id,
+    cartao.frente,
+    cartao.verso,
+    usuarioId,
+    new Date().toISOString(),
+    JSON.stringify(cartao.tags ?? []),
+    cartao.tipo ?? "frente-verso",
+    cartao.imagemChave ?? null,
+    cartao.textoAlternativo ?? null,
+  ];
+}
+
+/**
+ * Lê o Tipo de cartão da linha na forma legada da Porta: `frente-verso` não
+ * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408).
+ */
+function camposDeTipoDaLinha(
+  linha: Record<string, unknown>,
+): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo"> {
+  if (linha.tipo !== "imagem") {
+    return {};
+  }
+  const textoAlternativo = linha.texto_alternativo as string | null;
+  return {
+    tipo: "imagem",
+    imagemChave: linha.imagem_chave as string,
+    ...(textoAlternativo !== null && textoAlternativo !== undefined
+      ? { textoAlternativo }
+      : {}),
+  };
+}
+
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: Record<string, unknown>): Cartao {
   const tags = JSON.parse((linha.tags_json as string | undefined) ?? "[]") as string[];
@@ -258,6 +301,7 @@ function cartaoDaLinha(linha: Record<string, unknown>): Cartao {
     frente: linha.frente as string,
     verso: linha.verso as string,
     ...(tags.length > 0 ? { tags } : {}),
+    ...camposDeTipoDaLinha(linha),
   };
 }
 
@@ -279,6 +323,7 @@ function cartaoComDonoDaLinha(linha: Record<string, unknown>): CartaoComDono {
     frente: linha.frente as string,
     verso: linha.verso as string,
     ...(tags.length > 0 ? { tags } : {}),
+    ...camposDeTipoDaLinha(linha),
     baralho: {
       id: linha.baralho_id as string,
       nome: linha.baralho_nome as string,
@@ -310,6 +355,7 @@ function comoInstanteIso(valor: unknown): string {
 function itemDaLinha(linha: Record<string, unknown>): ItemRegistrado {
   return {
     posicao: Number(linha.posicao),
+    ...(linha.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
     frente: linha.frente as string,
     verso: linha.verso as string,
     resultado: linha.resultado as ItemRegistrado["resultado"],
@@ -528,7 +574,8 @@ export async function abrirArmazenamentoSqlite(
    * Devolve apenas Cartões com Pertencimento (FR-389), cada um com seu Baralho.
    */
   const listarCartoes = banco.prepare(
-    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, baralho.id AS baralho_id,
+    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
+            cartao.imagem_chave, cartao.texto_alternativo, baralho.id AS baralho_id,
             baralho.nome AS baralho_nome
        FROM cartao
        JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -537,7 +584,8 @@ export async function abrirArmazenamentoSqlite(
       ORDER BY cartao.criado_em IS NOT NULL, cartao.criado_em, cartao.rowid`,
   );
   const obterCartaoPorId = banco.prepare(
-    "SELECT id, frente, verso, tags_json FROM cartao WHERE id = ? AND usuario_id = ?",
+    `SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo
+       FROM cartao WHERE id = ? AND usuario_id = ?`,
   );
   /**
    * Insere um Cartão com o dono já especificado (FR-389). O `criado_em`é o
@@ -545,20 +593,57 @@ export async function abrirArmazenamentoSqlite(
    * Cartões novos por criação (FR-201).
    */
   const inserirCartaoComDono = banco.prepare(
-    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json,
+                         tipo, imagem_chave, texto_alternativo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const obterPertencimentoDoCartao = banco.prepare(
     `SELECT baralho_id FROM pertencimento WHERE cartao_id = ?`,
   );
   const atualizarCartaoEPertencimento = banco.prepare(
-    `UPDATE cartao SET frente = ?, verso = ?, tags_json = ? WHERE id = ? AND usuario_id = ?`,
+    `UPDATE cartao SET frente = ?, verso = ?, tags_json = ?, imagem_chave = ?, texto_alternativo = ?
+      WHERE id = ? AND usuario_id = ?`,
   );
   const atualizarFrenteChave = banco.prepare(
     `UPDATE pertencimento SET frente_chave = ? WHERE cartao_id = ?`,
   );
   const excluirCartao = banco.prepare(
     "DELETE FROM cartao WHERE id = ? AND usuario_id = ?",
+  );
+
+  /**
+   * A fila de remoção de Imagens (FR-421). As inserções rodam na mesma
+   * transação que exclui ou troca a Imagem; `OR IGNORE` torna a reinserção da
+   * mesma chave inofensiva.
+   */
+  const enfileirarImagem = banco.prepare(
+    "INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em) VALUES (?, ?)",
+  );
+  const enfileirarImagemDoCartao = banco.prepare(
+    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+     SELECT imagem_chave, ? FROM cartao
+      WHERE id = ? AND usuario_id = ? AND imagem_chave IS NOT NULL`,
+  );
+  const enfileirarImagensDoBaralho = banco.prepare(
+    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+     SELECT cartao.imagem_chave, ? FROM cartao
+       JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+      WHERE cartao.usuario_id = ? AND pertencimento.baralho_id = ?
+        AND cartao.imagem_chave IS NOT NULL`,
+  );
+  const enfileirarImagensDoUsuario = banco.prepare(
+    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+     SELECT imagem_chave, ? FROM cartao
+      WHERE usuario_id = ? AND imagem_chave IS NOT NULL`,
+  );
+  const obterImagemDoCartao = banco.prepare(
+    "SELECT imagem_chave FROM cartao WHERE id = ? AND usuario_id = ?",
+  );
+  const listarImagensARemover = banco.prepare(
+    "SELECT chave FROM imagem_a_remover ORDER BY registrada_em, chave LIMIT ?",
+  );
+  const esquecerImagemRemovida = banco.prepare(
+    "DELETE FROM imagem_a_remover WHERE chave = ?",
   );
 
   const inserirBaralho = banco.prepare(
@@ -605,7 +690,8 @@ export async function abrirArmazenamentoSqlite(
      VALUES (?, ?, ?)`,
   );
   const listarCartoesDoBaralho = banco.prepare(
-    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json
+    `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
+            cartao.imagem_chave, cartao.texto_alternativo
        FROM pertencimento
        JOIN cartao ON cartao.id = pertencimento.cartao_id
        JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -664,8 +750,8 @@ export async function abrirArmazenamentoSqlite(
   );
   const inserirItemDoRegistro = banco.prepare(
     `INSERT INTO item_de_registro
-       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo, tipo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   /**
    * A busca por `id` **sem** escopo de dono é deliberada: é ela que distingue
@@ -691,7 +777,7 @@ export async function abrirArmazenamentoSqlite(
       WHERE id = ? AND usuario_id = ?`,
   );
   const listarItensDoRegistro = banco.prepare(
-    `SELECT posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo
+    `SELECT posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo, tipo
        FROM item_de_registro
       WHERE registro_id = ?
       ORDER BY posicao`,
@@ -1003,18 +1089,13 @@ export async function abrirArmazenamentoSqlite(
         try {
           return emTransacaoComDesfecho(banco, () => {
             inserirCartaoComDono.run(
-              cartao.id,
-              cartao.frente,
-              cartao.verso,
-              usuarioId,
-              new Date().toISOString(),
-              JSON.stringify(cartao.tags ?? []),
+              ...colunasDeInsercao(cartao, usuarioId),
             );
 
             inserirPertencimento.run(
               cartao.id,
               baralhoId,
-              normalizarFrente(cartao.frente),
+              chaveDaFrente(cartao),
             );
 
             return { ok: true, valor: cartao };
@@ -1052,16 +1133,29 @@ export async function abrirArmazenamentoSqlite(
          */
         try {
           return emTransacaoComDesfecho(banco, () => {
+            const anterior = obterImagemDoCartao.get(cartao.id, usuarioId);
             const alteradas = atualizarCartaoEPertencimento.run(
               cartao.frente,
               cartao.verso,
               JSON.stringify(cartao.tags ?? []),
+              cartao.imagemChave ?? null,
+              cartao.textoAlternativo ?? null,
               cartao.id,
               usuarioId,
             );
 
             if (Number(alteradas.changes) === 0) {
               return NAO_ENCONTRADO;
+            }
+
+            /** A Imagem substituída entra na fila de remoção (FR-421). */
+            const chaveAnterior = anterior?.imagem_chave as string | null | undefined;
+            if (
+              chaveAnterior !== null &&
+              chaveAnterior !== undefined &&
+              chaveAnterior !== cartao.imagemChave
+            ) {
+              enfileirarImagem.run(chaveAnterior, new Date().toISOString());
             }
 
             /**
@@ -1073,7 +1167,7 @@ export async function abrirArmazenamentoSqlite(
 
             if (pertencimento !== undefined) {
               atualizarFrenteChave.run(
-                normalizarFrente(cartao.frente),
+                chaveDaFrente(cartao),
                 cartao.id,
               );
             }
@@ -1091,10 +1185,37 @@ export async function abrirArmazenamentoSqlite(
 
     async excluirCartao(usuarioId, id) {
       return comDesfecho(() =>
-        Number(excluirCartao.run(id, usuarioId).changes) === 0
-          ? NAO_ENCONTRADO
-          : SEM_CARGA,
+        emTransacaoComDesfecho(banco, () => {
+          enfileirarImagemDoCartao.run(new Date().toISOString(), id, usuarioId);
+          return Number(excluirCartao.run(id, usuarioId).changes) === 0
+            ? NAO_ENCONTRADO
+            : SEM_CARGA;
+        }),
       );
+    },
+
+    async enfileirarImagensARemover(chaves) {
+      return comDesfecho(() =>
+        emTransacaoComDesfecho(banco, () => {
+          const agora = new Date().toISOString();
+          for (const chave of chaves) {
+            enfileirarImagem.run(chave, agora);
+          }
+          return SEM_CARGA;
+        }),
+      );
+    },
+
+    async listarImagensARemover(limite) {
+      return listarImagensARemover
+        .all(limite)
+        .map((linha) => linha.chave as string);
+    },
+
+    async esquecerImagensRemovidas(chaves) {
+      for (const chave of chaves) {
+        esquecerImagemRemovida.run(chave);
+      }
     },
 
     async inserirBaralho(usuarioId, baralho) {
@@ -1152,14 +1273,7 @@ export async function abrirArmazenamentoSqlite(
              * O `criado_em` é o instante corrente e não faz parte de `Cartao`:
              * existe só para ordenar Cartões novos por criação (FR-201).
              */
-            inserirCartaoComDono.run(
-              copia.id,
-              copia.frente,
-              copia.verso,
-              usuarioId,
-              new Date().toISOString(),
-              JSON.stringify(copia.tags ?? []),
-            );
+            inserirCartaoComDono.run(...colunasDeInsercao(copia, usuarioId));
 
             /**
              * Insere o Pertencimento com a Frente normalizada.
@@ -1167,7 +1281,7 @@ export async function abrirArmazenamentoSqlite(
             inserirPertencimento.run(
               copia.id,
               baralho.id,
-              normalizarFrente(copia.frente),
+              chaveDaFrente(copia),
             );
           }
 
@@ -1181,8 +1295,8 @@ export async function abrirArmazenamentoSqlite(
         for (const { baralho, copias } of grupos) {
           inserirBaralho.run(baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? []));
           for (const copia of copias) {
-            inserirCartaoComDono.run(copia.id, copia.frente, copia.verso, usuarioId, new Date().toISOString(), JSON.stringify(copia.tags ?? []));
-            inserirPertencimento.run(copia.id, baralho.id, normalizarFrente(copia.frente));
+            inserirCartaoComDono.run(...colunasDeInsercao(copia, usuarioId));
+            inserirPertencimento.run(copia.id, baralho.id, chaveDaFrente(copia));
           }
         }
         return { ok: true, valor: undefined };
@@ -1240,6 +1354,7 @@ export async function abrirArmazenamentoSqlite(
            * as cascatas do esquema removem os Pertencimentos e Agendamentos
            * (FR-402).
            */
+          enfileirarImagensDoBaralho.run(new Date().toISOString(), usuarioId, id);
           excluirCartoesPertencimentoBaralho.run(usuarioId, id);
 
           /**
@@ -1319,6 +1434,7 @@ export async function abrirArmazenamentoSqlite(
               item.cartaoId ?? null,
               item.avaliacao ?? null,
               item.avaliacaoRotulo ?? null,
+              item.tipo ?? "frente-verso",
             );
           }
         });
@@ -1442,6 +1558,7 @@ export async function abrirArmazenamentoSqlite(
               item.cartaoId ?? null,
               item.avaliacao ?? null,
               item.avaliacaoRotulo ?? null,
+              item.tipo ?? "frente-verso",
             );
           }
 
@@ -1879,6 +1996,7 @@ export async function abrirArmazenamentoSqlite(
                 item.cartaoId ?? null,
                 item.avaliacao ?? null,
                 item.avaliacaoRotulo ?? null,
+                item.tipo ?? "frente-verso",
               );
             }
 
@@ -2041,14 +2159,7 @@ export async function abrirArmazenamentoSqlite(
             }
 
             // Insere o Cartão (novo, com dono e criado_em agora)
-            inserirCartaoComDono.run(
-              copia.cartao.id,
-              copia.cartao.frente,
-              copia.cartao.verso,
-              usuarioId,
-              new Date().toISOString(),
-              JSON.stringify(copia.cartao.tags ?? []),
-            );
+            inserirCartaoComDono.run(...colunasDeInsercao(copia.cartao, usuarioId));
 
             // Insere o Pertencimento
             try {
@@ -2168,9 +2279,12 @@ export async function abrirArmazenamentoSqlite(
     async excluirUsuario(id) {
       return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
         () =>
-          Number(excluirUsuarioPorId.run(id).changes) === 0
-            ? USUARIO_NAO_ENCONTRADO
-            : { ok: true, valor: undefined },
+          emTransacao(banco, () => {
+            enfileirarImagensDoUsuario.run(new Date().toISOString(), id);
+            return Number(excluirUsuarioPorId.run(id).changes) === 0
+              ? USUARIO_NAO_ENCONTRADO
+              : { ok: true as const, valor: undefined };
+          }),
         USUARIO_INDISPONIVEL,
       );
     },

@@ -1,0 +1,21 @@
+/* O protótipo usa os componentes e tokens de frontend/src/estilos.css. */
+.ci-cabecalho,.ci-acoes{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ci-cabecalho{margin-bottom:24px}
+.ci-cabecalho h1,.ci-formulario h2,.ci-lista h2{margin-block:4px 16px}
+.ci-formulario,.ci-lista{max-width:760px;margin:0 auto 32px}
+.ci-formulario,.ci-estudo{padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.ci-formulario select,.ci-formulario input[type=file],.ci-formulario input[type=text],.ci-formulario textarea{box-sizing:border-box;width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+.ci-formulario textarea{min-height:92px;resize:vertical}
+.ci-formulario input[type=file]{height:auto}
+.ci-erro,.ci-mensagem{min-height:1.5em;color:var(--danger)}
+.ci-previa{display:grid;gap:12px;margin-top:12px}
+.ci-previa img{display:block;max-width:100%;max-height:48vh;object-fit:contain;border-radius:8px}
+.ci-lista ul{padding:0;list-style:none}
+.ci-cartao{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:16px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+.ci-cartao p{margin:6px 0}
+.ci-miniatura{width:96px;height:96px;object-fit:cover;border-radius:8px}
+.ci-etiqueta{display:inline-block;padding:3px 8px;border:1px solid var(--border);border-radius:999px;font-size:.875rem}
+.ci-face{min-height:80px;margin:16px 0;overflow-wrap:anywhere}
+.ci-face img{display:block;max-width:100%;max-height:55vh;object-fit:contain}
+.ci-inativo{color:var(--muted)}
+@media(max-width:600px){.ci-formulario,.ci-estudo{padding:16px}.ci-cabecalho{align-items:flex-start}}

@@ -307,6 +307,14 @@ function chavesIguais(gravada: Uint8Array, candidata: Uint8Array): boolean {
 export function criarIdentidade(
   armazenamento: ArmazenamentoDeUsuarios,
   segredo: string,
+  opcoes: {
+    /**
+     * Chamada depois de excluir a conta, para remover do armazém as Imagens
+     * que a exclusão pôs na fila (`026`, FR-421). A falha não afeta a resposta:
+     * a fila continua guardada para a próxima vez.
+     */
+    aposExcluirConta?: () => Promise<void>;
+  } = {},
 ): Identidade {
   /**
    * A derivação **descartável** da recusa uniforme (FR-088, SC-029): um `sal` e
@@ -432,6 +440,10 @@ export function criarIdentidade(
       }
 
       const excluido = await armazenamento.excluirUsuario(usuarioId);
+
+      if (excluido.ok) {
+        await opcoes.aposExcluirConta?.().catch(() => undefined);
+      }
 
       return excluido.ok
         ? { ok: true }

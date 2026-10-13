@@ -19,6 +19,10 @@ import {
   MENSAGEM_DE_SESSAO_NAO_ENCONTRADA,
   NAO_AUTENTICADO,
 } from "./cliente";
+import {
+  conferirArquivoDeImagem,
+  regrasDo,
+} from "./tipos-de-cartao";
 import type {
   Avaliacao,
   Baralho,
@@ -88,6 +92,7 @@ import {
   obterAgendaEmMemoria,
   salvarRotinaEmMemoria,
 } from "./agenda-em-memoria";
+import type { ComplementoDeCartao, ResultadoDeEnvioDeImagem } from "./cliente";
 import type { AgendaBase, ContextoDaAgenda } from "./agenda-em-memoria";
 import {
   NOME_DE_USUARIO_EXISTENTE,
@@ -371,7 +376,13 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
-    const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
+    const ehImagem = dados.tipo === "imagem";
+    const falha = regrasDo(dados.tipo).validar({
+      frente: dados.frente,
+      verso: dados.verso,
+      textoAlternativo: dados.textoAlternativo,
+      temImagem: !ehImagem || typeof dados.imagemId === "string",
+    });
 
     if (falha !== null) {
       return { ok: false, ...falha };
@@ -384,11 +395,25 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     let frenteFinal = dados.frente;
     let numero = 2;
+    // Imagem sem Texto da frente fica fora da unicidade (FR-414).
     while (
-      cartoesDoBara1ho.some((c) => normalizarFrente(c.frente) === normalizarFrente(frenteFinal.trim()))
+      !(ehImagem && dados.frente.trim() === "") &&
+      cartoesDoBara1ho.some(
+        (c) =>
+          !(c.tipo === "imagem" && c.frente.trim() === "") &&
+          normalizarFrente(c.frente) === normalizarFrente(frenteFinal.trim()),
+      )
     ) {
       frenteFinal = `${dados.frente.trim()} (${numero})`;
       numero++;
+    }
+
+    const confirmada = ehImagem
+      ? await this.confirmarImagem(dono.id, dados.imagemId!)
+      : null;
+
+    if (confirmada !== null && !confirmada.ok) {
+      return confirmada;
     }
 
     const cartao: CartaoDoDono = {
@@ -398,6 +423,13 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       frente: frenteFinal,
       verso: dados.verso,
       tags: normalizarTags(dados.tags),
+      ...(ehImagem
+        ? {
+            tipo: "imagem" as const,
+            imagemId: dados.imagemId,
+            ...(dados.textoAlternativo ? { textoAlternativo: dados.textoAlternativo } : {}),
+          }
+        : {}),
     };
 
     this.base.cartoes.push(cartao);
@@ -686,6 +718,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     frente: string,
     verso: string,
     tags?: string[],
+    complemento: ComplementoDeCartao = {},
   ): Promise<ResultadoDeEdicaoDeCartao> {
     if (this.indisponivel) {
       return {
@@ -713,7 +746,21 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
-    const falha = validarFrente(frente) ?? validarVerso(verso);
+    if ((complemento.tipo ?? "frente-verso") !== (cartaoAtual.tipo ?? "frente-verso")) {
+      return {
+        ok: false,
+        erro: "tipo_imutavel",
+        mensagem: "O tipo do cartão não pode ser alterado depois da criação.",
+      };
+    }
+
+    const ehImagem = cartaoAtual.tipo === "imagem";
+    const falha = regrasDo(cartaoAtual.tipo).validar({
+      frente,
+      verso,
+      textoAlternativo: complemento.textoAlternativo,
+      temImagem: true,
+    });
 
     if (falha !== null) {
       return { ok: false, ...falha };
@@ -721,6 +768,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     // Verificar duplicação no mesmo baralho
     const frenteNormalizada = normalizarFrente(frente);
+    const foraDaUnicidade = ehImagem && frente.trim() === "";
     const cartoesDoBara1ho = this.base.cartoes.filter(
       (c) =>
         c.usuarioId === dono.id &&
@@ -729,6 +777,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     );
 
     if (
+      !foraDaUnicidade &&
       cartoesDoBara1ho.some(
         (c) => normalizarFrente(c.frente) === frenteNormalizada,
       )
@@ -740,17 +789,91 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       };
     }
 
+    const confirmada =
+      ehImagem && complemento.imagemId !== undefined
+        ? await this.confirmarImagem(dono.id, complemento.imagemId)
+        : null;
+
+    if (confirmada !== null && !confirmada.ok) {
+      return confirmada;
+    }
+
     const cartaoAtualizado: CartaoDoDono = {
       ...cartaoAtual,
       frente,
       verso,
       tags: tags === undefined ? cartaoAtual.tags ?? [] : normalizarTags(tags),
+      ...(ehImagem
+        ? {
+            imagemId: complemento.imagemId ?? cartaoAtual.imagemId,
+            textoAlternativo: complemento.textoAlternativo || undefined,
+          }
+        : {}),
     };
 
     const indice = this.base.cartoes.indexOf(cartaoAtual);
     this.base.cartoes[indice] = cartaoAtualizado;
 
     return { ok: true, cartao: cartaoSemDono(cartaoAtualizado) };
+  }
+
+  async enviarImagem(arquivo: File): Promise<ResultadoDeEnvioDeImagem> {
+    if (this.indisponivel) {
+      return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE };
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const recusa = conferirArquivoDeImagem(arquivo);
+
+    if (recusa !== null) {
+      return recusa;
+    }
+
+    const imagemId = `img${++this.base.sequenciaDeImagens}`;
+    this.base.imagensEnviadas.set(imagemId, { usuarioId: dono.id, arquivo });
+
+    return { ok: true, imagemId };
+  }
+
+  /**
+   * Confirma o envio como o servidor: só o do próprio Usuário, pelo conteúdo
+   * real (FR-411). O envio é consumido, aceito ou recusado.
+   */
+  private async confirmarImagem(
+    usuarioId: string,
+    imagemId: string,
+  ): Promise<
+    | { ok: true }
+    | { ok: false; erro: "imagem_invalida"; motivo: string; mensagem: string }
+  > {
+    const enviada = this.base.imagensEnviadas.get(imagemId);
+
+    if (enviada === undefined || enviada.usuarioId !== usuarioId) {
+      return {
+        ok: false,
+        erro: "imagem_invalida",
+        motivo: "nao_encontrada",
+        mensagem: "A imagem enviada não foi encontrada. Escolha a imagem de novo.",
+      };
+    }
+
+    this.base.imagensEnviadas.delete(imagemId);
+
+    if (!(await ehConteudoDeImagem(enviada.arquivo))) {
+      return {
+        ok: false,
+        erro: "imagem_invalida",
+        motivo: "formato",
+        mensagem: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
+      };
+    }
+
+    return { ok: true };
   }
 
   async renomearBaralho(
@@ -1156,6 +1279,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
         return {
           posicao,
+          ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
           frente: doSnapshot?.frente ?? item.frente,
           verso: doSnapshot?.verso ?? item.verso,
           resultado: resultadoDaAvaliacao(item.avaliacao),
@@ -2211,6 +2335,9 @@ interface BaseEmMemoria {
   sequenciaDeCartoes: number;
   sequenciaDeBaralhos: number;
   sequenciaDeUsuarios: number;
+  /** O armazém de Imagens simulado (026): envios ainda não confirmados. */
+  imagensEnviadas: Map<string, ImagemEnviada>;
+  sequenciaDeImagens: number;
   /**
    * Os Acessos temporários do servidor simulado (018) e o relógio — controlável
    * pela prova — com que a validade deslizante é decidida (FR-291, FR-297). O
@@ -2244,6 +2371,14 @@ interface UsuarioDaBase {
 interface CartaoDoDono extends Cartao {
   usuarioId: string;
   baralhoId: string;
+  /** No tipo Imagem, o envio confirmado; o endereço é derivado dele. */
+  imagemId?: string;
+}
+
+/** Um envio de Imagem ainda não confirmado por um Cartão (026). */
+interface ImagemEnviada {
+  usuarioId: string;
+  arquivo: File;
 }
 
 /** Baralho com o dono: o `usuarioId` é o escopo de toda operação (FR-092). */
@@ -2286,6 +2421,8 @@ function novaBaseEmMemoria(
     sequenciaDeCartoes: 0,
     sequenciaDeBaralhos: 0,
     sequenciaDeUsuarios: 0,
+    imagensEnviadas: new Map(),
+    sequenciaDeImagens: 0,
     acessos: new Map(),
     sequenciaDeAcessos: 0,
     deslocamentoDoRelogioEmMs: 0,
@@ -2307,7 +2444,54 @@ function novaBaseEmMemoria(
 /** O Cartão como a Interface o devolve: sem o dono, que é Implementation. */
 function cartaoSemDono(cartao: CartaoDoDono): Cartao {
   const tags = cartao.tags ?? [];
-  return { id: cartao.id, frente: cartao.frente, verso: cartao.verso, ...(tags.length > 0 ? { tags } : {}) };
+  return {
+    id: cartao.id,
+    frente: cartao.frente,
+    verso: cartao.verso,
+    ...(tags.length > 0 ? { tags } : {}),
+    ...(cartao.tipo === "imagem"
+      ? {
+          tipo: "imagem" as const,
+          imagem: {
+            url: `memoria://imagens/${cartao.imagemId}`,
+            expiraEm: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          },
+          ...(cartao.textoAlternativo ? { textoAlternativo: cartao.textoAlternativo } : {}),
+        }
+      : {}),
+  };
+}
+
+/**
+ * Confere o envio pelo conteúdo, como o servidor (FR-411): a assinatura dos
+ * primeiros bytes de JPEG, PNG, GIF ou WebP.
+ */
+async function ehConteudoDeImagem(arquivo: File): Promise<boolean> {
+  const bytes = new Uint8Array(await lerBytes(arquivo.slice(0, 16)));
+  const ascii = (texto: string, desde = 0) =>
+    [...texto].every((c, i) => bytes[desde + i] === c.charCodeAt(0));
+
+  return (
+    (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
+    (bytes[0] === 0x89 && ascii("PNG", 1)) ||
+    ascii("GIF87a") ||
+    ascii("GIF89a") ||
+    (ascii("RIFF") && ascii("WEBP", 8))
+  );
+}
+
+/** Lê os bytes de um Blob, inclusive onde `Blob.arrayBuffer` não existe. */
+function lerBytes(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
+  }
+
+  return new Promise((resolver, rejeitar) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolver(leitor.result as ArrayBuffer);
+    leitor.onerror = () => rejeitar(leitor.error);
+    leitor.readAsArrayBuffer(blob);
+  });
 }
 
 /** O Baralho como a Interface o devolve: sem o dono, que é Implementation. */
@@ -2428,9 +2612,16 @@ function itemDeRegistroValido(item: unknown): boolean {
 
   const campos = item as Record<string, unknown>;
 
+  if (campos.tipo !== undefined && campos.tipo !== "frente-verso" && campos.tipo !== "imagem") {
+    return false;
+  }
+
+  // No tipo Imagem, a Frente é o Texto da frente e pode ser vazia (FR-419a).
   if (
     typeof campos.frente !== "string" ||
-    validarFrente(campos.frente) !== null
+    (campos.tipo === "imagem"
+      ? campos.frente.length > 1000
+      : validarFrente(campos.frente) !== null)
   ) {
     return false;
   }

@@ -42,3 +42,8 @@ output "ci_role_arn" {
   description = "Role assumida pelo GitHub Actions via OIDC; vai na variavel AWS_ROLE_ARN do ambiente production"
   value       = aws_iam_role.ci_deploy.arn
 }
+
+output "imagens_bucket" {
+  description = "Bucket privado das Imagens dos Cartoes (026)"
+  value       = aws_s3_bucket.imagens.id
+}

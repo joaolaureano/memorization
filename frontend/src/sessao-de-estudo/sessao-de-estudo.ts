@@ -92,8 +92,14 @@ export const MENSAGEM_DE_REVELACAO_AUSENTE =
 export const MENSAGEM_DE_SESSAO_CONCLUIDA =
   "A Sessão já foi concluída.";
 
+/**
+ * O que um Cartão do tipo Imagem leva para a Sessão (026, FR-416): o tipo, o
+ * endereço de exibição e a Descrição. Ausente nos Cartões Frente-Verso.
+ */
+export type ApresentacaoDoTipo = Pick<Cartao, "tipo" | "imagem" | "textoAlternativo">;
+
 /** Item de estudo com o Verso ainda oculto (FR-032). */
-export interface ItemDeEstudoOculto {
+export interface ItemDeEstudoOculto extends ApresentacaoDoTipo {
   readonly cartaoId: string;
   readonly frente: string;
   readonly revelado: false;
@@ -103,7 +109,7 @@ export interface ItemDeEstudoOculto {
 }
 
 /** Item de estudo após a Revelação (FR-033, FR-193). */
-export interface ItemDeEstudoRevelado {
+export interface ItemDeEstudoRevelado extends ApresentacaoDoTipo {
   readonly cartaoId: string;
   readonly frente: string;
   readonly revelado: true;
@@ -200,6 +206,7 @@ interface ItemInterno {
   cartaoId: string;
   frente: string;
   verso: string;
+  apresentacao: ApresentacaoDoTipo;
   revelado: boolean;
   avaliacao: Avaliacao | null;
   resultado: ResultadoDoItem | null;
@@ -271,6 +278,7 @@ export class SessaoDeEstudo {
       cartaoId: cartao.id,
       frente: cartao.frente,
       verso: cartao.verso,
+      apresentacao: apresentacaoDo(cartao),
       revelado: false,
       avaliacao: null,
       resultado: null,
@@ -313,6 +321,7 @@ export class SessaoDeEstudo {
       cartaoId: cartao.id,
       frente: cartao.frente,
       verso: cartao.verso,
+      apresentacao: apresentacaoDo(cartao),
       revelado: false,
       avaliacao: null,
       resultado: null,
@@ -503,8 +512,22 @@ function congelarItem(item: ItemInterno): ItemDeEstudo {
   return congelarItemRevelado(item);
 }
 
+/** Só o Cartão do tipo Imagem leva campos de apresentação para a Sessão. */
+function apresentacaoDo(cartao: Cartao): ApresentacaoDoTipo {
+  if (cartao.tipo !== "imagem") {
+    return {};
+  }
+
+  return {
+    tipo: "imagem",
+    imagem: cartao.imagem ?? null,
+    ...(cartao.textoAlternativo ? { textoAlternativo: cartao.textoAlternativo } : {}),
+  };
+}
+
 function congelarItemOculto(item: ItemInterno): ItemDeEstudoOculto {
   const oculto: ItemDeEstudoOculto = {
+    ...item.apresentacao,
     cartaoId: item.cartaoId,
     frente: item.frente,
     revelado: false,
@@ -518,6 +541,7 @@ function congelarItemOculto(item: ItemInterno): ItemDeEstudoOculto {
 
 function congelarItemRevelado(item: ItemInterno): ItemDeEstudoRevelado {
   const revelado: ItemDeEstudoRevelado = {
+    ...item.apresentacao,
     cartaoId: item.cartaoId,
     frente: item.frente,
     revelado: true,

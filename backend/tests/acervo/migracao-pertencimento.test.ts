@@ -420,12 +420,12 @@ describe("Transição de Pertencimento (FR-397)", () => {
       const pendenteDaAna = await acervoAnaReaberto.obterTransicao();
       expect(pendenteDaAna.ok && pendenteDaAna.cartoes.length).toBeGreaterThan(0);
 
-      // Tags e migração 15 foram aplicadas; a transição legada segue pendente.
+      // Tags (15) e Tipo de cartão (17) foram aplicadas; a transição legada segue pendente.
       const bancoReaberto = abrirBanco(caminhoV13);
       const versao = bancoReaberto
         .prepare("SELECT versao FROM versao_do_esquema")
         .get();
-      expect(versao?.versao).toBe(15);
+      expect(versao?.versao).toBe(17);
 
       // Tabela vinculo ainda existe
       expect(existeTabela(bancoReaberto, "vinculo")).toBe(true);
@@ -491,7 +491,7 @@ describe("Transição de Pertencimento (FR-397)", () => {
       const versao = banco
         .prepare("SELECT versao FROM versao_do_esquema")
         .get();
-      expect(versao?.versao).toBe(16);
+      expect(versao?.versao).toBe(18);
 
       // Tabela vinculo deve ter sido removida
       expect(existeTabela(banco, "vinculo")).toBe(false);

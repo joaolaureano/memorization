@@ -40,15 +40,28 @@ import type { Avaliacao } from "../repeticao/algoritmo.ts";
 export type { Avaliacao };
 
 /**
+ * Tipo de cartão (`026`, FR-403): `frente-verso`, o padrão, ou `imagem`.
+ * Escolhido na criação e imutável depois (FR-420).
+ */
+export type TipoDeCartao = "frente-verso" | "imagem";
+
+/**
  * Cartão como o armazenamento o guarda: identificador opaco, Frente e Verso
  * (FR-009). É a Porta quem declara esta forma, porque é ela quem troca esses
  * dados com o armazenamento; o Module `Acervo` a re-exporta na sua Interface.
+ *
+ * Como as tags, o tipo mantém a forma legada: `tipo` ausente é `frente-verso`.
+ * No tipo `imagem`, `frente` é o Texto da frente (pode ser vazio), e
+ * `imagemChave` é a chave da Imagem no `ArmazemDeImagens` (FR-408).
  */
 export interface Cartao {
   id: string;
   frente: string;
   verso: string;
   tags?: string[];
+  tipo?: TipoDeCartao;
+  imagemChave?: string;
+  textoAlternativo?: string;
 }
 
 /**
@@ -134,6 +147,8 @@ export type ResultadoDoItemRegistrado = "acertou" | "errou";
 export interface ItemRegistrado {
   /** Posição na ordem apresentada: `0..n-1`, derivada pelo Module. */
   readonly posicao: number;
+  /** Tipo do Cartão estudado; ausente é `frente-verso`. Nunca a Imagem (FR-419a). */
+  readonly tipo?: TipoDeCartao;
   readonly frente: string;
   readonly verso: string;
   readonly resultado: ResultadoDoItemRegistrado;
@@ -550,7 +565,8 @@ export interface ArmazenamentoDeUsuarios {
   /**
    * Exclui o Usuário e, pelas cascatas `ON DELETE CASCADE` do esquema, tudo o
    * que lhe pertence, numa única instrução transacional: ou tudo desaparece, ou
-   * nada é aplicado (FR-274, FR-275, SC-108).
+   * nada é aplicado (FR-274, FR-275, SC-108). As chaves das Imagens dos seus
+   * Cartões entram em `imagem_a_remover` na mesma transação (FR-421).
    */
   excluirUsuario(id: string): Promise<DesfechoDeOperacaoDeConta<void>>;
 
@@ -663,7 +679,10 @@ export interface ArmazenamentoDoAcervo {
 
   /**
    * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId` e
-   * atualiza a chave normalizada do Pertencimento. Ausente é `nao_encontrado`;
+   * atualiza a chave normalizada do Pertencimento. O tipo nunca muda; no tipo
+   * `imagem`, a Imagem e a Descrição alternativa também são gravadas, e a
+   * chave da Imagem substituída entra em `imagem_a_remover` na mesma transação
+   * (FR-421). Ausente é `nao_encontrado`;
    * colisão com outro Cartão do mesmo Baralho é `frente_duplicada`, sem
    * alterar nada (FR-399).
    */
@@ -672,9 +691,22 @@ export interface ArmazenamentoDoAcervo {
   /**
    * Exclui o Cartão de `id` do acervo de `usuarioId`; Pertencimento e
    * Agendamento caem pela cascata do esquema e os Registros de sessão ficam
-   * intactos (FR-401). Ausente é `nao_encontrado`.
+   * intactos (FR-401). A chave da sua Imagem, se houver, entra em
+   * `imagem_a_remover` na mesma transação (FR-421). Ausente é `nao_encontrado`.
    */
   excluirCartao(usuarioId: string, id: string): Promise<Desfecho<void>>;
+
+  /**
+   * Põe chaves de Imagem na fila de remoção (FR-421, FR-423). Usada quando a
+   * gravação de um Cartão falha depois que a Imagem já foi confirmada.
+   */
+  enfileirarImagensARemover(chaves: readonly string[]): Promise<Desfecho<void>>;
+
+  /** Lê até `limite` chaves da fila de remoção, das mais antigas primeiro. */
+  listarImagensARemover(limite: number): Promise<string[]>;
+
+  /** Tira da fila as chaves já removidas do `ArmazemDeImagens`. */
+  esquecerImagensRemovidas(chaves: readonly string[]): Promise<void>;
 
   /**
    * Guarda um Baralho já validado pelo Module, como acervo do Usuário
@@ -720,7 +752,8 @@ export interface ArmazenamentoDoAcervo {
   /**
    * Exclui, numa única transação, o Baralho de `id` do acervo de `usuarioId`,
    * os Cartões que lhe pertencem e, pela cascata, os seus Pertencimentos e
-   * Agendamentos; os Registros de sessão ficam intactos (FR-402). Ausente é
+   * Agendamentos; os Registros de sessão ficam intactos (FR-402). As chaves
+   * das Imagens desses Cartões entram em `imagem_a_remover` (FR-421). Ausente é
    * `nao_encontrado`; falha não remove nada.
    */
   excluirBaralho(usuarioId: string, id: string): Promise<Desfecho<void>>;

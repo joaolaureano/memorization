@@ -486,6 +486,45 @@ ALTER TABLE baralho ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 `;
 
 /**
+ * A migração 17 introduz o Tipo de cartão (`026`, FR-403, FR-407), em paridade
+ * com a do SQLite. O `CHECK` original de `frente` é trocado para aceitar Frente
+ * vazia no tipo `imagem` (Texto da frente opcional, FR-408); as restrições
+ * entre colunas amarram Imagem e tipo. Todo Cartão existente vira
+ * `frente-verso` pelo padrão da coluna. `pertencimento.frente_chave` passa a
+ * aceitar `NULL` (FR-414); `item_de_registro.tipo` guarda o tipo no snapshot
+ * (FR-419a); `imagem_a_remover` é a fila de remoção, sem chave estrangeira
+ * (FR-421).
+ */
+const ESQUEMA_TIPO_DE_CARTAO = `
+ALTER TABLE cartao DROP CONSTRAINT IF EXISTS cartao_frente_check;
+ALTER TABLE cartao ADD COLUMN tipo TEXT NOT NULL DEFAULT 'frente-verso';
+ALTER TABLE cartao ADD COLUMN imagem_chave TEXT NULL;
+ALTER TABLE cartao ADD COLUMN texto_alternativo TEXT NULL;
+ALTER TABLE cartao ADD CONSTRAINT cartao_frente_check
+  CHECK (char_length(frente) <= 1000 AND (tipo = 'imagem' OR char_length(btrim(frente)) > 0));
+ALTER TABLE cartao ADD CONSTRAINT cartao_tipo_check
+  CHECK (tipo IN ('frente-verso', 'imagem'));
+ALTER TABLE cartao ADD CONSTRAINT cartao_imagem_check
+  CHECK ((tipo = 'imagem') = (imagem_chave IS NOT NULL));
+ALTER TABLE cartao ADD CONSTRAINT cartao_texto_alternativo_check
+  CHECK (texto_alternativo IS NULL OR (tipo = 'imagem' AND char_length(texto_alternativo) <= 250));
+
+ALTER TABLE pertencimento ALTER COLUMN frente_chave DROP NOT NULL;
+
+ALTER TABLE item_de_registro ADD COLUMN tipo TEXT NOT NULL DEFAULT 'frente-verso';
+ALTER TABLE item_de_registro ADD CONSTRAINT item_de_registro_tipo_check
+  CHECK (tipo IN ('frente-verso', 'imagem'));
+ALTER TABLE item_de_registro DROP CONSTRAINT IF EXISTS item_de_registro_frente_check;
+ALTER TABLE item_de_registro ADD CONSTRAINT item_de_registro_frente_check
+  CHECK (char_length(frente) <= 1000 AND (tipo = 'imagem' OR char_length(btrim(frente)) > 0));
+
+CREATE TABLE imagem_a_remover (
+  chave         TEXT PRIMARY KEY,
+  registrada_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -512,6 +551,17 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 15, sql: ESQUEMA_TAGS },
   {
     versao: 16,
+    sql: ESQUEMA_FINALIZAR_TRANSICAO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
+  { versao: 17, sql: ESQUEMA_TIPO_DE_CARTAO },
+  /**
+   * A 18 repete a finalização da transição (como a 16 repetiu a 14): numa base
+   * com Cartões ainda pendentes, a 17 é aplicada sobre a 16 adiada, e é a 18
+   * que remove `vinculo` quando a transição global terminar (FR-397).
+   */
+  {
+    versao: 18,
     sql: ESQUEMA_FINALIZAR_TRANSICAO,
     precondicao: PODE_REMOVER_VINCULO,
   },

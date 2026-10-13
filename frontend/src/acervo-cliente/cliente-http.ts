@@ -14,6 +14,11 @@ import {
   MENSAGEM_DE_NAO_AUTENTICADO,
   NAO_AUTENTICADO,
 } from "./cliente";
+import {
+  MENSAGEM_DE_IMAGEM_GRANDE,
+  camposDoTipo,
+  conferirArquivoDeImagem,
+} from "./tipos-de-cartao";
 import type {
   Avaliacao,
   CampoDeConta,
@@ -34,6 +39,8 @@ import type {
   BaralhoComCartoes,
   BaralhoListado,
   Cartao,
+  ComplementoDeCartao,
+  ResultadoDeEnvioDeImagem,
   CodigoDeErroDeAgenda,
   CompromissoDeEstudo,
   InicioDeCompromisso,
@@ -374,7 +381,12 @@ export class ClienteHttp implements ClienteDoAcervo {
         {
           method: "POST",
           headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ frente: dados.frente, verso: dados.verso, tags: dados.tags ?? [] }),
+          body: JSON.stringify({
+            frente: dados.frente,
+            verso: dados.verso,
+            tags: dados.tags ?? [],
+            ...camposDoTipo(dados),
+          }),
         },
       );
 
@@ -386,13 +398,13 @@ export class ClienteHttp implements ClienteDoAcervo {
         const cartao = lerCartao(await resposta.json());
 
         if (cartao !== null) {
-          return { ok: true, cartao };
+          return { ok: true, cartao: this.comEnderecoDaImagem(cartao) };
         }
 
         return this.falhaDeIndisponibilidade();
       }
 
-      if (resposta.status === 400) {
+      if (resposta.status === 400 || resposta.status === 422) {
         return this.traduzirRecusaDeCartao(await resposta.json());
       }
 
@@ -437,7 +449,10 @@ export class ClienteHttp implements ClienteDoAcervo {
         const cartoes = lerListaDeCartoesListados(await resposta.json());
 
         if (cartoes !== null) {
-          return { ok: true, cartoes };
+          return {
+            ok: true,
+            cartoes: cartoes.map((cartao) => this.comEnderecoDaImagem(cartao)),
+          };
         }
 
         return this.falhaDeIndisponibilidade();
@@ -628,7 +643,13 @@ export class ClienteHttp implements ClienteDoAcervo {
         const baralho = lerBaralhoComCartoes(await resposta.json());
 
         if (baralho !== null) {
-          return { ok: true, baralho };
+          return {
+            ok: true,
+            baralho: {
+              ...baralho,
+              cartoes: baralho.cartoes.map((cartao) => this.comEnderecoDaImagem(cartao)),
+            },
+          };
         }
 
         return this.falhaDeIndisponibilidadeDeBaralhos();
@@ -653,6 +674,7 @@ export class ClienteHttp implements ClienteDoAcervo {
     frente: string,
     verso: string,
     tags: string[] = [],
+    complemento: ComplementoDeCartao = {},
   ): Promise<ResultadoDeEdicaoDeCartao> {
     try {
       const resposta = await this.pedir(
@@ -660,7 +682,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         {
           method: "PUT",
           headers: { "content-type": "application/json", ...this.cabecalho() },
-          body: JSON.stringify({ frente, verso, tags }),
+          body: JSON.stringify({ frente, verso, tags, ...camposDoTipo(complemento) }),
         },
       );
 
@@ -672,14 +694,22 @@ export class ClienteHttp implements ClienteDoAcervo {
         const cartao = lerCartao(await resposta.json());
 
         if (cartao !== null) {
-          return { ok: true, cartao };
+          return { ok: true, cartao: this.comEnderecoDaImagem(cartao) };
         }
 
         return this.falhaDeIndisponibilidade();
       }
 
-      if (resposta.status === 400) {
+      if (resposta.status === 400 || resposta.status === 422) {
         return this.traduzirRecusaDeCartao(await resposta.json());
+      }
+
+      if (resposta.status === 409) {
+        const corpo = await resposta.clone().json();
+
+        if (ehCorpoDeRecusaComCodigo(corpo, "tipo_imutavel")) {
+          return { ok: false, erro: "tipo_imutavel", mensagem: corpo.mensagem };
+        }
       }
 
       if (resposta.status === 404) {
@@ -928,7 +958,15 @@ export class ClienteHttp implements ClienteDoAcervo {
     );
 
     return resultado.ok
-      ? { ok: true, inicio: resultado.valor }
+      ? {
+          ok: true,
+          inicio: {
+            ...resultado.valor,
+            cartoes: resultado.valor.cartoes.map((cartao) =>
+              this.comEnderecoDaImagem(cartao),
+            ),
+          },
+        }
       : resultado;
   }
 
@@ -1382,12 +1420,112 @@ export class ClienteHttp implements ClienteDoAcervo {
     ok: false;
     erro: CodigoDeErroDeCartao | typeof INDISPONIVEL;
     mensagem: string;
+    motivo?: string;
   } {
     if (ehCorpoDeRecusaDeCartao(corpo)) {
-      return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem };
+      const motivo = (corpo as { motivo?: unknown }).motivo;
+
+      return {
+        ok: false,
+        erro: corpo.erro,
+        mensagem: corpo.mensagem,
+        ...(typeof motivo === "string" ? { motivo } : {}),
+      };
     }
 
     return this.falhaDeIndisponibilidade();
+  }
+
+  /**
+   * O endereço de exibição pode vir relativo à API — no modo local, o
+   * armazém em Disco serve pela própria API (026) —; a `<img>` precisa dele
+   * absoluto, resolvido contra o endereço da API, e não contra a página.
+   */
+  private comEnderecoDaImagem<C extends Cartao>(cartao: C): C {
+    if (cartao.imagem === undefined || cartao.imagem === null) {
+      return cartao;
+    }
+
+    return {
+      ...cartao,
+      imagem: { ...cartao.imagem, url: this.absoluto(cartao.imagem.url) },
+    };
+  }
+
+  /** Resolve um endereço relativo à API; absoluto fica como está. */
+  private absoluto(url: string): string {
+    return /^https?:\/\//.test(url) ? url : `${this.endereco}${url}`;
+  }
+
+  /**
+   * Prepara o envio na API e manda o arquivo direto ao armazém, sem a
+   * Credencial: o envio preparado já é a autorização (026, research R4).
+   * A conferência de formato e tamanho aqui é só retorno rápido (FR-411).
+   */
+  async enviarImagem(arquivo: File): Promise<ResultadoDeEnvioDeImagem> {
+    const local = conferirArquivoDeImagem(arquivo);
+
+    if (local !== null) {
+      return local;
+    }
+
+    try {
+      const preparado = await this.pedir(`${this.endereco}/imagens/envios`, {
+        method: "POST",
+        headers: { ...this.cabecalho() },
+      });
+
+      if (preparado.status === 401) {
+        return await this.falhaDeNaoAutenticadoDe(preparado);
+      }
+
+      if (preparado.status !== 201) {
+        return this.falhaDeIndisponibilidade();
+      }
+
+      const corpo = (await preparado.json()) as {
+        imagemId?: unknown;
+        envio?: { url?: unknown; campos?: unknown };
+      };
+
+      if (
+        typeof corpo.imagemId !== "string" ||
+        typeof corpo.envio?.url !== "string" ||
+        typeof corpo.envio.campos !== "object" ||
+        corpo.envio.campos === null
+      ) {
+        return this.falhaDeIndisponibilidade();
+      }
+
+      const formulario = new FormData();
+
+      for (const [campo, valor] of Object.entries(
+        corpo.envio.campos as Record<string, unknown>,
+      )) {
+        formulario.append(campo, String(valor));
+      }
+      formulario.append("file", arquivo);
+
+      const enviado = await fetch(this.absoluto(corpo.envio.url), {
+        method: "POST",
+        body: formulario,
+      });
+
+      if (enviado.ok) {
+        return { ok: true, imagemId: corpo.imagemId };
+      }
+
+      if (
+        enviado.status === 413 ||
+        (enviado.status === 400 && (await enviado.text()).includes("EntityTooLarge"))
+      ) {
+        return { ok: false, erro: "tamanho", mensagem: MENSAGEM_DE_IMAGEM_GRANDE };
+      }
+
+      return this.falhaDeIndisponibilidade();
+    } catch {
+      return this.falhaDeIndisponibilidade();
+    }
   }
 
   /**
@@ -1729,12 +1867,36 @@ function lerCartao(corpo: unknown): Cartao | null {
     return null;
   }
 
+  const imagem = lerImagemDoCartao(campos.imagem);
+
   return {
     id: campos.id,
     frente: campos.frente,
     verso: campos.verso,
     ...(tags.length > 0 ? { tags } : {}),
+    ...(campos.tipo === "imagem"
+      ? {
+          tipo: "imagem" as const,
+          imagem,
+          ...(typeof campos.textoAlternativo === "string"
+            ? { textoAlternativo: campos.textoAlternativo }
+            : {}),
+        }
+      : {}),
   };
+}
+
+/** Lê o endereço de exibição da Imagem; ausente ou malformado vira `null`. */
+function lerImagemDoCartao(valor: unknown): Cartao["imagem"] {
+  if (typeof valor !== "object" || valor === null) {
+    return null;
+  }
+
+  const campos = valor as Record<string, unknown>;
+
+  return typeof campos.url === "string" && typeof campos.expiraEm === "string"
+    ? { url: campos.url, expiraEm: campos.expiraEm }
+    : null;
 }
 
 function lerUsuario(corpo: unknown): Usuario | null {
@@ -1929,6 +2091,7 @@ function lerItemRegistrado(corpo: unknown): ItemRegistrado | null {
 
   const item: ItemRegistrado = {
     posicao: campos.posicao,
+    ...(campos.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
     frente: campos.frente,
     verso: campos.verso,
     resultado: campos.resultado,

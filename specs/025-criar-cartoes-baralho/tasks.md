@@ -145,6 +145,7 @@ No setup tasks are required: Node/React/Fastify, SQLite/PostgreSQL, Vitest, Test
 - [X] T046 [P] Compare the implementation with `design/criar-cartoes-no-baralho/README.md` and `specs/025-criar-cartoes-baralho/prototipos.md`; refresh `design/criar-cartoes-no-baralho/capturas/` only for accepted visual differences.
 - [X] T047 [P] Add product responsive/zoom coverage to `e2e/baralhos-responsividade.spec.ts`: verify contextual Cartão list, create/edit/delete and keyboard flows at 360, 390, 768 and 1440 px, CSS zoom 200%, and no horizontal overflow or control overlap.
 - [X] T048 Run `rtk npm run verificar:ci` using `scripts/verificar-ci.mjs`, then append actual results and unverified accessibility checks to `specs/025-criar-cartoes-baralho/research.md`.
+- [X] T049 [US2] Add the single-select card type filter below review status in the current Baralho detail, combine it with existing filters, and document FR-430/SC-174.
 
 ---
 
@@ -180,6 +181,7 @@ No setup tasks are required: Node/React/Fastify, SQLite/PostgreSQL, Vitest, Test
 | FR-399 | T020–T028 |
 | FR-400 | T038–T044 |
 | FR-401–FR-402 | T030–T037 |
+| FR-430 | T049 |
 
 ### Parallel Opportunities
 

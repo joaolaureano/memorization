@@ -2,13 +2,27 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { CampoDeTags } from "./CampoDeTags";
 
-import type { ClienteDoAcervo } from "../acervo-cliente/cliente";
+import type {
+  Cartao,
+  ClienteDoAcervo,
+  TipoDeCartao,
+} from "../acervo-cliente/cliente";
+import {
+  FORMATOS_DE_IMAGEM,
+  LIMITE_DA_DESCRICAO_ALTERNATIVA,
+  ORDEM_DOS_TIPOS,
+  conferirArquivoDeImagem,
+  regrasDo,
+  textoAlternativoDa,
+} from "../acervo-cliente/tipos-de-cartao";
 import {
   LIMITE_DE_CARACTERES_DE_CARTAO,
   ehCodigoDeErroDeCartao,
   type CodigoDeErroDeCartao,
 } from "../acervo-cliente/validacao";
+import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
+import { ImagemDoCartao } from "./tipos-de-cartao/ImagemDoCartao";
 import { guardarAvisoDeCartao } from "./aviso-de-cartao";
 import { irParaRota } from "./navegacao";
 import {
@@ -20,6 +34,12 @@ import {
  * Página do formulário de Cartão — criação e edição (T1113;
  * specs/025-criar-cartoes-baralho/contracts/ui.md; FR-025, FR-388, FR-393,
  * FR-394, FR-396, FR-398, FR-399, FR-148, FR-153, FR-154, FR-155, FR-156).
+ *
+ * Desde a `026`, a criação começa por um seletor de Tipo de cartão, sempre em
+ * Frente-Verso (FR-404, FR-405), e os campos se adaptam ao tipo escolhido; a
+ * edição mostra o tipo e não deixa mudá-lo (FR-420). No tipo Imagem, o
+ * arquivo só é enviado ao salvar (research R4), e a pré-visualização é local
+ * (FR-413) — contrato em specs/026-cartao-com-imagem/contracts/ui.md.
  *
  * A criação e edição ocorrem dentro de um Baralho (`baralhoId` obrigatório).
  * Sem `id`, é a criação (`#/baralhos/{baralhoId}/cartoes/novo`); com `id`, é a
@@ -56,13 +76,26 @@ const FOLGA_PARA_AVISO_DE_LIMITE = 100;
  * fica de fora de propósito — na falha de transporte, nenhum campo precisa de
  * correção e o foco permanece onde estava.
  */
+type Campo = "frente" | "verso" | "imagem" | "descricao";
+
 const CAMPO_PARA_CORRECAO: Readonly<
-  Record<CodigoDeErroDeCartao, "frente" | "verso">
+  Record<CodigoDeErroDeCartao, Campo | null>
 > = {
   frente_vazia: "frente",
   frente_muito_longa: "frente",
   verso_vazio: "verso",
   verso_muito_longo: "verso",
+  imagem_ausente: "imagem",
+  imagem_invalida: "imagem",
+  descricao_muito_longa: "descricao",
+  // Sem seletor na edição, a recusa de tipo não aponta campo algum.
+  tipo_imutavel: null,
+};
+
+/** O anúncio da troca de campos, para leitores de tela (FR-425). */
+const ANUNCIO_DOS_CAMPOS: Readonly<Record<TipoDeCartao, string>> = {
+  "frente-verso": "Campos do tipo Frente-Verso",
+  imagem: "Campos do tipo Imagem",
 };
 
 export const MOTIVO_DE_PENDENCIA = "Aguarde: o Cartão está sendo salvo.";
@@ -99,13 +132,58 @@ export function PaginaDoFormularioDeCartao({
   const [falhaDeSalvamento, setFalhaDeSalvamento] = useState<string | null>(
     null,
   );
-  const [campoComErro, setCampoComErro] = useState<"frente" | "verso" | null>(null);
+  const [campoComErro, setCampoComErro] = useState<Campo | null>(null);
+
+  // 026 — Tipo de cartão e Imagem.
+  const [tipo, setTipo] = useState<TipoDeCartao>("frente-verso");
+  const [textoAlternativo, setTextoAlternativo] = useState("");
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [previa, setPrevia] = useState<string | null>(null);
+  const [imagemAtual, setImagemAtual] = useState<Cartao["imagem"]>(undefined);
+  const [imagemRemovida, setImagemRemovida] = useState(false);
+  const [falhaDaImagem, setFalhaDaImagem] = useState<string | null>(null);
+  const [confirmandoDescarte, setConfirmandoDescarte] = useState(false);
+  const [anuncio, setAnuncio] = useState("");
+  const [referenciaDoTipo, setReferenciaDoTipo] = useState({ textoAlternativo: "" });
 
   const campoDeFrente = useRef<HTMLTextAreaElement>(null);
   const campoDeVerso = useRef<HTMLTextAreaElement>(null);
+  const campoDeTipo = useRef<HTMLSelectElement>(null);
+  const campoDeImagem = useRef<HTMLInputElement>(null);
+  const campoDeDescricao = useRef<HTMLTextAreaElement>(null);
 
+  const ehImagem = tipo === "imagem";
   const estaSujo =
-    frente !== referencia.frente || verso !== referencia.verso || JSON.stringify(tags) !== JSON.stringify(referencia.tags);
+    frente !== referencia.frente ||
+    verso !== referencia.verso ||
+    JSON.stringify(tags) !== JSON.stringify(referencia.tags) ||
+    arquivo !== null ||
+    imagemRemovida ||
+    textoAlternativo !== referenciaDoTipo.textoAlternativo ||
+    (!emEdicao && tipo !== "frente-verso");
+
+  // A pré-visualização é um endereço local do arquivo escolhido, liberado
+  // quando o arquivo muda ou o formulário sai da tela (FR-413).
+  useEffect(() => {
+    if (arquivo === null || typeof URL.createObjectURL !== "function") {
+      setPrevia(null);
+      return;
+    }
+
+    let endereco: string;
+
+    try {
+      endereco = URL.createObjectURL(arquivo);
+    } catch {
+      // Sem pré-visualização local possível, o formulário segue sem ela.
+      setPrevia(null);
+      return;
+    }
+
+    setPrevia(endereco);
+
+    return () => URL.revokeObjectURL(endereco);
+  }, [arquivo]);
 
   const navegarSemProtecao = useNavegarSemProtecao();
 
@@ -154,6 +232,10 @@ export function PaginaDoFormularioDeCartao({
       setFrente(encontrado.frente);
       setVerso(encontrado.verso);
       setTags(encontrado.tags ?? []);
+      setTipo(encontrado.tipo ?? "frente-verso");
+      setImagemAtual(encontrado.imagem);
+      setTextoAlternativo(encontrado.textoAlternativo ?? "");
+      setReferenciaDoTipo({ textoAlternativo: encontrado.textoAlternativo ?? "" });
       setReferencia({
         frente: encontrado.frente,
         verso: encontrado.verso,
@@ -180,20 +262,141 @@ export function PaginaDoFormularioDeCartao({
     }
   }, [emEdicao, carregando, naoEncontrado]);
 
+  /** Leva o foco ao campo que precisa de correção. */
+  function focarCampo(campo: Campo) {
+    setCampoComErro(campo);
+    const alvo = {
+      frente: campoDeFrente,
+      verso: campoDeVerso,
+      imagem: campoDeImagem,
+      descricao: campoDeDescricao,
+    }[campo];
+
+    alvo.current?.focus();
+  }
+
+  /** Troca os campos pelo tipo escolhido e anuncia a troca (FR-404, FR-425). */
+  function aplicarTipo(novo: TipoDeCartao) {
+    setTipo(novo);
+    setCampoComErro(null);
+    setFalhaDaImagem(null);
+    setAnuncio(ANUNCIO_DOS_CAMPOS[novo]);
+  }
+
+  function escolherTipo(novo: TipoDeCartao) {
+    // Voltar a Frente-Verso com uma Imagem escolhida pede confirmação (FR-406).
+    if (novo === "frente-verso" && arquivo !== null) {
+      setConfirmandoDescarte(true);
+      return;
+    }
+
+    aplicarTipo(novo);
+  }
+
+  function fecharDescarte(descartar: boolean) {
+    setConfirmandoDescarte(false);
+
+    if (descartar) {
+      setArquivo(null);
+      aplicarTipo("frente-verso");
+    }
+
+    campoDeTipo.current?.focus();
+  }
+
+  function escolherArquivo(lista: FileList | null) {
+    const escolhido = lista?.[0];
+
+    if (escolhido === undefined) {
+      return;
+    }
+
+    const recusa = conferirArquivoDeImagem(escolhido);
+
+    if (recusa !== null) {
+      // O arquivo recusado não fica escolhido; os outros campos permanecem.
+      if (campoDeImagem.current !== null) {
+        campoDeImagem.current.value = "";
+      }
+      setFalhaDaImagem(recusa.mensagem);
+      focarCampo("imagem");
+      return;
+    }
+
+    setFalhaDaImagem(null);
+    setCampoComErro(null);
+    setArquivo(escolhido);
+    setImagemRemovida(false);
+  }
+
+  function removerImagem() {
+    setArquivo(null);
+    if (campoDeImagem.current !== null) {
+      campoDeImagem.current.value = "";
+    }
+    if (emEdicao) {
+      setImagemRemovida(true);
+    }
+    campoDeImagem.current?.focus();
+  }
+
   async function salvar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     setSalvando(true);
     setFalhaDeSalvamento(null);
+    setFalhaDaImagem(null);
     setCampoComErro(null);
 
+    // Na edição, a Imagem removida sem outra no lugar não pode ser salva: o
+    // tipo Imagem exige uma (US3-3).
+    if (ehImagem && emEdicao && imagemRemovida && arquivo === null) {
+      setFalhaDeSalvamento("Escolha uma imagem.");
+      focarCampo("imagem");
+      setSalvando(false);
+      return;
+    }
+
+    let imagemId: string | undefined;
+
+    if (ehImagem && arquivo !== null) {
+      setAnuncio("Enviando imagem…");
+      const enviada = await cliente.enviarImagem(arquivo);
+
+      if (!enviada.ok) {
+        setAnuncio("");
+        setFalhaDeSalvamento(enviada.mensagem);
+        if (enviada.erro === "formato" || enviada.erro === "tamanho") {
+          focarCampo("imagem");
+        }
+        setSalvando(false);
+        return;
+      }
+
+      imagemId = enviada.imagemId;
+    }
+
+    const doTipo = ehImagem
+      ? {
+          tipo: "imagem" as const,
+          ...(imagemId !== undefined ? { imagemId } : {}),
+          ...(textoAlternativo ? { textoAlternativo } : {}),
+        }
+      : {};
+
     const resultado = emEdicao
-      ? await cliente.editarCartao(id, frente, verso, tags)
-      : await cliente.criarCartao(baralhoId, { frente, verso, tags });
+      ? await cliente.editarCartao(id, frente, verso, tags, doTipo)
+      : await cliente.criarCartao(baralhoId, { frente, verso, tags, ...doTipo });
 
     if (resultado.ok) {
       setReferencia({ frente, verso, tags });
+      setArquivo(null);
+      setImagemRemovida(false);
+      setReferenciaDoTipo({ textoAlternativo });
       if (!emEdicao) {
-        guardarAvisoDeCartao(baralhoId, `Cartão criado: ${resultado.cartao.frente}.`);
+        guardarAvisoDeCartao(
+          baralhoId,
+          `Cartão criado: ${resultado.cartao.frente || "Imagem"}.`,
+        );
       }
       // Sucesso na criação ou edição: volta para o detalhe do Baralho.
       navegarSemProtecao(
@@ -202,20 +405,27 @@ export function PaginaDoFormularioDeCartao({
       return;
     }
 
+    setAnuncio("");
     setFalhaDeSalvamento(resultado.mensagem);
 
-    // FR-055, FR-155, FR-399: numa recusa, o foco vai ao campo que precisa de
-    // correção. A direção vem só do código devolvido pela Interface — a
-    // página não decide qual conteúdo é inválido, apenas para onde mover o
-    // foco. Na falha de transporte, nenhum campo é apontado.
+    // FR-055, FR-155, FR-399, FR-425: numa recusa, o foco vai ao campo que
+    // precisa de correção. A direção vem só do código devolvido pela
+    // Interface — a página não decide qual conteúdo é inválido, apenas para
+    // onde mover o foco. Na falha de transporte, nenhum campo é apontado.
     if (resultado.erro === "frente_duplicada" || ehCodigoDeErroDeCartao(resultado.erro)) {
       const campo = resultado.erro === "frente_duplicada"
         ? "frente"
         : CAMPO_PARA_CORRECAO[resultado.erro];
-      setCampoComErro(campo);
-      const alvo = campo === "frente" ? campoDeFrente : campoDeVerso;
 
-      alvo.current?.focus();
+      // A Imagem recusada pelo servidor deixa de estar escolhida, e o campo
+      // volta a pedir um arquivo; os textos permanecem (US1-6).
+      if (resultado.erro === "imagem_invalida") {
+        setArquivo(null);
+      }
+
+      if (campo !== null) {
+        focarCampo(campo);
+      }
     }
 
     setSalvando(false);
@@ -260,9 +470,108 @@ export function PaginaDoFormularioDeCartao({
 
       <div className="cartao">
         <form className="formulario" onSubmit={salvar}>
+          <p className="visualmente-oculto" aria-live="polite">
+            {anuncio}
+          </p>
+
+          {emEdicao ? (
+            <p className="ajuda">Tipo: {regrasDo(tipo).rotulo}</p>
+          ) : (
+            <div className="campo">
+              <label htmlFor="campo-tipo" className="rotulo">
+                Tipo de cartão
+              </label>
+              <select
+                id="campo-tipo"
+                ref={campoDeTipo}
+                value={tipo}
+                onChange={(evento) => escolherTipo(evento.target.value as TipoDeCartao)}
+              >
+                {ORDEM_DOS_TIPOS.map((opcao) => (
+                  <option key={opcao} value={opcao}>
+                    {regrasDo(opcao).rotulo}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {ehImagem && (
+            <>
+              <div className="campo">
+                <label htmlFor="campo-imagem" className="rotulo">
+                  Imagem
+                </label>
+                <input
+                  id="campo-imagem"
+                  ref={campoDeImagem}
+                  type="file"
+                  accept={FORMATOS_DE_IMAGEM.join(",")}
+                  className={arquivo !== null || (imagemAtual !== undefined && !imagemRemovida) ? "visualmente-oculto" : undefined}
+                  onChange={(evento) => escolherArquivo(evento.target.files)}
+                  aria-invalid={campoComErro === "imagem" ? true : undefined}
+                  aria-describedby={`ajuda-da-imagem${falhaDaImagem !== null ? " erro-da-imagem" : campoComErro === "imagem" ? " erro-do-formulario" : ""}`}
+                />
+                <p id="ajuda-da-imagem" className="ajuda">
+                  JPEG, PNG, WebP ou GIF, até 5 MB.
+                </p>
+                {falhaDaImagem !== null && (
+                  <p id="erro-da-imagem" className="erro" role="alert">
+                    {falhaDaImagem}
+                  </p>
+                )}
+                {(previa !== null || arquivo !== null || (imagemAtual !== undefined && !imagemRemovida)) && (
+                  <div className="previa-da-imagem">
+                    <ImagemDoCartao
+                      url={previa ?? (arquivo === null ? imagemAtual?.url ?? null : null)}
+                      textoAlternativo={arquivo?.name ?? textoAlternativoDa({ frente, textoAlternativo })}
+                      variante="previa"
+                    />
+                    <div className="acoes">
+                      <button
+                        type="button"
+                        className="botao botao--secundario"
+                        onClick={() => campoDeImagem.current?.click()}
+                      >
+                        Trocar imagem
+                      </button>
+                      <button
+                        type="button"
+                        className="botao botao--secundario"
+                        onClick={removerImagem}
+                      >
+                        Remover imagem
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="campo">
+                <label htmlFor="campo-descricao" className="rotulo">
+                  Descrição da imagem (opcional)
+                </label>
+                <textarea
+                  id="campo-descricao"
+                  ref={campoDeDescricao}
+                  value={textoAlternativo}
+                  onChange={(evento) => { setTextoAlternativo(evento.target.value); setCampoComErro(null); }}
+                  aria-invalid={campoComErro === "descricao" ? true : undefined}
+                  aria-describedby={`ajuda-da-descricao contador-da-descricao${campoComErro === "descricao" ? " erro-do-formulario" : ""}`}
+                />
+                <p id="ajuda-da-descricao" className="ajuda">
+                  Descreva a imagem sem revelar a resposta.
+                </p>
+                <p id="contador-da-descricao" className="contador">
+                  {textoAlternativo.length} / {LIMITE_DA_DESCRICAO_ALTERNATIVA} caracteres
+                </p>
+              </div>
+            </>
+          )}
+
           <div className="campo">
             <label htmlFor="campo-frente" className="rotulo">
-              Frente
+              {ehImagem ? "Texto da frente (opcional)" : "Frente"}
             </label>
             <textarea
               id="campo-frente"
@@ -335,7 +644,7 @@ export function PaginaDoFormularioDeCartao({
               type="submit"
               disabled={salvando}
             >
-              {salvando ? "Salvando…" : "Salvar"}
+              {salvando ? (ehImagem && arquivo !== null ? "Enviando imagem…" : "Salvando…") : "Salvar"}
             </button>
             <button
               className="botao botao--secundario"
@@ -347,6 +656,16 @@ export function PaginaDoFormularioDeCartao({
           </div>
         </form>
       </div>
+
+      <DialogoDeConfirmacao
+        aberto={confirmandoDescarte}
+        titulo="Descartar a imagem?"
+        rotuloDeConfirmacao="Descartar imagem"
+        aoConfirmar={() => fecharDescarte(true)}
+        aoCancelar={() => fecharDescarte(false)}
+      >
+        A imagem escolhida não existe no tipo Frente-Verso e será descartada.
+      </DialogoDeConfirmacao>
     </div>
   );
 }

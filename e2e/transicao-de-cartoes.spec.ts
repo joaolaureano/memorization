@@ -55,7 +55,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     await encerrarProcesso(api);
     api = null;
 
-    // Reproduz uma base v15 com dois Cartões legados pendentes. Bruno já tem
+    // Reproduz uma base v17 com dois Cartões legados pendentes. Bruno já tem
     // Pertencimento; apenas Ana precisará escolher, e a tabela v3 é a fonte.
     const arquivo = new DatabaseSync(banco);
     try {
@@ -70,7 +70,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
       const vincular = arquivo.prepare("INSERT INTO vinculo (cartao_id, baralho_id) VALUES (?, ?)");
       vincular.run(compartilhado.id, ingles.id);
       vincular.run(compartilhado.id, viagem.id);
-      arquivo.prepare("UPDATE versao_do_esquema SET versao = 15").run();
+      arquivo.prepare("UPDATE versao_do_esquema SET versao = 17").run();
       arquivo.exec("COMMIT;");
     } finally {
       arquivo.close();
@@ -78,7 +78,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
 
     api = iniciarApi(banco, portaDaApi);
     await aguardarApiPronta(api, enderecoDaApi);
-    expect(lerVersaoDoEsquema(banco)).toBe(15);
+    expect(lerVersaoDoEsquema(banco)).toBe(17);
     frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
     await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
 
@@ -112,7 +112,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     await expect(page.getByLabel("To travel")).toHaveValue(ingles.id);
     await expect(page.getByLabel("To read")).toHaveValue(viagem.id);
     await expect(page.getByRole("button", { name: "Concluir organização" })).toBeFocused();
-    expect(lerVersaoDoEsquema(banco)).toBe(15);
+    expect(lerVersaoDoEsquema(banco)).toBe(17);
     const antes = new DatabaseSync(banco);
     try {
       expect((antes.prepare("SELECT COUNT(*) AS total FROM vinculo").get() as { total: number }).total).toBe(2);
@@ -139,7 +139,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     api = null;
     api = iniciarApi(banco, portaDaApi);
     await aguardarApiPronta(api, enderecoDaApi);
-    expect(lerVersaoDoEsquema(banco)).toBe(16);
+    expect(lerVersaoDoEsquema(banco)).toBe(18);
     const final = new DatabaseSync(banco);
     try {
       expect(final.prepare("SELECT name FROM sqlite_master WHERE name = 'vinculo'").get()).toBeUndefined();

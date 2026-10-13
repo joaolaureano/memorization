@@ -679,6 +679,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "imagem_a_remover",
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",
@@ -901,10 +902,16 @@ describe("pacote da função", () => {
      * importado, e nenhuma linha da implementação dele é empacotada.
      */
     expect(
-      [...pacoteDaFuncao.matchAll(/["']@aws-sdk\/[^"']+["']/g)].map(
-        ([ocorrencia]) => ocorrencia,
-      ),
-    ).toEqual(['"@aws-sdk/client-ssm"']);
+      [...pacoteDaFuncao.matchAll(/["']@aws-sdk\/[^"']+["']/g)]
+        .map(([ocorrencia]) => ocorrencia)
+        .sort(),
+    ).toEqual([
+      // As Imagens no S3 (`026`): cliente e assinaturas, todos no runtime.
+      '"@aws-sdk/client-s3"',
+      '"@aws-sdk/client-ssm"',
+      '"@aws-sdk/s3-presigned-post"',
+      '"@aws-sdk/s3-request-presigner"',
+    ]);
     expect(pacoteDaFuncao).not.toMatch(/@smithy|@aws-crypto/);
 
     /** O `pg-native` é a opcional do `pg`: nunca é uma dependência a resolver. */

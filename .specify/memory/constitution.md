@@ -99,19 +99,6 @@ push até a correção e nova execução completa. O hook versionado
 substituir a responsabilidade explícita do Arquiteto. A CI remota permanece a
 verificação final em ambiente limpo.
 
-### XI. Delegação Obrigatória de Código (NÃO NEGOCIÁVEL)
-
-Todo código de aplicação é criado por subagentes DeepSeek. O Arquiteto não
-escreve código de aplicação: ele especifica a tarefa, delega, revisa
-integralmente o diff produzido e executa ou confere as verificações, conforme o
-Princípio VI. Código que o Arquiteto tenha escrito diretamente não é aceito e é
-refeito pela via delegada.
-
-Entende-se por código de aplicação todo fonte sob `backend/`, `frontend/` e
-`e2e/`, inclusive testes e arquivos de configuração desses pacotes. Permanecem
-com o Arquiteto os artefatos do Spec Kit, a documentação, o registro de auditoria
-e a configuração do repositório na raiz — que não são código de aplicação e cuja
-autoria delegada não traria verificação melhor.
 
 ## Skills Obrigatórias
 

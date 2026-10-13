@@ -6,7 +6,7 @@ import type {
 
 import { criarAcessos } from "../../src/acesso/acesso.ts";
 import type { Acessos, OpcoesDosAcessos } from "../../src/acesso/acesso.ts";
-import { criarAcervo } from "../../src/acervo/acervo.ts";
+import { criarAcervo, processarFilaDeImagens } from "../../src/acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
@@ -74,10 +74,13 @@ export async function montarServidorDeContrato(
   registrarRotas: (rotas: RotasDeContrato) => void,
   opcoesDoServidor: OpcoesDoServidor = {},
   opcoesDosAcessos: OpcoesDosAcessos = {},
-  opcoesDoAcervo: { agora?: () => Date } = {},
+  opcoesDoAcervo: Parameters<typeof criarAcervo>[2] = {},
 ): Promise<ServidorDeContrato> {
   const aberto = await abrirArmazenamentoSqlite(":memory:");
-  const identidade = criarIdentidade(aberto.usuarios, segredoGerado());
+  const imagens = opcoesDoAcervo?.imagens;
+  const identidade = criarIdentidade(aberto.usuarios, segredoGerado(), {
+    aposExcluirConta: () => processarFilaDeImagens(aberto.armazenamento, imagens),
+  });
   const acessos = criarAcessos(aberto.acessos, opcoesDosAcessos);
   const servidor = criarServidor(identidade, { acessos, ...opcoesDoServidor });
   const acervoDe: AcervoDeUsuario = (usuarioId) =>

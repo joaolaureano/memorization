@@ -14,14 +14,21 @@ import type {
 } from "../acervo-cliente/cliente";
 import {
   filtrarCartoes,
+  filtrarCartoesPorTipo,
   filtrarPorTags,
   situacaoDaRevisao,
+  type FiltroDeTipoDeCartao,
 } from "../acervo-cliente/busca-no-acervo";
+import {
+  ORDEM_DOS_TIPOS,
+  TIPOS_DE_CARTAO,
+} from "../acervo-cliente/tipos-de-cartao";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { consumirAvisoDeCartao } from "./aviso-de-cartao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { EtiquetasDeTags, OpcoesDeTags } from "./CampoDeTags";
 import { hashDaRota } from "./navegacao";
+import { ResumoDoCartao, rotuloDoCartao } from "./tipos-de-cartao/ResumoDoCartao";
 import {
   useNavegarSemProtecao,
   useProtecaoDeSaida,
@@ -30,7 +37,8 @@ import {
 /**
  * Tela de detalhe de um Baralho
  * (T1110; specs/012-interface-visual-navegavel/tasks.md, FR-145, FR-392,
- * FR-396, FR-401, FR-402, FR-153, FR-156; specs/025-criar-cartoes-baralho).
+ * FR-396, FR-401, FR-402, FR-430, FR-153, FR-156;
+ * specs/025-criar-cartoes-baralho).
  *
  * É a página `#/baralhos/<id>`: mostra o Baralho, a contagem de Cartões, o
  * caminho para Revisar (a ação da spec 024, FR-378), ação para Criar Cartão
@@ -114,6 +122,8 @@ export function PaginaDoBaralho({
   const [filtroDeSituacao, setFiltroDeSituacao] = useState<
     "todos" | "pendente" | "revisado"
   >("todos");
+  const [filtroDeTipo, setFiltroDeTipo] =
+    useState<FiltroDeTipoDeCartao>("todos");
   const [tagsSelecionadas, setTagsSelecionadas] = useState<string[]>([]);
   const campoDeBusca = useRef<HTMLInputElement>(null);
 
@@ -182,6 +192,18 @@ export function PaginaDoBaralho({
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  /**
+   * Renova os endereços de exibição das Imagens sem recarregar a tela: é o
+   * que a miniatura pede quando a Imagem não carrega (FR-418).
+   */
+  const renovarEnderecos = useCallback(() => {
+    void cliente.obterBaralho(id).then((resultado) => {
+      if (resultado.ok) {
+        setBaralho(resultado.baralho);
+      }
+    });
+  }, [cliente, id]);
 
   useLayoutEffect(() => {
     if (focoAposExclusaoDeCartao === null) {
@@ -383,18 +405,23 @@ export function PaginaDoBaralho({
     filtrarCartoes(cartoesComRevisao, { consulta, baralho: id }),
     tagsSelecionadas,
   );
-  const cartoesFiltrados = cartoesFiltradosPorTextoETags.filter((cartao) => {
-    if (filtroDeSituacao === "todos") {
-      return true;
-    }
-    return filtroDeSituacao === "pendente"
-      ? cartao.situacaoDaRevisao !== "em-dia"
-      : cartao.situacaoDaRevisao === "em-dia";
-  });
+  // FR-430: combina Tipo com busca, tags e Situação, sem alterar os dados.
+  const cartoesFiltrados = filtrarCartoesPorTipo(
+    cartoesFiltradosPorTextoETags.filter((cartao) => {
+      if (filtroDeSituacao === "todos") {
+        return true;
+      }
+      return filtroDeSituacao === "pendente"
+        ? cartao.situacaoDaRevisao !== "em-dia"
+        : cartao.situacaoDaRevisao === "em-dia";
+    }),
+    filtroDeTipo,
+  );
 
   function limparFiltros(): void {
     setConsulta("");
     setFiltroDeSituacao("todos");
+    setFiltroDeTipo("todos");
     setTagsSelecionadas([]);
     campoDeBusca.current?.focus();
   }
@@ -519,6 +546,25 @@ export function PaginaDoBaralho({
                 <option value="revisado">Revisado</option>
               </select>
             </div>
+            <div className="campo campo--filtro-de-tipo">
+              <label className="rotulo" htmlFor="filtro-de-tipo-de-cartao">
+                Tipo de cartão
+              </label>
+              <select
+                id="filtro-de-tipo-de-cartao"
+                value={filtroDeTipo}
+                onChange={(evento) =>
+                  setFiltroDeTipo(evento.target.value as FiltroDeTipoDeCartao)
+                }
+              >
+                <option value="todos">Todos</option>
+                {ORDEM_DOS_TIPOS.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {TIPOS_DE_CARTAO[tipo].rotulo}
+                  </option>
+                ))}
+              </select>
+            </div>
           </section>
           <div className="resultado-cabecalho">
             <p role="status" aria-live="polite" aria-atomic="true">
@@ -614,11 +660,9 @@ export function PaginaDoBaralho({
                     key={cartao.id}
                     className="linha-da-lista linha-da-lista--com-etiqueta"
                   >
-                    <div className="linha-da-lista__texto">
-                      <p className="linha-da-lista__titulo">{cartao.frente}</p>
-                      <p className="linha-da-lista__verso">{cartao.verso}</p>
+                    <ResumoDoCartao cartao={cartao} aoFalharImagem={renovarEnderecos}>
                       <EtiquetasDeTags tags={cartao.tags} />
-                    </div>
+                    </ResumoDoCartao>
                     <span
                       className={`etiqueta etiqueta--${
                         cartao.situacaoDaRevisao === "em-dia"
@@ -646,7 +690,7 @@ export function PaginaDoBaralho({
                         className="botao botao--perigo"
                         type="button"
                         disabled={excluindoCartao !== null}
-                        aria-label={`Excluir ${cartao.frente}`}
+                        aria-label={`Excluir ${rotuloDoCartao(cartao)}`}
                         onClick={(e) =>
                           void abrirExclusaoDeCartao(
                             cartao,

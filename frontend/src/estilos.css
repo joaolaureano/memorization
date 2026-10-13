@@ -1709,6 +1709,38 @@ label.campo--opcao {
   margin: 0;
 }
 
+/* No detalhe, Tags ocupa duas linhas para que o filtro de Tipo fique logo
+ * abaixo da Situação, sem herdar os 220 px de altura da lista de Tags. */
+@media (min-width: 761px) {
+  .filtros:has(.campo--filtro-de-tipo):has(.filtro-de-tags) {
+    grid-template-rows: 76px minmax(76px, 1fr);
+    min-height: 272px;
+    align-content: start;
+  }
+
+  .filtros:has(.campo--filtro-de-tipo) .campo:has(#filtro-de-situacao-dos-cartoes) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .filtros .campo--filtro-de-tipo {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .filtros:has(.campo--filtro-de-tipo) .filtro-de-tags {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+
+  .filtros:has(.campo--filtro-de-tipo):not(:has(.filtro-de-tags))
+    .campo:has(#filtro-de-situacao-dos-cartoes),
+  .filtros:has(.campo--filtro-de-tipo):not(:has(.filtro-de-tags)) .campo--filtro-de-tipo {
+    grid-column: 2;
+  }
+}
+
 .filtros input,
 .filtros select {
   width: 100%;
@@ -1732,6 +1764,10 @@ label.campo--opcao {
   .filtros {
     grid-template-columns: 1fr;
     padding: 16px;
+  }
+
+  .filtros .campo--filtro-de-tipo {
+    grid-column: 1;
   }
 }
 
@@ -1995,4 +2031,90 @@ label.campo--opcao {
     line-height: 1.15;
     font-size: 14px;
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Cartão com Imagem (026, specs/026-cartao-com-imagem/contracts/ui.md)
+ * A Imagem aparece inteira, sem distorção e sem rolagem horizontal (FR-417).
+ * ------------------------------------------------------------------------- */
+
+.imagem-do-cartao {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+/* Miniatura na lista do Baralho: até 96 px no lado maior (FR-415). */
+.imagem-do-cartao--miniatura {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 96px;
+  max-height: 96px;
+}
+
+/* A Frente na Sessão: inteira, até cerca de 60% da altura da tela. */
+.imagem-do-cartao--face {
+  margin: 0 auto;
+  max-height: 60vh;
+}
+
+/* A pré-visualização do formulário segue a mesma regra da Sessão. */
+.imagem-do-cartao--previa {
+  max-height: 40vh;
+}
+
+/* Imagem indisponível: o aviso ocupa o lugar dela, com a Descrição (FR-418). */
+.imagem-do-cartao--indisponivel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.imagem-do-cartao--miniatura.imagem-do-cartao--indisponivel {
+  width: 96px;
+  height: 96px;
+  padding: 6px;
+  font-size: 12px;
+}
+
+.imagem-do-cartao__aviso {
+  font-weight: 600;
+}
+
+.linha-da-lista__texto--imagem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.linha-da-lista__conteudo {
+  min-width: 0;
+}
+
+/* O rótulo do tipo é texto, nunca só cor ou ícone (FR-415). */
+.selo--tipo {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.previa-da-imagem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.conteudo-do-cartao--imagem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }

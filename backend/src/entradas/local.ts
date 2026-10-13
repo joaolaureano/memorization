@@ -1,10 +1,12 @@
-import { criarAcervo } from "../acervo/acervo.ts";
+import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
 } from "../armazenamento/sqlite/armazenamento.ts";
 import { lerPacoteAnki } from "../importacao/anki.ts";
 import { iniciarServidor } from "../http/servidor.ts";
+import { registrarRotasDeImagensLocais } from "../http/imagens-locais.ts";
+import { criarArmazemEmDisco } from "../imagens/armazem-em-disco.ts";
 import { relogioDeTeste } from "./relogio-de-teste.ts";
 import { criarIdentidade } from "../identidade/identidade.ts";
 import {
@@ -96,17 +98,32 @@ if (segredo !== null) {
   const aberto = await abrirArmazenamentoLocal();
 
   if (aberto !== null) {
-    const identidade = criarIdentidade(aberto.usuarios, segredo);
+    /**
+     * As Imagens dos Cartões ficam numa pasta local (`026`), configurável por
+     * `CAMINHO_DAS_IMAGENS`, com o padrão `imagens-locais` ignorado pelo git.
+     */
+    const imagens = criarArmazemEmDisco({
+      pasta: process.env.CAMINHO_DAS_IMAGENS ?? "imagens-locais",
+    });
+    const limparImagens = () =>
+      processarFilaDeImagens(aberto.armazenamento, imagens);
+    const identidade = criarIdentidade(aberto.usuarios, segredo, {
+      aposExcluirConta: limparImagens,
+    });
     const agora = relogioDeTeste(process.env);
 
     console.log(LINHA_DE_INICIO);
 
+    await limparImagens();
     await iniciarServidor(
       process.env,
       identidade,
-      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId, { agora }),
+      (usuarioId) =>
+        criarAcervo(aberto.armazenamento, usuarioId, { agora, imagens }),
       aberto.acessos,
       lerPacoteAnki,
+      imagens,
+      (servidor) => registrarRotasDeImagensLocais(servidor, imagens),
     );
   }
 }

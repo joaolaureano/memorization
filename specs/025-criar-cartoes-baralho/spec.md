@@ -47,6 +47,8 @@ Como Usuário, quero encontrar os Cartões ao abrir seu Baralho, sem uma lista g
 3. **Given** a navegação principal, **When** o Usuário a consulta, **Then** não existe item de menu Cartões nem uma tela global dedicada que liste todos os Cartões.
 4. **Given** um Cartão no detalhe de seu Baralho, **When** o Usuário aciona editar ou excluir, **Then** ambas as ações permanecem disponíveis; exclusão exige a confirmação existente e remove o Cartão do acervo.
 5. **Given** Cartões com Frentes iguais em Baralhos diferentes, **When** são consultados, **Then** continuam distintos e cada um mantém sua Frente nesse Baralho.
+6. **Given** o detalhe de um Baralho com Cartões Frente-Verso e Imagem, **When** o Usuário escolhe um Tipo no filtro abaixo de Situação da revisão, **Then** somente Cartões daquele Tipo aparecem na lista do Baralho atual; `Todos` restaura ambos.
+7. **Given** busca, tags ou Situação da revisão ativos, **When** o Usuário escolhe um Tipo ou limpa os filtros, **Then** os critérios se combinam e Limpar filtros restaura `Todos` em Situação e Tipo sem alterar os Cartões.
 
 ### User Story 3 - Preservar Cartões existentes na transição (Priority: P1)
 
@@ -81,6 +83,7 @@ Como Usuário, quero guardar uma seleção temporária em um novo Baralho sem re
 ### Edge Cases
 
 - Um Baralho sem Cartões continua válido e oferece criação contextual.
+- Cartões antigos sem Tipo explícito contam como Frente-Verso no filtro de Tipo.
 - Conteúdo inválido ou acima dos limites atuais segue as validações de criação já estabelecidas, sem apagar o que o Usuário digitou.
 - Uma falha de gravação não cria um Cartão órfão nem altera a lista apresentada.
 - Se o Baralho deixar de existir enquanto um formulário de criação estiver aberto, o Cartão não pode ser salvo sem um Baralho.
@@ -111,6 +114,7 @@ Como Usuário, quero guardar uma seleção temporária em um novo Baralho sem re
 - **FR-400 — Salvar seleção como Baralho**: O salvamento de seleção temporária MUST criar Cartões distintos no novo Baralho, em vez de associar Cartões existentes a outro Baralho. MUST preservar os Cartões de origem e seus Vínculos, conteúdos, Agendamentos e Históricos. As cópias MUST começar sem Agendamento ou Histórico; Frentes repetidas no novo Baralho MUST receber sufixos numéricos únicos, em ordem estável de apresentação da seleção. A criação do Baralho e de todas as cópias MUST ser atômica e idempotente para a mesma tentativa.
 - **FR-401 — Remover do Baralho**: A ação no detalhe do Baralho MUST ser apresentada como exclusão do Cartão, não como desvinculação. MUST exigir confirmação explícita, excluir o Cartão e seu Agendamento, e preservar os registros históricos já gravados como snapshots. MUST NOT deixar o Cartão sem Baralho.
 - **FR-402 — Excluir Baralho com Cartões**: Excluir um Baralho MUST exigir confirmação explícita que informe quantos Cartões e Agendamentos serão removidos. A confirmação MUST excluir o Baralho, todos os Cartões que lhe pertencem e seus Agendamentos atomicamente; MUST preservar registros históricos como snapshots. Falha MUST preservar Baralho, Cartões e Agendamentos.
+- **FR-430 — Filtrar Cartões por Tipo no detalhe**: Quando o Baralho aberto tiver Cartões, seu detalhe MUST oferecer, abaixo de Situação da revisão, um dropdown de seleção única com `Todos` (padrão) e cada Tipo de Cartão disponível, atualmente `Frente-Verso` e `Imagem`. A seleção MUST filtrar somente a lista de Cartões do Baralho aberto e MUST combinar imediatamente com busca, tags e Situação da revisão. `Todos` MUST preservar Cartões dos dois tipos; Cartões sem Tipo explícito MUST ser tratados como Frente-Verso. Limpar filtros MUST restaurar `Todos`. O filtro MUST NOT alterar Cartões, Agendamentos, ações ou ordenação.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -135,6 +139,7 @@ Como Usuário, quero guardar uma seleção temporária em um novo Baralho sem re
 - **SC-164**: Em 100% dos salvamentos de seleção temporária, o novo Baralho contém cópias únicas, nenhum Cartão de origem muda de Baralho e falhas não deixam criação parcial.
 - **SC-165**: Em 100% das exclusões confirmadas de Baralho, todos os Cartões e Agendamentos próprios são removidos, e os Registros históricos permanecem legíveis; em falhas, nenhum desses dados é removido parcialmente.
 - **SC-166**: Em 100% das remoções de Cartão pelo detalhe, a ação é confirmada como exclusão, nenhum Cartão órfão é criado e o Histórico registrado permanece legível.
+- **SC-174**: Em 100% das seleções de Tipo, a lista do detalhe contém somente Cartões do Baralho atual que correspondem ao Tipo escolhido; um Baralho misto pode ser filtrado pelos dois tipos, e limpar filtros restaura a lista completa.
 
 ## Assumptions
 

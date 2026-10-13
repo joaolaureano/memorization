@@ -31,9 +31,11 @@ function inserir(id: string, frente: string, verso: string): void {
 
 /** Cria a mensagem de recusa esperada do SQLite, qualquer que seja a coluna. */
 function recusaPorCheck(coluna: string): RegExp {
-  return new RegExp(
-    `CHECK constraint failed: length\\(trim\\(${coluna}\\)\\)\\s*> 0`,
-  );
+  /**
+   * Desde a migração 17 (`026`), o `CHECK` de `frente` também depende do Tipo
+   * de cartão; a recusa continua sendo do `CHECK` que menciona a coluna.
+   */
+  return new RegExp(`CHECK constraint failed: .*\\b${coluna}\\b`);
 }
 
 beforeEach(() => {
@@ -65,6 +67,9 @@ describe("criação do esquema", () => {
       "usuario_id",
       "criado_em",
       "tags_json",
+      "tipo",
+      "imagem_chave",
+      "texto_alternativo",
     ]);
     expect(colunas[3]).toMatchObject({
       name: "usuario_id",

@@ -6,6 +6,7 @@ import type {
   Baralho,
   Cartao,
   CartaoComDono,
+  TipoDeCartao,
   CompromissoPersistido,
   ItemRegistrado,
   Preferencias,
@@ -34,6 +35,16 @@ import {
   normalizarTags,
 } from "./invariantes.ts";
 import { criarAgenda } from "../agenda/agenda.ts";
+import type {
+  ArmazemDeImagens,
+  MotivoDeRecusaDaImagem,
+} from "../imagens/armazem.ts";
+import {
+  chaveDaFrenteDo,
+  ehTipoDeCartao,
+  numerarPeloTipo,
+  regrasDo,
+} from "./tipos-de-cartao.ts";
 import type {
   DadosDeInicio,
   DadosDeRotina,
@@ -111,6 +122,41 @@ export interface DadosDeCartao {
   frente: string;
   verso: string;
   tags?: string[];
+  /** Tipo de cartão; ausente é `frente-verso` (FR-403). Imutável na edição. */
+  tipo?: TipoDeCartao;
+  /**
+   * No tipo `imagem`, o envio da Imagem a confirmar (FR-408). Na edição,
+   * ausente mantém a Imagem atual; presente a substitui (FR-420).
+   */
+  imagemId?: string;
+  /** Descrição alternativa da Imagem, até 250 caracteres (FR-412). */
+  textoAlternativo?: string;
+}
+
+/**
+ * Endereço de exibição de uma Imagem, emitido só ao dono e válido por até 15
+ * minutos (FR-424). `null` quando a assinatura falhou: o cliente mostra Imagem
+ * indisponível (FR-418).
+ */
+export interface ImagemApresentada {
+  url: string;
+  expiraEm: string;
+}
+
+/**
+ * Cartão como a Interface o entrega ao caller: no tipo `imagem`, com o
+ * endereço de exibição no lugar da chave interna, que nunca sai do Module.
+ */
+export type CartaoApresentado = Omit<Cartao, "imagemChave"> & {
+  imagem?: ImagemApresentada | null;
+};
+
+/** Recusa da Imagem enviada, com o motivo do armazém (contracts/http.md). */
+export interface RecusaDaImagem {
+  ok: false;
+  erro: "imagem_invalida";
+  motivo: MotivoDeRecusaDaImagem;
+  mensagem: string;
 }
 
 /**
@@ -121,12 +167,13 @@ export interface DadosDeCartao {
  * informado continua disponível para nova tentativa (FR-044, FR-045).
  */
 export type ResultadoDeCriacaoDeCartao =
-  | { ok: true; cartao: Cartao }
+  | { ok: true; cartao: CartaoApresentado }
   | {
       ok: false;
       erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
       mensagem: string;
-    };
+    }
+  | RecusaDaImagem;
 
 /**
  * O que `criarBaralho` recebe: exatamente o nome.
@@ -235,14 +282,14 @@ export type ResultadoDeConcluirTransicao =
  * `criarCartao` continua devolvendo apenas `Cartao`, sem carregar campos que a
  * criação não exige.
  */
-export interface CartaoListado extends Cartao {
+export type CartaoListado = CartaoApresentado & {
   baralho: Baralho;
   /**
    * ISO-8601 da próxima revisão do Agendamento do Cartão, ou `null` sem
    * Agendamento (FR-352); só Agendamentos do dono (FR-359).
    */
   proximaRevisaoEm: string | null;
-}
+};
 
 /**
  * Baralho como devolvido por `listarBaralhos`: o Baralho mais a contagem de
@@ -262,7 +309,7 @@ export interface BaralhoListado extends Baralho {
  */
 export interface BaralhoComCartoes extends Baralho {
   elegivel: boolean;
-  cartoes: Cartao[];
+  cartoes: CartaoApresentado[];
   quantidadeDeAgendamentos: number;
 }
 
@@ -285,12 +332,17 @@ export type ResultadoDeObterBaralho =
  * criação; Cartão inexistente é recusado como `nao_encontrado`.
  */
 export type ResultadoDeEdicaoDeCartao =
-  | { ok: true; cartao: Cartao }
+  | { ok: true; cartao: CartaoApresentado }
   | {
       ok: false;
-      erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
+      erro:
+        | CodigoDeErroDeCartao
+        | "nao_encontrado"
+        | "indisponivel"
+        | "tipo_imutavel";
       mensagem: string;
-    };
+    }
+  | RecusaDaImagem;
 
 /**
  * Resultado de `renomearBaralho`. Mesma forma de `editarCartao`: sucesso
@@ -719,6 +771,49 @@ const FRENTE_DUPLICADA = {
   mensagem: "Já existe um cartão com esta frente neste baralho.",
 } as const;
 
+const TIPO_IMUTAVEL = {
+  erro: "tipo_imutavel",
+  mensagem: "O tipo do cartão não pode ser alterado depois da criação.",
+} as const;
+
+/** As mensagens da recusa da Imagem, por motivo (FR-410, FR-411). */
+const MENSAGEM_DA_RECUSA_DA_IMAGEM: Readonly<Record<MotivoDeRecusaDaImagem, string>> = {
+  formato: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
+  tamanho: "A imagem deve ter no máximo 5 MB.",
+  nao_encontrada: "A imagem enviada não foi encontrada. Escolha a imagem de novo.",
+};
+
+/** Quantas chaves a fila de remoção trata por vez. */
+const LOTE_DA_FILA_DE_IMAGENS = 100;
+
+/**
+ * Remove do `ArmazemDeImagens` as Imagens da fila (FR-421) e esquece as
+ * removidas. Falha do armazém deixa as chaves na fila para a próxima vez: é
+ * chamada depois de cada exclusão ou troca e no início da aplicação.
+ */
+export async function processarFilaDeImagens(
+  armazenamento: ArmazenamentoDoAcervo,
+  imagens: ArmazemDeImagens | undefined,
+): Promise<void> {
+  if (imagens === undefined) {
+    return;
+  }
+
+  try {
+    const chaves = await armazenamento.listarImagensARemover(
+      LOTE_DA_FILA_DE_IMAGENS,
+    );
+
+    if (chaves.length > 0) {
+      await armazenamento.esquecerImagensRemovidas(
+        await imagens.remover(chaves),
+      );
+    }
+  } catch {
+    // A fila continua guardada; a próxima chamada tenta de novo.
+  }
+}
+
 /**
  * Recusa por indisponibilidade do armazenamento.
  *
@@ -832,9 +927,22 @@ function interpretarItem(
     return null;
   }
 
-  const { frente, verso, cartaoId, avaliacao } = valor;
+  const { frente, verso, cartaoId, avaliacao, tipo } = valor;
 
-  if (typeof frente !== "string" || validarFrente(frente) !== null) {
+  if (tipo !== undefined && !ehTipoDeCartao(tipo)) {
+    return null;
+  }
+
+  /**
+   * O snapshot segue as regras do tipo (FR-419a): no tipo `imagem`, a Frente
+   * é o Texto da frente, que pode ser vazio; a Imagem nunca entra.
+   */
+  if (
+    typeof frente !== "string" ||
+    (tipo === "imagem"
+      ? frente.length > LIMITE_DE_CARACTERES_DE_CARTAO
+      : validarFrente(frente) !== null)
+  ) {
     return null;
   }
 
@@ -852,6 +960,7 @@ function interpretarItem(
 
   return {
     posicao,
+    ...(tipo === "imagem" ? { tipo } : {}),
     frente,
     verso,
     resultado: resultadoDaAvaliacao(avaliacao),
@@ -1140,8 +1249,14 @@ export function criarAcervo(
     algoritmos?: ReadonlyMap<string, AlgoritmoDeRepeticao>;
     /** Relógio injetável para os testes; padrão `() => new Date()`. Vale para a Agenda, as Estatísticas, o registro de Sessões e a Revisão do dia. */
     agora?: () => Date;
+    /**
+     * Onde moram as Imagens dos Cartões do tipo `imagem` (`026`). Ausente, o
+     * tipo `imagem` é recusado como `indisponivel`.
+     */
+    imagens?: ArmazemDeImagens;
   } = {},
 ): Acervo {
+  const imagens = opcoes.imagens;
   const algoritmos = opcoes.algoritmos ?? ALGORITMOS;
   /** O instante de agora: toda decisão que depende de «hoje» passa por aqui. */
   const relogio = opcoes.agora ?? (() => new Date());
@@ -1151,7 +1266,68 @@ export function criarAcervo(
    * `Acervo`, além do relógio injetável das opções, para que a projeção da
    * semana e a eleição de `hoje` sejam testáveis junto do restante do acervo.
    */
-  const agenda = criarAgenda(armazenamento, usuarioId, { agora: opcoes.agora });
+  /**
+   * Entrega o Cartão ao caller: no tipo `imagem`, troca a chave interna pelo
+   * endereço de exibição de curta duração (FR-415, FR-424).
+   */
+  async function apresentar<T extends Cartao>(
+    cartao: T,
+  ): Promise<Omit<T, "imagemChave"> & { imagem?: ImagemApresentada | null }> {
+    const { imagemChave, ...resto } = cartao;
+
+    if (cartao.tipo !== "imagem" || imagemChave === undefined) {
+      return resto;
+    }
+
+    try {
+      return { ...resto, imagem: await imagens!.enderecoDeLeitura(imagemChave) };
+    } catch {
+      return { ...resto, imagem: null };
+    }
+  }
+
+  /** Remove as Imagens da fila, sem que a falha do armazém afete o caller. */
+  async function limparImagens(): Promise<void> {
+    await processarFilaDeImagens(armazenamento, imagens);
+  }
+
+  /** Põe na fila uma Imagem confirmada cuja gravação falhou (FR-423). */
+  async function descartarImagem(chave: string): Promise<void> {
+    await armazenamento.enfileirarImagensARemover([chave]);
+    await limparImagens();
+  }
+
+  /**
+   * Confirma o envio da Imagem no armazém (FR-411). Devolve a chave ativa, a
+   * recusa com o motivo, ou `null` quando o armazém está indisponível.
+   */
+  async function confirmarImagem(
+    imagemId: string,
+  ): Promise<{ ok: true; chave: string } | RecusaDaImagem | null> {
+    if (imagens === undefined) {
+      return null;
+    }
+
+    try {
+      const confirmada = await imagens.confirmar(usuarioId, imagemId);
+
+      return confirmada.ok
+        ? { ok: true, chave: confirmada.chave }
+        : {
+            ok: false,
+            erro: "imagem_invalida",
+            motivo: confirmada.motivo,
+            mensagem: MENSAGEM_DA_RECUSA_DA_IMAGEM[confirmada.motivo],
+          };
+    } catch {
+      return null;
+    }
+  }
+
+  const agenda = criarAgenda(armazenamento, usuarioId, {
+    agora: opcoes.agora,
+    apresentar,
+  });
 
   /**
    * Resolve o algoritmo pelo identificador no registro disponível — o injetado
@@ -1379,7 +1555,13 @@ export function criarAcervo(
 
   return {
     async criarCartao(baralhoId, dados) {
-      const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
+      const tipo = dados.tipo ?? "frente-verso";
+      const regras = regrasDo(tipo);
+      const ehImagem = tipo === "imagem";
+      const falha = regras.validar(
+        dados,
+        ehImagem && typeof dados.imagemId === "string",
+      );
 
       if (falha !== null) {
         return { ok: false, ...falha };
@@ -1394,15 +1576,14 @@ export function criarAcervo(
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      const cartoesDoBaralho = await armazenamento.listarCartoesDoBaralho(
-        usuarioId,
-        baralhoId,
-      );
+      const chavesDoBaralho = async (): Promise<Set<string>> =>
+        new Set(
+          (await armazenamento.listarCartoesDoBaralho(usuarioId, baralhoId))
+            .map(chaveDaFrenteDo)
+            .filter((chave): chave is string => chave !== null),
+        );
 
-      const chavesOcupadas = new Set(
-        cartoesDoBaralho.map((c) => normalizarFrente(c.frente)),
-      );
-      let frente = numerarFrente(dados.frente, chavesOcupadas);
+      let frente = numerarPeloTipo(dados.frente, tipo, await chavesDoBaralho());
 
       if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
         return {
@@ -1411,6 +1592,32 @@ export function criarAcervo(
           mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
         };
       }
+
+      /**
+       * A Imagem só é confirmada depois que texto e Baralho passaram: uma
+       * recusa de texto não consome o envio, que continua disponível para a
+       * nova tentativa.
+       */
+      let imagemChave: string | undefined;
+
+      if (ehImagem) {
+        const confirmada = await confirmarImagem(dados.imagemId!);
+
+        if (confirmada === null) {
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
+        if (!confirmada.ok) {
+          return confirmada;
+        }
+        imagemChave = confirmada.chave;
+      }
+
+      const recusarComImagem = async <R,>(resultado: R): Promise<R> => {
+        if (imagemChave !== undefined) {
+          await descartarImagem(imagemChave).catch(() => undefined);
+        }
+        return resultado;
+      };
 
       let tentativas = 0;
 
@@ -1422,6 +1629,15 @@ export function criarAcervo(
           frente,
           verso: dados.verso,
           ...campoDeTags(dados.tags),
+          ...(ehImagem
+            ? {
+                tipo: "imagem" as const,
+                imagemChave,
+                ...(dados.textoAlternativo
+                  ? { textoAlternativo: dados.textoAlternativo }
+                  : {}),
+              }
+            : {}),
         };
 
         const gravado = await armazenamento.inserirCartaoNoBaralho(
@@ -1431,39 +1647,32 @@ export function criarAcervo(
         );
 
         if (gravado.ok) {
-          return { ok: true, cartao: gravado.valor };
+          return { ok: true, cartao: await apresentar(gravado.valor) };
         }
 
         if (gravado.erro === "frente_duplicada") {
           // Corrida concorrente: relê as chaves e tenta de novo
-          const cartoesAtualizados = await armazenamento.listarCartoesDoBaralho(
-            usuarioId,
-            baralhoId,
-          );
-          const novasChaves = new Set(
-            cartoesAtualizados.map((c) => normalizarFrente(c.frente)),
-          );
-          frente = numerarFrente(dados.frente, novasChaves);
+          frente = numerarPeloTipo(dados.frente, tipo, await chavesDoBaralho());
 
           if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
-            return {
+            return recusarComImagem({
               ok: false,
               erro: "frente_muito_longa",
               mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
-            };
+            } as const);
           }
 
           continue;
         }
 
         if (gravado.erro === "nao_encontrado") {
-          return { ok: false, ...BARALHO_NAO_ENCONTRADO };
+          return recusarComImagem({ ok: false, ...BARALHO_NAO_ENCONTRADO } as const);
         }
 
-        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        return recusarComImagem({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
       }
 
-      return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      return recusarComImagem({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
     },
 
     async criarBaralho(dados) {
@@ -1574,23 +1783,59 @@ export function criarAcervo(
       const chavesJaUsadas = new Set<string>();
 
       for (const origem of cartoesOrigemNaOrdem) {
-        const frente = numerarFrente(
-          origem.frente,
-          chavesJaUsadas,
-        );
+        const frente = numerarPeloTipo(origem.frente, origem.tipo, chavesJaUsadas);
 
         if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
           return { ok: false, erro: "dados_invalidos" };
         }
 
-        chavesJaUsadas.add(normalizarFrente(frente));
+        const chave = chaveDaFrenteDo({ frente, tipo: origem.tipo });
+        if (chave !== null) {
+          chavesJaUsadas.add(chave);
+        }
 
         copias.push({
           id: randomUUID(),
           frente,
           verso: origem.verso,
           tags: origem.tags ?? [],
+          ...(origem.tipo === "imagem"
+            ? {
+                tipo: "imagem" as const,
+                imagemChave: origem.imagemChave,
+                ...(origem.textoAlternativo
+                  ? { textoAlternativo: origem.textoAlternativo }
+                  : {}),
+              }
+            : {}),
         });
+      }
+
+      /**
+       * A Cópia de um Cartão do tipo Imagem recebe uma Imagem própria e
+       * idêntica (FR-422): o arquivo é copiado antes da transação, e uma
+       * falha da gravação manda as cópias para a fila de remoção.
+       */
+      const imagensCopiadas: string[] = [];
+
+      if (copias.some((copia) => copia.tipo === "imagem")) {
+        if (imagens === undefined) {
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
+
+        try {
+          for (const copia of copias) {
+            if (copia.tipo === "imagem" && copia.imagemChave !== undefined) {
+              copia.imagemChave = await imagens.copiar(copia.imagemChave, usuarioId);
+              imagensCopiadas.push(copia.imagemChave);
+            }
+          }
+        } catch {
+          await armazenamento
+            .enfileirarImagensARemover(imagensCopiadas)
+            .catch(() => undefined);
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
       }
 
       // d) Insere o Baralho com as cópias
@@ -1599,6 +1844,16 @@ export function criarAcervo(
         { id, nome, ...campoDeTags(tags) },
         copias,
       );
+
+      if (!resultado.ok || !resultado.valor.novo) {
+        // Cópias de Imagem que não chegaram a valer vão para a fila (FR-423).
+        if (imagensCopiadas.length > 0) {
+          await armazenamento
+            .enfileirarImagensARemover(imagensCopiadas)
+            .catch(() => undefined);
+          await limparImagens();
+        }
+      }
 
       if (!resultado.ok) {
         if (resultado.erro === "conflito") {
@@ -1631,10 +1886,12 @@ export function criarAcervo(
         ),
       );
 
-      return cartoesComDono.map((cartao) => ({
-        ...cartao,
-        proximaRevisaoEm: proximaPorCartao.get(cartao.id) ?? null,
-      }));
+      return Promise.all(
+        cartoesComDono.map(async (cartao) => ({
+          ...(await apresentar(cartao)),
+          proximaRevisaoEm: proximaPorCartao.get(cartao.id) ?? null,
+        })),
+      );
     },
 
     async listarBaralhos() {
@@ -1687,17 +1944,61 @@ export function criarAcervo(
         baralho: {
           ...encontrado.valor,
           elegivel: cartoes.length > 0,
-          cartoes,
+          cartoes: await Promise.all(cartoes.map(apresentar)),
           quantidadeDeAgendamentos: quantidadeDeAgendamentosDoBaralho,
         },
       };
     },
 
     async editarCartao(id, dados) {
-      const falha = validarFrente(dados.frente) ?? validarVerso(dados.verso);
+      /**
+       * As regras de conteúdo vêm à frente do armazenamento: os textos são
+       * validados pelo tipo declarado antes de qualquer leitura; a presença da
+       * Imagem depende do Cartão guardado e é conferida depois.
+       */
+      const falhaNosTextos = regrasDo(dados.tipo).validar(dados, true);
+
+      if (falhaNosTextos !== null) {
+        return { ok: false, ...falhaNosTextos };
+      }
+
+      const atual = await armazenamento.obterCartao(usuarioId, id);
+
+      if (!atual.ok) {
+        return atual.erro === "nao_encontrado"
+          ? { ok: false, ...CARTAO_NAO_ENCONTRADO }
+          : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+
+      const tipo = atual.valor.tipo ?? "frente-verso";
+
+      if ((dados.tipo ?? "frente-verso") !== tipo) {
+        return { ok: false, ...TIPO_IMUTAVEL };
+      }
+
+      const ehImagem = tipo === "imagem";
+      const imagemNova = ehImagem && typeof dados.imagemId === "string";
+      const falha = regrasDo(tipo).validar(
+        dados,
+        ehImagem && (imagemNova || atual.valor.imagemChave !== undefined),
+      );
 
       if (falha !== null) {
         return { ok: false, ...falha };
+      }
+
+      let imagemChave = atual.valor.imagemChave;
+
+      if (imagemNova) {
+        const confirmada = await confirmarImagem(dados.imagemId!);
+
+        if (confirmada === null) {
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
+        if (!confirmada.ok) {
+          return confirmada;
+        }
+        imagemChave = confirmada.chave;
       }
 
       const gravado = await armazenamento.atualizarCartao(usuarioId, {
@@ -1705,9 +2006,22 @@ export function criarAcervo(
         frente: dados.frente,
         verso: dados.verso,
         ...campoDeTags(dados.tags),
+        ...(ehImagem
+          ? {
+              tipo: "imagem" as const,
+              imagemChave,
+              ...(dados.textoAlternativo
+                ? { textoAlternativo: dados.textoAlternativo }
+                : {}),
+            }
+          : {}),
       });
 
       if (!gravado.ok) {
+        // A Imagem nova não chegou a valer: vai para a fila (FR-423).
+        if (imagemNova && imagemChave !== undefined) {
+          await descartarImagem(imagemChave).catch(() => undefined);
+        }
         if (gravado.erro === "nao_encontrado") {
           return { ok: false, ...CARTAO_NAO_ENCONTRADO };
         }
@@ -1717,7 +2031,12 @@ export function criarAcervo(
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      return { ok: true, cartao: gravado.valor };
+      if (imagemNova) {
+        // A Imagem substituída entrou na fila na mesma transação (FR-421).
+        await limparImagens();
+      }
+
+      return { ok: true, cartao: await apresentar(gravado.valor) };
     },
 
     async renomearBaralho(id, dados) {
@@ -1751,6 +2070,7 @@ export function criarAcervo(
           : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
+      await limparImagens();
       return { ok: true };
     },
 
@@ -1763,6 +2083,7 @@ export function criarAcervo(
           : { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
+      await limparImagens();
       return { ok: true };
     },
 

@@ -308,6 +308,8 @@ export function iniciarApi(
     ambiente: {
       PORTA: String(porta),
       CAMINHO_DO_BANCO: caminhoDoBanco,
+      /** As Imagens (026) ficam ao lado do banco temporário da prova. */
+      CAMINHO_DAS_IMAGENS: join(dirname(caminhoDoBanco), "imagens"),
       /** Sem o segredo a API recusa iniciar (FR-077): ele vai em toda subida. */
       SEGREDO_DAS_SENHAS,
       /**

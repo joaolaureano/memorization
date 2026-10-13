@@ -61,6 +61,30 @@ tofu -chdir=backend/terraform apply -var lambda_package=../dist-lambda.zip -var 
 Sem `-var lambda_package`, o apply volta para a stub. A função **nunca migra**:
 se o esquema estiver atrasado, ela recusa servir (503) até o passo 1 ser feito.
 
+### Cartões com Imagem (spec 026)
+
+Na primeira publicação que inclui Imagens, siga esta ordem:
+
+1. Execute `tofu apply` para criar o bucket S3 privado e configurar seu nome na
+   Lambda. Não passe ainda o pacote novo em `lambda_package`.
+2. Execute `migrate:cloud` contra o endpoint direto do Neon. O comando aplica
+   as migrações PostgreSQL 17 e 18 na ordem. A 18 finaliza a remoção da tabela
+   de transição da 025 quando todos os Cartões já têm Pertencimento.
+3. Só depois das migrações, publique o pacote novo da Lambda pelo fluxo de
+   deploy configurado.
+
+Se a saída da migração disser que a migração final foi adiada, conclua a
+transição dos Cartões pendentes e execute `migrate:cloud` novamente antes de
+publicar o novo código da Lambda. A migração não é executada no início da
+função.
+
+Depois de publicar a Lambda e o frontend, faça uma verificação funcional com
+uma conta de teste: salve um Cartão com uma Imagem válida de exatamente 5 MB e
+confirme que ele aparece no detalhe e na Sessão; tente também uma Imagem acima
+de 5 MB e confirme a recusa sem criação do Cartão. O armazenamento S3 aceita o
+limite no envio assinado, e o backend valida novamente o conteúdo antes de
+confirmá-lo.
+
 ## Verificar
 
 ```bash

@@ -1,3 +1,6 @@
+import type { TipoDeCartao } from "./cliente";
+import { regrasDo, tipoDo } from "./tipos-de-cartao";
+
 /**
  * Módulo puro da busca, dos filtros e da situação da revisão do Acervo
  * (FR-348, FR-349, FR-350, FR-351, FR-353, FR-379–FR-382, SC-140, SC-150,
@@ -42,6 +45,7 @@ export interface CartaoPesquisavel {
   baralho: { id: string };
   proximaRevisaoEm: string | null;
   tags?: readonly string[];
+  tipo?: TipoDeCartao;
 }
 
 /** A situação derivada da revisão de um Cartão (FR-352, SC-140). */
@@ -140,6 +144,22 @@ export type SituacaoDoBaralho = "sem-cartoes" | "pendente" | "revisado";
 
 /** O filtro de Situação dos Baralhos (FR-381). */
 export type FiltroDeSituacaoDoBaralho = "todos" | "pendente" | "revisado";
+
+/** O filtro de Tipo dos Cartões no detalhe do Baralho (025, FR-430). */
+export type FiltroDeTipoDeCartao = "todos" | TipoDeCartao;
+
+/**
+ * Os Cartões que passam pelo filtro de Tipo (FR-430). Cartões antigos sem
+ * tipo explícito são tratados como Frente-Verso (026, FR-405).
+ */
+export function filtrarCartoesPorTipo<C extends Pick<CartaoPesquisavel, "tipo">>(
+  cartoes: readonly C[],
+  filtro: FiltroDeTipoDeCartao,
+): C[] {
+  return cartoes.filter(
+    (cartao) => filtro === "todos" || tipoDo(cartao) === filtro,
+  );
+}
 
 /**
  * A situação da revisão de um Baralho a partir das próximas revisões dos seus
@@ -285,16 +305,16 @@ function meiaNoiteLocal(data: Date): Date {
   return new Date(data.getFullYear(), data.getMonth(), data.getDate());
 }
 
-/** A consulta casa na Frente ou no Verso do Cartão (FR-349). */
+/** A consulta casa na Frente ou no Verso do Cartão (FR-349, FR-419). */
 function correspondeAoTexto(cartao: CartaoPesquisavel, alvo: string): boolean {
   if (alvo === "") {
     return true;
   }
 
-  return (
-    normalizar(cartao.frente).includes(alvo) ||
-    normalizar(cartao.verso).includes(alvo)
-  );
+  // Os textos pesquisáveis vêm das regras do tipo do Cartão (026, FR-419).
+  return regrasDo(cartao.tipo)
+    .textosPesquisaveis(cartao)
+    .some((texto) => normalizar(texto).includes(alvo));
 }
 
 /** O Cartão passa pelo filtro de Baralho (FR-351). */

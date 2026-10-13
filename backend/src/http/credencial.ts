@@ -80,11 +80,19 @@ function caminhoDa(requisicao: FastifyRequest): string {
   return requisicao.url.split("?")[0] ?? "";
 }
 
+/**
+ * As rotas do Adapter Disco de Imagens (`026`) se autorizam por token assinado
+ * e com prazo, como as assinaturas do S3: o navegador as chama de `<img>` e de
+ * um envio direto, sem Credencial. Só a entrada local as registra.
+ */
+const PREFIXO_DAS_IMAGENS_LOCAIS = "/imagens-locais/";
+
 /** Diz se a requisição é uma das isentas: as três exceções, e só elas. */
 function isenta(requisicao: FastifyRequest): boolean {
   return (
     requisicao.method === "OPTIONS" ||
-    ROTAS_ISENTAS.has(`${requisicao.method} ${caminhoDa(requisicao)}`)
+    ROTAS_ISENTAS.has(`${requisicao.method} ${caminhoDa(requisicao)}`) ||
+    caminhoDa(requisicao).startsWith(PREFIXO_DAS_IMAGENS_LOCAIS)
   );
 }
 

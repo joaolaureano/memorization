@@ -25,6 +25,12 @@ export interface Migracao {
   sql: string;
   /** Consulta booleana avaliada dentro da transação antes de aplicar a migração. */
   precondicao?: string;
+  /**
+   * Desliga as chaves estrangeiras durante a migração, para reconstruir uma
+   * tabela referenciada sem disparar as cascatas do `DROP TABLE`. O aplicador
+   * confere `foreign_key_check` antes do `COMMIT` e religa as chaves depois.
+   */
+  semChavesEstrangeiras?: boolean;
 }
 
 /**
@@ -537,6 +543,68 @@ ALTER TABLE baralho ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
 `;
 
 /**
+ * A migração 17 introduz o Tipo de cartão (`026`, FR-403, FR-407).
+ *
+ * `cartao` é reconstruída porque o `CHECK` de `frente` passa a aceitar Frente
+ * vazia no tipo `imagem` (Texto da frente opcional, FR-408) e porque as
+ * restrições entre colunas não entram por `ALTER TABLE`. A reconstrução roda
+ * com as chaves estrangeiras desligadas (`semChavesEstrangeiras`): sem isso o
+ * `DROP TABLE` apagaria em cascata Pertencimentos e Agendamentos. Todo Cartão
+ * existente vira `frente-verso` pelo padrão da coluna.
+ *
+ * `pertencimento.frente_chave` passa a aceitar `NULL`: Cartão do tipo Imagem
+ * sem Texto da frente fica fora da unicidade (FR-414), e `UNIQUE` admite vários
+ * `NULL`. `item_de_registro.tipo` guarda o tipo no snapshot (FR-419a).
+ * `imagem_a_remover` é a fila de remoção de Imagens, sem chave estrangeira,
+ * preenchida na mesma transação que exclui ou troca a Imagem (FR-421).
+ */
+const ESQUEMA_TIPO_DE_CARTAO = `
+CREATE TABLE cartao_v17 (
+  id                TEXT PRIMARY KEY,
+  frente            TEXT NOT NULL CHECK (length(frente) <= 1000),
+  verso             TEXT NOT NULL CHECK (length(trim(verso)) > 0 AND length(verso) <= 1000),
+  usuario_id        TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  criado_em         TEXT NULL,
+  tags_json         TEXT NOT NULL DEFAULT '[]',
+  tipo              TEXT NOT NULL DEFAULT 'frente-verso'
+                    CHECK (tipo IN ('frente-verso', 'imagem')),
+  imagem_chave      TEXT NULL,
+  texto_alternativo TEXT NULL CHECK (texto_alternativo IS NULL OR length(texto_alternativo) <= 250),
+  CHECK (tipo = 'imagem' OR length(trim(frente)) > 0),
+  CHECK ((tipo = 'imagem') = (imagem_chave IS NOT NULL)),
+  CHECK (tipo = 'imagem' OR texto_alternativo IS NULL)
+);
+
+INSERT INTO cartao_v17 (id, frente, verso, usuario_id, criado_em, tags_json)
+SELECT id, frente, verso, usuario_id, criado_em, tags_json FROM cartao;
+
+DROP TABLE cartao;
+ALTER TABLE cartao_v17 RENAME TO cartao;
+CREATE INDEX indice_cartao_por_usuario ON cartao (usuario_id);
+
+CREATE TABLE pertencimento_v17 (
+  cartao_id    TEXT PRIMARY KEY REFERENCES cartao(id) ON DELETE CASCADE,
+  baralho_id   TEXT NOT NULL REFERENCES baralho(id) ON DELETE CASCADE,
+  frente_chave TEXT NULL,
+  UNIQUE (baralho_id, frente_chave)
+);
+
+INSERT INTO pertencimento_v17 (cartao_id, baralho_id, frente_chave)
+SELECT cartao_id, baralho_id, frente_chave FROM pertencimento;
+
+DROP TABLE pertencimento;
+ALTER TABLE pertencimento_v17 RENAME TO pertencimento;
+
+ALTER TABLE item_de_registro ADD COLUMN tipo TEXT NOT NULL DEFAULT 'frente-verso'
+  CHECK (tipo IN ('frente-verso', 'imagem'));
+
+CREATE TABLE imagem_a_remover (
+  chave         TEXT PRIMARY KEY,
+  registrada_em TEXT NOT NULL
+);
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -563,6 +631,17 @@ export const MIGRACOES: readonly Migracao[] = [
   { versao: 15, sql: ESQUEMA_TAGS },
   {
     versao: 16,
+    sql: ESQUEMA_FINALIZAR_TRANSICAO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
+  { versao: 17, sql: ESQUEMA_TIPO_DE_CARTAO, semChavesEstrangeiras: true },
+  /**
+   * A 18 repete a finalização da transição (como a 16 repetiu a 14): numa base
+   * com Cartões ainda pendentes, a 17 é aplicada sobre a 16 adiada, e é a 18
+   * que remove `vinculo` quando a transição global terminar (FR-397).
+   */
+  {
+    versao: 18,
     sql: ESQUEMA_FINALIZAR_TRANSICAO,
     precondicao: PODE_REMOVER_VINCULO,
   },

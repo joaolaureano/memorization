@@ -9,6 +9,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterAll, describe, expect, it } from "vitest";
+import { MIGRACOES } from "../../src/armazenamento/postgresql/migracoes.ts";
 
 /**
  * T810 — os scripts de inicialização do backend (FR-109, SC-041).
@@ -200,6 +201,20 @@ describe("scripts de inicialização do backend", () => {
     expect(SCRIPTS["test:postgresql"]).toBe(
       "vitest run --config vitest.postgresql.config.ts",
     );
+  });
+
+  it("o comando de migração da nuvem empacota e aplica as migrações 17 e 18", () => {
+    expect(SCRIPTS["build:cloud"]).toBe(
+      "node scripts/construir.mjs --banco=postgresql",
+    );
+    expect(SCRIPTS["migrate:cloud"]).toBe("node dist/postgresql/migrar.mjs");
+    expect(
+      MIGRACOES.filter(({ versao }) => versao >= 17).map(({ versao }) => versao),
+    ).toEqual([17, 18]);
+    expect(MIGRACOES.find(({ versao }) => versao === 17)?.sql).toContain(
+      "CREATE TABLE imagem_a_remover",
+    );
+    expect(MIGRACOES.find(({ versao }) => versao === 18)?.precondicao).toBeDefined();
   });
 });
 

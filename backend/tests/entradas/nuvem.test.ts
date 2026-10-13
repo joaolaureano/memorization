@@ -643,7 +643,7 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(15);
+    expect(versaoAtual[0]?.versao).toBe(17);
   }, PRAZO_DA_ENTRADA);
 
   it("recusa iniciar quando a base está na versão 12 (muito atrasada)", async () => {
@@ -708,6 +708,7 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "imagem_a_remover",
       "inicio_de_compromisso",
       "item_de_registro",
       "operacao_de_rotina",

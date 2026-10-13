@@ -39,6 +39,8 @@ import { OPCOES_DE_AVALIACAO_SM2 } from "../acervo-cliente/cliente-em-memoria";
 
 /** Um Item já respondido, como o Placar precisa exibir (FR-176). */
 export interface ItemDoResumo {
+  /** Tipo do Cartão (026); ausente é Frente-Verso. A Imagem nunca vem (FR-419a). */
+  tipo?: "frente-verso" | "imagem";
   frente: string;
   verso: string;
   resultado: "acertou" | "errou";
@@ -136,7 +138,14 @@ export function ResumoDaSessao({
             aria-controls={idDoVerso}
             onClick={() => alternarCartao(chave)}
           >
-            {item.frente}
+            {item.tipo === "imagem" ? (
+              <>
+                <span className="selo selo--tipo">Cartão do tipo Imagem</span>{" "}
+                {item.frente.trim() === "" ? "sem texto" : item.frente}
+              </>
+            ) : (
+              item.frente
+            )}
           </button>
           <div className="resumo__verso" id={idDoVerso} hidden={!expandido}>
             <p className="lado-do-cartao">Verso</p>

@@ -341,6 +341,112 @@ export function bateriaDaPorta(
       });
     });
 
+    describe("Tipo de cartão e fila de Imagens (026)", () => {
+      function imagemDe(id: string, chave: string, frente = ""): Cartao {
+        return {
+          id,
+          frente,
+          verso: "Pernambuco",
+          tipo: "imagem",
+          imagemChave: chave,
+          textoAlternativo: "Mapa",
+        };
+      }
+
+      it("guarda e lê o tipo Imagem com a chave e a Descrição (FR-408)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i1", "imagens/dono-um/a"));
+
+        expect(await armazenamento().obterCartao(DONO_UM, "i1")).toEqual({
+          ok: true,
+          valor: imagemDe("i1", "imagens/dono-um/a"),
+        });
+        expect(await armazenamento().listarCartoesDoBaralho(DONO_UM, "b1")).toEqual([
+          imagemDe("i1", "imagens/dono-um/a"),
+        ]);
+        expect(await armazenamento().obterCartao(DONO_UM, "i1")).not.toHaveProperty("valor.tags");
+      });
+
+      it("aceita várias Imagens sem Texto da frente no mesmo Baralho e numera o Texto repetido (FR-414)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+
+        expect((await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i1", "k1"))).ok).toBe(true);
+        expect((await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i2", "k2"))).ok).toBe(true);
+        expect((await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i3", "k3", "Qual?"))).ok).toBe(true);
+        expect(
+          await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i4", "k4", "qual?")),
+        ).toEqual({ ok: false, erro: "frente_duplicada" });
+      });
+
+      it("enfileira a Imagem ao excluir o Cartão e ao trocá-la, e esquece as removidas (FR-421)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i1", "k-velha"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i2", "k2"));
+
+        expect((await armazenamento().atualizarCartao(DONO_UM, imagemDe("i1", "k-nova"))).ok).toBe(true);
+        expect((await armazenamento().atualizarCartao(DONO_UM, imagemDe("i1", "k-nova", "Texto"))).ok).toBe(true);
+        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k-velha"]);
+
+        expect((await armazenamento().excluirCartao(DONO_UM, "i2")).ok).toBe(true);
+        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k-velha", "k2"]);
+
+        await armazenamento().esquecerImagensRemovidas(["k-velha"]);
+        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k2"]);
+      });
+
+      it("enfileira as Imagens do Baralho excluído e do Usuário excluído", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b2"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", imagemDe("i1", "k1"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b2", imagemDe("i2", "k2"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b2", cartaoDe("c3"));
+
+        expect((await armazenamento().excluirBaralho(DONO_UM, "b1")).ok).toBe(true);
+        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k1"]);
+
+        expect((await aberto.usuarios.excluirUsuario(DONO_UM)).ok).toBe(true);
+        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k1", "k2"]);
+      });
+
+      it("enfileira por pedido explícito, sem repetir a chave (FR-423)", async () => {
+        expect(await armazenamento().enfileirarImagensARemover(["k1", "k1", "k2"])).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k1", "k2"]);
+        expect(await armazenamento().listarImagensARemover(1)).toHaveLength(1);
+      });
+
+      it("guarda o tipo no snapshot do Histórico, nunca a Imagem (FR-419a)", async () => {
+        const registro: RegistroDeSessao = {
+          id: "r-imagem",
+          baralhoId: "b1",
+          nomeDoBaralho: "Geografia",
+          origem: "baralho",
+          concluidaEm: "2026-10-13T12:00:00.000Z",
+          estudados: 1,
+          acertos: 1,
+          erros: 0,
+          itens: [
+            {
+              posicao: 0,
+              tipo: "imagem",
+              frente: "",
+              verso: "Pernambuco",
+              resultado: "acertou",
+              cartaoId: "i1",
+              avaliacao: "bom",
+              avaliacaoRotulo: "Bom",
+            },
+          ],
+        };
+
+        expect((await armazenamento().inserirRegistroDeSessao(DONO_UM, registro)).ok).toBe(true);
+        const lido = await armazenamento().obterRegistroDeSessao(DONO_UM, "r-imagem");
+        expect(lido.ok && lido.valor.itens).toEqual(registro.itens);
+      });
+    });
+
     describe("Baralho", () => {
       it("guarda um Baralho e o devolve no desfecho de sucesso", async () => {
         expect(await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"))).toEqual({

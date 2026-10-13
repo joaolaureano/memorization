@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto";
 
 import type {
   ArmazenamentoDoAcervo,
+  Cartao,
   CompromissoPersistido,
   InicioAutorizado,
   RotinaArmazenada,
@@ -205,9 +206,17 @@ interface BaralhoDoContexto {
 export function criarAgenda(
   armazenamento: ArmazenamentoDoAcervo,
   usuarioId: string,
-  opcoes: { agora?: () => Date } = {},
+  opcoes: {
+    agora?: () => Date;
+    /**
+     * Entrega cada Cartão do Início ao cliente — no tipo `imagem`, com o
+     * endereço de exibição (`026`, FR-416). Padrão: o Cartão como está.
+     */
+    apresentar?: (cartao: Cartao) => Promise<Cartao>;
+  } = {},
 ): Agenda {
   const agora = opcoes.agora ?? (() => new Date());
+  const apresentar = opcoes.apresentar ?? (async (cartao: Cartao) => cartao);
 
   /** Os Baralhos do Usuário por identificador, com a contagem de Cartões. */
   async function carregarBaralhos(): Promise<Map<string, BaralhoDoContexto>> {
@@ -882,7 +891,7 @@ export function criarAgenda(
           data: gravado.valor.data,
           baralhoId: gravado.valor.baralhoId,
           nomeDoBaralho: gravado.valor.nomeDoBaralho,
-          cartoes: [...gravado.valor.cartoes],
+          cartoes: await Promise.all(gravado.valor.cartoes.map(apresentar)),
           quantidadeSolicitada: gravado.valor.quantidade,
         };
 

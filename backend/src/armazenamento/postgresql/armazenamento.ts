@@ -36,6 +36,7 @@ import type {
   VersaoDaRotina,
 } from "../porta.ts";
 import { normalizarFrente } from "../../acervo/invariantes.ts";
+import { chaveDaFrenteDo as chaveDaFrente } from "../../acervo/tipos-de-cartao.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
 
 /**
@@ -167,7 +168,8 @@ const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
  * mesmo instante.
  */
 const LISTAR_CARTOES = `
-SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, baralho.id AS baralho_id,
+SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
+       cartao.imagem_chave, cartao.texto_alternativo, baralho.id AS baralho_id,
        baralho.nome AS baralho_nome
   FROM cartao
   JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -177,15 +179,49 @@ SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, baralho.id AS b
 `;
 
 const OBTER_CARTAO = `
-SELECT id, frente, verso, tags_json FROM cartao WHERE id = $1 AND usuario_id = $2;
+SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo
+  FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
+/**
+ * Atualiza o Cartão e, na mesma instrução, põe na fila de remoção a Imagem
+ * substituída (FR-421). O tipo nunca muda (FR-420).
+ */
 const ATUALIZAR_CARTAO = `
-UPDATE cartao SET frente = $1, verso = $2, tags_json = $3 WHERE id = $4 AND usuario_id = $5;
+WITH anterior AS (
+  SELECT imagem_chave FROM cartao WHERE id = $6 AND usuario_id = $7
+), fila AS (
+  INSERT INTO imagem_a_remover (chave)
+  SELECT imagem_chave FROM anterior
+   WHERE imagem_chave IS NOT NULL AND imagem_chave IS DISTINCT FROM $4::text
+  ON CONFLICT (chave) DO NOTHING
+)
+UPDATE cartao
+   SET frente = $1, verso = $2, tags_json = $3, imagem_chave = $4, texto_alternativo = $5
+ WHERE id = $6 AND usuario_id = $7;
 `;
 
+/** Exclui o Cartão e enfileira a sua Imagem numa instrução só (FR-421). */
 const EXCLUIR_CARTAO = `
+WITH fila AS (
+  INSERT INTO imagem_a_remover (chave)
+  SELECT imagem_chave FROM cartao
+   WHERE id = $1 AND usuario_id = $2 AND imagem_chave IS NOT NULL
+  ON CONFLICT (chave) DO NOTHING
+)
 DELETE FROM cartao WHERE id = $1 AND usuario_id = $2;
+`;
+
+const ENFILEIRAR_IMAGEM = `
+INSERT INTO imagem_a_remover (chave) VALUES ($1) ON CONFLICT (chave) DO NOTHING;
+`;
+
+const LISTAR_IMAGENS_A_REMOVER = `
+SELECT chave FROM imagem_a_remover ORDER BY registrada_em, chave LIMIT $1;
+`;
+
+const ESQUECER_IMAGENS_REMOVIDAS = `
+DELETE FROM imagem_a_remover WHERE chave = ANY($1::text[]);
 `;
 
 const INSERIR_BARALHO = `
@@ -220,6 +256,14 @@ UPDATE baralho SET nome = $1, tags_json = $2 WHERE id = $3 AND usuario_id = $4;
  * Agendamentos automaticamente.
  */
 const EXCLUIR_CARTOES_PERTENCIMENTO_BARALHO = `
+WITH fila AS (
+  INSERT INTO imagem_a_remover (chave)
+  SELECT cartao.imagem_chave FROM cartao
+    JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+   WHERE cartao.usuario_id = $1 AND pertencimento.baralho_id = $2
+     AND cartao.imagem_chave IS NOT NULL
+  ON CONFLICT (chave) DO NOTHING
+)
 DELETE FROM cartao
  WHERE usuario_id = $1
    AND id IN (
@@ -236,8 +280,9 @@ DELETE FROM baralho WHERE id = $1 AND usuario_id = $2;
  * UNIQUE(baralho_id, frente_chave) é reconhecida e traduzida em `frente_duplicada`.
  */
 const INSERIR_CARTAO_NO_BARALHO = `
-INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json)
-VALUES ($1, $2, $3, $4, $5::timestamptz, $6);
+INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json,
+                    tipo, imagem_chave, texto_alternativo)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8, $9);
 `;
 
 /**
@@ -250,7 +295,8 @@ VALUES ($1, $2, $3);
 `;
 
 const LISTAR_CARTOES_DO_BARALHO = `
-SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json
+SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
+       cartao.imagem_chave, cartao.texto_alternativo
   FROM pertencimento
   JOIN cartao ON cartao.id = pertencimento.cartao_id
   JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -294,8 +340,8 @@ RETURNING concluida_em AS "concluidaEm";
  */
 const INSERIR_ITEM_DE_REGISTRO = `
 INSERT INTO item_de_registro
-       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+       (registro_id, posicao, frente, verso, resultado, cartao_id, avaliacao, avaliacao_rotulo, tipo)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 `;
 
 /**
@@ -349,7 +395,7 @@ SELECT ${COLUNAS_DE_RESUMO}
  */
 const LISTAR_ITENS_DO_REGISTRO = `
 SELECT posicao, frente, verso, resultado,
-       cartao_id AS "cartaoId", avaliacao, avaliacao_rotulo AS "avaliacaoRotulo"
+       cartao_id AS "cartaoId", avaliacao, avaliacao_rotulo AS "avaliacaoRotulo", tipo
   FROM item_de_registro
  WHERE registro_id = $1
  ORDER BY posicao;
@@ -455,6 +501,11 @@ UPDATE usuario SET sal = $1, hash = $2, parametros = $3 WHERE id = $4;
  * mesma transação implícita, tudo o que pertence ao Usuário (FR-274, FR-275).
  */
 const EXCLUIR_USUARIO = `
+WITH fila AS (
+  INSERT INTO imagem_a_remover (chave)
+  SELECT imagem_chave FROM cartao WHERE usuario_id = $1 AND imagem_chave IS NOT NULL
+  ON CONFLICT (chave) DO NOTHING
+)
 DELETE FROM usuario WHERE id = $1;
 `;
 
@@ -770,6 +821,9 @@ type LinhaDeCartao = {
   frente: string;
   verso: string;
   tags_json?: string;
+  tipo?: string;
+  imagem_chave?: string | null;
+  texto_alternativo?: string | null;
 };
 
 /** Linha de `baralho` como o Adapter a lê. */
@@ -846,6 +900,7 @@ type LinhaDeItem = {
   cartaoId: string | null;
   avaliacao: Avaliacao | null;
   avaliacaoRotulo: string | null;
+  tipo?: string;
 };
 
 /** Linha de `agendamento`; `estado` é `JSONB` e chega já como objeto. */
@@ -1106,7 +1161,47 @@ async function temTabelaVinculo(conexao: Conexao): Promise<boolean> {
 /** Lê a linha como Cartão, sem deixar a forma do driver atravessar a Porta. */
 function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
   const tags = JSON.parse(linha.tags_json ?? "[]") as string[];
-  return { id: linha.id, frente: linha.frente, verso: linha.verso, ...(tags.length > 0 ? { tags } : {}) };
+  return {
+    id: linha.id,
+    frente: linha.frente,
+    verso: linha.verso,
+    ...(tags.length > 0 ? { tags } : {}),
+    ...camposDeTipoDaLinha(linha),
+  };
+}
+
+/**
+ * Lê o Tipo de cartão da linha na forma legada da Porta: `frente-verso` não
+ * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408).
+ */
+function camposDeTipoDaLinha(
+  linha: LinhaDeCartao,
+): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo"> {
+  if (linha.tipo !== "imagem") {
+    return {};
+  }
+  return {
+    tipo: "imagem",
+    imagemChave: linha.imagem_chave as string,
+    ...(linha.texto_alternativo != null
+      ? { textoAlternativo: linha.texto_alternativo }
+      : {}),
+  };
+}
+
+/** Os parâmetros de `INSERIR_CARTAO_NO_BARALHO`, na ordem da consulta. */
+function parametrosDeInsercao(cartao: Cartao, usuarioId: string): unknown[] {
+  return [
+    cartao.id,
+    cartao.frente,
+    cartao.verso,
+    usuarioId,
+    new Date().toISOString(),
+    JSON.stringify(cartao.tags ?? []),
+    cartao.tipo ?? "frente-verso",
+    cartao.imagemChave ?? null,
+    cartao.textoAlternativo ?? null,
+  ];
 }
 
 /** Lê a linha como Baralho, sem deixar a forma do driver atravessar a Porta. */
@@ -1130,6 +1225,7 @@ function cartaoComDonoDaLinha(linha: LinhaDeCartaoComDono): CartaoComDono {
     frente: linha.frente,
     verso: linha.verso,
     ...(tags.length > 0 ? { tags } : {}),
+    ...camposDeTipoDaLinha(linha),
     baralho: { id: linha.baralho_id, nome: linha.baralho_nome },
   };
 }
@@ -1172,6 +1268,7 @@ function registroResumidoDaLinha(linha: LinhaDeRegistro): RegistroResumido {
 function itemDaLinha(linha: LinhaDeItem): ItemRegistrado {
   return {
     posicao: linha.posicao,
+    ...(linha.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
     frente: linha.frente,
     verso: linha.verso,
     resultado: linha.resultado,
@@ -1365,6 +1462,7 @@ async function gravarItens(
       item.cartaoId ?? null,
       item.avaliacao ?? null,
       item.avaliacaoRotulo ?? null,
+      item.tipo ?? "frente-verso",
     ]);
   }
 }
@@ -1481,19 +1579,15 @@ export async function abrirArmazenamentoPostgresql(
                * Insere o Cartão e o Pertencimento numa transação só. Violação de
                * UNIQUE(baralho_id, frente_chave) → frente_duplicada (FR-398).
                */
-              await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
-                cartao.id,
-                cartao.frente,
-                cartao.verso,
-                usuarioId,
-                new Date().toISOString(),
-                JSON.stringify(cartao.tags ?? []),
-              ]);
+              await cliente.query(
+                INSERIR_CARTAO_NO_BARALHO,
+                parametrosDeInsercao(cartao, usuarioId),
+              );
 
               await cliente.query(INSERIR_PERTENCIMENTO, [
                 cartao.id,
                 baralhoId,
-                normalizarFrente(cartao.frente),
+                chaveDaFrente(cartao),
               ]);
 
               return { ok: true, valor: cartao };
@@ -1547,7 +1641,15 @@ export async function abrirArmazenamentoPostgresql(
             async (cliente) => {
               const { rowCount: alteradas } = await cliente.query(
                 ATUALIZAR_CARTAO,
-                [cartao.frente, cartao.verso, JSON.stringify(cartao.tags ?? []), cartao.id, usuarioId],
+                [
+                  cartao.frente,
+                  cartao.verso,
+                  JSON.stringify(cartao.tags ?? []),
+                  cartao.imagemChave ?? null,
+                  cartao.textoAlternativo ?? null,
+                  cartao.id,
+                  usuarioId,
+                ],
               );
 
               if ((alteradas ?? 0) === 0) {
@@ -1569,7 +1671,7 @@ export async function abrirArmazenamentoPostgresql(
               if (pertencimentos[0]) {
                 await cliente.query(
                   "UPDATE pertencimento SET frente_chave = $1 WHERE cartao_id = $2",
-                  [normalizarFrente(cartao.frente), cartao.id],
+                  [chaveDaFrente(cartao), cartao.id],
                 );
               }
 
@@ -1594,6 +1696,29 @@ export async function abrirArmazenamentoPostgresql(
           ? NAO_ENCONTRADO
           : SEM_CARGA,
       );
+    },
+
+    async enfileirarImagensARemover(chaves) {
+      return comDesfecho(async () => {
+        for (const chave of chaves) {
+          await piscina.query(ENFILEIRAR_IMAGEM, [chave]);
+        }
+        return SEM_CARGA;
+      });
+    },
+
+    async listarImagensARemover(limite) {
+      const { rows } = await piscina.query<{ chave: string }>(
+        LISTAR_IMAGENS_A_REMOVER,
+        [limite],
+      );
+      return rows.map((linha) => linha.chave);
+    },
+
+    async esquecerImagensRemovidas(chaves) {
+      if (chaves.length > 0) {
+        await piscina.query(ESQUECER_IMAGENS_REMOVIDAS, [[...chaves]]);
+      }
     },
 
     async inserirBaralho(usuarioId, baralho) {
@@ -1660,14 +1785,10 @@ export async function abrirArmazenamentoPostgresql(
              * O `criado_em` é o instante corrente e não faz parte de `Cartao`:
              * existe só para ordenar Cartões novos por criação (FR-201).
              */
-            await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
-              copia.id,
-              copia.frente,
-              copia.verso,
-              usuarioId,
-              new Date().toISOString(),
-              JSON.stringify(copia.tags ?? []),
-            ]);
+            await cliente.query(
+              INSERIR_CARTAO_NO_BARALHO,
+              parametrosDeInsercao(copia, usuarioId),
+            );
 
             /**
              * Insere o Pertencimento com a Frente normalizada.
@@ -1675,7 +1796,7 @@ export async function abrirArmazenamentoPostgresql(
             await cliente.query(INSERIR_PERTENCIMENTO, [
               copia.id,
               baralho.id,
-              normalizarFrente(copia.frente),
+              chaveDaFrente(copia),
             ]);
           }
 
@@ -1689,8 +1810,8 @@ export async function abrirArmazenamentoPostgresql(
         for (const { baralho, copias } of grupos) {
           await cliente.query(INSERIR_BARALHO, [baralho.id, baralho.nome, usuarioId, JSON.stringify(baralho.tags ?? [])]);
           for (const copia of copias) {
-            await cliente.query(INSERIR_CARTAO_NO_BARALHO, [copia.id, copia.frente, copia.verso, usuarioId, new Date().toISOString(), JSON.stringify(copia.tags ?? [])]);
-            await cliente.query(INSERIR_PERTENCIMENTO, [copia.id, baralho.id, normalizarFrente(copia.frente)]);
+            await cliente.query(INSERIR_CARTAO_NO_BARALHO, parametrosDeInsercao(copia, usuarioId));
+            await cliente.query(INSERIR_PERTENCIMENTO, [copia.id, baralho.id, chaveDaFrente(copia)]);
           }
         }
         return { ok: true, valor: undefined };
@@ -1875,14 +1996,10 @@ export async function abrirArmazenamentoPostgresql(
                * Insere as cópias: Cartões novos com Pertencimento (FR-397).
                */
               for (const copia of plano.copias) {
-                await cliente.query(INSERIR_CARTAO_NO_BARALHO, [
-                  copia.cartao.id,
-                  copia.cartao.frente,
-                  copia.cartao.verso,
-                  usuarioId,
-                  new Date().toISOString(),
-                  JSON.stringify(copia.cartao.tags ?? []),
-                ]);
+                await cliente.query(
+                  INSERIR_CARTAO_NO_BARALHO,
+                  parametrosDeInsercao(copia.cartao, usuarioId),
+                );
 
                 await cliente.query(INSERIR_PERTENCIMENTO, [
                   copia.cartao.id,

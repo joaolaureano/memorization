@@ -91,6 +91,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       SSM_PREFIX = local.ssm_prefix
       NODE_ENV   = "production"
+      # Nao e segredo: as assinaturas usam as credenciais da role (026).
+      NOME_DO_BUCKET_DE_IMAGENS = aws_s3_bucket.imagens.id
     }
   }
 

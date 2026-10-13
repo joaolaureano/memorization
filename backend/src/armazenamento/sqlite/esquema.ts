@@ -87,6 +87,10 @@ export function aplicarMigracoes(
       continue;
     }
 
+    if (migracao.semChavesEstrangeiras) {
+      banco.exec("PRAGMA foreign_keys = OFF;");
+    }
+
     try {
       banco.exec("BEGIN");
       if (migracao.precondicao !== undefined) {
@@ -98,6 +102,14 @@ export function aplicarMigracoes(
         }
       }
       banco.exec(migracao.sql);
+      if (
+        migracao.semChavesEstrangeiras &&
+        banco.prepare("PRAGMA foreign_key_check;").all().length > 0
+      ) {
+        throw new Error(
+          `A migração ${migracao.versao} deixaria chaves estrangeiras órfãs.`,
+        );
+      }
       elevarVersao.run(migracao.versao);
       banco.exec("COMMIT");
       versao = migracao.versao;
@@ -108,6 +120,10 @@ export function aplicarMigracoes(
         // Sem transação ativa para desfazer; a falha original é a que importa.
       }
       throw erro;
+    } finally {
+      if (migracao.semChavesEstrangeiras) {
+        banco.exec(PRAGMA_CHAVES_ESTRANGEIRAS);
+      }
     }
   }
 }

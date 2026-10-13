@@ -24,6 +24,7 @@ import {
 } from "../acervo-cliente/busca-no-acervo";
 import { nomeAcessivelDaAvaliacao, rotuloDaPrevia } from "../revisao/dia";
 import { AleatoriedadeReal } from "../sessao-de-estudo/aleatoriedade";
+import { FaceDaPergunta } from "./tipos-de-cartao/FaceDaPergunta";
 import type { Aleatoriedade } from "../sessao-de-estudo/aleatoriedade";
 import { LIMITE_DA_SELECAO } from "../sessao-de-estudo/selecao-temporaria";
 import {
@@ -167,6 +168,15 @@ export function PaginaDeEstudo({
 }: PropriedadesDaPaginaDeEstudo) {
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
+
+  /** Um endereço novo para a Imagem de um Cartão da Sessão (026, FR-418). */
+  async function renovarEndereco(cartaoId: string): Promise<string | null> {
+    const listagem = await cliente.listarCartoes();
+
+    return listagem.ok
+      ? listagem.cartoes.find((cartao) => cartao.id === cartaoId)?.imagem?.url ?? null
+      : null;
+  }
 
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -1139,7 +1149,7 @@ export function PaginaDeEstudo({
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.frente}</p>
+        <FaceDaPergunta item={estado.itemAtual} renovar={renovarEndereco} />
 
         {!estado.itemAtual.revelado ? (
           <>
@@ -1205,6 +1215,7 @@ function itensDoResumo(estado: EstadoDaSessaoConcluida): ItemDoResumo[] {
   for (const item of estado.itens) {
     if (item.revelado && item.resultado !== null) {
       itens.push({
+        ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
         frente: item.frente,
         verso: item.verso,
         resultado: item.resultado,
@@ -1229,6 +1240,8 @@ function itensDoRegistro(
   for (const item of estado.itens) {
     if (item.revelado && item.avaliacao !== null) {
       itens.push({
+        // O snapshot leva o tipo e os textos, nunca a Imagem (FR-419a).
+        ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
         frente: item.frente,
         verso: item.verso,
         cartaoId: item.cartaoId,

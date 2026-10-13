@@ -130,7 +130,7 @@ const CASOS_DE_RECUSA: CasoDeRecusa[] = [
 ];
 
 describe("PaginaDoFormularioDeCartao por teclado", () => {
-  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Frente → Verso → Tags → Salvar (FR-054, SC-017)", async () => {
+  it("conclui a criação do primeiro campo ao salvamento apenas por teclado, na ordem visual Tipo → Frente → Verso → Tags → Salvar (FR-054, FR-404, SC-017)", async () => {
     const { cliente, baralhoId } = await clienteComBaralho();
     window.location.hash = `#/baralhos/${baralhoId}/cartoes/novo`;
     render(
@@ -140,18 +140,24 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
       ),
     );
 
+    const seletorDeTipo = screen.getByLabelText("Tipo de cartão");
     const campoFrente = screen.getByLabelText("Frente");
     const campoVerso = screen.getByLabelText("Verso");
     const botaoDeSalvar = screen.getByRole("button", { name: "Salvar" });
 
     const campoDeTags = screen.getByLabelText("Tags");
 
-    // A ordem de tabulação acompanha a disposição visual da coluna única.
+    // A ordem de tabulação acompanha a disposição visual da coluna única; desde
+    // a 026, o seletor de Tipo de cartão é o primeiro campo (FR-404).
     const controles = controlesInterativos();
-    expect(controles[0]).toBe(campoFrente);
-    expect(controles[1]).toBe(campoVerso);
-    expect(controles[2]).toBe(campoDeTags);
-    expect(controles[3]).toBe(botaoDeSalvar);
+    expect(controles[0]).toBe(seletorDeTipo);
+    expect(controles[1]).toBe(campoFrente);
+    expect(controles[2]).toBe(campoVerso);
+    expect(controles[3]).toBe(campoDeTags);
+    expect(controles[4]).toBe(botaoDeSalvar);
+
+    apertarTab();
+    expect(document.activeElement).toBe(seletorDeTipo);
 
     apertarTab();
     expect(document.activeElement).toBe(campoFrente);
@@ -192,6 +198,7 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
 
       // Submete percorrendo a ordem visual por teclado, da Frente ao
       // salvamento.
+      apertarTab(); // Tipo de cartão
       apertarTab(); // Frente
       apertarTab(); // Verso
       apertarTab(); // Tags
@@ -226,6 +233,7 @@ describe("PaginaDoFormularioDeCartao por teclado", () => {
 
     cliente.simularIndisponibilidade();
 
+    apertarTab(); // Tipo de cartão
     apertarTab(); // Frente
     apertarTab(); // Verso
     apertarTab(); // Tags

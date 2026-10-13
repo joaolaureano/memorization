@@ -1,7 +1,8 @@
 import awsLambdaFastify from "@fastify/aws-lambda";
 
 import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
-import { criarAcervo } from "../acervo/acervo.ts";
+import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
+import { armazemDaNuvem } from "../imagens/configuracao.ts";
 import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
@@ -266,7 +267,14 @@ export function criarFuncao(
     await conferirVersaoDoEsquema(configuracao);
 
     const aberto = await abrirArmazenamentoDaNuvem(configuracao);
-    const identidade = criarIdentidade(aberto.usuarios, segredoDasSenhas);
+    /** As Imagens no S3 (`026`); o bucket vem de `NOME_DO_BUCKET_DE_IMAGENS`. */
+    const imagens = armazemDaNuvem(process.env);
+    const limparImagens = () =>
+      processarFilaDeImagens(aberto.armazenamento, imagens);
+    const identidade = criarIdentidade(aberto.usuarios, segredoDasSenhas, {
+      aposExcluirConta: limparImagens,
+    });
+    await limparImagens();
 
     /**
      * Os Acessos temporários (018): na nuvem o cookie leva `Secure` — há HTTPS
@@ -285,9 +293,16 @@ export function criarFuncao(
     });
 
     const acervoDe = (usuarioId: string) =>
-      criarAcervo(aberto.armazenamento, usuarioId);
+      criarAcervo(aberto.armazenamento, usuarioId, { imagens });
 
-    registrarRotasDaAplicacao(servidor, identidade, acervoDe, acessos, lerPacoteAnki);
+    registrarRotasDaAplicacao(
+      servidor,
+      identidade,
+      acervoDe,
+      acessos,
+      lerPacoteAnki,
+      imagens,
+    );
 
     /**
      * O Adaptador do evento é criado **antes** do `ready()`: ele decora a

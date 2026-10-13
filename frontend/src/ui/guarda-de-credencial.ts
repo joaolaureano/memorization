@@ -3,6 +3,7 @@ import type {
   ClienteDoAcervo,
   DadosDeBaralho,
   DadosDeSelecaoParaBaralho,
+  ComplementoDeCartao,
   DadosDeCartao,
   DadosDeEntrada,
   DadosDeExclusaoDeConta,
@@ -84,8 +85,14 @@ export function comGuardaDeCredencial(
 
     obterBaralho: async (id: string) => vigiar(await cliente.obterBaralho(id)),
 
-    editarCartao: async (id: string, frente: string, verso: string, tags?: string[]) =>
-      vigiar(await cliente.editarCartao(id, frente, verso, tags)),
+    editarCartao: async (
+      id: string,
+      frente: string,
+      verso: string,
+      tags?: string[],
+      complemento?: ComplementoDeCartao,
+    ) => vigiar(await cliente.editarCartao(id, frente, verso, tags, complemento)),
+    enviarImagem: async (arquivo: File) => vigiar(await cliente.enviarImagem(arquivo)),
 
     renomearBaralho: async (id: string, nome: string, tags?: string[]) =>
       vigiar(await cliente.renomearBaralho(id, nome, tags)),

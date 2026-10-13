@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cartão com imagem · Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="moldura">
+    <a class="marca" href="#baralho">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio">Início</a><a href="#estudo">Estudo</a>
+      <a href="#baralho" aria-current="page">Baralhos</a><a href="#perfil">Perfil</a>
+    </nav>
+    <button class="botao-de-saida" type="button">Sair</button>
+  </header>
+  <main class="aplicacao" id="principal">
+    <div class="ci-cabecalho">
+      <div><p class="sobretitulo">Baralho</p><h1>Botânica</h1></div>
+      <button class="botao botao--secundario" id="mostrar-lista" type="button">Ver cartões</button>
+    </div>
+    <section class="ci-formulario" aria-labelledby="titulo-formulario">
+      <h2 id="titulo-formulario">Criar cartão</h2>
+      <div class="campo">
+        <label class="rotulo" for="tipo">Tipo de cartão</label>
+        <select id="tipo" name="tipo">
+          <option value="frente-verso">Frente-Verso</option>
+          <option value="imagem">Imagem</option>
+        </select>
+      </div>
+      <p class="visualmente-oculto" id="anuncio" role="status" aria-live="polite" aria-atomic="true"></p>
+      <form id="formulario">
+        <div class="campo ci-campo-imagem" hidden>
+          <label class="rotulo" for="arquivo">Imagem</label>
+          <input id="arquivo" type="file" accept="image/jpeg,image/png,image/webp,image/gif">
+          <p class="ajuda">JPEG, PNG, WebP ou GIF, até 5 MB.</p>
+          <p class="ci-erro" id="erro-arquivo" role="alert" hidden></p>
+          <div class="ci-previa" id="previa" hidden>
+            <img id="previa-imagem" alt="Pré-visualização da imagem">
+            <div class="ci-acoes">
+              <button class="botao botao--secundario" id="trocar" type="button">Trocar imagem</button>
+              <button class="botao botao--secundario" id="remover" type="button">Remover imagem</button>
+            </div>
+          </div>
+        </div>
+        <div class="campo ci-campo-texto-frente" hidden>
+          <label class="rotulo" for="frente">Texto da frente (opcional)</label>
+          <textarea id="frente" maxlength="1000" rows="3"></textarea>
+        </div>
+        <div class="campo ci-campo-frente">
+          <label class="rotulo" for="frente-texto">Frente</label>
+          <textarea id="frente-texto" maxlength="1000" rows="3"></textarea>
+        </div>
+        <div class="campo ci-campo-alternativo" hidden>
+          <label class="rotulo" for="alternativo">Descrição da imagem (opcional)</label>
+          <input id="alternativo" maxlength="250" type="text">
+          <p class="ajuda">Descreva a imagem sem revelar a resposta.</p>
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="verso">Verso</label>
+          <textarea id="verso" maxlength="1000" rows="3" required></textarea>
+        </div>
+        <div class="ci-acoes">
+          <button class="botao botao--primario" type="submit">Salvar cartão</button>
+        </div>
+        <p class="ci-mensagem" id="mensagem" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section class="ci-lista" aria-labelledby="titulo-lista">
+      <h2 id="titulo-lista">Cartões do baralho</h2>
+      <ul id="cartoes">
+        <li class="ci-cartao">
+          <div><span class="ci-etiqueta">Frente-Verso</span><p><strong>Fotossíntese</strong></p><p>Processo pelo qual plantas convertem luz em energia química.</p></div>
+        </li>
+      </ul>
+      <button class="botao botao--secundario" id="estudar" type="button">Estudar exemplo</button>
+      <div class="ci-estudo" id="painel-estudo" hidden>
+        <h3>Estudando cartão</h3>
+        <div class="ci-face" id="face"></div>
+        <button class="botao botao--secundario" id="revelar" type="button">Revelar verso</button>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -28,6 +28,10 @@ dist-lambda*
 
 # Banco de dados local — artefato de execução, não do repositório
 *.sqlite
+
+# Imagens dos Cartões no modo local (026) — artefato de execução, não do
+# repositório
+imagens-locais/
 *.sqlite3
 *.db
 *.db-journal

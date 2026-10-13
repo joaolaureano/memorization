@@ -4,6 +4,11 @@ import { z } from "zod";
 import { ACESSO_EXPIRADO, SEM_ACESSO } from "../acesso/acesso.ts";
 import type { Acessos } from "../acesso/acesso.ts";
 import type { Acervo } from "../acervo/acervo.ts";
+import {
+  FORMATOS_ACEITOS,
+  LIMITE_DE_BYTES_DA_IMAGEM,
+  type ArmazemDeImagens,
+} from "../imagens/armazem.ts";
 import type { AcaoDeRotina } from "../agenda/tipos.ts";
 import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 import type { Identidade } from "../identidade/identidade.ts";
@@ -46,10 +51,38 @@ export type AcervoDeUsuario = (usuarioId: string) => Acervo;
  * `Acervo`.
  */
 const corpoDeCartao = z.object({
+  /** Tipo de cartão (`026`, FR-403); ausente é `frente-verso`, o padrão. */
+  tipo: z.enum(["frente-verso", "imagem"]).optional(),
   frente: z.string(),
   verso: z.string(),
   tags: z.array(z.string()).optional(),
+  /** No tipo `imagem`, o envio da Imagem a confirmar (FR-408). */
+  imagemId: z.string().optional(),
+  /** Descrição alternativa da Imagem (FR-412). */
+  textoAlternativo: z.string().optional(),
 });
+
+/**
+ * Responde as recusas de criação e edição de Cartão comuns às duas rotas:
+ * Imagem recusada é `422` com o motivo (FR-410, FR-411); tipo alterado na
+ * edição é `409` (FR-420); as demais regras de conteúdo são `400`.
+ */
+function responderRecusaDeCartao(
+  resposta: FastifyReply,
+  resultado: { erro: string; mensagem: string; motivo?: string },
+) {
+  if (resultado.erro === "imagem_invalida") {
+    return resposta.status(422).send({
+      erro: resultado.erro,
+      motivo: resultado.motivo,
+      mensagem: resultado.mensagem,
+    });
+  }
+
+  return resposta
+    .status(resultado.erro === "tipo_imutavel" ? 409 : 400)
+    .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+}
 
 /**
  * FR-371 — forma do corpo de `POST /baralhos/de-selecao`: o `id` é o UUID
@@ -142,6 +175,8 @@ const corpoDeRegistro = z.object({
   nomeDoBaralho: z.string(),
   itens: z.array(
     z.object({
+      /** Tipo do Cartão estudado (`026`, FR-419a); ausente é `frente-verso`. */
+      tipo: z.string().optional(),
       frente: z.string(),
       verso: z.string(),
       cartaoId: z.string(),
@@ -317,6 +352,43 @@ function responderIndisponivel(
  * acervo de quem Entrou (FR-090, FR-092). Criação de Cartão agora é feita via
  * `POST /baralhos/{baralhoId}/cartoes` (FR-025).
  */
+/** Caminho do envio de Imagem (`026`, contracts/http.md). */
+export const CAMINHO_DOS_ENVIOS_DE_IMAGEM = "/imagens/envios";
+
+/**
+ * `POST /imagens/envios` prepara o envio de uma Imagem nova do Usuário, que o
+ * navegador faz direto ao armazém (research R4). Sem armazém configurado, a
+ * rota responde indisponível.
+ */
+export function registrarRotasDeImagens(
+  servidor: FastifyInstance,
+  imagens: ArmazemDeImagens | undefined,
+): void {
+  servidor.post(CAMINHO_DOS_ENVIOS_DE_IMAGEM, async (requisicao, resposta) => {
+    if (imagens === undefined) {
+      return responderIndisponivel(resposta, {
+        erro: "indisponivel",
+        mensagem: "O envio de imagens não está disponível.",
+      });
+    }
+
+    try {
+      const envio = await imagens.prepararEnvio(requisicao.usuarioQueEntrou.id);
+
+      return resposta.status(201).send({
+        ...envio,
+        limiteEmBytes: LIMITE_DE_BYTES_DA_IMAGEM,
+        formatos: FORMATOS_ACEITOS,
+      });
+    } catch {
+      return responderIndisponivel(resposta, {
+        erro: "indisponivel",
+        mensagem: "O envio de imagens não está disponível. Tente novamente.",
+      });
+    }
+  });
+}
+
 export function registrarRotasDeCartoes(
   servidor: FastifyInstance,
   acervoDe: AcervoDeUsuario,
@@ -355,10 +427,7 @@ export function registrarRotasDeCartoes(
         });
       }
 
-      return resposta.status(400).send({
-        erro: resultado.erro,
-        mensagem: resultado.mensagem,
-      });
+      return responderRecusaDeCartao(resposta, resultado);
     }
 
     return resposta.status(200).send(resultado.cartao);
@@ -614,10 +683,7 @@ export function registrarRotasDeBaralhos(
           });
         }
 
-        return resposta.status(400).send({
-          erro: resultado.erro,
-          mensagem: resultado.mensagem,
-        });
+        return responderRecusaDeCartao(resposta, resultado);
       }
 
       return resposta.status(201).send(resultado.cartao);

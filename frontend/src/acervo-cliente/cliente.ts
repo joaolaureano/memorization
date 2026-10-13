@@ -36,6 +36,47 @@ export interface Cartao {
   frente: string;
   verso: string;
   tags?: string[];
+  /**
+   * Tipo de cartão (026, FR-403). Ausente é Frente-Verso, o padrão; no tipo
+   * Imagem, `frente` é o Texto da frente e pode ser vazio.
+   */
+  tipo?: TipoDeCartao;
+  /**
+   * Endereço de exibição da Imagem, de curta duração e nunca mostrado ao
+   * Usuário (FR-424); `null` quando o servidor não conseguiu emiti-lo.
+   */
+  imagem?: ImagemDoCartao | null;
+  /** Descrição alternativa da Imagem (FR-412). */
+  textoAlternativo?: string;
+}
+
+/** Tipo de cartão (026): Frente-Verso, o padrão, ou Imagem. */
+export type TipoDeCartao = "frente-verso" | "imagem";
+
+/** O endereço de exibição de uma Imagem e até quando vale. */
+export interface ImagemDoCartao {
+  url: string;
+  expiraEm: string;
+}
+
+/**
+ * Resultado de `enviarImagem` (026, research R4): o envio direto ao armazém
+ * devolve o `imagemId` que a criação ou a edição do Cartão confirma.
+ */
+export type ResultadoDeEnvioDeImagem =
+  | { ok: true; imagemId: string }
+  | {
+      ok: false;
+      erro: "formato" | "tamanho" | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
+/** O complemento do tipo Imagem na edição de um Cartão (FR-420). */
+export interface ComplementoDeCartao {
+  tipo?: TipoDeCartao;
+  /** Envio novo da Imagem; ausente mantém a Imagem atual. */
+  imagemId?: string;
+  textoAlternativo?: string;
 }
 
 /**
@@ -65,6 +106,12 @@ export interface DadosDeCartao {
   frente: string;
   verso: string;
   tags?: string[];
+  /** Tipo de cartão; ausente é Frente-Verso (FR-405). */
+  tipo?: TipoDeCartao;
+  /** No tipo Imagem, o envio feito por `enviarImagem` (FR-408). */
+  imagemId?: string;
+  /** Descrição alternativa da Imagem, até 250 caracteres (FR-412). */
+  textoAlternativo?: string;
 }
 
 /**
@@ -225,6 +272,8 @@ export type ResultadoDeCriacaoDeCartao =
         | typeof INDISPONIVEL
         | typeof NAO_AUTENTICADO;
       mensagem: string;
+      /** Na recusa `imagem_invalida`: `formato`, `tamanho` ou `nao_encontrada`. */
+      motivo?: string;
     };
 
 /**
@@ -382,6 +431,8 @@ export type ResultadoDeEdicaoDeCartao =
         | typeof INDISPONIVEL
         | typeof NAO_AUTENTICADO;
       mensagem: string;
+      /** Na recusa `imagem_invalida`: `formato`, `tamanho` ou `nao_encontrada`. */
+      motivo?: string;
     };
 
 /**
@@ -495,6 +546,8 @@ export type ResultadoDoItemRegistrado = "acertou" | "errou";
  */
 export interface ItemRegistrado {
   posicao: number;
+  /** Tipo do Cartão estudado (026); ausente é Frente-Verso. Nunca a Imagem. */
+  tipo?: TipoDeCartao;
   frente: string;
   verso: string;
   resultado: ResultadoDoItemRegistrado;
@@ -559,6 +612,8 @@ export interface DadosDeRegistro {
    * (`errei` → `errou`; os demais → `acertou`) (FR-194).
    */
   itens: {
+    /** Tipo do Cartão estudado (026, FR-419a); ausente é Frente-Verso. */
+    tipo?: TipoDeCartao;
     frente: string;
     verso: string;
     cartaoId: string;
@@ -1123,7 +1178,16 @@ export interface ClienteDoAcervo {
     frente: string,
     verso: string,
     tags?: string[],
+    complemento?: ComplementoDeCartao,
   ): Promise<ResultadoDeEdicaoDeCartao>;
+
+  /**
+   * Envia o arquivo de uma Imagem direto ao armazém (026, research R4) e
+   * devolve o `imagemId` que `criarCartao` ou `editarCartao` confirmam. O
+   * formato e o tamanho conferidos aqui servem só ao retorno rápido; quem
+   * decide pelo conteúdo é o servidor (FR-411).
+   */
+  enviarImagem(arquivo: File): Promise<ResultadoDeEnvioDeImagem>;
 
   /**
    * Renomeia um Baralho existente (FR-015), reaplicando as mesmas regras de

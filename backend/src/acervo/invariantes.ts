@@ -33,7 +33,9 @@ export type CodigoDeErroDeCartao =
   | "verso_vazio"
   | "frente_muito_longa"
   | "verso_muito_longo"
-  | "frente_duplicada";
+  | "frente_duplicada"
+  | "descricao_muito_longa"
+  | "imagem_ausente";
 
 /**
  * Falha de regra de domínio. É resultado previsto da Interface, não exceção:

@@ -1,4 +1,5 @@
-import { criarAcervo } from "../acervo/acervo.ts";
+import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
+import { armazemDaNuvem } from "../imagens/configuracao.ts";
 import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
@@ -200,16 +201,23 @@ if (
   const aberto = await abrirArmazenamentoDaNuvem(configuracao);
 
   if (aberto !== null) {
-    const identidade = criarIdentidade(aberto.usuarios, segredo);
+    const imagens = armazemDaNuvem(process.env);
+    const limparImagens = () =>
+      processarFilaDeImagens(aberto.armazenamento, imagens);
+    const identidade = criarIdentidade(aberto.usuarios, segredo, {
+      aposExcluirConta: limparImagens,
+    });
 
     console.log(LINHA_DE_INICIO);
 
+    await limparImagens();
     await iniciarServidor(
       process.env,
       identidade,
-      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId),
+      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId, { imagens }),
       aberto.acessos,
       lerPacoteAnki,
+      imagens,
     );
   }
 }

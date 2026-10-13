@@ -60,6 +60,8 @@ const ENTRADAS = {
     /**
      * O SDK da AWS v3 vem **no runtime** `nodejs24.x` e é externo: empacotá-lo
      * engordaria o zip e duplicaria o que o runtime já traz (FR-130).
+     * Inclui o S3 e as duas bibliotecas de assinatura das Imagens (`026`),
+     * conferidas em `/var/runtime/node_modules/@aws-sdk` da imagem oficial.
      */
     externos: ["pg-native", "@aws-sdk/*"],
     /**

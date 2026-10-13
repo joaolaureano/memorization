@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
   mkdtempSync,
   readdirSync,
@@ -95,7 +95,7 @@ function executarBateria(
   projeto: string,
   filtros: string[],
   rotulo: string,
-): ExecucaoDaBateria {
+): Promise<ExecucaoDaBateria> {
   const arquivoDoRelatorio = join(DIRETORIO_TEMPORARIO, `${rotulo}.json`);
   const ambiente = { ...process.env };
 
@@ -105,25 +105,53 @@ function executarBateria(
     }
   }
 
-  const resultado = spawnSync(
-    process.execPath,
-    [
-      join(projeto, "node_modules", "vitest", "vitest.mjs"),
-      "run",
-      ...filtros,
-      "--reporter=json",
-      `--outputFile=${arquivoDoRelatorio}`,
-    ],
-    { cwd: projeto, env: ambiente, encoding: "utf8", timeout: 240_000 },
-  );
+  const argumentos = [
+    join(projeto, "node_modules", "vitest", "vitest.mjs"),
+    "run",
+    ...filtros,
+    "--reporter=json",
+    `--outputFile=${arquivoDoRelatorio}`,
+  ];
 
-  return {
-    codigo: resultado.status,
-    saida: `${resultado.stdout}${resultado.stderr}`,
-    relatorio: JSON.parse(
-      readFileSync(arquivoDoRelatorio, "utf8"),
-    ) as RelatorioDaBateria,
-  };
+  // A bateria dura dezenas de segundos: spawnSync bloquearia o worker e
+  // impediria o RPC do Vitest de processar onTaskUpdate durante esse período.
+  return new Promise((resolver, rejeitar) => {
+    const processo = spawn(process.execPath, argumentos, {
+      cwd: projeto,
+      env: ambiente,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const limite = setTimeout(() => processo.kill("SIGKILL"), 240_000);
+
+    processo.stdout.setEncoding("utf8");
+    processo.stdout.on("data", (trecho: string) => {
+      stdout += trecho;
+    });
+    processo.stderr.setEncoding("utf8");
+    processo.stderr.on("data", (trecho: string) => {
+      stderr += trecho;
+    });
+    processo.once("error", (erro) => {
+      clearTimeout(limite);
+      rejeitar(erro);
+    });
+    processo.once("close", (codigo) => {
+      clearTimeout(limite);
+      try {
+        resolver({
+          codigo,
+          saida: `${stdout}${stderr}`,
+          relatorio: JSON.parse(
+            readFileSync(arquivoDoRelatorio, "utf8"),
+          ) as RelatorioDaBateria,
+        });
+      } catch (erro) {
+        rejeitar(erro);
+      }
+    });
+  });
 }
 
 /** Cem por cento: todos os casos passaram, e nenhum ficou de fora. */
@@ -154,7 +182,7 @@ function relativoAoProjeto(projeto: string, arquivo: string): string {
 }
 
 describe("bateria existente com o Adapter do armazenamento local", () => {
-  it("as suítes de domínio, de contrato HTTP, do servidor e da escuta passam por inteiro (SC-038)", () => {
+  it("as suítes de domínio, de contrato HTTP, do servidor e da escuta passam por inteiro (SC-038)", async () => {
     const esperados = [
       ...arquivosDeTeste(join(RAIZ_DO_BACKEND, "tests", "acervo")),
       ...arquivosDeTeste(join(RAIZ_DO_BACKEND, "tests", "http")),
@@ -162,7 +190,7 @@ describe("bateria existente com o Adapter do armazenamento local", () => {
       join(RAIZ_DO_BACKEND, "tests", "escuta.test.ts"),
     ].map((arquivo) => relativoAoProjeto(RAIZ_DO_BACKEND, arquivo));
 
-    const { codigo, saida, relatorio } = executarBateria(
+    const { codigo, saida, relatorio } = await executarBateria(
       RAIZ_DO_BACKEND,
       FILTROS_DA_BATERIA_DO_BACKEND,
       "backend",

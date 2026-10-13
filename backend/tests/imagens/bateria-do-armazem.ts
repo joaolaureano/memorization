@@ -1,0 +1,216 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  LIMITE_DE_BYTES_DA_IMAGEM,
+  VALIDADE_DA_LEITURA_EM_SEGUNDOS,
+  VALIDADE_DO_ENVIO_EM_SEGUNDOS,
+  type ArmazemDeImagens,
+  type EnvioPreparado,
+} from "../../src/imagens/armazem.ts";
+import {
+  contem,
+  gifComMetadados,
+  jpegComMetadados,
+  orientacaoDoJpeg,
+  pngComMetadados,
+  textoDisfarcado,
+  webpComMetadados,
+} from "./amostras.ts";
+
+/**
+ * T007 — bateria de contrato do `ArmazemDeImagens` (`026`, FR-410, FR-411,
+ * FR-424, FR-427), comum aos Adapters Disco e S3.
+ *
+ * Cada Adapter fornece, além do armazém, as duas ações que o navegador faz
+ * fora da API: enviar o arquivo ao envio preparado e ler um endereço.
+ */
+export interface CenarioDoArmazem {
+  armazem: ArmazemDeImagens;
+  /** Faz o envio como o navegador; devolve o status HTTP da resposta. */
+  enviar(envio: EnvioPreparado, bytes: Uint8Array): Promise<number>;
+  /** Lê um endereço; `null` quando a leitura é negada. */
+  ler(url: string): Promise<{ bytes: Uint8Array; tipo: string } | null>;
+  /** Lê diretamente uma chave do armazém, sem assinatura; `null` se negado. */
+  lerSemAssinatura(chave: string): Promise<Uint8Array | null>;
+  /** Leva o relógio adiante, quando o Adapter permite; senão, omitido. */
+  avancar?(segundos: number): void;
+  /** Diz se o Adapter recusa envios acima do limite (o MinIO pode não recusar). */
+  recusaEnvioGrande?: boolean;
+}
+
+const DONO = "dono-um";
+const OUTRO = "dono-dois";
+
+export function bateriaDoArmazem(
+  nome: string,
+  criar: () => Promise<CenarioDoArmazem>,
+): void {
+  describe(`ArmazemDeImagens — ${nome}`, () => {
+    async function enviarEConfirmar(
+      cenario: CenarioDoArmazem,
+      bytes: Uint8Array,
+    ) {
+      const envio = await cenario.armazem.prepararEnvio(DONO);
+      expect(await cenario.enviar(envio, bytes)).toBeLessThan(300);
+      return cenario.armazem.confirmar(DONO, envio.imagemId);
+    }
+
+    it("prepara envio válido por até 5 minutos", async () => {
+      const cenario = await criar();
+      const antes = Date.now();
+      const envio = await cenario.armazem.prepararEnvio(DONO);
+
+      expect(envio.imagemId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(typeof envio.envio.url).toBe("string");
+      expect(typeof envio.envio.campos).toBe("object");
+      expect(Date.parse(envio.expiraEm) - antes).toBeLessThanOrEqual(
+        VALIDADE_DO_ENVIO_EM_SEGUNDOS * 1000 + 2000,
+      );
+    });
+
+    it.each([
+      ["JPEG", jpegComMetadados(), "image/jpeg"],
+      ["PNG", pngComMetadados(), "image/png"],
+      ["GIF87a", gifComMetadados("GIF87a"), "image/gif"],
+      ["GIF89a", gifComMetadados("GIF89a"), "image/gif"],
+      ["WebP", webpComMetadados(), "image/webp"],
+    ] as const)("aceita %s pelo conteúdo e o serve com o tipo detectado", async (_, bytes, tipo) => {
+      const cenario = await criar();
+      const confirmada = await enviarEConfirmar(cenario, bytes);
+
+      expect(confirmada).toMatchObject({ ok: true, formato: tipo });
+      if (!confirmada.ok) return;
+      expect(confirmada.chave.startsWith(`imagens/${DONO}/`)).toBe(true);
+
+      const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
+      const lida = await cenario.ler(endereco.url);
+      expect(lida?.tipo).toBe(tipo);
+    });
+
+    it("remove os metadados e preserva a orientação do JPEG (FR-427)", async () => {
+      const cenario = await criar();
+
+      for (const bytes of [jpegComMetadados(6), pngComMetadados(), gifComMetadados(), webpComMetadados()]) {
+        const confirmada = await enviarEConfirmar(cenario, bytes);
+        if (!confirmada.ok) throw new Error("recusada");
+        const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
+        const lida = await cenario.ler(endereco.url);
+
+        expect(lida).not.toBeNull();
+        expect(contem(lida!.bytes, "SEGREDO-GPS")).toBe(false);
+        expect(contem(lida!.bytes, "SEGREDO-COMENTARIO")).toBe(false);
+        if (lida!.tipo === "image/jpeg") {
+          expect(orientacaoDoJpeg(lida!.bytes)).toBe(6);
+        }
+        if (lida!.tipo === "image/gif") {
+          expect(contem(lida!.bytes, "NETSCAPE2.0")).toBe(true);
+        }
+      }
+    });
+
+    it("recusa texto com nome de imagem e apaga o pendente (FR-411)", async () => {
+      const cenario = await criar();
+      const envio = await cenario.armazem.prepararEnvio(DONO);
+      await cenario.enviar(envio, textoDisfarcado());
+
+      expect(await cenario.armazem.confirmar(DONO, envio.imagemId)).toEqual({
+        ok: false,
+        motivo: "formato",
+      });
+      expect(await cenario.armazem.confirmar(DONO, envio.imagemId)).toEqual({
+        ok: false,
+        motivo: "nao_encontrada",
+      });
+    });
+
+    it("aceita 1 B a 5.242.880 B e recusa acima do limite (FR-410)", async () => {
+      const cenario = await criar();
+      const noLimite = pngComMetadados(LIMITE_DE_BYTES_DA_IMAGEM);
+      expect(noLimite.length).toBe(LIMITE_DE_BYTES_DA_IMAGEM);
+      expect(await enviarEConfirmar(cenario, noLimite)).toMatchObject({ ok: true });
+
+      const umByte = await cenario.armazem.prepararEnvio(DONO);
+      expect(await cenario.enviar(umByte, new Uint8Array([0x47]))).toBeLessThan(300);
+      expect(await cenario.armazem.confirmar(DONO, umByte.imagemId)).toEqual({
+        ok: false,
+        motivo: "formato",
+      });
+
+      if (cenario.recusaEnvioGrande !== false) {
+        const grande = await cenario.armazem.prepararEnvio(DONO);
+        expect(
+          await cenario.enviar(grande, pngComMetadados(LIMITE_DE_BYTES_DA_IMAGEM + 1)),
+        ).toBeGreaterThanOrEqual(400);
+        expect(await cenario.armazem.confirmar(DONO, grande.imagemId)).toEqual({
+          ok: false,
+          motivo: "nao_encontrada",
+        });
+      }
+    });
+
+    it("não confirma envio ausente, de outro Usuário ou com identificador forjado", async () => {
+      const cenario = await criar();
+      const envio = await cenario.armazem.prepararEnvio(DONO);
+      await cenario.enviar(envio, pngComMetadados());
+
+      expect(await cenario.armazem.confirmar(OUTRO, envio.imagemId)).toEqual({
+        ok: false,
+        motivo: "nao_encontrada",
+      });
+      expect(
+        await cenario.armazem.confirmar(DONO, "00000000-0000-4000-8000-000000000000"),
+      ).toEqual({ ok: false, motivo: "nao_encontrada" });
+      expect(await cenario.armazem.confirmar(DONO, "../dono-dois/x")).toEqual({
+        ok: false,
+        motivo: "nao_encontrada",
+      });
+    });
+
+    it("nunca deixa ler pendente nem Imagem sem assinatura (FR-424)", async () => {
+      const cenario = await criar();
+      const envio = await cenario.armazem.prepararEnvio(DONO);
+      await cenario.enviar(envio, pngComMetadados());
+
+      expect(await cenario.lerSemAssinatura(`pendentes/${DONO}/${envio.imagemId}`)).toBeNull();
+
+      const confirmada = await cenario.armazem.confirmar(DONO, envio.imagemId);
+      if (!confirmada.ok) throw new Error("recusada");
+      expect(await cenario.lerSemAssinatura(confirmada.chave)).toBeNull();
+    });
+
+    it("emite endereço de leitura que expira em até 15 minutos", async () => {
+      const cenario = await criar();
+      const confirmada = await enviarEConfirmar(cenario, pngComMetadados());
+      if (!confirmada.ok) throw new Error("recusada");
+
+      const antes = Date.now();
+      const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
+      expect(Date.parse(endereco.expiraEm) - antes).toBeLessThanOrEqual(
+        VALIDADE_DA_LEITURA_EM_SEGUNDOS * 1000 + 2000,
+      );
+
+      if (cenario.avancar !== undefined) {
+        cenario.avancar(VALIDADE_DA_LEITURA_EM_SEGUNDOS + 1);
+        expect(await cenario.ler(endereco.url)).toBeNull();
+      }
+    });
+
+    it("copia para uma chave independente e remove de forma idempotente (FR-422)", async () => {
+      const cenario = await criar();
+      const confirmada = await enviarEConfirmar(cenario, pngComMetadados());
+      if (!confirmada.ok) throw new Error("recusada");
+
+      const copia = await cenario.armazem.copiar(confirmada.chave, OUTRO);
+      expect(copia).not.toBe(confirmada.chave);
+      expect(copia.startsWith(`imagens/${OUTRO}/`)).toBe(true);
+
+      expect(await cenario.armazem.remover([confirmada.chave])).toEqual([confirmada.chave]);
+      expect(await cenario.armazem.remover([confirmada.chave])).toEqual([confirmada.chave]);
+
+      const original = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
+      expect(await cenario.ler(original.url)).toBeNull();
+      const daCopia = await cenario.armazem.enderecoDeLeitura(copia);
+      expect((await cenario.ler(daCopia.url))?.tipo).toBe("image/png");
+    });
+  });
+}
