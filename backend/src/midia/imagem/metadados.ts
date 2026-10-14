@@ -1,4 +1,4 @@
-import type { FormatoDeImagem } from "./armazem.ts";
+import type { FormatoDeImagem } from "../armazem.ts";
 
 /**
  * Remoção de metadados embutidos na Imagem (`026`, FR-427, research R13).

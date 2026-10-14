@@ -259,7 +259,19 @@ function ehFrenteDuplicada(erro: unknown): boolean {
 function colunasDeInsercao(
   cartao: Cartao,
   usuarioId: string,
-): [string, string, string, string, string, string, string, string | null, string | null] {
+): [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string | null,
+  string | null,
+  string | null,
+  number | null,
+] {
   return [
     cartao.id,
     cartao.frente,
@@ -270,16 +282,29 @@ function colunasDeInsercao(
     cartao.tipo ?? "frente-verso",
     cartao.imagemChave ?? null,
     cartao.textoAlternativo ?? null,
+    cartao.audioChave ?? null,
+    cartao.audioDuracaoMs ?? null,
   ];
 }
 
 /**
  * Lê o Tipo de cartão da linha na forma legada da Porta: `frente-verso` não
- * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408).
+ * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408);
+ * `audio` traz a chave do Áudio e a duração em milissegundos (FR-434).
  */
 function camposDeTipoDaLinha(
   linha: Record<string, unknown>,
-): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo"> {
+): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo" | "audioChave" | "audioDuracaoMs"> {
+  if (linha.tipo === "audio") {
+    const audioDuracaoMs = linha.audio_duracao_ms as number | null | undefined;
+    return {
+      tipo: "audio",
+      audioChave: linha.audio_chave as string,
+      ...(audioDuracaoMs !== null && audioDuracaoMs !== undefined
+        ? { audioDuracaoMs }
+        : {}),
+    };
+  }
   if (linha.tipo !== "imagem") {
     return {};
   }
@@ -355,7 +380,9 @@ function comoInstanteIso(valor: unknown): string {
 function itemDaLinha(linha: Record<string, unknown>): ItemRegistrado {
   return {
     posicao: Number(linha.posicao),
-    ...(linha.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+    ...(linha.tipo === "imagem" || linha.tipo === "audio"
+      ? { tipo: linha.tipo as "imagem" | "audio" }
+      : {}),
     frente: linha.frente as string,
     verso: linha.verso as string,
     resultado: linha.resultado as ItemRegistrado["resultado"],
@@ -575,7 +602,8 @@ export async function abrirArmazenamentoSqlite(
    */
   const listarCartoes = banco.prepare(
     `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
-            cartao.imagem_chave, cartao.texto_alternativo, baralho.id AS baralho_id,
+            cartao.imagem_chave, cartao.texto_alternativo, cartao.audio_chave,
+            cartao.audio_duracao_ms, baralho.id AS baralho_id,
             baralho.nome AS baralho_nome
        FROM cartao
        JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -584,7 +612,8 @@ export async function abrirArmazenamentoSqlite(
       ORDER BY cartao.criado_em IS NOT NULL, cartao.criado_em, cartao.rowid`,
   );
   const obterCartaoPorId = banco.prepare(
-    `SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo
+    `SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo,
+            audio_chave, audio_duracao_ms
        FROM cartao WHERE id = ? AND usuario_id = ?`,
   );
   /**
@@ -594,14 +623,15 @@ export async function abrirArmazenamentoSqlite(
    */
   const inserirCartaoComDono = banco.prepare(
     `INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json,
-                         tipo, imagem_chave, texto_alternativo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         tipo, imagem_chave, texto_alternativo, audio_chave, audio_duracao_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const obterPertencimentoDoCartao = banco.prepare(
     `SELECT baralho_id FROM pertencimento WHERE cartao_id = ?`,
   );
   const atualizarCartaoEPertencimento = banco.prepare(
-    `UPDATE cartao SET frente = ?, verso = ?, tags_json = ?, imagem_chave = ?, texto_alternativo = ?
+    `UPDATE cartao SET frente = ?, verso = ?, tags_json = ?, imagem_chave = ?, texto_alternativo = ?,
+                       audio_chave = ?, audio_duracao_ms = ?
       WHERE id = ? AND usuario_id = ?`,
   );
   const atualizarFrenteChave = banco.prepare(
@@ -612,38 +642,58 @@ export async function abrirArmazenamentoSqlite(
   );
 
   /**
-   * A fila de remoção de Imagens (FR-421). As inserções rodam na mesma
-   * transação que exclui ou troca a Imagem; `OR IGNORE` torna a reinserção da
-   * mesma chave inofensiva.
+   * A fila `midia_a_remover` guarda as chaves de Imagem e de Áudio (FR-449). As
+   * inserções rodam na mesma transação que exclui ou troca a Mídia; `OR IGNORE`
+   * torna a reinserção da mesma chave inofensiva.
    */
-  const enfileirarImagem = banco.prepare(
-    "INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em) VALUES (?, ?)",
+  const enfileirarMidia = banco.prepare(
+    "INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em) VALUES (?, ?)",
   );
-  const enfileirarImagemDoCartao = banco.prepare(
-    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+  const enfileirarMidiaDoCartao = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
      SELECT imagem_chave, ? FROM cartao
       WHERE id = ? AND usuario_id = ? AND imagem_chave IS NOT NULL`,
   );
-  const enfileirarImagensDoBaralho = banco.prepare(
-    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+  const enfileirarAudioDoCartao = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
+     SELECT audio_chave, ? FROM cartao
+      WHERE id = ? AND usuario_id = ? AND audio_chave IS NOT NULL`,
+  );
+  const enfileirarMidiasDoBaralho = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
      SELECT cartao.imagem_chave, ? FROM cartao
        JOIN pertencimento ON pertencimento.cartao_id = cartao.id
       WHERE cartao.usuario_id = ? AND pertencimento.baralho_id = ?
         AND cartao.imagem_chave IS NOT NULL`,
   );
-  const enfileirarImagensDoUsuario = banco.prepare(
-    `INSERT OR IGNORE INTO imagem_a_remover (chave, registrada_em)
+  const enfileirarAudiosDoBaralho = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
+     SELECT cartao.audio_chave, ? FROM cartao
+       JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+      WHERE cartao.usuario_id = ? AND pertencimento.baralho_id = ?
+        AND cartao.audio_chave IS NOT NULL`,
+  );
+  const enfileirarMidiasDoUsuario = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
      SELECT imagem_chave, ? FROM cartao
       WHERE usuario_id = ? AND imagem_chave IS NOT NULL`,
+  );
+  const enfileirarAudiosDoUsuario = banco.prepare(
+    `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
+     SELECT audio_chave, ? FROM cartao
+      WHERE usuario_id = ? AND audio_chave IS NOT NULL`,
   );
   const obterImagemDoCartao = banco.prepare(
     "SELECT imagem_chave FROM cartao WHERE id = ? AND usuario_id = ?",
   );
-  const listarImagensARemover = banco.prepare(
-    "SELECT chave FROM imagem_a_remover ORDER BY registrada_em, chave LIMIT ?",
+  const obterAudioDoCartao = banco.prepare(
+    "SELECT audio_chave FROM cartao WHERE id = ? AND usuario_id = ?",
   );
-  const esquecerImagemRemovida = banco.prepare(
-    "DELETE FROM imagem_a_remover WHERE chave = ?",
+  const listarMidiaARemover = banco.prepare(
+    "SELECT chave FROM midia_a_remover ORDER BY registrada_em, chave LIMIT ?",
+  );
+  const esquecerMidiaRemovida = banco.prepare(
+    "DELETE FROM midia_a_remover WHERE chave = ?",
   );
 
   const inserirBaralho = banco.prepare(
@@ -691,7 +741,8 @@ export async function abrirArmazenamentoSqlite(
   );
   const listarCartoesDoBaralho = banco.prepare(
     `SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
-            cartao.imagem_chave, cartao.texto_alternativo
+            cartao.imagem_chave, cartao.texto_alternativo, cartao.audio_chave,
+            cartao.audio_duracao_ms
        FROM pertencimento
        JOIN cartao ON cartao.id = pertencimento.cartao_id
        JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -1134,12 +1185,15 @@ export async function abrirArmazenamentoSqlite(
         try {
           return emTransacaoComDesfecho(banco, () => {
             const anterior = obterImagemDoCartao.get(cartao.id, usuarioId);
+            const anteriorDeAudio = obterAudioDoCartao.get(cartao.id, usuarioId);
             const alteradas = atualizarCartaoEPertencimento.run(
               cartao.frente,
               cartao.verso,
               JSON.stringify(cartao.tags ?? []),
               cartao.imagemChave ?? null,
               cartao.textoAlternativo ?? null,
+              cartao.audioChave ?? null,
+              cartao.audioDuracaoMs ?? null,
               cartao.id,
               usuarioId,
             );
@@ -1148,14 +1202,22 @@ export async function abrirArmazenamentoSqlite(
               return NAO_ENCONTRADO;
             }
 
-            /** A Imagem substituída entra na fila de remoção (FR-421). */
+            /** A Mídia substituída (Imagem ou Áudio) entra na fila de remoção (FR-421, FR-449). */
             const chaveAnterior = anterior?.imagem_chave as string | null | undefined;
             if (
               chaveAnterior !== null &&
               chaveAnterior !== undefined &&
               chaveAnterior !== cartao.imagemChave
             ) {
-              enfileirarImagem.run(chaveAnterior, new Date().toISOString());
+              enfileirarMidia.run(chaveAnterior, new Date().toISOString());
+            }
+            const chaveAnteriorDeAudio = anteriorDeAudio?.audio_chave as string | null | undefined;
+            if (
+              chaveAnteriorDeAudio !== null &&
+              chaveAnteriorDeAudio !== undefined &&
+              chaveAnteriorDeAudio !== cartao.audioChave
+            ) {
+              enfileirarMidia.run(chaveAnteriorDeAudio, new Date().toISOString());
             }
 
             /**
@@ -1186,7 +1248,8 @@ export async function abrirArmazenamentoSqlite(
     async excluirCartao(usuarioId, id) {
       return comDesfecho(() =>
         emTransacaoComDesfecho(banco, () => {
-          enfileirarImagemDoCartao.run(new Date().toISOString(), id, usuarioId);
+          enfileirarMidiaDoCartao.run(new Date().toISOString(), id, usuarioId);
+          enfileirarAudioDoCartao.run(new Date().toISOString(), id, usuarioId);
           return Number(excluirCartao.run(id, usuarioId).changes) === 0
             ? NAO_ENCONTRADO
             : SEM_CARGA;
@@ -1194,27 +1257,27 @@ export async function abrirArmazenamentoSqlite(
       );
     },
 
-    async enfileirarImagensARemover(chaves) {
+    async enfileirarMidiaARemover(chaves) {
       return comDesfecho(() =>
         emTransacaoComDesfecho(banco, () => {
           const agora = new Date().toISOString();
           for (const chave of chaves) {
-            enfileirarImagem.run(chave, agora);
+            enfileirarMidia.run(chave, agora);
           }
           return SEM_CARGA;
         }),
       );
     },
 
-    async listarImagensARemover(limite) {
-      return listarImagensARemover
+    async listarMidiaARemover(limite) {
+      return listarMidiaARemover
         .all(limite)
         .map((linha) => linha.chave as string);
     },
 
-    async esquecerImagensRemovidas(chaves) {
+    async esquecerMidiaRemovida(chaves) {
       for (const chave of chaves) {
-        esquecerImagemRemovida.run(chave);
+        esquecerMidiaRemovida.run(chave);
       }
     },
 
@@ -1354,7 +1417,8 @@ export async function abrirArmazenamentoSqlite(
            * as cascatas do esquema removem os Pertencimentos e Agendamentos
            * (FR-402).
            */
-          enfileirarImagensDoBaralho.run(new Date().toISOString(), usuarioId, id);
+          enfileirarMidiasDoBaralho.run(new Date().toISOString(), usuarioId, id);
+          enfileirarAudiosDoBaralho.run(new Date().toISOString(), usuarioId, id);
           excluirCartoesPertencimentoBaralho.run(usuarioId, id);
 
           /**
@@ -2280,7 +2344,8 @@ export async function abrirArmazenamentoSqlite(
       return comDesfechoDeUsuario<DesfechoDeOperacaoDeConta<void>>(
         () =>
           emTransacao(banco, () => {
-            enfileirarImagensDoUsuario.run(new Date().toISOString(), id);
+            enfileirarMidiasDoUsuario.run(new Date().toISOString(), id);
+            enfileirarAudiosDoUsuario.run(new Date().toISOString(), id);
             return Number(excluirUsuarioPorId.run(id).changes) === 0
               ? USUARIO_NAO_ENCONTRADO
               : { ok: true as const, valor: undefined };

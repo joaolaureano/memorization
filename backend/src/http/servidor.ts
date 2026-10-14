@@ -10,7 +10,7 @@ import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
 import type { Acessos } from "../acesso/acesso.ts";
 import type { ArmazenamentoDeAcessos } from "../armazenamento/porta.ts";
 import type { Identidade } from "../identidade/identidade.ts";
-import type { ArmazemDeImagens } from "../imagens/armazem.ts";
+import type { ArmazemDeMidia } from "../midia/armazem.ts";
 import { exigirCredencial } from "./credencial.ts";
 import { exigirSegredoDeOrigem } from "./origem.ts";
 import {
@@ -23,6 +23,8 @@ import {
   registrarRotasDeConta,
   registrarRotasDeImagens,
   CAMINHO_DOS_ENVIOS_DE_IMAGEM,
+  registrarRotasDeAudios,
+  CAMINHO_DOS_ENVIOS_DE_AUDIO,
   registrarRotasDePreferencias,
   registrarRotasDeRevisao,
   registrarRotasDeSessoes,
@@ -366,6 +368,7 @@ export function criarServidor(
       CAMINHO_DA_RENOVACAO_DO_ACESSO,
       CAMINHO_DE_SAIR,
       CAMINHO_DOS_ENVIOS_DE_IMAGEM,
+      CAMINHO_DOS_ENVIOS_DE_AUDIO,
     ]) {
       permitirPreVoo(servidor, caminho, origemDa);
     }
@@ -394,7 +397,8 @@ export function criarServidor(
         caminho === CAMINHO_DA_RENOVACAO_DO_ACESSO ||
         caminho === CAMINHO_DE_SAIR ||
         caminho === CAMINHO_DOS_ENVIOS_DE_IMAGEM ||
-        caminho.startsWith("/imagens-locais/")
+        caminho === CAMINHO_DOS_ENVIOS_DE_AUDIO ||
+        caminho.startsWith("/midia-local/")
       ) {
         resposta
           .header("access-control-allow-origin", origemDa(requisicao))
@@ -460,10 +464,11 @@ export function registrarRotasDaAplicacao(
   acervoDe: AcervoDeUsuario,
   acessos: Acessos,
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
-  imagens?: ArmazemDeImagens,
+  imagens?: ArmazemDeMidia,
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
   registrarRotasDeImagens(servidor, imagens);
+  registrarRotasDeAudios(servidor, imagens);
   registrarRotasDeBaralhos(servidor, acervoDe, lerAnki);
   registrarRotasDeTransicao(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
@@ -490,7 +495,7 @@ export async function iniciarServidor(
   acervoDe: AcervoDeUsuario,
   armazenamentoDeAcessos: ArmazenamentoDeAcessos,
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
-  imagens?: ArmazemDeImagens,
+  imagens?: ArmazemDeMidia,
   registrarRotasLocais?: (servidor: FastifyInstance) => void,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);

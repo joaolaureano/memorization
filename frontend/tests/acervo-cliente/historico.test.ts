@@ -430,6 +430,27 @@ describe("ClienteHttp — obterRegistroDeSessao", () => {
     );
   });
 
+  it("mantém o tipo Áudio de cada Item do Registro (028, FR-447)", async () => {
+    const registro = {
+      ...registroCompleto(),
+      itens: [
+        { posicao: 0, tipo: "audio", frente: "Olá", verso: "Hello", resultado: "acertou" },
+        { posicao: 1, tipo: "imagem", frente: "", verso: "Casa", resultado: "errou" },
+      ],
+    };
+    const { cliente } = ambienteHttp(
+      respostaDeTeste(200, { registro, baralhoExiste: true }),
+    );
+
+    const resultado = await cliente.obterRegistroDeSessao(registro.id);
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) {
+      throw new Error("o registro deveria ser aceito");
+    }
+    expect(resultado.registro.itens.map((item) => item.tipo)).toEqual(["audio", "imagem"]);
+  });
+
   it("aceita baralhoExiste false (FR-166)", async () => {
     const registro = registroCompleto();
     const { cliente } = ambienteHttp(
@@ -580,6 +601,27 @@ describe("ClienteEmMemoria — histórico", () => {
     expect(new Date(resultado.registro.concluidaEm).toISOString()).toBe(
       resultado.registro.concluidaEm,
     );
+  });
+
+  it("guarda o tipo Áudio do Item no Registro da Sessão (028, FR-447)", async () => {
+    const cliente = clienteEmMemoria();
+
+    const resultado = await cliente.registrarSessao({
+      id: randomUUID(),
+      origem: "baralho",
+      baralhoId: "b1",
+      nomeDoBaralho: "Inglês",
+      itens: [
+        { ...itemDe("Olá", "Hello", "bom"), tipo: "audio" },
+        itemDe("To run", "Correr", "errei"),
+      ],
+    });
+
+    expect(resultado.ok).toBe(true);
+    if (!resultado.ok) {
+      throw new Error("o registro deveria ser aceito");
+    }
+    expect(resultado.registro.itens.map((item) => item.tipo)).toEqual(["audio", undefined]);
   });
 
   it("é idempotente pelo id: o mesmo id devolve o mesmo Registro, sem duplicar (FR-163)", async () => {

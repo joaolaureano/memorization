@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { armazemDaNuvem } from "../../src/imagens/configuracao.ts";
+import { armazemDaNuvem } from "../../src/midia/configuracao.ts";
 
 /**
  * T016 — a nuvem só tem armazém de Imagens com `NOME_DO_BUCKET_DE_IMAGENS`;

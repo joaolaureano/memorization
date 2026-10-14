@@ -54,11 +54,12 @@ export const CODIGOS_DE_RECUSA: readonly string[] = [
   "imagem_ausente", "frente_vazia", "envio_invalido", "descricao_muito_longa",
   "credencial_invalida", "acesso_expirado", "anki_grande_demais",
   "anki_ilegivel", "anki_corrompido", "anki_incompativel", "sobreposicao",
+  "audio_ausente", "audio_invalido",
 ];
 
 /** Os `motivo`s que mudam o texto de uma recusa. */
 export const MOTIVOS_DE_RECUSA: readonly string[] = [
-  "formato", "tamanho", "nao_encontrada",
+  "formato", "tamanho", "duracao", "nao_encontrada", "nao_encontrado",
   "baralho_ausente", "dias_invalidos", "quantidade_invalida", "data_invalida",
   "inicio_nao_segunda", "fuso_invalido", "operacao_vazia", "acao_invalida",
   "rotina_ausente", "versao_ausente", "operacao_reutilizada",
@@ -135,6 +136,15 @@ export const textoDaRecusaPt: TextoDaRecusa = (recusa, contexto) => {
         return "A imagem enviada não foi encontrada. Escolha a imagem de novo.";
       }
       return "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.";
+    case "audio_ausente":
+      return "Escolha um áudio.";
+    case "audio_invalido":
+      if (recusa.motivo === "tamanho") return "O áudio deve ter no máximo 10 MB.";
+      if (recusa.motivo === "duracao") return "O áudio deve ter no máximo 5 minutos.";
+      if (recusa.motivo === "nao_encontrado") {
+        return "O áudio enviado não foi encontrado. Escolha o áudio de novo.";
+      }
+      return "O arquivo não é um áudio MP3, M4A, OGG, WebM ou WAV.";
     case "envio_invalido":
       return "Escolha uma imagem JPEG, PNG, WebP ou GIF.";
     case "nome_de_usuario_invalido":
@@ -252,6 +262,15 @@ export const textoDaRecusaEn: TextoDaRecusa = (recusa, contexto) => {
         return "The uploaded image was not found. Choose the image again.";
       }
       return "The file is not a JPEG, PNG, WebP or GIF image.";
+    case "audio_ausente":
+      return "Choose an audio file.";
+    case "audio_invalido":
+      if (recusa.motivo === "tamanho") return "The audio must be at most 10 MB.";
+      if (recusa.motivo === "duracao") return "The audio must be at most 5 minutes long.";
+      if (recusa.motivo === "nao_encontrado") {
+        return "The uploaded audio was not found. Choose the audio again.";
+      }
+      return "The file is not an MP3, M4A, OGG, WebM or WAV audio file.";
     case "envio_invalido":
       return "Choose a JPEG, PNG, WebP or GIF image.";
     case "nome_de_usuario_invalido":
@@ -369,6 +388,15 @@ export const textoDaRecusaEs: TextoDaRecusa = (recusa, contexto) => {
         return "No se encontró la imagen enviada. Elige la imagen de nuevo.";
       }
       return "El archivo no es una imagen JPEG, PNG, WebP o GIF.";
+    case "audio_ausente":
+      return "Elige un audio.";
+    case "audio_invalido":
+      if (recusa.motivo === "tamanho") return "El audio debe tener como máximo 10 MB.";
+      if (recusa.motivo === "duracao") return "El audio debe durar como máximo 5 minutos.";
+      if (recusa.motivo === "nao_encontrado") {
+        return "No se encontró el audio enviado. Elige el audio de nuevo.";
+      }
+      return "El archivo no es un audio MP3, M4A, OGG, WebM o WAV.";
     case "envio_invalido":
       return "Elige una imagen JPEG, PNG, WebP o GIF.";
     case "nome_de_usuario_invalido":

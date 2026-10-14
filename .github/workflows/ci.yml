@@ -69,7 +69,7 @@ jobs:
           S3_DE_TESTE_USUARIO="$usuario" \
           S3_DE_TESTE_SENHA="$senha" \
           S3_DE_TESTE_RECUSA_ENVIO_GRANDE=sim \
-            npx vitest run tests/imagens/armazem-s3.test.ts
+            npx vitest run tests/midia/armazem-s3.test.ts
 
   frontend:
     name: Frontend (lint, testes, build)

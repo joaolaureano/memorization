@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
+import { ProvedorDeIdioma } from "../src/idioma";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
@@ -405,5 +406,27 @@ describe("PaginaDoBaralho", () => {
     })) {
       expect(excluirCartao).not.toBe(document.activeElement);
     }
+  });
+});
+
+describe("filtro de Tipo de cartão no idioma inglês (B6)", () => {
+  it("a opção Todos do filtro de Tipo vem do catálogo: em inglês, All", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoDeTeste();
+    const { container } = render(
+      comProtecaoDeSaida(
+        <ProvedorDeIdioma idiomaInicial="en">
+          <PaginaDoBaralho cliente={cliente} id={idDoBaralho} />
+        </ProvedorDeIdioma>,
+        true,
+      ),
+    );
+
+    const filtro = await waitFor(() => {
+      const el = container.querySelector<HTMLSelectElement>("#filtro-de-tipo-de-cartao");
+      if (el === null) throw new Error("filtro de Tipo ainda não montado");
+      return el;
+    });
+
+    expect(filtro.options[0]).toHaveTextContent(/^All$/);
   });
 });

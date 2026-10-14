@@ -44,6 +44,9 @@ export const MENSAGENS_PT = {
   sessaoConcluida: "A Sessão já foi concluída.",
   imagemGrande: "A imagem deve ter no máximo 5 MB.",
   formatoDeImagem: "Escolha uma imagem JPEG, PNG, WebP ou GIF.",
+  audioGrande: "O áudio deve ter no máximo 10 MB.",
+  formatoDeAudio: "O arquivo não é um áudio MP3, M4A, OGG, WebM ou WAV.",
+  audioLongo: "O áudio deve ter no máximo 5 minutos.",
   resultadoDesconhecidoDaExclusao: "Não foi possível confirmar se a conta foi excluída.",
   contaNaoExcluida:
     "Não foi possível excluir a conta agora. Nada foi excluído. Tente novamente.",
@@ -94,6 +97,9 @@ export const MENSAGENS: Record<Idioma, Record<ChaveDeMensagem, string>> = {
     sessaoConcluida: "The session is already complete.",
     imagemGrande: "The image can be at most 5 MB.",
     formatoDeImagem: "Choose a JPEG, PNG, WebP or GIF image.",
+    audioGrande: "The audio must be at most 10 MB.",
+    formatoDeAudio: "The file is not an MP3, M4A, OGG, WebM or WAV audio file.",
+    audioLongo: "The audio must be at most 5 minutes long.",
     resultadoDesconhecidoDaExclusao: "We could not confirm whether the account was deleted.",
     contaNaoExcluida:
       "The account could not be deleted right now. Nothing was deleted. Try again.",
@@ -138,6 +144,9 @@ export const MENSAGENS: Record<Idioma, Record<ChaveDeMensagem, string>> = {
     sessaoConcluida: "La sesión ya se completó.",
     imagemGrande: "La imagen puede tener como máximo 5 MB.",
     formatoDeImagem: "Elige una imagen JPEG, PNG, WebP o GIF.",
+    audioGrande: "El audio debe tener como máximo 10 MB.",
+    formatoDeAudio: "El archivo no es un audio MP3, M4A, OGG, WebM o WAV.",
+    audioLongo: "El audio debe durar como máximo 5 minutos.",
     resultadoDesconhecidoDaExclusao: "No pudimos confirmar si la cuenta se eliminó.",
     contaNaoExcluida:
       "No se pudo eliminar la cuenta ahora. No se eliminó nada. Inténtalo de nuevo.",

@@ -605,6 +605,97 @@ CREATE TABLE imagem_a_remover (
 `;
 
 /**
+ * Troca por vazio o rótulo padrão gravado como nome do Baralho no Registro:
+ * sempre na Revisão do dia e, no temporário, só quando o nome é "Baralho
+ * temporário". Usada pela 19 e repetida pela 21 (como a 16 e a 18 repetem a
+ * finalização da transição), para que a base que chegou à 20 com a 19 pulada
+ * também a receba.
+ */
+const ESQUEMA_NOME_DA_REVISAO = `UPDATE registro_de_sessao SET nome_do_baralho = ''
+          WHERE origem = 'revisao'
+             OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');`;
+
+/**
+ * A migração 20 introduz o Tipo áudio (`028`, FR-434, FR-435, FR-441, FR-447,
+ * FR-449).
+ *
+ * `cartao` é reconstruída, como na 17, porque as restrições entre colunas não
+ * entram por `ALTER TABLE`: o `tipo` passa a aceitar `audio`, e as colunas
+ * `audio_chave` (a chave do arquivo no `ArmazemDeMidia`) e `audio_duracao_ms`
+ * (1 a 300 000 ms, medida pelo servidor) entram com `NULL`. Os `CHECK` dizem
+ * que o Áudio tem chave e duração e que a chave só existe no tipo `audio`.
+ * A Frente deixa de ser obrigatória também no `audio` (FR-439). As restrições
+ * da Imagem ficam as mesmas. A reconstrução roda com as chaves estrangeiras
+ * desligadas (`semChavesEstrangeiras`), pelo mesmo motivo da 17: o `DROP`
+ * apagaria em cascata Pertencimentos e Agendamentos.
+ *
+ * `item_de_registro` é reconstruída pelo mesmo motivo: o snapshot do Histórico
+ * também aceita `audio` (FR-447), e nunca guarda o Áudio. Não há índice sobre
+ * essa tabela a recriar.
+ *
+ * `imagem_a_remover` vira `midia_a_remover`: a fila passa a guardar as chaves
+ * de Imagem e de Áudio (FR-449), e a própria tabela não muda de forma.
+ */
+const ESQUEMA_TIPO_AUDIO = `
+CREATE TABLE cartao_v20 (
+  id                TEXT PRIMARY KEY,
+  frente            TEXT NOT NULL CHECK (length(frente) <= 1000),
+  verso             TEXT NOT NULL CHECK (length(trim(verso)) > 0 AND length(verso) <= 1000),
+  usuario_id        TEXT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  criado_em         TEXT NULL,
+  tags_json         TEXT NOT NULL DEFAULT '[]',
+  tipo              TEXT NOT NULL DEFAULT 'frente-verso'
+                    CHECK (tipo IN ('frente-verso', 'imagem', 'audio')),
+  imagem_chave      TEXT NULL,
+  texto_alternativo TEXT NULL CHECK (texto_alternativo IS NULL OR length(texto_alternativo) <= 250),
+  audio_chave       TEXT NULL,
+  audio_duracao_ms  INTEGER NULL,
+  CHECK (tipo IN ('imagem', 'audio') OR length(trim(frente)) > 0),
+  CHECK ((tipo = 'imagem') = (imagem_chave IS NOT NULL)),
+  CHECK (tipo = 'imagem' OR texto_alternativo IS NULL),
+  CHECK ((tipo = 'audio') = (audio_chave IS NOT NULL)),
+  CHECK ((audio_chave IS NULL) = (audio_duracao_ms IS NULL)),
+  CHECK (audio_duracao_ms IS NULL OR audio_duracao_ms BETWEEN 1 AND 300000)
+);
+
+INSERT INTO cartao_v20 (id, frente, verso, usuario_id, criado_em, tags_json,
+                        tipo, imagem_chave, texto_alternativo)
+SELECT id, frente, verso, usuario_id, criado_em, tags_json,
+       tipo, imagem_chave, texto_alternativo
+FROM cartao;
+
+DROP TABLE cartao;
+ALTER TABLE cartao_v20 RENAME TO cartao;
+CREATE INDEX indice_cartao_por_usuario ON cartao (usuario_id);
+
+CREATE TABLE item_de_registro_v20 (
+  registro_id      TEXT NOT NULL REFERENCES registro_de_sessao(id) ON DELETE CASCADE,
+  posicao          INTEGER NOT NULL,
+  frente           TEXT NOT NULL,
+  verso            TEXT NOT NULL,
+  resultado        TEXT NOT NULL CHECK (resultado IN ('acertou', 'errou')),
+  cartao_id        TEXT NULL,
+  avaliacao        TEXT NULL
+                   CHECK (avaliacao IS NULL OR avaliacao IN ('errei','dificil','bom','facil')),
+  avaliacao_rotulo TEXT NULL,
+  tipo             TEXT NOT NULL DEFAULT 'frente-verso'
+                   CHECK (tipo IN ('frente-verso', 'imagem', 'audio')),
+  PRIMARY KEY (registro_id, posicao)
+);
+
+INSERT INTO item_de_registro_v20 (registro_id, posicao, frente, verso, resultado,
+                                  cartao_id, avaliacao, avaliacao_rotulo, tipo)
+SELECT registro_id, posicao, frente, verso, resultado,
+       cartao_id, avaliacao, avaliacao_rotulo, tipo
+FROM item_de_registro;
+
+DROP TABLE item_de_registro;
+ALTER TABLE item_de_registro_v20 RENAME TO item_de_registro;
+
+ALTER TABLE imagem_a_remover RENAME TO midia_a_remover;
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar
  * uma entrada aqui — nunca editar uma migração já aplicada, que bases
  * instaladas já executaram.
@@ -654,9 +745,25 @@ export const MIGRACOES: readonly Migracao[] = [
    */
   {
     versao: 19,
-    sql: `UPDATE registro_de_sessao SET nome_do_baralho = ''
-          WHERE origem = 'revisao'
-             OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');`,
+    sql: ESQUEMA_NOME_DA_REVISAO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
+  /**
+   * A 20 introduz o Tipo áudio (`028`). Não tem precondição: o `CHECK` novo de
+   * `cartao` vale para qualquer base, com ou sem Pertencimentos pendentes. Por
+   * isso a versão sobe além da 18 e da 19 adiadas, e a 21 as repete (research
+   * R6, FR-431).
+   */
+  { versao: 20, sql: ESQUEMA_TIPO_AUDIO, semChavesEstrangeiras: true },
+  /**
+   * A 21 repete a finalização da transição e a troca do nome da Revisão, com a
+   * mesma precondição da 18 e da 19. Numa base em que a 19 foi pulada pela
+   * transição pendente, é esta migração que aplica o nome vazio, pois a 20 já
+   * elevou a versão além dela (research R6).
+   */
+  {
+    versao: 21,
+    sql: `${ESQUEMA_FINALIZAR_TRANSICAO}\n${ESQUEMA_NOME_DA_REVISAO}`,
     precondicao: PODE_REMOVER_VINCULO,
   },
 ];

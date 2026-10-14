@@ -425,7 +425,7 @@ describe("Transição de Pertencimento (FR-397)", () => {
       const versao = bancoReaberto
         .prepare("SELECT versao FROM versao_do_esquema")
         .get();
-      expect(versao?.versao).toBe(17);
+      expect(versao?.versao).toBe(20);
 
       // Tabela vinculo ainda existe
       expect(existeTabela(bancoReaberto, "vinculo")).toBe(true);
@@ -491,7 +491,7 @@ describe("Transição de Pertencimento (FR-397)", () => {
       const versao = banco
         .prepare("SELECT versao FROM versao_do_esquema")
         .get();
-      expect(versao?.versao).toBe(19);
+      expect(versao?.versao).toBe(21);
 
       // Tabela vinculo deve ter sido removida
       expect(existeTabela(banco, "vinculo")).toBe(false);

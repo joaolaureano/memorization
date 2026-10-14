@@ -70,6 +70,8 @@ describe("criação do esquema", () => {
       "tipo",
       "imagem_chave",
       "texto_alternativo",
+      "audio_chave",
+      "audio_duracao_ms",
     ]);
     expect(colunas[3]).toMatchObject({
       name: "usuario_id",

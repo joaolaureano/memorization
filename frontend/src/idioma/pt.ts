@@ -198,20 +198,47 @@ export interface Catalogo {
     aviseLimiteExcedido: (limite: number) => string;
     descartarImagemTitle: string;
     descartarImagemConfirm: string;
-    descartarImagemMsg: string;
+    descartarImagemMsg: (tipo: string) => string;
     tagsLabel: string;
     tagsPlaceholder: string;
     tagsAriaLabel: string;
     removerTagAriaLabel: (tag: string) => string;
     tagsFilterLabel: string;
     imagemIndisponivel: string;
-    nomeDoTipo: { "frente-verso": string; imagem: string };
+    nomeDoTipo: { "frente-verso": string; imagem: string; audio: string };
+    anunciarAudio: string;
+    audioLabel: string;
+    audioHint: string;
+    btnTrocarAudio: string;
+    btnRemoverAudio: string;
+    mensagemLabel: string;
+    mensagemHint: string;
+    naoEscolheuAudio: string;
+    enviandoAudio: string;
+    btnEnviandoAudio: string;
+    descartarAudioTitle: string;
+    descartarAudioConfirm: string;
+    descartarAudioMsg: (tipo: string) => string;
+    audioIndisponivel: string;
+    audioSemMensagem: string;
+    cartaoDoTipoAudio: string;
+    semMensagem: string;
     tipoAtual: (tipo: string) => string;
     imagemSemDescricao: string;
     pendenciaDeSalvamento: string;
     falhaNaEdicao: string;
     falhaNaCriacao: string;
     tags: string;
+  };
+  tocador: {
+    tocar: string;
+    pausar: string;
+    posicao: string;
+    posicaoFalada: (atual: string, total: string) => string;
+    tocando: string;
+    pausado: string;
+    fim: string;
+    duracao: (falada: string) => string;
   };
   sessao: {
     revelarVerse: string;
@@ -747,20 +774,47 @@ export const pt: Catalogo = {
     aviseLimiteExcedido: (limite: number) => `Atenção: o texto excede o limite de ${limite} caracteres.`,
     descartarImagemTitle: "Descartar a imagem?",
     descartarImagemConfirm: "Descartar imagem",
-    descartarImagemMsg: "A imagem escolhida não existe no tipo Frente-Verso e será descartada.",
+    descartarImagemMsg: (tipo: string) => `A imagem escolhida não existe no tipo ${tipo} e será descartada.`,
     tagsLabel: "Tags",
     tagsPlaceholder: "Digite uma tag e pressione Enter",
     tagsAriaLabel: "Tags adicionadas",
     removerTagAriaLabel: (tag: string) => `Remover tag ${tag}`,
     tagsFilterLabel: "Tags",
     imagemIndisponivel: "Imagem indisponível",
-    nomeDoTipo: { "frente-verso": "Frente-Verso", imagem: "Imagem" },
+    nomeDoTipo: { "frente-verso": "Frente-Verso", imagem: "Imagem", audio: "Áudio" },
+    anunciarAudio: "Campos do tipo Áudio",
+    audioLabel: "Áudio",
+    audioHint: "MP3, M4A, OGG, WebM ou WAV, até 10 MB e 5 minutos. MP3 e M4A tocam em todos os aparelhos.",
+    btnTrocarAudio: "Trocar áudio",
+    btnRemoverAudio: "Remover áudio",
+    mensagemLabel: "Mensagem (opcional)",
+    mensagemHint: "Contexto ou pergunta para o áudio, sem revelar a resposta.",
+    naoEscolheuAudio: "Escolha um áudio.",
+    enviandoAudio: "Enviando áudio…",
+    btnEnviandoAudio: "Enviando áudio…",
+    descartarAudioTitle: "Descartar o áudio?",
+    descartarAudioConfirm: "Descartar áudio",
+    descartarAudioMsg: (tipo: string) => `O áudio escolhido não existe no tipo ${tipo} e será descartado.`,
+    audioIndisponivel: "Áudio indisponível",
+    audioSemMensagem: "Áudio do Cartão",
+    cartaoDoTipoAudio: "Cartão do tipo Áudio",
+    semMensagem: "sem mensagem",
     tipoAtual: (tipo: string) => `Tipo: ${tipo}`,
     imagemSemDescricao: "Imagem do Cartão",
     pendenciaDeSalvamento: "Aguarde: o Cartão está sendo salvo.",
     falhaNaEdicao: "Falha na edição do Cartão",
     falhaNaCriacao: "Falha na criação do Cartão",
     tags: "Tags",
+  },
+  tocador: {
+    tocar: "Tocar áudio",
+    pausar: "Pausar áudio",
+    posicao: "Posição do áudio",
+    posicaoFalada: (atual: string, total: string) => `${atual} de ${total}`,
+    tocando: "Tocando",
+    pausado: "Pausado",
+    fim: "Fim do áudio",
+    duracao: (falada: string) => `Duração: ${falada}`,
   },
   sessao: {
     revelarVerse: "Verso revelado.",

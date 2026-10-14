@@ -35,7 +35,8 @@ export type CodigoDeErroDeCartao =
   | "verso_muito_longo"
   | "frente_duplicada"
   | "descricao_muito_longa"
-  | "imagem_ausente";
+  | "imagem_ausente"
+  | "audio_ausente";
 
 /**
  * Falha de regra de domínio. É resultado previsto da Interface, não exceção:
@@ -200,3 +201,21 @@ export type CodigoDeErroDeVinculo =
   | "vinculo_duplicado"
   | "vinculo_nao_encontrado"
   | "nao_encontrado";
+
+/** Motivo da recusa do Áudio enviado (contracts/http.md, `028`). */
+export type MotivoDeRecusaDoAudio =
+  | "nao_encontrado"
+  | "formato"
+  | "tamanho"
+  | "duracao";
+
+/**
+ * As mensagens técnicas da recusa do Áudio, por motivo (`028`, FR-459). Fonte
+ * única: o `Acervo` e o Adapter HTTP (`recusaDeAudioInvalido`) leem daqui.
+ */
+export const MENSAGEM_DA_RECUSA_DO_AUDIO: Readonly<Record<MotivoDeRecusaDoAudio, string>> = {
+  formato: "File is not a supported audio format.",
+  tamanho: "Audio exceeds the size limit.",
+  nao_encontrado: "Audio upload was not found.",
+  duracao: "Audio exceeds the duration limit.",
+};

@@ -70,7 +70,7 @@ describe("migração 17 — Tipo de cartão", () => {
 
     aplicarEsquema(banco);
 
-    expect(versao(banco)).toBe(19);
+    expect(versao(banco)).toBe(21);
     expect(
       banco
         .prepare(
@@ -158,15 +158,15 @@ describe("migração 17 — Tipo de cartão", () => {
     banco.close();
   });
 
-  it("cria a fila `imagem_a_remover` sem chave estrangeira", () => {
+  it("cria a fila `midia_a_remover` sem chave estrangeira", () => {
     const banco = baseNaVersao16();
     aplicarEsquema(banco);
 
     expect(
-      banco.prepare("PRAGMA table_info(imagem_a_remover)").all().map((c) => c.name),
+      banco.prepare("PRAGMA table_info(midia_a_remover)").all().map((c) => c.name),
     ).toEqual(["chave", "registrada_em"]);
     expect(
-      banco.prepare("PRAGMA foreign_key_list(imagem_a_remover)").all(),
+      banco.prepare("PRAGMA foreign_key_list(midia_a_remover)").all(),
     ).toEqual([]);
 
     banco.close();

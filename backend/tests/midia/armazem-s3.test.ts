@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { beforeEach, describe, vi } from "vitest";
 
-import { criarArmazemS3 } from "../../src/imagens/armazem-s3.ts";
+import { criarArmazemS3 } from "../../src/midia/armazem-s3.ts";
 import { bateriaDoArmazem } from "./bateria-do-armazem.ts";
 
 /**
@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 if (configuracao === undefined) {
-  describe.skip("ArmazemDeImagens — Adapter S3 (sem S3_DE_TESTE_ENDERECO)", () => {});
+  describe.skip("ArmazemDeMidia — Adapter S3 (sem S3_DE_TESTE_ENDERECO)", () => {});
 } else {
   /** Um bucket por arquivo: as chaves já são únicas por Imagem. */
   const bucket = `imagens-${randomUUID()}`;

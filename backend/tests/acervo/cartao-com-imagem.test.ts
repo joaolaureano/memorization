@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   criarAcervo,
-  processarFilaDeImagens,
+  processarFilaDeMidia,
   type Acervo,
   type CartaoApresentado,
 } from "../../src/acervo/acervo.ts";
@@ -18,9 +18,9 @@ import {
 import {
   criarArmazemEmDisco,
   type ArmazemEmDisco,
-} from "../../src/imagens/armazem-em-disco.ts";
+} from "../../src/midia/armazem-em-disco.ts";
 import { criarDonoDeTeste } from "../armazenamento/usuarios-de-teste.ts";
-import { pngComMetadados, textoDisfarcado } from "../imagens/amostras.ts";
+import { pngComMetadados, textoDisfarcado } from "../midia/amostras.ts";
 
 /**
  * T019, T030, T037 — Cartão do tipo Imagem pela Interface do `Acervo`
@@ -55,10 +55,10 @@ afterEach(async () => {
 
 /** Faz o envio de uma Imagem como o navegador; devolve o `imagemId`. */
 async function enviar(bytes = pngComMetadados(), usuarioId = dono): Promise<string> {
-  const envio = await imagens.prepararEnvio(usuarioId);
+  const envio = await imagens.prepararEnvio(usuarioId, "imagem");
   const token = new URL(envio.envio.url, "http://local").searchParams.get("t")!;
   expect(await imagens.receberEnvio(token, bytes)).toBe("ok");
-  return envio.imagemId;
+  return envio.envioId;
 }
 
 /** Diz se o endereço de exibição ainda entrega a Imagem. */
@@ -194,7 +194,7 @@ describe("criar Cartão do tipo Imagem (FR-408, FR-409, FR-412, FR-414)", () => 
     expect(
       await fragil.criarCartao(baralhoId, { tipo: "imagem", imagemId, frente: "", verso: "Pernambuco" }),
     ).toMatchObject({ ok: false, erro: "indisponivel" });
-    expect(await aberto.armazenamento.listarImagensARemover(10)).toEqual([]);
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
     expect((await acervo.obterBaralho(baralhoId)).ok && (await acervo.listarCartoes())).toEqual([]);
   });
 
@@ -299,7 +299,7 @@ describe("editar e excluir Cartão do tipo Imagem (FR-420, FR-421, FR-422)", () 
         verso: "Outro",
       }),
     ).toMatchObject({ ok: false, erro: "indisponivel" });
-    expect(await aberto.armazenamento.listarImagensARemover(10)).toEqual([]);
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
     expect(await serve(cartao)).toBe(true);
     expect((await acervo.listarCartoes())[0]).toMatchObject({ verso: "Pernambuco" });
   });
@@ -320,10 +320,10 @@ describe("editar e excluir Cartão do tipo Imagem (FR-420, FR-421, FR-422)", () 
     const cartao = await criarImagem();
 
     expect((await aberto.usuarios.excluirUsuario(dono)).ok).toBe(true);
-    await processarFilaDeImagens(aberto.armazenamento, imagens);
+    await processarFilaDeMidia(aberto.armazenamento, imagens);
 
     expect(await serve(cartao)).toBe(false);
-    expect(await aberto.armazenamento.listarImagensARemover(10)).toEqual([]);
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
   });
 
   it("guarda na fila o que o armazém não conseguiu remover e tenta de novo", async () => {
@@ -337,11 +337,11 @@ describe("editar e excluir Cartão do tipo Imagem (FR-420, FR-421, FR-422)", () 
     const comFalha = criarAcervo(aberto.armazenamento, dono, { imagens: armazemQueFalha });
 
     expect(await comFalha.excluirCartao(cartao.id)).toEqual({ ok: true });
-    expect(await aberto.armazenamento.listarImagensARemover(10)).toHaveLength(1);
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toHaveLength(1);
     expect(await serve(cartao)).toBe(true);
 
-    await processarFilaDeImagens(aberto.armazenamento, imagens);
-    expect(await aberto.armazenamento.listarImagensARemover(10)).toEqual([]);
+    await processarFilaDeMidia(aberto.armazenamento, imagens);
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
     expect(await serve(cartao)).toBe(false);
   });
 

@@ -3,20 +3,24 @@ import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs
 import { dirname, join } from "node:path";
 
 import {
-  LIMITE_DE_BYTES_DA_IMAGEM,
   VALIDADE_DA_LEITURA_EM_SEGUNDOS,
   VALIDADE_DO_ENVIO_EM_SEGUNDOS,
+  PREFIXO_DA_MIDIA,
   chaveAtiva,
   chavePendente,
-  detectarFormato,
-  ehIdentificadorDeImagem,
-  prepararImagemConfirmada,
-  type ArmazemDeImagens,
+  ehIdentificadorDeEnvio,
+  midiaDaChave,
+  type ArmazemDeMidia,
   type FormatoDeImagem,
+  type Midia,
 } from "./armazem.ts";
+import { reconhecerAudio } from "./audio/reconhecer.ts";
+import type { FormatoDeAudio } from "./audio/tipos.ts";
+import { detectarFormato } from "./imagem/formato.ts";
+import { REGRAS_DA_MIDIA } from "./regras.ts";
 
 /**
- * Adapter Disco do `ArmazemDeImagens` — o modo local e os testes (`026`,
+ * Adapter Disco do `ArmazemDeMidia` — o modo local e os testes (`026`,
  * research R3).
  *
  * Os arquivos ficam numa pasta, sob as mesmas chaves do S3. O envio e a
@@ -29,8 +33,8 @@ import {
  */
 
 /** Os caminhos das rotas locais; relativos à API, como o cliente os resolve. */
-export const CAMINHO_DO_ENVIO_LOCAL = "/imagens-locais/envios";
-export const CAMINHO_DA_LEITURA_LOCAL = "/imagens-locais/arquivo";
+export const CAMINHO_DO_ENVIO_LOCAL = "/midia-local/envios";
+export const CAMINHO_DA_LEITURA_LOCAL = "/midia-local/arquivo";
 
 /** Pendentes mais antigos que isto são descartados (FR-423: até 48 horas). */
 const IDADE_MAXIMA_DO_PENDENTE_EM_MS = 24 * 60 * 60 * 1000;
@@ -44,16 +48,38 @@ export interface OpcoesDoArmazemEmDisco {
   agora?: () => Date;
 }
 
-export interface ArmazemEmDisco extends ArmazemDeImagens {
+export interface ArmazemEmDisco extends ArmazemDeMidia {
   /** Recebe o arquivo de um envio preparado (rota local de envio). */
   receberEnvio(
     token: string,
     arquivo: Uint8Array,
   ): Promise<"ok" | "invalido" | "tamanho">;
-  /** Entrega a Imagem ativa de um endereço de leitura (rota local de leitura). */
+  /** Entrega a Mídia ativa de um endereço de leitura (rota local de leitura). */
   lerParaEntrega(
     token: string,
-  ): Promise<{ bytes: Uint8Array; formato: FormatoDeImagem } | null>;
+  ): Promise<{ bytes: Uint8Array; formato: FormatoDeImagem | FormatoDeAudio } | null>;
+}
+
+/**
+ * O formato de uma Mídia ativa, pela chave e pelo conteúdo já gravado. O
+ * arquivo ativo já passou pela confirmação, então a detecção dá sempre o
+ * mesmo resultado que deu no envio.
+ */
+function formatoDaMidiaAtiva(
+  chave: string,
+  bytes: Uint8Array,
+): FormatoDeImagem | FormatoDeAudio | null {
+  if (chave.startsWith(`${PREFIXO_DA_MIDIA.imagem}/`)) {
+    return detectarFormato(bytes);
+  }
+  const reconhecido = reconhecerAudio(bytes);
+  return reconhecido.ok ? reconhecido.formato : null;
+}
+
+/** Os dados que o token assinado carrega. A Mídia só existe no envio. */
+interface DadosDoToken {
+  chave: string;
+  midia?: Midia;
 }
 
 export function criarArmazemEmDisco(
@@ -69,20 +95,33 @@ export function criarArmazemEmDisco(
     return createHmac("sha256", segredo).update(conteudo).digest("base64url");
   }
 
+  /**
+   * Emite um token assinado. No envio, a Mídia entra no conteúdo assinado: o
+   * limite de tamanho é conferido por ela, e não pelo que o cliente declara.
+   */
   function emitirToken(
     chave: string,
     finalidade: Finalidade,
     validadeEmSegundos: number,
+    midia?: Midia,
   ): { token: string; expiraEm: Date } {
     const expiraEm = new Date(agora().getTime() + validadeEmSegundos * 1000);
     const conteudo = Buffer.from(
-      JSON.stringify({ c: chave, f: finalidade, e: expiraEm.getTime() }),
+      JSON.stringify({
+        c: chave,
+        f: finalidade,
+        e: expiraEm.getTime(),
+        ...(midia === undefined ? {} : { m: midia }),
+      }),
     ).toString("base64url");
     return { token: `${conteudo}.${assinar(conteudo)}`, expiraEm };
   }
 
-  /** Confere assinatura, finalidade e prazo; devolve a chave ou `null`. */
-  function lerToken(token: string, finalidade: Finalidade): string | null {
+  /**
+   * Confere assinatura, finalidade e prazo; devolve os dados do token ou
+   * `null`. Um envio sem Mídia conhecida também é recusado.
+   */
+  function lerToken(token: string, finalidade: Finalidade): DadosDoToken | null {
     const [conteudo, assinatura] = token.split(".");
 
     if (conteudo === undefined || assinatura === undefined) {
@@ -104,11 +143,18 @@ export function criarArmazemEmDisco(
         c: string;
         f: Finalidade;
         e: number;
+        m?: Midia;
       };
 
-      return dados.f === finalidade && dados.e > agora().getTime()
-        ? dados.c
-        : null;
+      if (dados.f !== finalidade || dados.e <= agora().getTime()) {
+        return null;
+      }
+
+      if (finalidade === "envio" && dados.m !== "imagem" && dados.m !== "audio") {
+        return null;
+      }
+
+      return { chave: dados.c, midia: dados.m };
     } catch {
       return null;
     }
@@ -152,70 +198,83 @@ export function criarArmazemEmDisco(
   }
 
   return {
-    async prepararEnvio(usuarioId) {
+    async prepararEnvio(usuarioId, midia) {
       await varrerPendentes(usuarioId);
 
-      const imagemId = randomUUID();
+      const envioId = randomUUID();
       const { token, expiraEm } = emitirToken(
-        chavePendente(usuarioId, imagemId),
+        chavePendente(usuarioId, envioId),
         "envio",
         VALIDADE_DO_ENVIO_EM_SEGUNDOS,
+        midia,
       );
 
       return {
-        imagemId,
+        envioId,
         envio: { url: `${CAMINHO_DO_ENVIO_LOCAL}?t=${token}`, campos: {} },
         expiraEm: expiraEm.toISOString(),
       };
     },
 
     async receberEnvio(token, arquivo) {
-      const chave = lerToken(token, "envio");
+      const dados = lerToken(token, "envio");
 
-      if (chave === null) {
+      if (dados === null || dados.midia === undefined) {
         return "invalido";
       }
 
-      if (arquivo.length === 0 || arquivo.length > LIMITE_DE_BYTES_DA_IMAGEM) {
+      if (
+        arquivo.length === 0 ||
+        arquivo.length > REGRAS_DA_MIDIA[dados.midia].limiteEmBytes
+      ) {
         return "tamanho";
       }
 
-      await gravar(chave, arquivo);
+      await gravar(dados.chave, arquivo);
       return "ok";
     },
 
-    async confirmar(usuarioId, imagemId) {
-      if (!ehIdentificadorDeImagem(imagemId)) {
+    async confirmar(usuarioId, envioId, midia) {
+      if (!ehIdentificadorDeEnvio(envioId)) {
         return { ok: false, motivo: "nao_encontrada" };
       }
 
-      const pendente = chavePendente(usuarioId, imagemId);
+      const pendente = chavePendente(usuarioId, envioId);
       const bytes = await lerSeExistir(pendente);
 
       if (bytes === null) {
         return { ok: false, motivo: "nao_encontrada" };
       }
 
-      const preparada = prepararImagemConfirmada(bytes);
+      const conferida = REGRAS_DA_MIDIA[midia].confirmar(bytes);
       await rm(caminhoDa(pendente), { force: true });
 
-      if (!preparada.ok) {
-        return { ok: false, motivo: preparada.motivo };
+      if (!conferida.ok) {
+        return { ok: false, motivo: conferida.motivo };
       }
 
-      const chave = chaveAtiva(usuarioId, imagemId);
-      await gravar(chave, preparada.bytes);
+      const chave = chaveAtiva(usuarioId, envioId, midia);
+      await gravar(chave, conferida.bytes);
 
       return {
         ok: true,
         chave,
-        formato: preparada.formato,
-        bytes: preparada.bytes.length,
+        formato: conferida.formato,
+        bytes: conferida.bytes.length,
+        ...(conferida.duracaoMs === undefined
+          ? {}
+          : { duracaoMs: conferida.duracaoMs }),
       };
     },
 
     async copiar(chave, usuarioId) {
-      const nova = chaveAtiva(usuarioId, randomUUID());
+      const midia = midiaDaChave(chave);
+
+      if (midia === null) {
+        throw new Error("copiar: a chave não é de uma Mídia ativa");
+      }
+
+      const nova = chaveAtiva(usuarioId, randomUUID(), midia);
       await mkdir(dirname(caminhoDa(nova)), { recursive: true });
       await copyFile(caminhoDa(chave), caminhoDa(nova));
       return nova;
@@ -235,14 +294,14 @@ export function criarArmazemEmDisco(
     },
 
     async lerParaEntrega(token) {
-      const chave = lerToken(token, "leitura");
+      const dados = lerToken(token, "leitura");
 
-      if (chave === null || !chave.startsWith("imagens/")) {
+      if (dados === null || midiaDaChave(dados.chave) === null) {
         return null;
       }
 
-      const bytes = await lerSeExistir(chave);
-      const formato = bytes === null ? null : detectarFormato(bytes);
+      const bytes = await lerSeExistir(dados.chave);
+      const formato = bytes === null ? null : formatoDaMidiaAtiva(dados.chave, bytes);
 
       return bytes === null || formato === null ? null : { bytes, formato };
     },

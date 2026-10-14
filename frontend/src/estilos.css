@@ -525,7 +525,9 @@ label.rotulo,
   font-weight: 600;
 }
 
-input:not([type="checkbox"]),
+/* `.visualmente-oculto` fica de fora: com (0,1,1) venceria a sua largura de 1px
+ * e um input escondido ocupava 100% da tela (B5, 028). */
+input:not([type="checkbox"]):not(.visualmente-oculto),
 textarea,
 select {
   width: 100%;
@@ -2208,6 +2210,128 @@ label.campo--opcao {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* A linha do Cartão de Áudio na lista (028, FR-441): o tocador ocupa a
+ * largura que sobra e quebra linha antes de estourar; a duração fica ao lado,
+ * em dígitos tabulares e na cor secundária da lista. */
+.linha-da-lista__audio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.linha-da-lista__audio > .tocador {
+  flex: 1 1 200px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.linha-da-lista__duracao {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cartão com Áudio (028, specs/028-cartao-com-audio/contracts/ui.md)
+ * O tocador cabe em 360 px sem rolagem horizontal (FR-446); o foco segue o
+ * contorno global de `:focus-visible` (FR-456).
+ * ------------------------------------------------------------------------- */
+
+.tocador {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Botão Tocar/Pausar: alvo de pelo menos 44 × 44 px (FR-456). */
+.tocador__botao {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tocador__icone {
+  width: 20px;
+  height: 20px;
+}
+
+/* Controle de posição: ocupa o espaço que sobra e encolhe sem estourar. */
+.tocador__posicao {
+  flex: 1 1 120px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tocador__tempo {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+/* A Frente de um Cartão do tipo Áudio na Sessão: tocador maior. */
+.tocador--face {
+  justify-content: center;
+  gap: 12px;
+}
+
+.tocador--face .tocador__botao {
+  min-width: 56px;
+  min-height: 56px;
+}
+
+.tocador--face .tocador__icone {
+  width: 28px;
+  height: 28px;
+}
+
+/* Áudio indisponível: o aviso ocupa o lugar do tocador (FR-444). */
+.audio-indisponivel {
+  padding: 12px;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.previa-do-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.previa-do-audio__nome {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Com movimento reduzido, o tocador não anima nada: só muda o valor (FR-456). */
+@media (prefers-reduced-motion: reduce) {
+  .tocador,
+  .tocador * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /* 027: em telefones estreitos a marca encolhe um pouco, para o cabeçalho com

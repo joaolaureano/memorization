@@ -6,7 +6,7 @@ import type {
 
 import { criarAcessos } from "../../src/acesso/acesso.ts";
 import type { Acessos, OpcoesDosAcessos } from "../../src/acesso/acesso.ts";
-import { criarAcervo, processarFilaDeImagens } from "../../src/acervo/acervo.ts";
+import { criarAcervo, processarFilaDeMidia } from "../../src/acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
@@ -79,7 +79,7 @@ export async function montarServidorDeContrato(
   const aberto = await abrirArmazenamentoSqlite(":memory:");
   const imagens = opcoesDoAcervo?.imagens;
   const identidade = criarIdentidade(aberto.usuarios, segredoGerado(), {
-    aposExcluirConta: () => processarFilaDeImagens(aberto.armazenamento, imagens),
+    aposExcluirConta: () => processarFilaDeMidia(aberto.armazenamento, imagens),
   });
   const acessos = criarAcessos(aberto.acessos, opcoesDosAcessos);
   const servidor = criarServidor(identidade, { acessos, ...opcoesDoServidor });

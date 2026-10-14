@@ -6,6 +6,11 @@
  * Anki codes are not included here (task T039).
  */
 
+import {
+  MENSAGEM_DA_RECUSA_DO_AUDIO,
+  type MotivoDeRecusaDoAudio,
+} from "../acervo/invariantes.ts";
+
 export type CodigoDeRecusa =
   | "indisponivel"
   | "nao_encontrado"
@@ -39,7 +44,9 @@ export type CodigoDeRecusa =
   | "anki_grande_demais"
   | "anki_ilegivel"
   | "anki_corrompido"
-  | "anki_incompativel";
+  | "anki_incompativel"
+  | "audio_ausente"
+  | "audio_invalido";
 
 export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   indisponivel: "Storage is unavailable. Try again.",
@@ -75,6 +82,8 @@ export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   anki_ilegivel: "Anki file could not be read.",
   anki_corrompido: "Anki file is corrupted or exceeds the expansion limit.",
   anki_incompativel: "File does not contain a compatible Anki collection.",
+  audio_ausente: "Choose an audio file.",
+  audio_invalido: "Audio is invalid.",
 };
 
 export interface RecusaBody<C extends CodigoDeRecusa = CodigoDeRecusa> {
@@ -94,4 +103,43 @@ export function recusa<C extends CodigoDeRecusa>(
     ...(extras?.motivo && { motivo: extras.motivo }),
     ...(extras?.limite !== undefined && { limite: extras.limite }),
   };
+}
+
+/**
+ * Body for an `audio_invalido` refusal (FR-459, specs/028-cartao-com-audio
+ * contracts/http.md). The generic `recusa()` builder uses one message per code,
+ * so per-motivo messages and limits are built here. Limits are in bytes for
+ * "tamanho" and in seconds for "duracao".
+ */
+export function recusaDeAudioInvalido(
+  motivo: MotivoDeRecusaDoAudio,
+): RecusaBody<"audio_invalido"> {
+  switch (motivo) {
+    case "tamanho":
+      return {
+        erro: "audio_invalido",
+        mensagem: MENSAGEM_DA_RECUSA_DO_AUDIO.tamanho,
+        motivo,
+        limite: 10485760,
+      };
+    case "duracao":
+      return {
+        erro: "audio_invalido",
+        mensagem: MENSAGEM_DA_RECUSA_DO_AUDIO.duracao,
+        motivo,
+        limite: 300,
+      };
+    case "formato":
+      return {
+        erro: "audio_invalido",
+        mensagem: MENSAGEM_DA_RECUSA_DO_AUDIO.formato,
+        motivo,
+      };
+    case "nao_encontrado":
+      return {
+        erro: "audio_invalido",
+        mensagem: MENSAGEM_DA_RECUSA_DO_AUDIO.nao_encontrado,
+        motivo,
+      };
+  }
 }

@@ -171,13 +171,17 @@ export function PaginaDeEstudo({
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
 
-  /** Um endereço novo para a Imagem de um Cartão da Sessão (026, FR-418). */
+  /**
+   * Um endereço novo para a Imagem ou o Áudio de um Cartão da Sessão (026,
+   * FR-418; 028, FR-444).
+   */
   async function renovarEndereco(cartaoId: string): Promise<string | null> {
     const listagem = await cliente.listarCartoes();
 
-    return listagem.ok
-      ? listagem.cartoes.find((cartao) => cartao.id === cartaoId)?.imagem?.url ?? null
-      : null;
+    if (!listagem.ok) return null;
+
+    const cartao = listagem.cartoes.find((candidato) => candidato.id === cartaoId);
+    return cartao?.tipo === "audio" ? cartao.audio?.url ?? null : cartao?.imagem?.url ?? null;
   }
 
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
@@ -1179,7 +1183,11 @@ export function PaginaDeEstudo({
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           Frente
         </h2>
-        <FaceDaPergunta item={estado.itemAtual} renovar={renovarEndereco} />
+        <FaceDaPergunta
+          item={estado.itemAtual}
+          renovar={renovarEndereco}
+          posicao={estado.posicao}
+        />
 
         {!estado.itemAtual.revelado ? (
           <>
@@ -1247,7 +1255,7 @@ function itensDoResumo(estado: EstadoDaSessaoConcluida): ItemDoResumo[] {
   for (const item of estado.itens) {
     if (item.revelado && item.resultado !== null) {
       itens.push({
-        ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+        ...(item.tipo === "imagem" || item.tipo === "audio" ? { tipo: item.tipo } : {}),
         frente: item.frente,
         verso: item.verso,
         resultado: item.resultado,
@@ -1273,7 +1281,7 @@ function itensDoRegistro(
     if (item.revelado && item.avaliacao !== null) {
       itens.push({
         // O snapshot leva o tipo e os textos, nunca a Imagem (FR-419a).
-        ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+        ...(item.tipo === "imagem" || item.tipo === "audio" ? { tipo: item.tipo } : {}),
         frente: item.frente,
         verso: item.verso,
         cartaoId: item.cartaoId,

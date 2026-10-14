@@ -93,6 +93,7 @@ export function comGuardaDeCredencial(
       complemento?: ComplementoDeCartao,
     ) => vigiar(await cliente.editarCartao(id, frente, verso, tags, complemento)),
     enviarImagem: async (arquivo: File) => vigiar(await cliente.enviarImagem(arquivo)),
+    enviarAudio: async (arquivo: File) => vigiar(await cliente.enviarAudio(arquivo)),
 
     renomearBaralho: async (id: string, nome: string, tags?: string[]) =>
       vigiar(await cliente.renomearBaralho(id, nome, tags)),

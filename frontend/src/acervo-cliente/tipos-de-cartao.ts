@@ -35,6 +35,30 @@ const EXTENSOES_DE_IMAGEM = /\.(jpe?g|png|webp|gif)$/i;
 export const MENSAGEM_DE_IMAGEM_GRANDE = MENSAGENS_PT.imagemGrande;
 export const MENSAGEM_DE_FORMATO_DE_IMAGEM = MENSAGENS_PT.formatoDeImagem;
 
+/** Limite do arquivo de Áudio: 10 MiB (028, FR-410). */
+export const LIMITE_DE_BYTES_DO_AUDIO = 10_485_760;
+
+/** Limite de duração do Áudio: 5 minutos (028, FR-410). */
+export const LIMITE_DE_DURACAO_DO_AUDIO_EM_MS = 300_000;
+
+/** Os formatos de Áudio aceitos, como o seletor de arquivo os anuncia. */
+export const FORMATOS_DE_AUDIO = [
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/ogg",
+  "audio/webm",
+  "audio/wav",
+  "audio/x-wav",
+] as const;
+
+/** As extensões de Áudio, conferidas quando o navegador não informa o tipo. */
+const EXTENSOES_DE_AUDIO = /\.(mp3|m4a|ogg|opus|webm|wav)$/i;
+
+export const MENSAGEM_DE_AUDIO_GRANDE = MENSAGENS_PT.audioGrande;
+export const MENSAGEM_DE_FORMATO_DE_AUDIO = MENSAGENS_PT.formatoDeAudio;
+export const MENSAGEM_DE_AUDIO_LONGO = MENSAGENS_PT.audioLongo;
+
 /** O que o formulário valida antes de enviar (FR-408, FR-409, FR-412). */
 export interface DadosDoFormulario {
   frente: string;
@@ -42,6 +66,8 @@ export interface DadosDoFormulario {
   textoAlternativo?: string;
   /** Diz se haverá Imagem depois de salvar — escolhida agora ou mantida. */
   temImagem: boolean;
+  /** Diz se haverá Áudio depois de salvar — escolhido agora ou mantido. */
+  temAudio?: boolean;
 }
 
 export interface RegrasDoTipo {
@@ -83,14 +109,35 @@ const IMAGEM: RegrasDoTipo = {
   textosPesquisaveis: (cartao) => [cartao.frente, cartao.verso],
 };
 
+const AUDIO: RegrasDoTipo = {
+  validar(dados) {
+    if (dados.frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
+      return validarFrente(dados.frente);
+    }
+
+    const falhaNoVerso = validarVerso(dados.verso);
+
+    if (falhaNoVerso !== null) {
+      return falhaNoVerso;
+    }
+
+    return dados.temAudio
+      ? null
+      : { erro: "audio_ausente", mensagem: textoDaRecusaPt({ erro: "audio_ausente" }, "cartoes") };
+  },
+  // A Mensagem e o Verso; o Áudio não tem texto a buscar.
+  textosPesquisaveis: (cartao) => [cartao.frente, cartao.verso],
+};
+
 /** O registro: as regras de cada Tipo de cartão. */
 export const TIPOS_DE_CARTAO: Readonly<Record<TipoDeCartao, RegrasDoTipo>> = {
   "frente-verso": FRENTE_VERSO,
   imagem: IMAGEM,
+  audio: AUDIO,
 };
 
 /** Os tipos na ordem do seletor; o primeiro é o padrão (FR-405). */
-export const ORDEM_DOS_TIPOS: readonly TipoDeCartao[] = ["frente-verso", "imagem"];
+export const ORDEM_DOS_TIPOS: readonly TipoDeCartao[] = ["frente-verso", "imagem", "audio"];
 
 /** O tipo do Cartão; ausente é Frente-Verso. */
 export function tipoDo(cartao: Pick<Cartao, "tipo">): TipoDeCartao {
@@ -126,6 +173,29 @@ export function conferirArquivoDeImagem(
 }
 
 /**
+ * Confere o arquivo de Áudio escolhido pelo formato declarado (ou, sem tipo,
+ * pela extensão) e pelo tamanho (FR-410). A duração é conferida depois, pelo
+ * `loadedmetadata` do arquivo, e a decisão final é do servidor.
+ */
+export function conferirArquivoDeAudio(
+  arquivo: File,
+): { ok: false; erro: "formato" | "tamanho"; mensagem: string } | null {
+  const formatoAceito =
+    (FORMATOS_DE_AUDIO as readonly string[]).includes(arquivo.type) ||
+    (arquivo.type === "" && EXTENSOES_DE_AUDIO.test(arquivo.name));
+
+  if (!formatoAceito) {
+    return { ok: false, erro: "formato", mensagem: MENSAGEM_DE_FORMATO_DE_AUDIO };
+  }
+
+  if (arquivo.size === 0 || arquivo.size > LIMITE_DE_BYTES_DO_AUDIO) {
+    return { ok: false, erro: "tamanho", mensagem: MENSAGEM_DE_AUDIO_GRANDE };
+  }
+
+  return null;
+}
+
+/**
  * O texto alternativo da Imagem exibida (FR-426): a Descrição, senão o Texto
  * da frente, senão "Imagem do Cartão".
  */
@@ -143,8 +213,16 @@ export function textoAlternativoDa(
 export function camposDoTipo(dados: {
   tipo?: TipoDeCartao;
   imagemId?: string;
+  audioId?: string;
   textoAlternativo?: string;
 }): Record<string, string> {
+  if (dados.tipo === "audio") {
+    return {
+      tipo: "audio",
+      ...(dados.audioId ? { audioId: dados.audioId } : {}),
+    };
+  }
+
   if (dados.tipo !== "imagem") {
     return {};
   }

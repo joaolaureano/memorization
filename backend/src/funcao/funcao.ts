@@ -1,8 +1,8 @@
 import awsLambdaFastify from "@fastify/aws-lambda";
 
 import { criarAcessos, validadeConfigurada } from "../acesso/acesso.ts";
-import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
-import { armazemDaNuvem } from "../imagens/configuracao.ts";
+import { criarAcervo, processarFilaDeMidia } from "../acervo/acervo.ts";
+import { armazemDaNuvem } from "../midia/configuracao.ts";
 import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
@@ -270,7 +270,7 @@ export function criarFuncao(
     /** As Imagens no S3 (`026`); o bucket vem de `NOME_DO_BUCKET_DE_IMAGENS`. */
     const imagens = armazemDaNuvem(process.env);
     const limparImagens = () =>
-      processarFilaDeImagens(aberto.armazenamento, imagens);
+      processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredoDasSenhas, {
       aposExcluirConta: limparImagens,
     });

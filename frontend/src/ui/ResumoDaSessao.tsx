@@ -42,7 +42,7 @@ import { rotuloDoBaralhoDoRegistro } from "../idioma/rotulo-do-baralho";
 /** Um Item já respondido, como o Placar precisa exibir (FR-176). */
 export interface ItemDoResumo {
   /** Tipo do Cartão (026); ausente é Frente-Verso. A Imagem nunca vem (FR-419a). */
-  tipo?: "frente-verso" | "imagem";
+  tipo?: "frente-verso" | "imagem" | "audio";
   frente: string;
   verso: string;
   resultado: "acertou" | "errou";
@@ -151,6 +151,11 @@ export function ResumoDaSessao({
               <>
                 <span className="selo selo--tipo">{textos.sessao.cartaoDoTipoImagem}</span>{" "}
                 {item.frente.trim() === "" ? textos.sessao.semTexto : item.frente}
+              </>
+            ) : item.tipo === "audio" ? (
+              <>
+                <span className="selo selo--tipo">{textos.cartao.cartaoDoTipoAudio}</span>{" "}
+                {item.frente.trim() === "" ? textos.cartao.semMensagem : item.frente}
               </>
             ) : (
               item.frente

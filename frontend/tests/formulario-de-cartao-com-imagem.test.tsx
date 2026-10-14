@@ -59,6 +59,7 @@ describe("seletor de Tipo de cartão (FR-404, FR-405)", () => {
     expect(within(seletor()).getAllByRole("option").map((o) => o.textContent)).toEqual([
       "Frente-Verso",
       "Imagem",
+      "Áudio",
     ]);
     expect(screen.getByLabelText("Frente")).toBeInTheDocument();
     expect(screen.queryByLabelText("Imagem")).not.toBeInTheDocument();

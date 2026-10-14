@@ -200,14 +200,14 @@ describe("migração 19 — nome_do_baralho derivado da origem (PostgreSQL)", ()
 
 /**
  * A 19 tem a mesma precondição da 18 (research R11): enquanto a transição de
- * Pertencimento está pendente, as duas ficam para a próxima aplicação, a base
- * fica na 17 e o Adapter ainda grava o rótulo legado, porque o CHECK antigo
- * recusa nome vazio (FR-020).
+ * Pertencimento está pendente, a 19 fica para a próxima aplicação. A 20 já
+ * aceita o nome vazio (research R6), e por isso o Adapter grava `""` nas
+ * origens derivadas; a leitura devolve o rótulo legado (FR-020).
  */
 describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)", () => {
   const INSTANTE = "2025-01-01T00:00:00.000Z";
 
-  it("fica pendente com a 18, grava o rótulo legado e limpa ao concluir a transição", async () => {
+  it("fica pendente, grava o nome vazio e limpa ao concluir a transição", async () => {
     const nomeDaBase = await servidor.criarBase("nome-derivado-pendente");
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
@@ -228,7 +228,7 @@ describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)",
       );
 
       await aplicarMigracoes(piscina, MIGRACOES);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(17);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(20);
 
       const aberto = await abrirArmazenamentoDaBase(nomeDaBase);
 
@@ -263,14 +263,14 @@ describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)",
         "SELECT id, nome_do_baralho FROM registro_de_sessao ORDER BY id",
       );
       expect(legados.rows).toEqual([
-        { id: "r-revisao", nome_do_baralho: "Revisão do dia" },
-        { id: "r-temporario", nome_do_baralho: "Baralho temporário" },
+        { id: "r-revisao", nome_do_baralho: "" },
+        { id: "r-temporario", nome_do_baralho: "" },
         { id: "r-temporario-nomeado", nome_do_baralho: "Aula de Inglês" },
       ]);
 
       await piscina.query("DELETE FROM cartao WHERE id = 'c-pendente'");
       await aplicarMigracoes(piscina, MIGRACOES);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(19);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(21);
 
       const limpos = await piscina.query(
         "SELECT id, nome_do_baralho FROM registro_de_sessao ORDER BY id",
@@ -308,10 +308,10 @@ describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)",
     });
   });
 
-  it("aceita na inicialização a versão parada antes de migrações com precondição", () => {
-    expect(versaoAceitaNoInicio(19)).toBe(true);
-    expect(versaoAceitaNoInicio(18)).toBe(true);
-    expect(versaoAceitaNoInicio(17)).toBe(true);
+  it("recusa na inicialização as versões paradas antes da 20, que não tem precondição (research R6)", () => {
+    expect(versaoAceitaNoInicio(19)).toBe(false);
+    expect(versaoAceitaNoInicio(18)).toBe(false);
+    expect(versaoAceitaNoInicio(17)).toBe(false);
     expect(versaoAceitaNoInicio(16)).toBe(false);
   });
 });

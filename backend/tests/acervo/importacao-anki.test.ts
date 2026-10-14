@@ -79,6 +79,36 @@ describe("importação Anki", () => {
     ).rejects.toMatchObject({ codigo: "anki_incompativel" });
   });
 
+  it("importa só cartões frente-verso e ignora a mídia de som (FR-452): [sound:] fica no texto da Frente e não gera Áudio nem escrita em armazém de mídia", async () => {
+    // FR-452: o Anki não cria Cartão de Áudio; o `[sound:…]` e o arquivo de mídia são ignorados.
+    // Comportamento atual observado: o marcador é mantido literalmente na Frente (o `texto` só remove HTML),
+    // e a nota é contada em `avisos.conteudoIgnorado`. Não há Armazém de Mídia: `lerPacoteAnki(bytes)` só lê.
+    const dir = mkdtempSync(join(tmpdir(), "anki-fixture-")); dirs.push(dir);
+    const path = join(dir, "collection.anki2"); const db = new DatabaseSync(path);
+    db.exec("CREATE TABLE col(decks TEXT, models TEXT); CREATE TABLE notes(id INTEGER, mid INTEGER, flds TEXT, tags TEXT); CREATE TABLE cards(id INTEGER, nid INTEGER, did INTEGER);");
+    db.prepare("INSERT INTO col VALUES (?, ?)").run(JSON.stringify({ "1": { name: "Inglês" } }), JSON.stringify({ "10": { type: 0, flds: [{ name: "Front" }, { name: "Back" }] } }));
+    db.prepare("INSERT INTO notes VALUES (?, ?, ?, ?)").run(1, 10, "Obrigado [sound:pronuncia.mp3]\u001fThank you", "audio");
+    db.prepare("INSERT INTO cards VALUES (?, ?, ?)").run(1, 1, 1); db.close();
+    const bytes = zipSync({
+      "collection.anki2": new Uint8Array(readFileSync(path)),
+      "media": new TextEncoder().encode(JSON.stringify({ "0": "pronuncia.mp3" })),
+      "0": new Uint8Array([0x49, 0x44, 0x33, 0x04, 0x00, 0x00]),
+    });
+
+    const previa = await lerPacoteAnki(Buffer.from(bytes));
+    const cartoes = previa.baralhos.flatMap((baralho) => baralho.cartoes);
+    expect(cartoes).toHaveLength(1);
+    // Nenhum cartão carrega `tipo`: ausente equivale a "frente-verso" e nunca "audio".
+    for (const cartao of cartoes) {
+      expect(Object.keys(cartao).sort()).toEqual(["estado", "frente", "tags", "verso"]);
+    }
+    // Comportamento atual: o `[sound:…]` permanece no texto da Frente.
+    expect(cartoes[0]).toEqual({ frente: "Obrigado [sound:pronuncia.mp3]", verso: "Thank you", tags: ["audio"], estado: "adicionado" });
+    expect(previa.avisos.conteudoIgnorado).toBe(1);
+    // Sem Armazém de Mídia: a assinatura aceita apenas os bytes, então nada pode ser gravado em mídia.
+    expect(lerPacoteAnki.length).toBe(1);
+  });
+
   it("lê o pacote moderno real: prefere collection.anki21b ao aviso em collection.anki2 e lê decks e notetypes do esquema novo", async () => {
     const previa = await lerPacoteAnki(Buffer.from(pacoteModernoReal()));
     expect(previa.baralhos).toEqual([{ nome: "Idiomas::Inglês", cartoes: [{ frente: "savvy", verso: "Astuto", tags: ["vocab"], estado: "adicionado" }] }]);

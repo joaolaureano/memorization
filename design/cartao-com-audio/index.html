@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cartão com áudio · Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="moldura">
+    <a class="marca" href="#baralho">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio" data-i18n="navInicio">Início</a><a href="#estudo" data-i18n="navEstudo">Estudo</a>
+      <a href="#baralho" aria-current="page" data-i18n="navBaralhos">Baralhos</a><a href="#perfil" data-i18n="navPerfil">Perfil</a>
+    </nav>
+    <div class="ca-idiomas" role="group" aria-label="Idioma" data-i18n-aria="idioma">
+      <button class="ca-idioma" type="button" data-idioma="pt-BR" aria-pressed="true">PT</button>
+      <button class="ca-idioma" type="button" data-idioma="en-US" aria-pressed="false">EN</button>
+      <button class="ca-idioma" type="button" data-idioma="es-419" aria-pressed="false">ES</button>
+    </div>
+    <button class="botao-de-saida" type="button" data-i18n="sair">Sair</button>
+  </header>
+  <main class="aplicacao" id="principal">
+    <div class="ca-cabecalho">
+      <p class="sobretitulo" data-i18n="baralho">Baralho</p>
+      <h1>Botânica</h1>
+    </div>
+
+    <section class="ca-bloco" aria-labelledby="titulo-criar">
+      <h2 id="titulo-criar" data-i18n="criarCartao">Criar cartão</h2>
+      <div class="campo">
+        <label class="rotulo" for="tipo" data-i18n="tipoCartao">Tipo de cartão</label>
+        <select id="tipo" name="tipo">
+          <option value="frente-verso" data-i18n="tipoFrenteVerso">Frente-Verso</option>
+          <option value="imagem" data-i18n="tipoImagem">Imagem</option>
+          <option value="audio" data-i18n="tipoAudio">Áudio</option>
+        </select>
+      </div>
+      <p class="visualmente-oculto" id="anuncio" role="status" aria-live="polite" aria-atomic="true"></p>
+
+      <form id="formulario">
+        <div class="campo" id="campo-frente">
+          <label class="rotulo" for="frente" data-i18n="frente">Frente</label>
+          <textarea id="frente" maxlength="1000" rows="3"></textarea>
+          <p class="contador" id="contador-frente"></p>
+        </div>
+
+        <div id="campos-audio" hidden>
+          <div class="campo">
+            <label class="rotulo" for="arquivo" data-i18n="tipoAudio">Áudio</label>
+            <input id="arquivo" type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,audio/webm,audio/wav,audio/x-wav,.mp3,.m4a,.ogg,.opus,.webm,.wav" aria-describedby="ajuda-audio">
+            <p class="ajuda" id="ajuda-audio" data-i18n="ajudaAudio">MP3, M4A, OGG, WebM ou WAV, até 10 MB e 5 minutos. MP3 e M4A tocam em todos os aparelhos.</p>
+            <p class="ca-erro" id="erro-audio" role="alert" hidden></p>
+          </div>
+          <div class="ca-previa" id="previa" hidden>
+            <div id="previa-tocador"></div>
+            <p class="ca-nome-arquivo" id="nome-arquivo"></p>
+            <div class="ca-acoes">
+              <button class="botao botao--secundario" id="trocar-audio" type="button" data-i18n="trocarAudio">Trocar áudio</button>
+              <button class="botao botao--secundario" id="remover-audio" type="button" data-i18n="removerAudio">Remover áudio</button>
+            </div>
+          </div>
+          <div class="campo">
+            <label class="rotulo" for="mensagem" data-i18n="mensagem">Mensagem (opcional)</label>
+            <textarea id="mensagem" maxlength="1000" rows="3" aria-describedby="ajuda-mensagem"></textarea>
+            <p class="contador" id="contador-mensagem"></p>
+            <p class="ajuda" id="ajuda-mensagem" data-i18n="ajudaMensagem">Contexto ou pergunta para o áudio, sem revelar a resposta.</p>
+          </div>
+        </div>
+
+        <div id="campos-imagem" hidden>
+          <p class="ajuda" data-i18n="ajudaImagem">Os campos de Imagem seguem a spec 026.</p>
+        </div>
+
+        <div class="campo">
+          <label class="rotulo" for="verso" data-i18n="verso">Verso</label>
+          <textarea id="verso" maxlength="1000" rows="3" required></textarea>
+          <p class="contador" id="contador-verso"></p>
+        </div>
+
+        <div class="campo">
+          <label class="rotulo" for="tags" data-i18n="tags">Tags</label>
+          <input id="tags" type="text" maxlength="200">
+        </div>
+
+        <div class="ca-acoes">
+          <button class="botao botao--primario" id="salvar" type="submit" data-i18n="salvar">Salvar cartão</button>
+        </div>
+        <p class="ca-mensagem" id="mensagem-formulario" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="ca-bloco" id="tocador-demo" aria-labelledby="titulo-demo">
+      <h2 id="titulo-demo" data-i18n="tituloDemo">Tocador</h2>
+      <div class="ca-slot"></div>
+      <div class="ca-indisponivel">
+        <p class="ca-indisponivel-titulo" data-i18n="indisponivel">Áudio indisponível</p>
+      </div>
+    </section>
+
+    <section class="ca-bloco" id="baralho" aria-labelledby="titulo-lista">
+      <h2 id="titulo-lista" data-i18n="cartoesDoBaralho">Cartões do baralho</h2>
+      <ul id="cartoes" class="ca-lista"></ul>
+    </section>
+
+    <section class="ca-bloco" id="estudo" aria-labelledby="titulo-estudo">
+      <h2 id="titulo-estudo" data-i18n="estudo">Estudo</h2>
+      <div class="ca-face" id="face"></div>
+      <div class="ca-acoes">
+        <button class="botao botao--secundario" id="revelar" type="button" data-i18n="revelar">Revelar</button>
+        <button class="botao botao--primario" id="proximo" type="button" data-i18n="proximo">Próximo</button>
+      </div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

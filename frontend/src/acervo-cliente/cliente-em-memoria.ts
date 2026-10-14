@@ -22,6 +22,8 @@ import {
   NAO_AUTENTICADO,
 } from "./cliente";
 import {
+  LIMITE_DE_DURACAO_DO_AUDIO_EM_MS,
+  conferirArquivoDeAudio,
   conferirArquivoDeImagem,
   regrasDo,
 } from "./tipos-de-cartao";
@@ -94,7 +96,11 @@ import {
   obterAgendaEmMemoria,
   salvarRotinaEmMemoria,
 } from "./agenda-em-memoria";
-import type { ComplementoDeCartao, ResultadoDeEnvioDeImagem } from "./cliente";
+import type {
+  ComplementoDeCartao,
+  ResultadoDeEnvioDeAudio,
+  ResultadoDeEnvioDeImagem,
+} from "./cliente";
 import type { AgendaBase, ContextoDaAgenda } from "./agenda-em-memoria";
 import {
   NOME_DE_USUARIO_EXISTENTE,
@@ -379,11 +385,13 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     }
 
     const ehImagem = dados.tipo === "imagem";
+    const ehAudio = dados.tipo === "audio";
     const falha = regrasDo(dados.tipo).validar({
       frente: dados.frente,
       verso: dados.verso,
       textoAlternativo: dados.textoAlternativo,
       temImagem: !ehImagem || typeof dados.imagemId === "string",
+      temAudio: !ehAudio || typeof dados.audioId === "string",
     });
 
     if (falha !== null) {
@@ -399,10 +407,10 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     let numero = 2;
     // Imagem sem Texto da frente fica fora da unicidade (FR-414).
     while (
-      !(ehImagem && dados.frente.trim() === "") &&
+      !((ehImagem || ehAudio) && dados.frente.trim() === "") &&
       cartoesDoBara1ho.some(
         (c) =>
-          !(c.tipo === "imagem" && c.frente.trim() === "") &&
+          !((c.tipo === "imagem" || c.tipo === "audio") && c.frente.trim() === "") &&
           normalizarFrente(c.frente) === normalizarFrente(frenteFinal.trim()),
       )
     ) {
@@ -418,6 +426,14 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return confirmada;
     }
 
+    const confirmado = ehAudio
+      ? await this.confirmarAudio(dono.id, dados.audioId!)
+      : null;
+
+    if (confirmado !== null && !confirmado.ok) {
+      return confirmado;
+    }
+
     const cartao: CartaoDoDono = {
       id: `c${++this.base.sequenciaDeCartoes}`,
       usuarioId: dono.id,
@@ -430,6 +446,13 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
             tipo: "imagem" as const,
             imagemId: dados.imagemId,
             ...(dados.textoAlternativo ? { textoAlternativo: dados.textoAlternativo } : {}),
+          }
+        : {}),
+      ...(confirmado?.ok
+        ? {
+            tipo: "audio" as const,
+            audioId: dados.audioId,
+            duracaoMs: confirmado.duracaoMs,
           }
         : {}),
     };
@@ -757,11 +780,14 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     }
 
     const ehImagem = cartaoAtual.tipo === "imagem";
+    const ehAudio = cartaoAtual.tipo === "audio";
     const falha = regrasDo(cartaoAtual.tipo).validar({
       frente,
       verso,
       textoAlternativo: complemento.textoAlternativo,
       temImagem: true,
+      // Sem `audioId` na edição, o Áudio atual é mantido (028, FR-448).
+      temAudio: true,
     });
 
     if (falha !== null) {
@@ -770,7 +796,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
     // Verificar duplicação no mesmo baralho
     const frenteNormalizada = normalizarFrente(frente);
-    const foraDaUnicidade = ehImagem && frente.trim() === "";
+    const foraDaUnicidade = (ehImagem || ehAudio) && frente.trim() === "";
     const cartoesDoBara1ho = this.base.cartoes.filter(
       (c) =>
         c.usuarioId === dono.id &&
@@ -800,6 +826,16 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return confirmada;
     }
 
+    // Um Áudio novo é confirmado como na criação: a duração passa a ser a dele.
+    const confirmado =
+      ehAudio && complemento.audioId !== undefined
+        ? await this.confirmarAudio(dono.id, complemento.audioId)
+        : null;
+
+    if (confirmado !== null && !confirmado.ok) {
+      return confirmado;
+    }
+
     const cartaoAtualizado: CartaoDoDono = {
       ...cartaoAtual,
       frente,
@@ -809,6 +845,12 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         ? {
             imagemId: complemento.imagemId ?? cartaoAtual.imagemId,
             textoAlternativo: complemento.textoAlternativo || undefined,
+          }
+        : {}),
+      ...(ehAudio
+        ? {
+            audioId: complemento.audioId ?? cartaoAtual.audioId,
+            duracaoMs: confirmado?.ok ? confirmado.duracaoMs : cartaoAtual.duracaoMs,
           }
         : {}),
     };
@@ -876,6 +918,68 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     }
 
     return { ok: true };
+  }
+
+  async enviarAudio(arquivo: File): Promise<ResultadoDeEnvioDeAudio> {
+    if (this.indisponivel) {
+      return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE };
+    }
+
+    const dono = this.dono();
+
+    if (dono === null) {
+      return this.falhaDeNaoAutenticado();
+    }
+
+    const recusa = conferirArquivoDeAudio(arquivo);
+
+    if (recusa !== null) {
+      return recusa;
+    }
+
+    const audioId = `aud${++this.base.sequenciaDeAudios}`;
+    this.base.audiosEnviados.set(audioId, { usuarioId: dono.id, arquivo });
+
+    return { ok: true, audioId };
+  }
+
+  /**
+   * Confirma o envio de Áudio como o servidor: só o do próprio Usuário, e
+   * recusa a duração acima do limite (028, FR-437). O envio é consumido. A
+   * duração vem do `duracaoDeTesteMs` do arquivo, ou 4 s por padrão.
+   */
+  private async confirmarAudio(
+    usuarioId: string,
+    audioId: string,
+  ): Promise<
+    | { ok: true; duracaoMs: number }
+    | { ok: false; erro: "audio_invalido"; motivo: string; mensagem: string }
+  > {
+    const enviado = this.base.audiosEnviados.get(audioId);
+
+    if (enviado === undefined || enviado.usuarioId !== usuarioId) {
+      return {
+        ok: false,
+        erro: "audio_invalido",
+        motivo: "nao_encontrado",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "audio_invalido", motivo: "nao_encontrado" }, "cartoes"),
+      };
+    }
+
+    this.base.audiosEnviados.delete(audioId);
+
+    const duracaoMs = duracaoDeTesteDo(enviado.arquivo) ?? 4000;
+
+    if (duracaoMs > LIMITE_DE_DURACAO_DO_AUDIO_EM_MS) {
+      return {
+        ok: false,
+        erro: "audio_invalido",
+        motivo: "duracao",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "audio_invalido", motivo: "duracao" }, "cartoes"),
+      };
+    }
+
+    return { ok: true, duracaoMs };
   }
 
   async renomearBaralho(
@@ -1283,7 +1387,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
 
         return {
           posicao,
-          ...(item.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+          ...(item.tipo === "imagem" || item.tipo === "audio" ? { tipo: item.tipo } : {}),
           frente: doSnapshot?.frente ?? item.frente,
           verso: doSnapshot?.verso ?? item.verso,
           resultado: resultadoDaAvaliacao(item.avaliacao),
@@ -2342,6 +2446,9 @@ interface BaseEmMemoria {
   /** O armazém de Imagens simulado (026): envios ainda não confirmados. */
   imagensEnviadas: Map<string, ImagemEnviada>;
   sequenciaDeImagens: number;
+  /** O armazém de Áudios simulado (028): envios ainda não confirmados. */
+  audiosEnviados: Map<string, AudioEnviado>;
+  sequenciaDeAudios: number;
   /**
    * Os Acessos temporários do servidor simulado (018) e o relógio — controlável
    * pela prova — com que a validade deslizante é decidida (FR-291, FR-297). O
@@ -2377,12 +2484,26 @@ interface CartaoDoDono extends Cartao {
   baralhoId: string;
   /** No tipo Imagem, o envio confirmado; o endereço é derivado dele. */
   imagemId?: string;
+  /** No tipo Áudio, o envio confirmado; o endereço é derivado dele (028). */
+  audioId?: string;
 }
 
 /** Um envio de Imagem ainda não confirmado por um Cartão (026). */
 interface ImagemEnviada {
   usuarioId: string;
   arquivo: File;
+}
+
+/** Um envio de Áudio ainda não confirmado por um Cartão (028). */
+interface AudioEnviado {
+  usuarioId: string;
+  arquivo: File;
+}
+
+/** A duração que o arquivo de teste declara (`duracaoDeTesteMs`), se houver. */
+function duracaoDeTesteDo(arquivo: File): number | undefined {
+  const valor = (arquivo as { duracaoDeTesteMs?: unknown }).duracaoDeTesteMs;
+  return typeof valor === "number" ? valor : undefined;
 }
 
 /** Baralho com o dono: o `usuarioId` é o escopo de toda operação (FR-092). */
@@ -2427,6 +2548,8 @@ function novaBaseEmMemoria(
     sequenciaDeUsuarios: 0,
     imagensEnviadas: new Map(),
     sequenciaDeImagens: 0,
+    audiosEnviados: new Map(),
+    sequenciaDeAudios: 0,
     acessos: new Map(),
     sequenciaDeAcessos: 0,
     deslocamentoDoRelogioEmMs: 0,
@@ -2461,6 +2584,16 @@ function cartaoSemDono(cartao: CartaoDoDono): Cartao {
             expiraEm: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
           },
           ...(cartao.textoAlternativo ? { textoAlternativo: cartao.textoAlternativo } : {}),
+        }
+      : {}),
+    ...(cartao.tipo === "audio"
+      ? {
+          tipo: "audio" as const,
+          audio: {
+            url: `memoria://audios/${cartao.audioId}`,
+            expiraEm: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          },
+          duracaoMs: cartao.duracaoMs,
         }
       : {}),
   };
@@ -2616,14 +2749,19 @@ function itemDeRegistroValido(item: unknown): boolean {
 
   const campos = item as Record<string, unknown>;
 
-  if (campos.tipo !== undefined && campos.tipo !== "frente-verso" && campos.tipo !== "imagem") {
+  if (
+    campos.tipo !== undefined &&
+    campos.tipo !== "frente-verso" &&
+    campos.tipo !== "imagem" &&
+    campos.tipo !== "audio"
+  ) {
     return false;
   }
 
-  // No tipo Imagem, a Frente é o Texto da frente e pode ser vazia (FR-419a).
+  // No tipo Imagem e no tipo Áudio, a Frente pode ser vazia (FR-419a, 028).
   if (
     typeof campos.frente !== "string" ||
-    (campos.tipo === "imagem"
+    (campos.tipo === "imagem" || campos.tipo === "audio"
       ? campos.frente.length > 1000
       : validarFrente(campos.frente) !== null)
   ) {

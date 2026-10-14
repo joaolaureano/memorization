@@ -385,13 +385,13 @@ export function bateriaDaPorta(
 
         expect((await armazenamento().atualizarCartao(DONO_UM, imagemDe("i1", "k-nova"))).ok).toBe(true);
         expect((await armazenamento().atualizarCartao(DONO_UM, imagemDe("i1", "k-nova", "Texto"))).ok).toBe(true);
-        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k-velha"]);
+        expect(await armazenamento().listarMidiaARemover(10)).toEqual(["k-velha"]);
 
         expect((await armazenamento().excluirCartao(DONO_UM, "i2")).ok).toBe(true);
-        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k-velha", "k2"]);
+        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual(["k-velha", "k2"]);
 
-        await armazenamento().esquecerImagensRemovidas(["k-velha"]);
-        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k2"]);
+        await armazenamento().esquecerMidiaRemovida(["k-velha"]);
+        expect(await armazenamento().listarMidiaARemover(10)).toEqual(["k2"]);
       });
 
       it("enfileira as Imagens do Baralho excluído e do Usuário excluído", async () => {
@@ -402,19 +402,19 @@ export function bateriaDaPorta(
         await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b2", cartaoDe("c3"));
 
         expect((await armazenamento().excluirBaralho(DONO_UM, "b1")).ok).toBe(true);
-        expect(await armazenamento().listarImagensARemover(10)).toEqual(["k1"]);
+        expect(await armazenamento().listarMidiaARemover(10)).toEqual(["k1"]);
 
         expect((await aberto.usuarios.excluirUsuario(DONO_UM)).ok).toBe(true);
-        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k1", "k2"]);
+        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual(["k1", "k2"]);
       });
 
       it("enfileira por pedido explícito, sem repetir a chave (FR-423)", async () => {
-        expect(await armazenamento().enfileirarImagensARemover(["k1", "k1", "k2"])).toEqual({
+        expect(await armazenamento().enfileirarMidiaARemover(["k1", "k1", "k2"])).toEqual({
           ok: true,
           valor: undefined,
         });
-        expect((await armazenamento().listarImagensARemover(10)).sort()).toEqual(["k1", "k2"]);
-        expect(await armazenamento().listarImagensARemover(1)).toHaveLength(1);
+        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual(["k1", "k2"]);
+        expect(await armazenamento().listarMidiaARemover(1)).toHaveLength(1);
       });
 
       it("guarda o tipo no snapshot do Histórico, nunca a Imagem (FR-419a)", async () => {
@@ -443,6 +443,72 @@ export function bateriaDaPorta(
 
         expect((await armazenamento().inserirRegistroDeSessao(DONO_UM, registro)).ok).toBe(true);
         const lido = await armazenamento().obterRegistroDeSessao(DONO_UM, "r-imagem");
+        expect(lido.ok && lido.valor.itens).toEqual(registro.itens);
+      });
+    });
+
+    describe("Tipo áudio (028)", () => {
+      function audioDe(id: string, chave: string, duracaoMs: number, frente = ""): Cartao {
+        return {
+          id,
+          frente,
+          verso: "Verso",
+          tipo: "audio",
+          audioChave: chave,
+          audioDuracaoMs: duracaoMs,
+        };
+      }
+
+      it("guarda e lê o tipo Áudio com a chave e a duração (FR-434, FR-435)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        const cartao = audioDe("a1", "audios/u/a1", 4210);
+
+        expect((await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", cartao)).ok).toBe(true);
+        expect(await armazenamento().obterCartao(DONO_UM, "a1")).toEqual({ ok: true, valor: cartao });
+      });
+
+      it("enfileira a chave do Áudio ao excluir o Cartão (FR-449)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", audioDe("a1", "audios/u/a1", 4210));
+
+        expect((await armazenamento().excluirCartao(DONO_UM, "a1")).ok).toBe(true);
+        expect(await armazenamento().listarMidiaARemover(10)).toEqual(["audios/u/a1"]);
+      });
+
+      it("enfileira a chave do Áudio substituído ao trocá-lo (FR-449)", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("b1"));
+        await armazenamento().inserirCartaoNoBaralho(DONO_UM, "b1", audioDe("a1", "audios/u/velha", 4210));
+
+        expect((await armazenamento().atualizarCartao(DONO_UM, audioDe("a1", "audios/u/nova", 5000))).ok).toBe(true);
+        expect(await armazenamento().listarMidiaARemover(10)).toEqual(["audios/u/velha"]);
+      });
+
+      it("guarda o tipo Áudio no snapshot do Histórico, sem o Áudio (FR-447)", async () => {
+        const registro: RegistroDeSessao = {
+          id: "r-audio",
+          baralhoId: "b1",
+          nomeDoBaralho: "Espanhol",
+          origem: "baralho",
+          concluidaEm: "2026-10-13T12:00:00.000Z",
+          estudados: 1,
+          acertos: 1,
+          erros: 0,
+          itens: [
+            {
+              posicao: 0,
+              tipo: "audio",
+              frente: "",
+              verso: "Verso",
+              resultado: "acertou",
+              cartaoId: "a1",
+              avaliacao: "bom",
+              avaliacaoRotulo: "Bom",
+            },
+          ],
+        };
+
+        expect((await armazenamento().inserirRegistroDeSessao(DONO_UM, registro)).ok).toBe(true);
+        const lido = await armazenamento().obterRegistroDeSessao(DONO_UM, "r-audio");
         expect(lido.ok && lido.valor.itens).toEqual(registro.itens);
       });
     });

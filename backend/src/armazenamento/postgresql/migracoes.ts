@@ -525,6 +525,77 @@ CREATE TABLE imagem_a_remover (
 `;
 
 /**
+ * A 19 troca por vazio o rótulo padrão gravado como nome: sempre na Revisão
+ * do dia e, no temporário, só quando o nome é "Baralho temporário" — o nome
+ * digitado pela pessoa é preservado (FR-006, FR-020, FR-021). O DDL fica numa
+ * constante porque a 21 o repete (research R6).
+ */
+const ESQUEMA_NOME_DA_REVISAO = `
+      ALTER TABLE registro_de_sessao DROP CONSTRAINT IF EXISTS registro_de_sessao_nome_do_baralho_check;
+      UPDATE registro_de_sessao SET nome_do_baralho = ''
+       WHERE origem = 'revisao'
+          OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');
+      ALTER TABLE registro_de_sessao ADD CONSTRAINT registro_de_sessao_nome_do_baralho_check
+        CHECK ((origem IN ('revisao','temporario') AND nome_do_baralho = '') OR (char_length(btrim(nome_do_baralho)) > 0 AND char_length(nome_do_baralho) <= 100));
+    `;
+
+/**
+ * A 20 introduz o Tipo áudio (`028`, FR-434, FR-435, FR-441), em paridade com o
+ * SQLite. Não tem precondição: as restrições novas de `cartao` valem para
+ * qualquer base, com ou sem Pertencimentos pendentes — por isso a versão sobe
+ * além da 18 e da 19 adiadas, e a 21 as repete.
+ *
+ * `audio_chave` e `audio_duracao_ms` são colunas novas, nulas nas linhas
+ * existentes. As `CHECK` amarram o Áudio ao tipo: a chave está presente se e
+ * somente se o tipo é `audio`, e a duração está presente se e somente se há
+ * chave, de 1 a 300 000 ms. A `CHECK` de Frente não vazia passa a isentar
+ * `audio`, como já isenta `imagem`, tanto em `cartao` quanto no snapshot do
+ * Histórico (FR-439). `item_de_registro.tipo` aceita `audio` (FR-447).
+ *
+ * A restrição de nome do Registro (migração 6) também é trocada aqui, pelo
+ * mesmo texto da 19: enquanto a transição de Pertencimento estiver pendente, a
+ * 19 fica para depois, e o Histórico já grava o rótulo vazio das origens
+ * derivadas (027, `CASE versao >= 19`). Sem a troca, a restrição antiga recusaria
+ * esse `''`. A troca só amplia o que é aceito e não toca nos dados.
+ *
+ * `imagem_a_remover` vira `midia_a_remover` (FR-449): a fila guarda as chaves
+ * de Imagem e de Áudio, e a tabela mantém a ausência de chave estrangeira.
+ */
+const ESQUEMA_TIPO_AUDIO = `
+ALTER TABLE cartao ADD COLUMN audio_chave TEXT NULL;
+ALTER TABLE cartao ADD COLUMN audio_duracao_ms INTEGER NULL;
+
+ALTER TABLE cartao DROP CONSTRAINT IF EXISTS cartao_tipo_check;
+ALTER TABLE cartao ADD CONSTRAINT cartao_tipo_check
+  CHECK (tipo IN ('frente-verso', 'imagem', 'audio'));
+
+ALTER TABLE cartao DROP CONSTRAINT IF EXISTS cartao_frente_check;
+ALTER TABLE cartao ADD CONSTRAINT cartao_frente_check
+  CHECK (char_length(frente) <= 1000 AND (tipo IN ('imagem', 'audio') OR char_length(btrim(frente)) > 0));
+
+ALTER TABLE cartao ADD CONSTRAINT cartao_audio_check
+  CHECK ((tipo = 'audio') = (audio_chave IS NOT NULL));
+ALTER TABLE cartao ADD CONSTRAINT cartao_audio_duracao_presente_check
+  CHECK ((audio_chave IS NULL) = (audio_duracao_ms IS NULL));
+ALTER TABLE cartao ADD CONSTRAINT cartao_audio_duracao_check
+  CHECK (audio_duracao_ms IS NULL OR audio_duracao_ms BETWEEN 1 AND 300000);
+
+ALTER TABLE item_de_registro DROP CONSTRAINT IF EXISTS item_de_registro_tipo_check;
+ALTER TABLE item_de_registro ADD CONSTRAINT item_de_registro_tipo_check
+  CHECK (tipo IN ('frente-verso', 'imagem', 'audio'));
+
+ALTER TABLE item_de_registro DROP CONSTRAINT IF EXISTS item_de_registro_frente_check;
+ALTER TABLE item_de_registro ADD CONSTRAINT item_de_registro_frente_check
+  CHECK (char_length(frente) <= 1000 AND (tipo IN ('imagem', 'audio') OR char_length(btrim(frente)) > 0));
+
+ALTER TABLE registro_de_sessao DROP CONSTRAINT IF EXISTS registro_de_sessao_nome_do_baralho_check;
+ALTER TABLE registro_de_sessao ADD CONSTRAINT registro_de_sessao_nome_do_baralho_check
+  CHECK ((origem IN ('revisao','temporario') AND nome_do_baralho = '') OR (char_length(btrim(nome_do_baralho)) > 0 AND char_length(nome_do_baralho) <= 100));
+
+ALTER TABLE imagem_a_remover RENAME TO midia_a_remover;
+`;
+
+/**
  * As migrações disponíveis, em ordem. Mudar o esquema significa acrescentar uma
  * entrada aqui — nunca editar uma migração já aplicada, que bases instaladas já
  * executaram.
@@ -566,23 +637,33 @@ export const MIGRACOES: readonly Migracao[] = [
     precondicao: PODE_REMOVER_VINCULO,
   },
   /**
-   * A 19 troca por vazio o rótulo padrão gravado como nome: sempre na Revisão
-   * do dia e, no temporário, só quando o nome é "Baralho temporário" — o nome
-   * digitado pela pessoa é preservado (FR-006, FR-020, FR-021). Mesma precondição da 18: a 19 só roda depois da transição de
-   * Pertencimento; enquanto ela estiver pendente, as duas ficam para a próxima
-   * aplicação. Remove a restrição CHECK que proíbe nomes vazios, atualiza os dados
-   * e recria a restrição permitindo nomes vazios só para origens derivadas.
+   * A 19 troca por vazio o rótulo padrão gravado como nome (ver
+   * `ESQUEMA_NOME_DA_REVISAO`). Mesma precondição da 18: a 19 só roda depois da
+   * transição de Pertencimento; enquanto ela estiver pendente, as duas ficam
+   * para a próxima aplicação (027, FR-020).
    */
   {
     versao: 19,
-    sql: `
-      ALTER TABLE registro_de_sessao DROP CONSTRAINT IF EXISTS registro_de_sessao_nome_do_baralho_check;
-      UPDATE registro_de_sessao SET nome_do_baralho = ''
-       WHERE origem = 'revisao'
-          OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');
-      ALTER TABLE registro_de_sessao ADD CONSTRAINT registro_de_sessao_nome_do_baralho_check
-        CHECK ((origem IN ('revisao','temporario') AND nome_do_baralho = '') OR (char_length(btrim(nome_do_baralho)) > 0 AND char_length(nome_do_baralho) <= 100));
-    `,
+    sql: ESQUEMA_NOME_DA_REVISAO,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
+  /**
+   * A 20 introduz o Tipo áudio (`028`, ver `ESQUEMA_TIPO_AUDIO`). Sem
+   * precondição, para que o tipo Áudio funcione logo, mesmo com Cartões ainda
+   * pendentes de Pertencimento (research R6).
+   */
+  { versao: 20, sql: ESQUEMA_TIPO_AUDIO },
+  /**
+   * A 21 repete a finalização da transição e a troca do nome da Revisão, com a
+   * mesma precondição da 18 e da 19. Numa base em que a 19 foi pulada pela
+   * transição pendente, é esta migração que aplica o nome vazio, pois a 20 já
+   * elevou a versão além dela. O DDL da troca do nome inclui a troca da
+   * restrição de nome, que a 19 faz e que precisa existir antes do `UPDATE`
+   * (research R6).
+   */
+  {
+    versao: 21,
+    sql: `DROP TABLE IF EXISTS vinculo;\n${ESQUEMA_NOME_DA_REVISAO}`,
     precondicao: PODE_REMOVER_VINCULO,
   },
 ];

@@ -1,5 +1,5 @@
 /**
- * Amostras de Imagem montadas byte a byte para as provas do `ArmazemDeImagens`.
+ * Amostras de Imagem montadas byte a byte para as provas do `ArmazemDeMidia`.
  * Cada uma traz metadados que precisam sumir (FR-427) e um marcador de texto
  * (`SEGREDO-GPS`, `SEGREDO-COMENTARIO`...) que permite provar a remoção sem
  * decodificar a imagem.

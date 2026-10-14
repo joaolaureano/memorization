@@ -21,8 +21,10 @@ import {
   NAO_AUTENTICADO,
 } from "./cliente";
 import {
+  MENSAGEM_DE_AUDIO_GRANDE,
   MENSAGEM_DE_IMAGEM_GRANDE,
   camposDoTipo,
+  conferirArquivoDeAudio,
   conferirArquivoDeImagem,
 } from "./tipos-de-cartao";
 import type {
@@ -46,7 +48,9 @@ import type {
   BaralhoListado,
   Cartao,
   ComplementoDeCartao,
+  ImagemDoCartao,
   ResultadoDeEnvioDeImagem,
+  ResultadoDeEnvioDeAudio,
   CodigoDeErroDeAgenda,
   CompromissoDeEstudo,
   InicioDeCompromisso,
@@ -1078,6 +1082,9 @@ export class ClienteHttp implements ClienteDoAcervo {
             ? { inicioAgendaId: dados.inicioAgendaId }
             : {}),
           itens: dados.itens.map((item) => ({
+            ...(item.tipo === "imagem" || item.tipo === "audio"
+              ? { tipo: item.tipo }
+              : {}),
             frente: item.frente,
             verso: item.verso,
             cartaoId: item.cartaoId,
@@ -1445,18 +1452,24 @@ export class ClienteHttp implements ClienteDoAcervo {
   }
 
   /**
-   * O endereço de exibição pode vir relativo à API — no modo local, o
-   * armazém em Disco serve pela própria API (026) —; a `<img>` precisa dele
-   * absoluto, resolvido contra o endereço da API, e não contra a página.
+   * O endereço de exibição da Imagem e o de reprodução do Áudio podem vir
+   * relativos à API — no modo local, o armazém em Disco serve pela própria API
+   * (026, 028) —; `<img>` e `<audio>` precisam deles absolutos, resolvidos
+   * contra o endereço da API, e não contra a página.
    */
   private comEnderecoDaImagem<C extends Cartao>(cartao: C): C {
-    if (cartao.imagem === undefined || cartao.imagem === null) {
-      return cartao;
+    const comImagem =
+      cartao.imagem === undefined || cartao.imagem === null
+        ? cartao
+        : { ...cartao, imagem: { ...cartao.imagem, url: this.absoluto(cartao.imagem.url) } };
+
+    if (comImagem.audio === undefined || comImagem.audio === null) {
+      return comImagem;
     }
 
     return {
-      ...cartao,
-      imagem: { ...cartao.imagem, url: this.absoluto(cartao.imagem.url) },
+      ...comImagem,
+      audio: { ...comImagem.audio, url: this.absoluto(comImagem.audio.url) },
     };
   }
 
@@ -1477,8 +1490,58 @@ export class ClienteHttp implements ClienteDoAcervo {
       return local;
     }
 
+    const enviado = await this.enviarPorPreparo(
+      "/imagens/envios",
+      "imagemId",
+      arquivo,
+      MENSAGEM_DE_IMAGEM_GRANDE,
+    );
+
+    return enviado.ok ? { ok: true, imagemId: enviado.id } : enviado;
+  }
+
+  /**
+   * Envia o arquivo de um Áudio pelo mesmo fluxo da Imagem (028, FR-436,
+   * FR-437): a conferência local, a preparação na API e o envio direto ao
+   * armazém, sem a Credencial.
+   */
+  async enviarAudio(arquivo: File): Promise<ResultadoDeEnvioDeAudio> {
+    const local = conferirArquivoDeAudio(arquivo);
+
+    if (local !== null) {
+      return local;
+    }
+
+    const enviado = await this.enviarPorPreparo(
+      "/audios/envios",
+      "audioId",
+      arquivo,
+      MENSAGEM_DE_AUDIO_GRANDE,
+    );
+
+    return enviado.ok ? { ok: true, audioId: enviado.id } : enviado;
+  }
+
+  /**
+   * O fluxo comum de `enviarImagem` e `enviarAudio`: prepara o envio na API
+   * (`caminho`), lê o `chaveDoId` da resposta e manda o arquivo ao endereço
+   * de envio. O envio preparado já é a autorização (026, research R4).
+   */
+  private async enviarPorPreparo(
+    caminho: "/imagens/envios" | "/audios/envios",
+    chaveDoId: "imagemId" | "audioId",
+    arquivo: File,
+    mensagemDeTamanho: string,
+  ): Promise<
+    | { ok: true; id: string }
+    | {
+        ok: false;
+        erro: "tamanho" | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+        mensagem: string;
+      }
+  > {
     try {
-      const preparado = await this.pedir(`${this.endereco}/imagens/envios`, {
+      const preparado = await this.pedir(`${this.endereco}${caminho}`, {
         method: "POST",
         headers: { ...this.cabecalho() },
       });
@@ -1493,11 +1556,13 @@ export class ClienteHttp implements ClienteDoAcervo {
 
       const corpo = (await preparado.json()) as {
         imagemId?: unknown;
+        audioId?: unknown;
         envio?: { url?: unknown; campos?: unknown };
       };
+      const id = corpo[chaveDoId];
 
       if (
-        typeof corpo.imagemId !== "string" ||
+        typeof id !== "string" ||
         typeof corpo.envio?.url !== "string" ||
         typeof corpo.envio.campos !== "object" ||
         corpo.envio.campos === null
@@ -1520,14 +1585,14 @@ export class ClienteHttp implements ClienteDoAcervo {
       });
 
       if (enviado.ok) {
-        return { ok: true, imagemId: corpo.imagemId };
+        return { ok: true, id };
       }
 
       if (
         enviado.status === 413 ||
         (enviado.status === 400 && (await enviado.text()).includes("EntityTooLarge"))
       ) {
-        return { ok: false, erro: "tamanho", mensagem: MENSAGEM_DE_IMAGEM_GRANDE };
+        return { ok: false, erro: "tamanho", mensagem: mensagemDeTamanho };
       }
 
       return this.falhaDeIndisponibilidade();
@@ -1875,7 +1940,7 @@ function lerCartao(corpo: unknown): Cartao | null {
     return null;
   }
 
-  const imagem = lerImagemDoCartao(campos.imagem);
+  const imagem = lerEnderecoDeMidia(campos.imagem);
 
   return {
     id: campos.id,
@@ -1891,11 +1956,23 @@ function lerCartao(corpo: unknown): Cartao | null {
             : {}),
         }
       : {}),
+    ...(campos.tipo === "audio"
+      ? {
+          tipo: "audio" as const,
+          audio: lerEnderecoDeMidia(campos.audio),
+          ...(typeof campos.duracaoMs === "number"
+            ? { duracaoMs: campos.duracaoMs }
+            : {}),
+        }
+      : {}),
   };
 }
 
-/** Lê o endereço de exibição da Imagem; ausente ou malformado vira `null`. */
-function lerImagemDoCartao(valor: unknown): Cartao["imagem"] {
+/**
+ * Lê o endereço de reprodução ou de exibição de uma Mídia (Imagem ou Áudio);
+ * ausente ou malformado vira `null`.
+ */
+function lerEnderecoDeMidia(valor: unknown): ImagemDoCartao | null {
   if (typeof valor !== "object" || valor === null) {
     return null;
   }
@@ -2099,7 +2176,7 @@ function lerItemRegistrado(corpo: unknown): ItemRegistrado | null {
 
   const item: ItemRegistrado = {
     posicao: campos.posicao,
-    ...(campos.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+    ...(campos.tipo === "imagem" || campos.tipo === "audio" ? { tipo: campos.tipo } : {}),
     frente: campos.frente,
     verso: campos.verso,
     resultado: campos.resultado,

@@ -4,9 +4,10 @@ import {
   LIMITE_DE_BYTES_DA_IMAGEM,
   VALIDADE_DA_LEITURA_EM_SEGUNDOS,
   VALIDADE_DO_ENVIO_EM_SEGUNDOS,
-  type ArmazemDeImagens,
+  type ArmazemDeMidia,
   type EnvioPreparado,
-} from "../../src/imagens/armazem.ts";
+  type Midia,
+} from "../../src/midia/armazem.ts";
 import {
   contem,
   gifComMetadados,
@@ -16,16 +17,17 @@ import {
   textoDisfarcado,
   webpComMetadados,
 } from "./amostras.ts";
+import { amostraWav } from "./amostras-de-audio/wav.ts";
 
 /**
- * T007 — bateria de contrato do `ArmazemDeImagens` (`026`, FR-410, FR-411,
+ * T007 — bateria de contrato do `ArmazemDeMidia` (`026`, FR-410, FR-411,
  * FR-424, FR-427), comum aos Adapters Disco e S3.
  *
  * Cada Adapter fornece, além do armazém, as duas ações que o navegador faz
  * fora da API: enviar o arquivo ao envio preparado e ler um endereço.
  */
 export interface CenarioDoArmazem {
-  armazem: ArmazemDeImagens;
+  armazem: ArmazemDeMidia;
   /** Faz o envio como o navegador; devolve o status HTTP da resposta. */
   enviar(envio: EnvioPreparado, bytes: Uint8Array): Promise<number>;
   /** Lê um endereço; `null` quando a leitura é negada. */
@@ -45,22 +47,23 @@ export function bateriaDoArmazem(
   nome: string,
   criar: () => Promise<CenarioDoArmazem>,
 ): void {
-  describe(`ArmazemDeImagens — ${nome}`, () => {
+  describe(`ArmazemDeMidia — ${nome}`, () => {
     async function enviarEConfirmar(
       cenario: CenarioDoArmazem,
+      midia: Midia,
       bytes: Uint8Array,
     ) {
-      const envio = await cenario.armazem.prepararEnvio(DONO);
+      const envio = await cenario.armazem.prepararEnvio(DONO, midia);
       expect(await cenario.enviar(envio, bytes)).toBeLessThan(300);
-      return cenario.armazem.confirmar(DONO, envio.imagemId);
+      return cenario.armazem.confirmar(DONO, envio.envioId, midia);
     }
 
     it("prepara envio válido por até 5 minutos", async () => {
       const cenario = await criar();
       const antes = Date.now();
-      const envio = await cenario.armazem.prepararEnvio(DONO);
+      const envio = await cenario.armazem.prepararEnvio(DONO, "imagem");
 
-      expect(envio.imagemId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(envio.envioId).toMatch(/^[0-9a-f-]{36}$/);
       expect(typeof envio.envio.url).toBe("string");
       expect(typeof envio.envio.campos).toBe("object");
       expect(Date.parse(envio.expiraEm) - antes).toBeLessThanOrEqual(
@@ -76,7 +79,7 @@ export function bateriaDoArmazem(
       ["WebP", webpComMetadados(), "image/webp"],
     ] as const)("aceita %s pelo conteúdo e o serve com o tipo detectado", async (_, bytes, tipo) => {
       const cenario = await criar();
-      const confirmada = await enviarEConfirmar(cenario, bytes);
+      const confirmada = await enviarEConfirmar(cenario, "imagem", bytes);
 
       expect(confirmada).toMatchObject({ ok: true, formato: tipo });
       if (!confirmada.ok) return;
@@ -91,7 +94,7 @@ export function bateriaDoArmazem(
       const cenario = await criar();
 
       for (const bytes of [jpegComMetadados(6), pngComMetadados(), gifComMetadados(), webpComMetadados()]) {
-        const confirmada = await enviarEConfirmar(cenario, bytes);
+        const confirmada = await enviarEConfirmar(cenario, "imagem", bytes);
         if (!confirmada.ok) throw new Error("recusada");
         const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
         const lida = await cenario.ler(endereco.url);
@@ -110,14 +113,14 @@ export function bateriaDoArmazem(
 
     it("recusa texto com nome de imagem e apaga o pendente (FR-411)", async () => {
       const cenario = await criar();
-      const envio = await cenario.armazem.prepararEnvio(DONO);
+      const envio = await cenario.armazem.prepararEnvio(DONO, "imagem");
       await cenario.enviar(envio, textoDisfarcado());
 
-      expect(await cenario.armazem.confirmar(DONO, envio.imagemId)).toEqual({
+      expect(await cenario.armazem.confirmar(DONO, envio.envioId, "imagem")).toEqual({
         ok: false,
         motivo: "formato",
       });
-      expect(await cenario.armazem.confirmar(DONO, envio.imagemId)).toEqual({
+      expect(await cenario.armazem.confirmar(DONO, envio.envioId, "imagem")).toEqual({
         ok: false,
         motivo: "nao_encontrada",
       });
@@ -127,21 +130,21 @@ export function bateriaDoArmazem(
       const cenario = await criar();
       const noLimite = pngComMetadados(LIMITE_DE_BYTES_DA_IMAGEM);
       expect(noLimite.length).toBe(LIMITE_DE_BYTES_DA_IMAGEM);
-      expect(await enviarEConfirmar(cenario, noLimite)).toMatchObject({ ok: true });
+      expect(await enviarEConfirmar(cenario, "imagem", noLimite)).toMatchObject({ ok: true });
 
-      const umByte = await cenario.armazem.prepararEnvio(DONO);
+      const umByte = await cenario.armazem.prepararEnvio(DONO, "imagem");
       expect(await cenario.enviar(umByte, new Uint8Array([0x47]))).toBeLessThan(300);
-      expect(await cenario.armazem.confirmar(DONO, umByte.imagemId)).toEqual({
+      expect(await cenario.armazem.confirmar(DONO, umByte.envioId, "imagem")).toEqual({
         ok: false,
         motivo: "formato",
       });
 
       if (cenario.recusaEnvioGrande !== false) {
-        const grande = await cenario.armazem.prepararEnvio(DONO);
+        const grande = await cenario.armazem.prepararEnvio(DONO, "imagem");
         expect(
           await cenario.enviar(grande, pngComMetadados(LIMITE_DE_BYTES_DA_IMAGEM + 1)),
         ).toBeGreaterThanOrEqual(400);
-        expect(await cenario.armazem.confirmar(DONO, grande.imagemId)).toEqual({
+        expect(await cenario.armazem.confirmar(DONO, grande.envioId, "imagem")).toEqual({
           ok: false,
           motivo: "nao_encontrada",
         });
@@ -150,17 +153,17 @@ export function bateriaDoArmazem(
 
     it("não confirma envio ausente, de outro Usuário ou com identificador forjado", async () => {
       const cenario = await criar();
-      const envio = await cenario.armazem.prepararEnvio(DONO);
+      const envio = await cenario.armazem.prepararEnvio(DONO, "imagem");
       await cenario.enviar(envio, pngComMetadados());
 
-      expect(await cenario.armazem.confirmar(OUTRO, envio.imagemId)).toEqual({
+      expect(await cenario.armazem.confirmar(OUTRO, envio.envioId, "imagem")).toEqual({
         ok: false,
         motivo: "nao_encontrada",
       });
       expect(
-        await cenario.armazem.confirmar(DONO, "00000000-0000-4000-8000-000000000000"),
+        await cenario.armazem.confirmar(DONO, "00000000-0000-4000-8000-000000000000", "imagem"),
       ).toEqual({ ok: false, motivo: "nao_encontrada" });
-      expect(await cenario.armazem.confirmar(DONO, "../dono-dois/x")).toEqual({
+      expect(await cenario.armazem.confirmar(DONO, "../dono-dois/x", "imagem")).toEqual({
         ok: false,
         motivo: "nao_encontrada",
       });
@@ -168,19 +171,19 @@ export function bateriaDoArmazem(
 
     it("nunca deixa ler pendente nem Imagem sem assinatura (FR-424)", async () => {
       const cenario = await criar();
-      const envio = await cenario.armazem.prepararEnvio(DONO);
+      const envio = await cenario.armazem.prepararEnvio(DONO, "imagem");
       await cenario.enviar(envio, pngComMetadados());
 
-      expect(await cenario.lerSemAssinatura(`pendentes/${DONO}/${envio.imagemId}`)).toBeNull();
+      expect(await cenario.lerSemAssinatura(`pendentes/${DONO}/${envio.envioId}`)).toBeNull();
 
-      const confirmada = await cenario.armazem.confirmar(DONO, envio.imagemId);
+      const confirmada = await cenario.armazem.confirmar(DONO, envio.envioId, "imagem");
       if (!confirmada.ok) throw new Error("recusada");
       expect(await cenario.lerSemAssinatura(confirmada.chave)).toBeNull();
     });
 
     it("emite endereço de leitura que expira em até 15 minutos", async () => {
       const cenario = await criar();
-      const confirmada = await enviarEConfirmar(cenario, pngComMetadados());
+      const confirmada = await enviarEConfirmar(cenario, "imagem", pngComMetadados());
       if (!confirmada.ok) throw new Error("recusada");
 
       const antes = Date.now();
@@ -197,7 +200,7 @@ export function bateriaDoArmazem(
 
     it("copia para uma chave independente e remove de forma idempotente (FR-422)", async () => {
       const cenario = await criar();
-      const confirmada = await enviarEConfirmar(cenario, pngComMetadados());
+      const confirmada = await enviarEConfirmar(cenario, "imagem", pngComMetadados());
       if (!confirmada.ok) throw new Error("recusada");
 
       const copia = await cenario.armazem.copiar(confirmada.chave, OUTRO);
@@ -211,6 +214,58 @@ export function bateriaDoArmazem(
       expect(await cenario.ler(original.url)).toBeNull();
       const daCopia = await cenario.armazem.enderecoDeLeitura(copia);
       expect((await cenario.ler(daCopia.url))?.tipo).toBe("image/png");
+    });
+
+    describe("Mídia Áudio (028, FR-436, FR-437)", () => {
+      it("confere o WAV pelo conteúdo, o guarda sob audios/ e o serve como audio/wav", async () => {
+        const cenario = await criar();
+        const confirmada = await enviarEConfirmar(cenario, "audio", amostraWav({ segundos: 1 }));
+
+        expect(confirmada).toMatchObject({ ok: true, formato: "audio/wav", duracaoMs: 1000 });
+        if (!confirmada.ok) return;
+        expect(confirmada.chave.startsWith(`audios/${DONO}/`)).toBe(true);
+
+        const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
+        expect((await cenario.ler(endereco.url))?.tipo).toBe("audio/wav");
+      });
+
+      it("aceita envio de exatamente 10.485.760 B e recusa 10.485.761 B (FR-436)", async () => {
+        const cenario = await criar();
+
+        const noLimite = await cenario.armazem.prepararEnvio(DONO, "audio");
+        expect(await cenario.enviar(noLimite, new Uint8Array(10_485_760))).toBeLessThan(300);
+
+        if (cenario.recusaEnvioGrande !== false) {
+          const grande = await cenario.armazem.prepararEnvio(DONO, "audio");
+          expect(await cenario.enviar(grande, new Uint8Array(10_485_761))).toBeGreaterThanOrEqual(400);
+          expect(await cenario.armazem.confirmar(DONO, grande.envioId, "audio")).toEqual({
+            ok: false,
+            motivo: "nao_encontrada",
+          });
+        }
+      });
+
+      it("recusa WAV como Imagem e PNG como Áudio, pelo conteúdo real", async () => {
+        const cenario = await criar();
+
+        expect(await enviarEConfirmar(cenario, "imagem", amostraWav({ segundos: 1 }))).toEqual({
+          ok: false,
+          motivo: "formato",
+        });
+        expect(await enviarEConfirmar(cenario, "audio", pngComMetadados())).toEqual({
+          ok: false,
+          motivo: "formato",
+        });
+      });
+
+      it("recusa Áudio com mais de 300 s por duração (FR-437)", async () => {
+        const cenario = await criar();
+
+        expect(await enviarEConfirmar(cenario, "audio", amostraWav({ segundos: 300.001 }))).toEqual({
+          ok: false,
+          motivo: "duracao",
+        });
+      });
     });
   });
 }

@@ -40,10 +40,10 @@ import type { Avaliacao } from "../repeticao/algoritmo.ts";
 export type { Avaliacao };
 
 /**
- * Tipo de cartão (`026`, FR-403): `frente-verso`, o padrão, ou `imagem`.
- * Escolhido na criação e imutável depois (FR-420).
+ * Tipo de cartão (`026`, FR-403; `028`, FR-434): `frente-verso`, o padrão,
+ * `imagem` ou `audio`. Escolhido na criação e imutável depois (FR-420, FR-448).
  */
-export type TipoDeCartao = "frente-verso" | "imagem";
+export type TipoDeCartao = "frente-verso" | "imagem" | "audio";
 
 /**
  * Cartão como o armazenamento o guarda: identificador opaco, Frente e Verso
@@ -52,7 +52,7 @@ export type TipoDeCartao = "frente-verso" | "imagem";
  *
  * Como as tags, o tipo mantém a forma legada: `tipo` ausente é `frente-verso`.
  * No tipo `imagem`, `frente` é o Texto da frente (pode ser vazio), e
- * `imagemChave` é a chave da Imagem no `ArmazemDeImagens` (FR-408).
+ * `imagemChave` é a chave da Imagem no `ArmazemDeMidia` (FR-408).
  */
 export interface Cartao {
   id: string;
@@ -62,6 +62,16 @@ export interface Cartao {
   tipo?: TipoDeCartao;
   imagemChave?: string;
   textoAlternativo?: string;
+  /**
+   * Chave do Áudio no `ArmazemDeMidia` (`audios/{usuarioId}/{uuid}`). Presente
+   * se e somente se o tipo é `audio` (FR-434, FR-435).
+   */
+  audioChave?: string;
+  /**
+   * Duração do Áudio em milissegundos, de 1 a 300 000, medida pelo servidor.
+   * Presente se e somente se há `audioChave` (data-model, `028`).
+   */
+  audioDuracaoMs?: number;
 }
 
 /**
@@ -147,7 +157,7 @@ export type ResultadoDoItemRegistrado = "acertou" | "errou";
 export interface ItemRegistrado {
   /** Posição na ordem apresentada: `0..n-1`, derivada pelo Module. */
   readonly posicao: number;
-  /** Tipo do Cartão estudado; ausente é `frente-verso`. Nunca a Imagem (FR-419a). */
+  /** Tipo do Cartão estudado; ausente é `frente-verso`. Nunca a Imagem nem o Áudio (FR-419a, FR-447). */
   readonly tipo?: TipoDeCartao;
   readonly frente: string;
   readonly verso: string;
@@ -565,8 +575,9 @@ export interface ArmazenamentoDeUsuarios {
   /**
    * Exclui o Usuário e, pelas cascatas `ON DELETE CASCADE` do esquema, tudo o
    * que lhe pertence, numa única instrução transacional: ou tudo desaparece, ou
-   * nada é aplicado (FR-274, FR-275, SC-108). As chaves das Imagens dos seus
-   * Cartões entram em `imagem_a_remover` na mesma transação (FR-421).
+   * nada é aplicado (FR-274, FR-275, SC-108). As chaves das Mídias (Imagens e
+   * Áudios) dos seus Cartões entram em `midia_a_remover` na mesma transação
+   * (FR-421, FR-449).
    */
   excluirUsuario(id: string): Promise<DesfechoDeOperacaoDeConta<void>>;
 
@@ -681,8 +692,8 @@ export interface ArmazenamentoDoAcervo {
    * Grava Frente e Verso do Cartão de `cartao.id` no acervo de `usuarioId` e
    * atualiza a chave normalizada do Pertencimento. O tipo nunca muda; no tipo
    * `imagem`, a Imagem e a Descrição alternativa também são gravadas, e a
-   * chave da Imagem substituída entra em `imagem_a_remover` na mesma transação
-   * (FR-421). Ausente é `nao_encontrado`;
+   * chave da Mídia substituída (Imagem ou Áudio) entra em `midia_a_remover` na
+   * mesma transação (FR-421, FR-449). Ausente é `nao_encontrado`;
    * colisão com outro Cartão do mesmo Baralho é `frente_duplicada`, sem
    * alterar nada (FR-399).
    */
@@ -691,22 +702,24 @@ export interface ArmazenamentoDoAcervo {
   /**
    * Exclui o Cartão de `id` do acervo de `usuarioId`; Pertencimento e
    * Agendamento caem pela cascata do esquema e os Registros de sessão ficam
-   * intactos (FR-401). A chave da sua Imagem, se houver, entra em
-   * `imagem_a_remover` na mesma transação (FR-421). Ausente é `nao_encontrado`.
+   * intactos (FR-401). A chave da sua Mídia (Imagem ou Áudio), se houver, entra
+   * em `midia_a_remover` na mesma transação (FR-421, FR-449). Ausente é
+   * `nao_encontrado`.
    */
   excluirCartao(usuarioId: string, id: string): Promise<Desfecho<void>>;
 
   /**
-   * Põe chaves de Imagem na fila de remoção (FR-421, FR-423). Usada quando a
-   * gravação de um Cartão falha depois que a Imagem já foi confirmada.
+   * Põe chaves de Mídia (Imagem ou Áudio) na fila `midia_a_remover` (FR-421,
+   * FR-423). Usada quando a gravação de um Cartão falha depois que a Mídia já
+   * foi confirmada.
    */
-  enfileirarImagensARemover(chaves: readonly string[]): Promise<Desfecho<void>>;
+  enfileirarMidiaARemover(chaves: readonly string[]): Promise<Desfecho<void>>;
 
-  /** Lê até `limite` chaves da fila de remoção, das mais antigas primeiro. */
-  listarImagensARemover(limite: number): Promise<string[]>;
+  /** Lê até `limite` chaves de Mídia da fila `midia_a_remover`, das mais antigas primeiro. */
+  listarMidiaARemover(limite: number): Promise<string[]>;
 
-  /** Tira da fila as chaves já removidas do `ArmazemDeImagens`. */
-  esquecerImagensRemovidas(chaves: readonly string[]): Promise<void>;
+  /** Tira da fila `midia_a_remover` as chaves já removidas do `ArmazemDeMidia`. */
+  esquecerMidiaRemovida(chaves: readonly string[]): Promise<void>;
 
   /**
    * Guarda um Baralho já validado pelo Module, como acervo do Usuário
@@ -753,7 +766,7 @@ export interface ArmazenamentoDoAcervo {
    * Exclui, numa única transação, o Baralho de `id` do acervo de `usuarioId`,
    * os Cartões que lhe pertencem e, pela cascata, os seus Pertencimentos e
    * Agendamentos; os Registros de sessão ficam intactos (FR-402). As chaves
-   * das Imagens desses Cartões entram em `imagem_a_remover` (FR-421). Ausente é
+   * das Mídias desses Cartões entram em `midia_a_remover` (FR-421, FR-449). Ausente é
    * `nao_encontrado`; falha não remove nada.
    */
   excluirBaralho(usuarioId: string, id: string): Promise<Desfecho<void>>;

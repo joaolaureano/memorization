@@ -49,13 +49,26 @@ export interface Cartao {
   imagem?: ImagemDoCartao | null;
   /** Descrição alternativa da Imagem (FR-412). */
   textoAlternativo?: string;
+  /**
+   * Endereço de reprodução do Áudio, de curta duração e nunca mostrado ao
+   * Usuário; `null` quando o servidor não conseguiu emiti-lo (FR-453).
+   */
+  audio?: AudioDoCartao | null;
+  /** Duração do Áudio em milissegundos (FR-441). */
+  duracaoMs?: number;
 }
 
-/** Tipo de cartão (026): Frente-Verso, o padrão, ou Imagem. */
-export type TipoDeCartao = "frente-verso" | "imagem";
+/** Tipo de cartão (026, 028): Frente-Verso, o padrão, Imagem ou Áudio. */
+export type TipoDeCartao = "frente-verso" | "imagem" | "audio";
 
 /** O endereço de exibição de uma Imagem e até quando vale. */
 export interface ImagemDoCartao {
+  url: string;
+  expiraEm: string;
+}
+
+/** O endereço de reprodução de um Áudio e até quando vale. */
+export interface AudioDoCartao {
   url: string;
   expiraEm: string;
 }
@@ -72,12 +85,27 @@ export type ResultadoDeEnvioDeImagem =
       mensagem: string;
     };
 
+/**
+ * Resultado de `enviarAudio` (028, FR-436, FR-437): o envio direto ao armazém
+ * devolve o `audioId` que a criação ou a edição do Cartão confirma. Mesma
+ * forma de `ResultadoDeEnvioDeImagem`.
+ */
+export type ResultadoDeEnvioDeAudio =
+  | { ok: true; audioId: string }
+  | {
+      ok: false;
+      erro: "formato" | "tamanho" | typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
+      mensagem: string;
+    };
+
 /** O complemento do tipo Imagem na edição de um Cartão (FR-420). */
 export interface ComplementoDeCartao {
   tipo?: TipoDeCartao;
   /** Envio novo da Imagem; ausente mantém a Imagem atual. */
   imagemId?: string;
   textoAlternativo?: string;
+  /** Envio novo do Áudio (028, FR-448); ausente mantém o Áudio atual. */
+  audioId?: string;
 }
 
 /**
@@ -111,6 +139,8 @@ export interface DadosDeCartao {
   tipo?: TipoDeCartao;
   /** No tipo Imagem, o envio feito por `enviarImagem` (FR-408). */
   imagemId?: string;
+  /** No tipo Áudio, o envio feito por `enviarAudio` (FR-436). */
+  audioId?: string;
   /** Descrição alternativa da Imagem, até 250 caracteres (FR-412). */
   textoAlternativo?: string;
 }
@@ -1174,6 +1204,14 @@ export interface ClienteDoAcervo {
    * decide pelo conteúdo é o servidor (FR-411).
    */
   enviarImagem(arquivo: File): Promise<ResultadoDeEnvioDeImagem>;
+
+  /**
+   * Envia o arquivo de um Áudio direto ao armazém (028, FR-436) e devolve o
+   * `audioId` que `criarCartao` ou `editarCartao` confirmam. Como
+   * `enviarImagem`: o formato e o tamanho conferidos aqui servem só ao retorno
+   * rápido; quem decide, inclusive a duração, é o servidor (FR-437).
+   */
+  enviarAudio(arquivo: File): Promise<ResultadoDeEnvioDeAudio>;
 
   /**
    * Renomeia um Baralho existente (FR-015), reaplicando as mesmas regras de

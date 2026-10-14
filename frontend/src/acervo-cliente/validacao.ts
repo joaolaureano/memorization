@@ -30,6 +30,9 @@ export const CODIGOS_DE_ERRO_DE_CARTAO = [
   "imagem_ausente",
   "descricao_muito_longa",
   "imagem_invalida",
+  // Cartão do tipo Áudio (028, FR-456).
+  "audio_ausente",
+  "audio_invalido",
   "tipo_imutavel",
 ] as const;
 

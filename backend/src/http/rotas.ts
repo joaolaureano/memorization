@@ -7,13 +7,18 @@ import type { Acervo } from "../acervo/acervo.ts";
 import {
   FORMATOS_ACEITOS,
   LIMITE_DE_BYTES_DA_IMAGEM,
-  type ArmazemDeImagens,
-} from "../imagens/armazem.ts";
+  type ArmazemDeMidia,
+  type FormatoDeAudio,
+} from "../midia/armazem.ts";
+import {
+  LIMITE_DE_BYTES_DO_AUDIO,
+  LIMITE_DE_DURACAO_DO_AUDIO_EM_MS,
+} from "../midia/audio/reconhecer.ts";
 import type { AcaoDeRotina } from "../agenda/tipos.ts";
 import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 import { credencialDoCabecalho } from "./credencial.ts";
-import { recusa } from "./recusas.ts";
+import { recusa, recusaDeAudioInvalido } from "./recusas.ts";
 import { AnkiError } from "../importacao/anki.ts";
 
 /**
@@ -54,7 +59,7 @@ export type AcervoDeUsuario = (usuarioId: string) => Acervo;
  */
 const corpoDeCartao = z.object({
   /** Tipo de cartão (`026`, FR-403); ausente é `frente-verso`, o padrão. */
-  tipo: z.enum(["frente-verso", "imagem"]).optional(),
+  tipo: z.enum(["frente-verso", "imagem", "audio"]).optional(),
   frente: z.string(),
   verso: z.string(),
   tags: z.array(z.string()).optional(),
@@ -62,12 +67,16 @@ const corpoDeCartao = z.object({
   imagemId: z.string().optional(),
   /** Descrição alternativa da Imagem (FR-412). */
   textoAlternativo: z.string().optional(),
+  /** No tipo `audio`, o envio do Áudio a confirmar (`028`, FR-434). */
+  audioId: z.string().optional(),
 });
 
 /**
  * Responde as recusas de criação e edição de Cartão comuns às duas rotas:
- * Imagem recusada é `422` com o motivo (FR-410, FR-411); tipo alterado na
- * edição é `409` (FR-420); as demais regras de conteúdo são `400`.
+ * Imagem ou Áudio recusados são `422` com o motivo (FR-410, FR-411, FR-436);
+ * tipo alterado na edição é `409` (FR-420); as demais regras de conteúdo são
+ * `400`. Nenhuma resposta leva a Mensagem, o endereço ou o nome do arquivo
+ * (FR-455).
  */
 function responderRecusaDeCartao(
   resposta: FastifyReply,
@@ -79,6 +88,12 @@ function responderRecusaDeCartao(
       motivo: resultado.motivo,
       mensagem: resultado.mensagem,
     });
+  }
+
+  if (resultado.erro === "audio_invalido") {
+    return resposta
+      .status(422)
+      .send(recusaDeAudioInvalido(resultado.motivo as Parameters<typeof recusaDeAudioInvalido>[0]));
   }
 
   const body: Record<string, unknown> = { erro: resultado.erro, mensagem: resultado.mensagem };
@@ -344,7 +359,7 @@ export const CAMINHO_DOS_ENVIOS_DE_IMAGEM = "/imagens/envios";
  */
 export function registrarRotasDeImagens(
   servidor: FastifyInstance,
-  imagens: ArmazemDeImagens | undefined,
+  imagens: ArmazemDeMidia | undefined,
 ): void {
   servidor.post(CAMINHO_DOS_ENVIOS_DE_IMAGEM, async (requisicao, resposta) => {
     if (imagens === undefined) {
@@ -352,12 +367,61 @@ export function registrarRotasDeImagens(
     }
 
     try {
-      const envio = await imagens.prepararEnvio(requisicao.usuarioQueEntrou.id);
+      const { envioId, ...envio } = await imagens.prepararEnvio(
+        requisicao.usuarioQueEntrou.id,
+        "imagem",
+      );
 
       return resposta.status(201).send({
+        imagemId: envioId,
         ...envio,
         limiteEmBytes: LIMITE_DE_BYTES_DA_IMAGEM,
         formatos: FORMATOS_ACEITOS,
+      });
+    } catch {
+      return responderIndisponivel(resposta, recusa("indisponivel"));
+    }
+  });
+}
+
+/** Caminho do envio de Áudio (`028`, contracts/http.md). */
+export const CAMINHO_DOS_ENVIOS_DE_AUDIO = "/audios/envios";
+
+/** Formatos de Áudio aceitos, na ordem em que o cliente os anuncia (FR-436). */
+const FORMATOS_DE_AUDIO_ACEITOS: readonly FormatoDeAudio[] = [
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/webm",
+  "audio/wav",
+];
+
+/**
+ * `POST /audios/envios` prepara o envio de um Áudio novo do Usuário, que o
+ * navegador faz direto ao armazém, como a Imagem (research R4). Sem armazém
+ * configurado, a rota responde indisponível.
+ */
+export function registrarRotasDeAudios(
+  servidor: FastifyInstance,
+  audios: ArmazemDeMidia | undefined,
+): void {
+  servidor.post(CAMINHO_DOS_ENVIOS_DE_AUDIO, async (requisicao, resposta) => {
+    if (audios === undefined) {
+      return responderIndisponivel(resposta, recusa("indisponivel"));
+    }
+
+    try {
+      const { envioId, ...envio } = await audios.prepararEnvio(
+        requisicao.usuarioQueEntrou.id,
+        "audio",
+      );
+
+      return resposta.status(201).send({
+        audioId: envioId,
+        ...envio,
+        limiteEmBytes: LIMITE_DE_BYTES_DO_AUDIO,
+        limiteEmSegundos: LIMITE_DE_DURACAO_DO_AUDIO_EM_MS / 1000,
+        formatos: FORMATOS_DE_AUDIO_ACEITOS,
       });
     } catch {
       return responderIndisponivel(resposta, recusa("indisponivel"));

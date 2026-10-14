@@ -1,0 +1,34 @@
+/* O protótipo usa os componentes e tokens de frontend/src/estilos.css. */
+[hidden]{display:none!important}
+.ca-cabecalho{margin-bottom:24px}
+.ca-cabecalho h1{margin-block:4px 16px}
+.ca-bloco{box-sizing:border-box;width:100%;max-width:760px;margin:0 auto 32px;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.ca-bloco h2{margin-block:4px 16px}
+.ca-idiomas{display:flex;gap:4px;flex-wrap:wrap}
+.ca-idioma{min-width:44px;min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.ca-idioma[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ca-bloco select,.ca-bloco input[type=file],.ca-bloco input[type=text],.ca-bloco textarea{box-sizing:border-box;width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+.ca-bloco textarea{min-height:92px;resize:vertical}
+.ca-bloco input[type=file]{height:auto}
+.ca-erro,.ca-mensagem{min-height:1.5em;color:var(--danger)}
+.ca-acoes{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap;margin-block:12px}
+.ca-previa{display:grid;gap:12px;margin-top:12px}
+.ca-nome-arquivo{margin:0;overflow-wrap:anywhere}
+.ca-lista{list-style:none;padding:0;margin:0}
+.ca-cartao{display:grid;gap:8px;padding:16px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+.ca-cartao p{margin:6px 0}
+.ca-linha{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ca-etiqueta{display:inline-block;width:fit-content;padding:3px 8px;border:1px solid var(--border);border-radius:999px;font-size:.875rem}
+.ca-miniatura{display:grid;place-items:center;width:96px;height:96px;padding:4px;box-sizing:border-box;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:.8rem;text-align:center}
+.ca-face{min-height:80px;margin:16px 0;overflow-wrap:anywhere}
+.ca-verso{margin-top:12px}
+.ca-tocador{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 12px;align-items:center;margin:8px 0;padding:12px;border:1px solid var(--border);border-radius:12px}
+.ca-tocador--compacto{flex:1 1 220px;margin:0;padding:0;border:0}
+.ca-botao{min-width:44px;min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:999px;background:var(--accent);color:var(--on-accent);font:inherit;font-weight:600;cursor:pointer}
+.ca-corpo{display:grid;gap:4px;min-width:0}
+.ca-posicao{box-sizing:border-box;width:100%;min-height:44px;margin:0;accent-color:var(--accent)}
+.ca-tempo,.ca-estado{margin:0;font-size:.9rem;color:var(--muted)}
+.ca-duracao{font-variant-numeric:tabular-nums;color:var(--muted)}
+.ca-indisponivel{margin-top:12px;padding:12px;border:1px dashed var(--border);border-radius:8px;color:var(--muted)}
+.ca-indisponivel p{margin:0}
+@media(max-width:600px){.ca-bloco{padding:16px}.ca-cabecalho{align-items:flex-start}}

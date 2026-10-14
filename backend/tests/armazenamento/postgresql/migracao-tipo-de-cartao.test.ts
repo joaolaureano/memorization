@@ -88,7 +88,7 @@ describe("migração 17 — Tipo de cartão (PostgreSQL)", () => {
     try {
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(19);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(21);
       expect(
         (
           await piscina.query(
@@ -161,7 +161,7 @@ describe("migração 17 — Tipo de cartão (PostgreSQL)", () => {
       expect(
         (
           await piscina.query(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'imagem_a_remover' ORDER BY ordinal_position",
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'midia_a_remover' ORDER BY ordinal_position",
           )
         ).rows.map((linha) => linha.column_name),
       ).toEqual(["chave", "registrada_em"]);

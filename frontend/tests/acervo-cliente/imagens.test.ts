@@ -97,7 +97,7 @@ describe("ClienteHttp.enviarImagem", () => {
       return url.endsWith("/imagens/envios")
         ? resposta(201, {
             imagemId: "22222222-2222-4222-8222-222222222222",
-            envio: { url: "/imagens-locais/envios?t=abc", campos: {} },
+            envio: { url: "/midia-local/envios?t=abc", campos: {} },
             expiraEm: "2026-10-13T12:05:00.000Z",
           })
         : resposta(413, { erro: "EntityTooLarge" });
@@ -107,7 +107,7 @@ describe("ClienteHttp.enviarImagem", () => {
       ok: false,
       erro: "tamanho",
     });
-    expect(urls[1]).toBe(`${API}/imagens-locais/envios?t=abc`);
+    expect(urls[1]).toBe(`${API}/midia-local/envios?t=abc`);
   });
 
   it("recusa no navegador o arquivo fora do formato, sem tocar a rede", async () => {
@@ -131,7 +131,7 @@ describe("ClienteHttp.enviarImagem", () => {
               tipo: "imagem",
               frente: "",
               verso: "Pernambuco",
-              imagem: { url: "/imagens-locais/arquivo?t=xyz", expiraEm: "2026-10-13T12:15:00.000Z" },
+              imagem: { url: "/midia-local/arquivo?t=xyz", expiraEm: "2026-10-13T12:15:00.000Z" },
             });
       }
       return resposta(404, { erro: "nao_encontrado", mensagem: "?" });
@@ -147,7 +147,7 @@ describe("ClienteHttp.enviarImagem", () => {
         tipo: "imagem",
         frente: "",
         verso: "Pernambuco",
-        imagem: { url: `${API}/imagens-locais/arquivo?t=xyz`, expiraEm: "2026-10-13T12:15:00.000Z" },
+        imagem: { url: `${API}/midia-local/arquivo?t=xyz`, expiraEm: "2026-10-13T12:15:00.000Z" },
       },
     });
     expect(

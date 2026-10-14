@@ -557,7 +557,7 @@ export function PaginaDoBaralho({
                   setFiltroDeTipo(evento.target.value as FiltroDeTipoDeCartao)
                 }
               >
-                <option value="todos">Todos</option>
+                <option value="todos">{textos.baralhos.tipoCartaoTodos}</option>
                 {ORDEM_DOS_TIPOS.map((tipo) => (
                   <option key={tipo} value={tipo}>
                     {textos.cartao.nomeDoTipo[tipo]}

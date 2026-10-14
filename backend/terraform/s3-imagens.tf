@@ -1,7 +1,9 @@
-# Imagens dos Cartoes do tipo Imagem (026, research R10). O bucket e privado:
-# o navegador envia por presigned POST (limite de 5 MB imposto pelo proprio
-# S3) e le por presigned GET de 15 minutos, ambos assinados pela role da
-# Lambda. Nao ha chave nova a guardar.
+# Midia dos Cartoes (026 e 028, research R10): o bucket guarda as Imagens
+# (prefixo imagens/, ate 5 MB) do tipo Imagem e os Audios (prefixo audios/,
+# ate 10 MB) do tipo Audio. O bucket e privado: o navegador envia por
+# presigned POST (limite de tamanho imposto pelo proprio S3) e le por
+# presigned GET de 15 minutos, ambos assinados pela role da Lambda. Nao ha
+# chave nova a guardar.
 resource "aws_s3_bucket" "imagens" {
   bucket = "${var.project_name}-imagens-${data.aws_caller_identity.current.account_id}"
 }
@@ -33,9 +35,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "imagens" {
   }
 }
 
-# Envios que nunca viraram Cartao ficam em pendentes/ e expiram em 1 dia; o
-# S3 arredonda para a meia-noite UTC seguinte, o que da ate 48 horas
-# (FR-423, research R12).
+# Envios de Imagens e Audios que nunca viraram Cartao ficam em pendentes/ e
+# expiram em 1 dia; o S3 arredonda para a meia-noite UTC seguinte, o que da
+# ate 48 horas (FR-423, research R12).
 resource "aws_s3_bucket_lifecycle_configuration" "imagens" {
   bucket = aws_s3_bucket.imagens.id
 
@@ -58,7 +60,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "imagens" {
 }
 
 # O navegador so faz POST (envio) a partir da origem do CloudFront; a leitura
-# por <img> nao precisa de CORS.
+# por <img> e por <audio> nao precisa de CORS.
 resource "aws_s3_bucket_cors_configuration" "imagens" {
   bucket = aws_s3_bucket.imagens.id
 
@@ -70,8 +72,8 @@ resource "aws_s3_bucket_cors_configuration" "imagens" {
   }
 }
 
-# A Lambda le, grava e apaga objetos do bucket; sem ListBucket, porque as
-# chaves vem sempre do banco.
+# A Lambda le, grava e apaga Imagens e Audios do bucket; sem ListBucket,
+# porque as chaves vem sempre do banco.
 data "aws_iam_policy_document" "lambda_imagens" {
   statement {
     actions = [

@@ -14,3 +14,4 @@ export { SeletorDeIdioma } from "./SeletorDeIdioma";
 export { resolverIdiomaInicial } from "./resolver";
 export { rotuloDoBaralhoDoRegistro } from "./rotulo-do-baralho";
 export { rotuloDoNivel } from "./nivel";
+export { formatarDuracao, duracaoFalada } from "./duracao";

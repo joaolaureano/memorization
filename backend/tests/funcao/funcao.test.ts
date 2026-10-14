@@ -1292,7 +1292,7 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(17);
+    expect(versaoAtual[0]?.versao).toBe(20);
   }, 60_000);
 
   it("recusa uma base na versão 12 (muito atrasada)", async () => {

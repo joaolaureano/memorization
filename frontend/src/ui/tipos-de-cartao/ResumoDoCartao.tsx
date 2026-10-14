@@ -1,14 +1,16 @@
-import { useIdioma, type Catalogo } from "../../idioma";
+import { LOCALE, duracaoFalada, formatarDuracao, useIdioma, type Catalogo } from "../../idioma";
 import type { ReactNode } from "react";
 
 import type { Cartao } from "../../acervo-cliente/cliente";
 import { textoAlternativoDa, tipoDo } from "../../acervo-cliente/tipos-de-cartao";
+import { AudioDoCartao } from "./AudioDoCartao";
 import { ImagemDoCartao } from "./ImagemDoCartao";
 
 /**
- * Como um Cartão aparece na lista do Baralho, por tipo (026, FR-415): o
- * rótulo textual do tipo e, no tipo Imagem, a miniatura direto no item, ao
- * lado do Texto da frente e do Verso.
+ * Como um Cartão aparece na lista do Baralho, por tipo (026, FR-415; 028,
+ * FR-441): o rótulo textual do tipo e, no tipo Imagem, a miniatura direto no
+ * item; no tipo Áudio, o tocador compacto e a duração, com a Mensagem só
+ * quando ela existe.
  */
 export function ResumoDoCartao({
   cartao,
@@ -19,7 +21,7 @@ export function ResumoDoCartao({
   aoFalharImagem?: () => void;
   children?: ReactNode;
 }) {
-  const { textos } = useIdioma();
+  const { textos, idioma } = useIdioma();
   const tipo = tipoDo(cartao);
 
   return (
@@ -35,8 +37,26 @@ export function ResumoDoCartao({
       )}
       <div className="linha-da-lista__conteudo">
         <span className="selo selo--tipo">{textos.cartao.nomeDoTipo[tipo]}</span>
-        {(tipo !== "imagem" || cartao.frente.trim() !== "") && (
+        {(tipo === "frente-verso" || cartao.frente.trim() !== "") && (
           <p className="linha-da-lista__titulo">{cartao.frente}</p>
+        )}
+        {tipo === "audio" && (
+          <div className="linha-da-lista__audio">
+            <AudioDoCartao
+              url={cartao.audio?.url ?? null}
+              duracaoMs={cartao.duracaoMs}
+              variante="compacto"
+            />
+            {cartao.duracaoMs !== undefined && (
+              <span
+                className="linha-da-lista__duracao"
+                role="img"
+                aria-label={textos.tocador.duracao(duracaoFalada(cartao.duracaoMs, LOCALE[idioma]))}
+              >
+                {formatarDuracao(cartao.duracaoMs, LOCALE[idioma])}
+              </span>
+            )}
+          </div>
         )}
         <p className="linha-da-lista__verso">{cartao.verso}</p>
         {children}
@@ -45,9 +65,15 @@ export function ResumoDoCartao({
   );
 }
 
-/** Como o Cartão é nomeado em ações e anúncios (FR-426). */
+/** Como o Cartão é nomeado em ações e anúncios (FR-426; 028, FR-441). */
 export function rotuloDoCartao(cartao: Cartao, textos: Catalogo): string {
-  return tipoDo(cartao) === "imagem"
-    ? textoAlternativoDa(cartao, textos.cartao.imagemSemDescricao)
-    : cartao.frente;
+  if (tipoDo(cartao) === "imagem") {
+    return textoAlternativoDa(cartao, textos.cartao.imagemSemDescricao);
+  }
+
+  if (tipoDo(cartao) === "audio") {
+    return cartao.frente.trim() !== "" ? cartao.frente : textos.cartao.audioSemMensagem;
+  }
+
+  return cartao.frente;
 }

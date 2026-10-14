@@ -13,21 +13,22 @@ import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import {
-  LIMITE_DE_BYTES_DA_IMAGEM,
   VALIDADE_DA_LEITURA_EM_SEGUNDOS,
   VALIDADE_DO_ENVIO_EM_SEGUNDOS,
   chaveAtiva,
   chavePendente,
-  ehIdentificadorDeImagem,
-  prepararImagemConfirmada,
-  type ArmazemDeImagens,
+  ehIdentificadorDeEnvio,
+  midiaDaChave,
+  type ArmazemDeMidia,
 } from "./armazem.ts";
+import { REGRAS_DA_MIDIA } from "./regras.ts";
 
 /**
- * Adapter S3 do `ArmazemDeImagens` — a nuvem (`026`, research R4–R6).
+ * Adapter S3 do `ArmazemDeMidia` — a nuvem (`026`, research R4–R6; `028`, R5).
  *
  * O bucket é privado. O envio é um presigned POST com chave fixa e limite de
- * tamanho imposto pelo próprio S3; a leitura é um presigned GET de 15 minutos.
+ * tamanho imposto pelo próprio S3, o da Mídia pedida; a leitura é um presigned
+ * GET de 15 minutos, que o S3 responde com `Range` sem configuração extra.
  * As assinaturas usam as credenciais temporárias da role da Lambda: não há
  * chave nova a guardar (Princípio VIII).
  */
@@ -46,22 +47,22 @@ function ehAusente(erro: unknown): boolean {
   return nome === "NoSuchKey" || nome === "NotFound" || status === 404;
 }
 
-export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeImagens {
+export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeMidia {
   const s3 = new S3Client(opcoes.cliente ?? {});
   const Bucket = opcoes.bucket;
 
   return {
-    async prepararEnvio(usuarioId) {
-      const imagemId = randomUUID();
+    async prepararEnvio(usuarioId, midia) {
+      const envioId = randomUUID();
       const { url, fields } = await createPresignedPost(s3, {
         Bucket,
-        Key: chavePendente(usuarioId, imagemId),
-        Conditions: [["content-length-range", 1, LIMITE_DE_BYTES_DA_IMAGEM]],
+        Key: chavePendente(usuarioId, envioId),
+        Conditions: [["content-length-range", 1, REGRAS_DA_MIDIA[midia].limiteEmBytes]],
         Expires: VALIDADE_DO_ENVIO_EM_SEGUNDOS,
       });
 
       return {
-        imagemId,
+        envioId,
         envio: { url, campos: fields },
         expiraEm: new Date(
           Date.now() + VALIDADE_DO_ENVIO_EM_SEGUNDOS * 1000,
@@ -69,17 +70,18 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeImagens {
       };
     },
 
-    async confirmar(usuarioId, imagemId) {
-      if (!ehIdentificadorDeImagem(imagemId)) {
+    async confirmar(usuarioId, envioId, midia) {
+      if (!ehIdentificadorDeEnvio(envioId)) {
         return { ok: false, motivo: "nao_encontrada" };
       }
 
-      const Key = chavePendente(usuarioId, imagemId);
+      const regras = REGRAS_DA_MIDIA[midia];
+      const Key = chavePendente(usuarioId, envioId);
 
       try {
         const cabeca = await s3.send(new HeadObjectCommand({ Bucket, Key }));
 
-        if ((cabeca.ContentLength ?? 0) > LIMITE_DE_BYTES_DA_IMAGEM) {
+        if ((cabeca.ContentLength ?? 0) > regras.limiteEmBytes) {
           await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: [{ Key }] } }));
           return { ok: false, motivo: "tamanho" };
         }
@@ -92,20 +94,20 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeImagens {
 
       const objeto = await s3.send(new GetObjectCommand({ Bucket, Key }));
       const bytes = await objeto.Body!.transformToByteArray();
-      const preparada = prepararImagemConfirmada(bytes);
+      const conferida = regras.confirmar(bytes);
       await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: [{ Key }] } }));
 
-      if (!preparada.ok) {
-        return { ok: false, motivo: preparada.motivo };
+      if (!conferida.ok) {
+        return { ok: false, motivo: conferida.motivo };
       }
 
-      const chave = chaveAtiva(usuarioId, imagemId);
+      const chave = chaveAtiva(usuarioId, envioId, midia);
       await s3.send(
         new PutObjectCommand({
           Bucket,
           Key: chave,
-          Body: preparada.bytes,
-          ContentType: preparada.formato,
+          Body: conferida.bytes,
+          ContentType: conferida.formato,
           ContentDisposition: "inline",
         }),
       );
@@ -113,13 +115,22 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeImagens {
       return {
         ok: true,
         chave,
-        formato: preparada.formato,
-        bytes: preparada.bytes.length,
+        formato: conferida.formato,
+        bytes: conferida.bytes.length,
+        ...(conferida.duracaoMs === undefined
+          ? {}
+          : { duracaoMs: conferida.duracaoMs }),
       };
     },
 
     async copiar(chave, usuarioId) {
-      const nova = chaveAtiva(usuarioId, randomUUID());
+      const midia = midiaDaChave(chave);
+
+      if (midia === null) {
+        throw new Error("copiar: a chave não é de uma Mídia ativa");
+      }
+
+      const nova = chaveAtiva(usuarioId, randomUUID(), midia);
       await s3.send(
         new CopyObjectCommand({
           Bucket,

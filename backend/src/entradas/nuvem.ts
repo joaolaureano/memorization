@@ -1,5 +1,5 @@
-import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
-import { armazemDaNuvem } from "../imagens/configuracao.ts";
+import { criarAcervo, processarFilaDeMidia } from "../acervo/acervo.ts";
+import { armazemDaNuvem } from "../midia/configuracao.ts";
 import {
   abrirArmazenamentoPostgresql,
   type ArmazenamentoPostgresqlAberto,
@@ -203,7 +203,7 @@ if (
   if (aberto !== null) {
     const imagens = armazemDaNuvem(process.env);
     const limparImagens = () =>
-      processarFilaDeImagens(aberto.armazenamento, imagens);
+      processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredo, {
       aposExcluirConta: limparImagens,
     });

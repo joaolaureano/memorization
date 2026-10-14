@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { InjectOptions } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { registrarRotasDeImagensLocais } from "../../src/http/imagens-locais.ts";
+import { registrarRotasDeMidiaLocal } from "../../src/http/midia-local.ts";
 import {
   registrarRotasDeBaralhos,
   registrarRotasDeCartoes,
@@ -13,8 +13,8 @@ import {
   registrarRotasDeImagens,
   registrarRotasDeSessoes,
 } from "../../src/http/rotas.ts";
-import { criarArmazemEmDisco } from "../../src/imagens/armazem-em-disco.ts";
-import { pngComMetadados, textoDisfarcado } from "../imagens/amostras.ts";
+import { criarArmazemEmDisco } from "../../src/midia/armazem-em-disco.ts";
+import { pngComMetadados, textoDisfarcado } from "../midia/amostras.ts";
 import {
   montarServidorDeContrato,
   pedirComCredencial,
@@ -41,7 +41,7 @@ beforeEach(async () => {
       registrarRotasDeSessoes(servidor, acervoDe);
       registrarRotasDeConta(servidor, identidade, acessos);
       registrarRotasDeImagens(servidor, imagens);
-      registrarRotasDeImagensLocais(servidor, imagens);
+      registrarRotasDeMidiaLocal(servidor, imagens);
     },
     {},
     {},
@@ -118,7 +118,7 @@ describe("POST /imagens/envios", () => {
     expect(resposta.statusCode).toBe(201);
     expect(resposta.json()).toEqual({
       imagemId: expect.stringMatching(/^[0-9a-f-]{36}$/),
-      envio: { url: expect.stringMatching(/^\/imagens-locais\/envios\?t=/), campos: {} },
+      envio: { url: expect.stringMatching(/^\/midia-local\/envios\?t=/), campos: {} },
       expiraEm: expect.any(String),
       limiteEmBytes: 5_242_880,
       formatos: ["image/jpeg", "image/png", "image/webp", "image/gif"],
@@ -218,7 +218,7 @@ describe("POST /baralhos/{id}/cartoes com tipo (FR-405, FR-409, FR-411)", () => 
     });
     // FR-428: a recusa não devolve a Descrição nem endereço algum.
     expect(invalida.body).not.toContain(segredo);
-    expect(invalida.body).not.toMatch(/imagens(-locais)?\//);
+    expect(invalida.body).not.toMatch(/imagens\/|midia-local\//);
 
     const naoEncontrada = await pedir({
       method: "POST",
@@ -228,8 +228,12 @@ describe("POST /baralhos/{id}/cartoes com tipo (FR-405, FR-409, FR-411)", () => 
     expect(naoEncontrada.statusCode).toBe(422);
     expect(naoEncontrada.json()).toMatchObject({ motivo: "nao_encontrada" });
 
-    const desconhecido = await pedir({ method: "POST", url, payload: { tipo: "audio", frente: "F", verso: "V" } });
+    const desconhecido = await pedir({ method: "POST", url, payload: { tipo: "video", frente: "F", verso: "V" } });
     expect(desconhecido.statusCode).toBe(400);
+    expect(desconhecido.json()).toEqual({
+      erro: "corpo_invalido",
+      mensagem: expect.any(String),
+    });
   });
 });
 
@@ -254,7 +258,7 @@ describe("leitura e isolamento (FR-424, SC-170)", () => {
     expect((await pedir({ method: "GET", url: "/cartoes" }, outro)).json()).toEqual([]);
 
     // A chave do arquivo, sem token, não é endereço de leitura.
-    expect((await lerImagem("/imagens-locais/arquivo?t=imagens/dono-um/x")).statusCode).toBe(404);
+    expect((await lerImagem("/midia-local/arquivo?t=imagens/dono-um/x")).statusCode).toBe(404);
   });
 
   it("não aceita o envio de outro Usuário num Cartão", async () => {

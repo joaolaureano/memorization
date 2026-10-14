@@ -11,9 +11,13 @@ import type {
   TipoDeCartao,
 } from "../acervo-cliente/cliente";
 import {
+  FORMATOS_DE_AUDIO,
   FORMATOS_DE_IMAGEM,
   LIMITE_DA_DESCRICAO_ALTERNATIVA,
+  LIMITE_DE_DURACAO_DO_AUDIO_EM_MS,
+  MENSAGEM_DE_AUDIO_LONGO,
   ORDEM_DOS_TIPOS,
+  conferirArquivoDeAudio,
   conferirArquivoDeImagem,
   textoAlternativoDa,
 } from "../acervo-cliente/tipos-de-cartao";
@@ -25,6 +29,7 @@ import {
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { ImagemDoCartao } from "./tipos-de-cartao/ImagemDoCartao";
+import { AudioDoCartao } from "./tipos-de-cartao/AudioDoCartao";
 import { guardarAvisoDeCartao } from "./aviso-de-cartao";
 import { irParaRota } from "./navegacao";
 import {
@@ -78,7 +83,7 @@ const FOLGA_PARA_AVISO_DE_LIMITE = 100;
  * fica de fora de propósito — na falha de transporte, nenhum campo precisa de
  * correção e o foco permanece onde estava.
  */
-type Campo = "frente" | "verso" | "imagem" | "descricao";
+type Campo = "frente" | "verso" | "imagem" | "descricao" | "audio";
 
 const CAMPO_PARA_CORRECAO: Readonly<
   Record<CodigoDeErroDeCartao, Campo | null>
@@ -90,10 +95,59 @@ const CAMPO_PARA_CORRECAO: Readonly<
   imagem_ausente: "imagem",
   imagem_invalida: "imagem",
   descricao_muito_longa: "descricao",
+  audio_ausente: "audio",
+  audio_invalido: "audio",
   // Sem seletor na edição, a recusa de tipo não aponta campo algum.
   tipo_imutavel: null,
 };
 
+
+/** Os formatos de Áudio, como o seletor de arquivo os anuncia (028, FR-436). */
+const ACEITOS_PARA_AUDIO = [
+  ...FORMATOS_DE_AUDIO,
+  ".mp3",
+  ".m4a",
+  ".ogg",
+  ".opus",
+  ".webm",
+  ".wav",
+].join(",");
+
+/**
+ * A duração que o navegador lê do arquivo local (028, FR-437): uma sonda
+ * `Audio` com o endereço do arquivo, sem aparecer na tela. `null` enquanto o
+ * `loadedmetadata` não chega ou se o endereço não existe.
+ */
+function useDuracaoDoAudio(endereco: string | null): number | null {
+  const [duracaoMs, setDuracaoMs] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDuracaoMs(null);
+
+    if (endereco === null || typeof Audio !== "function") {
+      return;
+    }
+
+    const sonda = new Audio();
+    sonda.preload = "metadata";
+
+    const aoCarregarMetadados = () => {
+      if (Number.isFinite(sonda.duration)) {
+        setDuracaoMs(sonda.duration * 1000);
+      }
+    };
+
+    sonda.addEventListener("loadedmetadata", aoCarregarMetadados);
+    sonda.src = endereco;
+
+    return () => {
+      sonda.removeEventListener("loadedmetadata", aoCarregarMetadados);
+      sonda.removeAttribute("src");
+    };
+  }, [endereco]);
+
+  return duracaoMs;
+}
 
 export const MOTIVO_DE_PENDENCIA = pt.cartao.pendenciaDeSalvamento;
 
@@ -133,23 +187,33 @@ export function PaginaDoFormularioDeCartao({
   const [imagemAtual, setImagemAtual] = useState<Cartao["imagem"]>(undefined);
   const [imagemRemovida, setImagemRemovida] = useState(false);
   const [falhaDaImagem, setFalhaDaImagem] = useState<string | null>(null);
-  const [confirmandoDescarte, setConfirmandoDescarte] = useState(false);
   const [anuncio, setAnuncio] = useState("");
   const [referenciaDoTipo, setReferenciaDoTipo] = useState({ textoAlternativo: "" });
+  // 028 — Áudio. O arquivo escolhido é compartilhado com a Imagem: só um dos
+  // dois tipos tem arquivo por vez.
+  const [falhaDoAudio, setFalhaDoAudio] = useState<string | null>(null);
+  const [audioAtual, setAudioAtual] = useState<Cartao["audio"]>(undefined);
+  const [duracaoAtual, setDuracaoAtual] = useState<number | undefined>(undefined);
+  const [audioRemovido, setAudioRemovido] = useState(false);
+  // O tipo para o qual o usuário quer trocar, enquanto o aviso de descarte está aberto.
+  const [destinoDoDescarte, setDestinoDoDescarte] = useState<TipoDeCartao | null>(null);
 
   const campoDeFrente = useRef<HTMLTextAreaElement>(null);
   const campoDeVerso = useRef<HTMLTextAreaElement>(null);
   const campoDeTipo = useRef<HTMLSelectElement>(null);
   const campoDeImagem = useRef<HTMLInputElement>(null);
+  const campoDeAudio = useRef<HTMLInputElement>(null);
   const campoDeDescricao = useRef<HTMLTextAreaElement>(null);
 
   const ehImagem = tipo === "imagem";
+  const ehAudio = tipo === "audio";
   const estaSujo =
     frente !== referencia.frente ||
     verso !== referencia.verso ||
     JSON.stringify(tags) !== JSON.stringify(referencia.tags) ||
     arquivo !== null ||
     imagemRemovida ||
+    audioRemovido ||
     textoAlternativo !== referenciaDoTipo.textoAlternativo ||
     (!emEdicao && tipo !== "frente-verso");
 
@@ -175,6 +239,25 @@ export function PaginaDoFormularioDeCartao({
 
     return () => URL.revokeObjectURL(endereco);
   }, [arquivo]);
+
+  // Com um Áudio escolhido, a duração vem do arquivo local; acima do limite, o
+  // arquivo é recusado aqui mesmo, sem esperar o servidor (FR-437).
+  const duracaoDoAudio = useDuracaoDoAudio(ehAudio ? previa : null);
+
+  useEffect(() => {
+    if (!ehAudio || duracaoDoAudio === null || arquivo === null) {
+      return;
+    }
+
+    if (duracaoDoAudio > LIMITE_DE_DURACAO_DO_AUDIO_EM_MS) {
+      setArquivo(null);
+      if (campoDeAudio.current !== null) {
+        campoDeAudio.current.value = "";
+      }
+      setFalhaDoAudio(MENSAGEM_DE_AUDIO_LONGO);
+      focarCampo("audio");
+    }
+  }, [duracaoDoAudio]);
 
   const navegarSemProtecao = useNavegarSemProtecao();
 
@@ -217,6 +300,18 @@ export function PaginaDoFormularioDeCartao({
         : null,
   );
 
+  // FR-444: quando o Áudio atual não carrega, o tocador pede um endereço novo
+  // pela mesma leitura que carrega o Cartão na edição.
+  async function renovarAudioAtual(): Promise<string | null> {
+    const listagem = await cliente.listarCartoes();
+
+    if (!listagem.ok) {
+      return null;
+    }
+
+    return listagem.cartoes.find((item) => item.id === id)?.audio?.url ?? null;
+  }
+
   useEffect(() => {
     if (!emEdicao) {
       return;
@@ -250,6 +345,8 @@ export function PaginaDoFormularioDeCartao({
       setTags(encontrado.tags ?? []);
       setTipo(encontrado.tipo ?? "frente-verso");
       setImagemAtual(encontrado.imagem);
+      setAudioAtual(encontrado.audio);
+      setDuracaoAtual(encontrado.duracaoMs);
       setTextoAlternativo(encontrado.textoAlternativo ?? "");
       setReferenciaDoTipo({ textoAlternativo: encontrado.textoAlternativo ?? "" });
       setReferencia({
@@ -286,6 +383,7 @@ export function PaginaDoFormularioDeCartao({
       verso: campoDeVerso,
       imagem: campoDeImagem,
       descricao: campoDeDescricao,
+      audio: campoDeAudio,
     }[campo];
 
     alvo.current?.focus();
@@ -296,16 +394,20 @@ export function PaginaDoFormularioDeCartao({
     setTipo(novo);
     setCampoComErro(null);
     setFalhaDaImagem(null);
-    const anuncio = novo === "frente-verso"
-      ? textos.cartao.anunciarFrenteVerso
-      : textos.cartao.anunciarImagem;
+    setFalhaDoAudio(null);
+    const anuncio = {
+      "frente-verso": textos.cartao.anunciarFrenteVerso,
+      imagem: textos.cartao.anunciarImagem,
+      audio: textos.cartao.anunciarAudio,
+    }[novo];
     setAnuncio(anuncio);
   }
 
   function escolherTipo(novo: TipoDeCartao) {
-    // Voltar a Frente-Verso com uma Imagem escolhida pede confirmação (FR-406).
-    if (novo === "frente-verso" && arquivo !== null) {
-      setConfirmandoDescarte(true);
+    // Trocar de tipo com uma Imagem ou um Áudio escolhidos pede confirmação,
+    // porque o arquivo não existe no tipo de destino (FR-406, FR-433).
+    if ((ehImagem || ehAudio) && arquivo !== null && novo !== tipo) {
+      setDestinoDoDescarte(novo);
       return;
     }
 
@@ -313,14 +415,51 @@ export function PaginaDoFormularioDeCartao({
   }
 
   function fecharDescarte(descartar: boolean) {
-    setConfirmandoDescarte(false);
+    const destino = destinoDoDescarte;
+    setDestinoDoDescarte(null);
 
-    if (descartar) {
+    if (descartar && destino !== null) {
       setArquivo(null);
-      aplicarTipo("frente-verso");
+      aplicarTipo(destino);
     }
 
     campoDeTipo.current?.focus();
+  }
+
+  function escolherAudio(lista: FileList | null) {
+    const escolhido = lista?.[0];
+
+    if (escolhido === undefined) {
+      return;
+    }
+
+    const recusa = conferirArquivoDeAudio(escolhido);
+
+    if (recusa !== null) {
+      // Como a Imagem: o arquivo recusado não fica escolhido, e os textos ficam.
+      if (campoDeAudio.current !== null) {
+        campoDeAudio.current.value = "";
+      }
+      setFalhaDoAudio(recusa.mensagem);
+      focarCampo("audio");
+      return;
+    }
+
+    setFalhaDoAudio(null);
+    setCampoComErro(null);
+    setArquivo(escolhido);
+    setAudioRemovido(false);
+  }
+
+  function removerAudio() {
+    setArquivo(null);
+    if (campoDeAudio.current !== null) {
+      campoDeAudio.current.value = "";
+    }
+    if (emEdicao) {
+      setAudioRemovido(true);
+    }
+    campoDeAudio.current?.focus();
   }
 
   function escolherArquivo(lista: FileList | null) {
@@ -375,6 +514,34 @@ export function PaginaDoFormularioDeCartao({
       return;
     }
 
+    // Na edição, o Áudio atual vale até ser removido sem outro no lugar; o
+    // tipo Áudio exige um (028, FR-448, US3-3). Sem Áudio, a recusa é local.
+    if (ehAudio && emEdicao && arquivo === null && (audioAtual === undefined || audioRemovido)) {
+      setFalhaDeSalvamento(textos.cartao.naoEscolheuAudio);
+      focarCampo("audio");
+      setSalvando(false);
+      return;
+    }
+
+    let audioId: string | undefined;
+
+    if (ehAudio && arquivo !== null) {
+      setAnuncio(textos.cartao.enviandoAudio);
+      const enviado = await cliente.enviarAudio(arquivo);
+
+      if (!enviado.ok) {
+        setAnuncio("");
+        setFalhaDeSalvamento(enviado.mensagem);
+        if (enviado.erro === "formato" || enviado.erro === "tamanho") {
+          focarCampo("audio");
+        }
+        setSalvando(false);
+        return;
+      }
+
+      audioId = enviado.audioId;
+    }
+
     let imagemId: string | undefined;
 
     if (ehImagem && arquivo !== null) {
@@ -400,7 +567,12 @@ export function PaginaDoFormularioDeCartao({
           ...(imagemId !== undefined ? { imagemId } : {}),
           ...(textoAlternativo ? { textoAlternativo } : {}),
         }
-      : {};
+      : ehAudio
+        ? {
+            tipo: "audio" as const,
+            ...(audioId !== undefined ? { audioId } : {}),
+          }
+        : {};
 
     const resultado = emEdicao
       ? await cliente.editarCartao(id, frente, verso, tags, doTipo)
@@ -410,6 +582,7 @@ export function PaginaDoFormularioDeCartao({
       setReferencia({ frente, verso, tags });
       setArquivo(null);
       setImagemRemovida(false);
+      setAudioRemovido(false);
       setReferenciaDoTipo({ textoAlternativo });
       if (!emEdicao) {
         guardarAvisoDeCartao(
@@ -425,7 +598,15 @@ export function PaginaDoFormularioDeCartao({
     }
 
     setAnuncio("");
-    setFalhaDeSalvamento(resultado.mensagem);
+
+    // Como a Imagem recusada na escolha, o Áudio recusado pelo servidor mostra
+    // a mensagem no próprio campo (#erro-do-audio), e não no aviso do formulário.
+    if (resultado.erro === "audio_invalido" || resultado.erro === "audio_ausente") {
+      setFalhaDeSalvamento(null);
+      setFalhaDoAudio(resultado.mensagem);
+    } else {
+      setFalhaDeSalvamento(resultado.mensagem);
+    }
 
     // FR-055, FR-155, FR-399, FR-425: numa recusa, o foco vai ao campo que
     // precisa de correção. A direção vem só do código devolvido pela
@@ -436,10 +617,16 @@ export function PaginaDoFormularioDeCartao({
         ? "frente"
         : CAMPO_PARA_CORRECAO[resultado.erro];
 
-      // A Imagem recusada pelo servidor deixa de estar escolhida, e o campo
-      // volta a pedir um arquivo; os textos permanecem (US1-6).
-      if (resultado.erro === "imagem_invalida") {
+      // A Imagem ou o Áudio recusados pelo servidor deixam de estar escolhidos,
+      // e o campo volta a pedir um arquivo; os textos permanecem (US1-6).
+      if (resultado.erro === "imagem_invalida" || resultado.erro === "audio_invalido") {
         setArquivo(null);
+        if (campoDeImagem.current !== null) {
+          campoDeImagem.current.value = "";
+        }
+        if (campoDeAudio.current !== null) {
+          campoDeAudio.current.value = "";
+        }
       }
 
       if (campo !== null) {
@@ -588,9 +775,87 @@ export function PaginaDoFormularioDeCartao({
             </>
           )}
 
+          {ehAudio && (
+            <div className="campo">
+              <label htmlFor="campo-audio" className="rotulo">
+                {textos.cartao.audioLabel}
+              </label>
+              <input
+                id="campo-audio"
+                ref={campoDeAudio}
+                type="file"
+                accept={ACEITOS_PARA_AUDIO}
+                className={arquivo !== null || (emEdicao && audioAtual !== undefined && !audioRemovido) ? "visualmente-oculto" : undefined}
+                onChange={(evento) => escolherAudio(evento.target.files)}
+                aria-invalid={campoComErro === "audio" ? true : undefined}
+                aria-describedby={`ajuda-do-audio${falhaDoAudio !== null ? " erro-do-audio" : campoComErro === "audio" ? " erro-do-formulario" : ""}`}
+              />
+              <p id="ajuda-do-audio" className="ajuda">
+                {textos.cartao.audioHint}
+              </p>
+              {falhaDoAudio !== null && (
+                <p id="erro-do-audio" className="erro" role="alert">
+                  <TextoDoProduto texto={falhaDoAudio} />
+                </p>
+              )}
+              {arquivo !== null && (
+                <div className="previa-do-audio">
+                  <AudioDoCartao url={previa} variante="compacto" />
+                  <p className="previa-do-audio__nome">{arquivo.name}</p>
+                  <div className="acoes">
+                    <button
+                      type="button"
+                      className="botao botao--secundario"
+                      onClick={() => campoDeAudio.current?.click()}
+                    >
+                      {textos.cartao.btnTrocarAudio}
+                    </button>
+                    <button
+                      type="button"
+                      className="botao botao--secundario"
+                      onClick={removerAudio}
+                    >
+                      {textos.cartao.btnRemoverAudio}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {arquivo === null && emEdicao && audioAtual !== undefined && !audioRemovido && (
+                <div className="previa-do-audio">
+                  <AudioDoCartao
+                    url={audioAtual?.url ?? null}
+                    duracaoMs={duracaoAtual}
+                    variante="compacto"
+                    renovar={renovarAudioAtual}
+                  />
+                  <div className="acoes">
+                    <button
+                      type="button"
+                      className="botao botao--secundario"
+                      onClick={() => campoDeAudio.current?.click()}
+                    >
+                      {textos.cartao.btnTrocarAudio}
+                    </button>
+                    <button
+                      type="button"
+                      className="botao botao--secundario"
+                      onClick={removerAudio}
+                    >
+                      {textos.cartao.btnRemoverAudio}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="campo">
             <label htmlFor="campo-frente" className="rotulo">
-              {ehImagem ? textos.cartao.textoFrenteFront : textos.cartao.textoFrente}
+              {ehImagem
+                ? textos.cartao.textoFrenteFront
+                : ehAudio
+                  ? textos.cartao.mensagemLabel
+                  : textos.cartao.textoFrente}
             </label>
             <textarea
               id="campo-frente"
@@ -599,11 +864,18 @@ export function PaginaDoFormularioDeCartao({
               onChange={(evento) => { setFrente(evento.target.value); setCampoComErro(null); }}
               aria-invalid={campoComErro === "frente" ? true : undefined}
               aria-describedby={
-                avisoDeLimite(frente.length) === null
-                  ? `contador-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
-                  : `contador-da-frente aviso-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
+                `${ehAudio ? "ajuda-da-mensagem " : ""}${
+                  avisoDeLimite(frente.length) === null
+                    ? `contador-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
+                    : `contador-da-frente aviso-da-frente${campoComErro === "frente" ? " erro-do-formulario" : ""}`
+                }`
               }
             />
+            {ehAudio && (
+              <p id="ajuda-da-mensagem" className="ajuda">
+                {textos.cartao.mensagemHint}
+              </p>
+            )}
             <p id="contador-da-frente" className="contador">
               {frente.length} / {LIMITE_DE_CARACTERES_DE_CARTAO} {textos.cartao.caracteres}
             </p>
@@ -663,7 +935,13 @@ export function PaginaDoFormularioDeCartao({
               type="submit"
               disabled={salvando}
             >
-              {salvando ? (ehImagem && arquivo !== null ? textos.cartao.btnEnviandoImagem : textos.cartao.btnSalvando) : textos.cartao.btnSalvar}
+              {salvando
+                ? ehImagem && arquivo !== null
+                  ? textos.cartao.btnEnviandoImagem
+                  : ehAudio && arquivo !== null
+                    ? textos.cartao.btnEnviandoAudio
+                    : textos.cartao.btnSalvando
+                : textos.cartao.btnSalvar}
             </button>
             <button
               className="botao botao--secundario"
@@ -677,13 +955,15 @@ export function PaginaDoFormularioDeCartao({
       </div>
 
       <DialogoDeConfirmacao
-        aberto={confirmandoDescarte}
-        titulo={textos.cartao.descartarImagemTitle}
-        rotuloDeConfirmacao={textos.cartao.descartarImagemConfirm}
+        aberto={destinoDoDescarte !== null}
+        titulo={ehAudio ? textos.cartao.descartarAudioTitle : textos.cartao.descartarImagemTitle}
+        rotuloDeConfirmacao={ehAudio ? textos.cartao.descartarAudioConfirm : textos.cartao.descartarImagemConfirm}
         aoConfirmar={() => fecharDescarte(true)}
         aoCancelar={() => fecharDescarte(false)}
       >
-        {textos.cartao.descartarImagemMsg}
+        {ehAudio
+          ? textos.cartao.descartarAudioMsg(textos.cartao.nomeDoTipo[destinoDoDescarte ?? "frente-verso"])
+          : textos.cartao.descartarImagemMsg(textos.cartao.nomeDoTipo[destinoDoDescarte ?? "frente-verso"])}
       </DialogoDeConfirmacao>
     </div>
   );

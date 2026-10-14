@@ -1,5 +1,5 @@
 import { criarArmazemS3 } from "./armazem-s3.ts";
-import type { ArmazemDeImagens } from "./armazem.ts";
+import type { ArmazemDeMidia } from "./armazem.ts";
 
 /**
  * O armazém de Imagens da nuvem, pela configuração do ambiente (`026`,
@@ -9,7 +9,7 @@ import type { ArmazemDeImagens } from "./armazem.ts";
  */
 export function armazemDaNuvem(
   env: NodeJS.ProcessEnv,
-): ArmazemDeImagens | undefined {
+): ArmazemDeMidia | undefined {
   const bucket = env.NOME_DO_BUCKET_DE_IMAGENS?.trim();
 
   return bucket ? criarArmazemS3({ bucket }) : undefined;

@@ -169,7 +169,8 @@ const INDICE_DE_NOME_DE_USUARIO = "usuario_nome_de_usuario_unico";
  */
 const LISTAR_CARTOES = `
 SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
-       cartao.imagem_chave, cartao.texto_alternativo, baralho.id AS baralho_id,
+       cartao.imagem_chave, cartao.texto_alternativo, cartao.audio_chave,
+       cartao.audio_duracao_ms, baralho.id AS baralho_id,
        baralho.nome AS baralho_nome
   FROM cartao
   JOIN pertencimento ON pertencimento.cartao_id = cartao.id
@@ -179,49 +180,70 @@ SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
 `;
 
 const OBTER_CARTAO = `
-SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo
+SELECT id, frente, verso, tags_json, tipo, imagem_chave, texto_alternativo,
+       audio_chave, audio_duracao_ms
   FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
 /**
- * Atualiza o Cartão e, na mesma instrução, põe na fila de remoção a Imagem
- * substituída (FR-421). O tipo nunca muda (FR-420).
+ * As chaves de Mídia (Imagem e Áudio) de um conjunto de Cartões, sem repetição.
+ * O filtro é aplicado às duas colunas, e o `UNION` tira a repetição de uma
+ * mesma chave (FR-449).
+ */
+function chavesDeMidia(filtro: string): string {
+  return `
+    SELECT imagem_chave AS chave FROM cartao
+     WHERE ${filtro} AND imagem_chave IS NOT NULL
+    UNION
+    SELECT audio_chave AS chave FROM cartao
+     WHERE ${filtro} AND audio_chave IS NOT NULL`;
+}
+
+/**
+ * Atualiza o Cartão e, na mesma instrução, põe na fila de remoção a Imagem e o
+ * Áudio substituídos (FR-421, FR-449). O tipo nunca muda (FR-420).
  */
 const ATUALIZAR_CARTAO = `
 WITH anterior AS (
-  SELECT imagem_chave FROM cartao WHERE id = $6 AND usuario_id = $7
+  SELECT imagem_chave, audio_chave FROM cartao WHERE id = $6 AND usuario_id = $7
 ), fila AS (
-  INSERT INTO imagem_a_remover (chave)
-  SELECT imagem_chave FROM anterior
-   WHERE imagem_chave IS NOT NULL AND imagem_chave IS DISTINCT FROM $4::text
+  INSERT INTO midia_a_remover (chave)
+  SELECT chave FROM (
+    SELECT imagem_chave AS chave FROM anterior
+     WHERE imagem_chave IS NOT NULL AND imagem_chave IS DISTINCT FROM $4::text
+    UNION
+    SELECT audio_chave AS chave FROM anterior
+     WHERE audio_chave IS NOT NULL AND audio_chave IS DISTINCT FROM $8::text
+  ) AS substituidas
   ON CONFLICT (chave) DO NOTHING
 )
 UPDATE cartao
-   SET frente = $1, verso = $2, tags_json = $3, imagem_chave = $4, texto_alternativo = $5
+   SET frente = $1, verso = $2, tags_json = $3, imagem_chave = $4, texto_alternativo = $5,
+       audio_chave = $8, audio_duracao_ms = $9
  WHERE id = $6 AND usuario_id = $7;
 `;
 
-/** Exclui o Cartão e enfileira a sua Imagem numa instrução só (FR-421). */
+/** Exclui o Cartão e enfileira a sua Imagem e o seu Áudio numa instrução só (FR-421, FR-449). */
 const EXCLUIR_CARTAO = `
 WITH fila AS (
-  INSERT INTO imagem_a_remover (chave)
-  SELECT imagem_chave FROM cartao
-   WHERE id = $1 AND usuario_id = $2 AND imagem_chave IS NOT NULL
+  INSERT INTO midia_a_remover (chave)
+  SELECT chave FROM (${chavesDeMidia("id = $1 AND usuario_id = $2")}
+  ) AS midias
   ON CONFLICT (chave) DO NOTHING
 )
 DELETE FROM cartao WHERE id = $1 AND usuario_id = $2;
 `;
 
-const ENFILEIRAR_IMAGEM = `
-INSERT INTO imagem_a_remover (chave) VALUES ($1) ON CONFLICT (chave) DO NOTHING;
+const ENFILEIRAR_MIDIA = `
+INSERT INTO midia_a_remover (chave) VALUES ($1) ON CONFLICT (chave) DO NOTHING;
 `;
 
-const LISTAR_IMAGENS_A_REMOVER = `
-SELECT chave FROM imagem_a_remover ORDER BY registrada_em, chave LIMIT $1;
+const LISTAR_MIDIA_A_REMOVER = `
+SELECT chave FROM midia_a_remover ORDER BY registrada_em, chave LIMIT $1;
 `;
 
-const ESQUECER_IMAGENS_REMOVIDAS = `
-DELETE FROM imagem_a_remover WHERE chave = ANY($1::text[]);
+const ESQUECER_MIDIA_REMOVIDA = `
+DELETE FROM midia_a_remover WHERE chave = ANY($1::text[]);
 `;
 
 const INSERIR_BARALHO = `
@@ -257,11 +279,18 @@ UPDATE baralho SET nome = $1, tags_json = $2 WHERE id = $3 AND usuario_id = $4;
  */
 const EXCLUIR_CARTOES_PERTENCIMENTO_BARALHO = `
 WITH fila AS (
-  INSERT INTO imagem_a_remover (chave)
-  SELECT cartao.imagem_chave FROM cartao
-    JOIN pertencimento ON pertencimento.cartao_id = cartao.id
-   WHERE cartao.usuario_id = $1 AND pertencimento.baralho_id = $2
-     AND cartao.imagem_chave IS NOT NULL
+  INSERT INTO midia_a_remover (chave)
+  SELECT chave FROM (
+    SELECT cartao.imagem_chave AS chave FROM cartao
+      JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+     WHERE cartao.usuario_id = $1 AND pertencimento.baralho_id = $2
+       AND cartao.imagem_chave IS NOT NULL
+    UNION
+    SELECT cartao.audio_chave AS chave FROM cartao
+      JOIN pertencimento ON pertencimento.cartao_id = cartao.id
+     WHERE cartao.usuario_id = $1 AND pertencimento.baralho_id = $2
+       AND cartao.audio_chave IS NOT NULL
+  ) AS midias
   ON CONFLICT (chave) DO NOTHING
 )
 DELETE FROM cartao
@@ -281,8 +310,8 @@ DELETE FROM baralho WHERE id = $1 AND usuario_id = $2;
  */
 const INSERIR_CARTAO_NO_BARALHO = `
 INSERT INTO cartao (id, frente, verso, usuario_id, criado_em, tags_json,
-                    tipo, imagem_chave, texto_alternativo)
-VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8, $9);
+                    tipo, imagem_chave, texto_alternativo, audio_chave, audio_duracao_ms)
+VALUES ($1, $2, $3, $4, $5::timestamptz, $6, $7, $8, $9, $10, $11);
 `;
 
 /**
@@ -296,7 +325,8 @@ VALUES ($1, $2, $3);
 
 const LISTAR_CARTOES_DO_BARALHO = `
 SELECT cartao.id, cartao.frente, cartao.verso, cartao.tags_json, cartao.tipo,
-       cartao.imagem_chave, cartao.texto_alternativo
+       cartao.imagem_chave, cartao.texto_alternativo, cartao.audio_chave,
+       cartao.audio_duracao_ms
   FROM pertencimento
   JOIN cartao ON cartao.id = pertencimento.cartao_id
   JOIN baralho ON baralho.id = pertencimento.baralho_id
@@ -515,8 +545,9 @@ UPDATE usuario SET sal = $1, hash = $2, parametros = $3 WHERE id = $4;
  */
 const EXCLUIR_USUARIO = `
 WITH fila AS (
-  INSERT INTO imagem_a_remover (chave)
-  SELECT imagem_chave FROM cartao WHERE usuario_id = $1 AND imagem_chave IS NOT NULL
+  INSERT INTO midia_a_remover (chave)
+  SELECT chave FROM (${chavesDeMidia("usuario_id = $1")}
+  ) AS midias
   ON CONFLICT (chave) DO NOTHING
 )
 DELETE FROM usuario WHERE id = $1;
@@ -837,6 +868,8 @@ type LinhaDeCartao = {
   tipo?: string;
   imagem_chave?: string | null;
   texto_alternativo?: string | null;
+  audio_chave?: string | null;
+  audio_duracao_ms?: number | null;
 };
 
 /** Linha de `baralho` como o Adapter a lê. */
@@ -1185,11 +1218,21 @@ function cartaoDaLinha(linha: LinhaDeCartao): Cartao {
 
 /**
  * Lê o Tipo de cartão da linha na forma legada da Porta: `frente-verso` não
- * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408).
+ * aparece; `imagem` traz a chave da Imagem e a Descrição alternativa (FR-408);
+ * `audio` traz a chave do Áudio e a duração em milissegundos (FR-434).
  */
 function camposDeTipoDaLinha(
   linha: LinhaDeCartao,
-): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo"> {
+): Pick<Cartao, "tipo" | "imagemChave" | "textoAlternativo" | "audioChave" | "audioDuracaoMs"> {
+  if (linha.tipo === "audio") {
+    return {
+      tipo: "audio",
+      audioChave: linha.audio_chave as string,
+      ...(linha.audio_duracao_ms != null
+        ? { audioDuracaoMs: linha.audio_duracao_ms }
+        : {}),
+    };
+  }
   if (linha.tipo !== "imagem") {
     return {};
   }
@@ -1214,6 +1257,8 @@ function parametrosDeInsercao(cartao: Cartao, usuarioId: string): unknown[] {
     cartao.tipo ?? "frente-verso",
     cartao.imagemChave ?? null,
     cartao.textoAlternativo ?? null,
+    cartao.audioChave ?? null,
+    cartao.audioDuracaoMs ?? null,
   ];
 }
 
@@ -1281,7 +1326,9 @@ function registroResumidoDaLinha(linha: LinhaDeRegistro): RegistroResumido {
 function itemDaLinha(linha: LinhaDeItem): ItemRegistrado {
   return {
     posicao: linha.posicao,
-    ...(linha.tipo === "imagem" ? { tipo: "imagem" as const } : {}),
+    ...(linha.tipo === "imagem" || linha.tipo === "audio"
+      ? { tipo: linha.tipo as "imagem" | "audio" }
+      : {}),
     frente: linha.frente,
     verso: linha.verso,
     resultado: linha.resultado,
@@ -1662,6 +1709,8 @@ export async function abrirArmazenamentoPostgresql(
                   cartao.textoAlternativo ?? null,
                   cartao.id,
                   usuarioId,
+                  cartao.audioChave ?? null,
+                  cartao.audioDuracaoMs ?? null,
                 ],
               );
 
@@ -1711,26 +1760,26 @@ export async function abrirArmazenamentoPostgresql(
       );
     },
 
-    async enfileirarImagensARemover(chaves) {
+    async enfileirarMidiaARemover(chaves) {
       return comDesfecho(async () => {
         for (const chave of chaves) {
-          await piscina.query(ENFILEIRAR_IMAGEM, [chave]);
+          await piscina.query(ENFILEIRAR_MIDIA, [chave]);
         }
         return SEM_CARGA;
       });
     },
 
-    async listarImagensARemover(limite) {
+    async listarMidiaARemover(limite) {
       const { rows } = await piscina.query<{ chave: string }>(
-        LISTAR_IMAGENS_A_REMOVER,
+        LISTAR_MIDIA_A_REMOVER,
         [limite],
       );
       return rows.map((linha) => linha.chave);
     },
 
-    async esquecerImagensRemovidas(chaves) {
+    async esquecerMidiaRemovida(chaves) {
       if (chaves.length > 0) {
-        await piscina.query(ESQUECER_IMAGENS_REMOVIDAS, [[...chaves]]);
+        await piscina.query(ESQUECER_MIDIA_REMOVIDA, [[...chaves]]);
       }
     },
 

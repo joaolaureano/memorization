@@ -15,6 +15,12 @@ import type {
 } from "../armazenamento/porta.ts";
 import { recusa } from "../http/recusas.ts";
 import {
+  MENSAGEM_DA_RECUSA_DO_AUDIO,
+  type MotivoDeRecusaDoAudio,
+} from "./invariantes.ts";
+
+export type { MotivoDeRecusaDoAudio };
+import {
   ALGORITMOS,
   algoritmoPorId,
   previa,
@@ -37,9 +43,9 @@ import {
 } from "./invariantes.ts";
 import { criarAgenda } from "../agenda/agenda.ts";
 import type {
-  ArmazemDeImagens,
-  MotivoDeRecusaDaImagem,
-} from "../imagens/armazem.ts";
+  ArmazemDeMidia,
+  MotivoDeRecusaDaMidia,
+} from "../midia/armazem.ts";
 import {
   chaveDaFrenteDo,
   ehTipoDeCartao,
@@ -132,12 +138,17 @@ export interface DadosDeCartao {
   imagemId?: string;
   /** Descrição alternativa da Imagem, até 250 caracteres (FR-412). */
   textoAlternativo?: string;
+  /**
+   * No tipo `audio`, o envio do Áudio a confirmar (`028`, FR-434). Na edição,
+   * ausente mantém o Áudio atual; presente o substitui (FR-448).
+   */
+  audioId?: string;
 }
 
 /**
- * Endereço de exibição de uma Imagem, emitido só ao dono e válido por até 15
- * minutos (FR-424). `null` quando a assinatura falhou: o cliente mostra Imagem
- * indisponível (FR-418).
+ * Endereço de exibição de uma Imagem ou de um Áudio, emitido só ao dono e
+ * válido por até 15 minutos (FR-424, FR-453). `null` quando a assinatura
+ * falhou: o cliente mostra a Mídia indisponível (FR-418, FR-444).
  */
 export interface ImagemApresentada {
   url: string;
@@ -146,18 +157,35 @@ export interface ImagemApresentada {
 
 /**
  * Cartão como a Interface o entrega ao caller: no tipo `imagem`, com o
- * endereço de exibição no lugar da chave interna, que nunca sai do Module.
+ * endereço de exibição no lugar da chave interna, e no tipo `audio`, com o
+ * endereço de reprodução e a duração. As chaves internas nunca saem do Module.
  */
-export type CartaoApresentado = Omit<Cartao, "imagemChave"> & {
+export type CartaoApresentado = Omit<
+  Cartao,
+  "imagemChave" | "audioChave" | "audioDuracaoMs"
+> & {
   imagem?: ImagemApresentada | null;
+  /** Endereço de reprodução do Áudio; `null` quando a assinatura falhou. */
+  audio?: ImagemApresentada | null;
+  /** Duração do Áudio em milissegundos (`028`, FR-441). */
+  duracaoMs?: number;
 };
 
 /** Recusa da Imagem enviada, com o motivo do armazém (contracts/http.md). */
 export interface RecusaDaImagem {
   ok: false;
   erro: "imagem_invalida";
-  motivo: MotivoDeRecusaDaImagem;
+  motivo: MotivoDeRecusaDaMidia;
   mensagem: string;
+}
+
+/** Recusa do Áudio enviado; `limite` vem para tamanho e duração. */
+export interface RecusaDoAudio {
+  ok: false;
+  erro: "audio_invalido";
+  motivo: MotivoDeRecusaDoAudio;
+  mensagem: string;
+  limite?: number;
 }
 
 /**
@@ -175,7 +203,8 @@ export type ResultadoDeCriacaoDeCartao =
       mensagem: string;
       limite?: number;
     }
-  | RecusaDaImagem;
+  | RecusaDaImagem
+  | RecusaDoAudio;
 
 /**
  * O que `criarBaralho` recebe: exatamente o nome.
@@ -344,7 +373,8 @@ export type ResultadoDeEdicaoDeCartao =
         | "tipo_imutavel";
       mensagem: string;
     }
-  | RecusaDaImagem;
+  | RecusaDaImagem
+  | RecusaDoAudio;
 
 /**
  * Resultado de `renomearBaralho`. Mesma forma de `editarCartao`: sucesso
@@ -767,35 +797,53 @@ const FRENTE_DUPLICADA = recusa("frente_duplicada");
 const TIPO_IMUTAVEL = recusa("tipo_imutavel");
 
 /** As mensagens técnicas da recusa da Imagem, por motivo (FR-410, FR-411). */
-const MENSAGEM_DA_RECUSA_DA_IMAGEM: Readonly<Record<MotivoDeRecusaDaImagem, string>> = {
+const MENSAGEM_DA_RECUSA_DA_IMAGEM: Readonly<Record<MotivoDeRecusaDaMidia, string>> = {
   formato: "File is not a JPEG, PNG, WebP, or GIF image.",
   tamanho: "Image must be at most 5 MB.",
   nao_encontrada: "Uploaded image was not found. Choose the image again.",
+  // A duração é só do Áudio (028); a Imagem nunca chega a este motivo.
+  duracao: "Audio exceeds the duration limit.",
 };
+
+/** Limites numéricos das recusas do Áudio: bytes e segundos (FR-436). */
+const LIMITE_DE_BYTES_DO_AUDIO = 10_485_760;
+const LIMITE_DE_SEGUNDOS_DO_AUDIO = 300;
+
+/** Recusa do Áudio com o motivo, a mensagem e o limite quando há um. */
+function recusaDoAudio(motivo: MotivoDeRecusaDoAudio): RecusaDoAudio {
+  return {
+    ok: false,
+    erro: "audio_invalido",
+    motivo,
+    mensagem: MENSAGEM_DA_RECUSA_DO_AUDIO[motivo],
+    ...(motivo === "tamanho" ? { limite: LIMITE_DE_BYTES_DO_AUDIO } : {}),
+    ...(motivo === "duracao" ? { limite: LIMITE_DE_SEGUNDOS_DO_AUDIO } : {}),
+  };
+}
 
 /** Quantas chaves a fila de remoção trata por vez. */
 const LOTE_DA_FILA_DE_IMAGENS = 100;
 
 /**
- * Remove do `ArmazemDeImagens` as Imagens da fila (FR-421) e esquece as
+ * Remove do `ArmazemDeMidia` as Imagens da fila (FR-421) e esquece as
  * removidas. Falha do armazém deixa as chaves na fila para a próxima vez: é
  * chamada depois de cada exclusão ou troca e no início da aplicação.
  */
-export async function processarFilaDeImagens(
+export async function processarFilaDeMidia(
   armazenamento: ArmazenamentoDoAcervo,
-  imagens: ArmazemDeImagens | undefined,
+  imagens: ArmazemDeMidia | undefined,
 ): Promise<void> {
   if (imagens === undefined) {
     return;
   }
 
   try {
-    const chaves = await armazenamento.listarImagensARemover(
+    const chaves = await armazenamento.listarMidiaARemover(
       LOTE_DA_FILA_DE_IMAGENS,
     );
 
     if (chaves.length > 0) {
-      await armazenamento.esquecerImagensRemovidas(
+      await armazenamento.esquecerMidiaRemovida(
         await imagens.remover(chaves),
       );
     }
@@ -946,7 +994,7 @@ function interpretarItem(
    */
   if (
     typeof frente !== "string" ||
-    (tipo === "imagem"
+    (tipo === "imagem" || tipo === "audio"
       ? frente.length > LIMITE_DE_CARACTERES_DE_CARTAO
       : validarFrente(frente) !== null)
   ) {
@@ -967,7 +1015,7 @@ function interpretarItem(
 
   return {
     posicao,
-    ...(tipo === "imagem" ? { tipo } : {}),
+    ...(tipo === "imagem" || tipo === "audio" ? { tipo } : {}),
     frente,
     verso,
     resultado: resultadoDaAvaliacao(avaliacao),
@@ -1260,7 +1308,7 @@ export function criarAcervo(
      * Onde moram as Imagens dos Cartões do tipo `imagem` (`026`). Ausente, o
      * tipo `imagem` é recusado como `indisponivel`.
      */
-    imagens?: ArmazemDeImagens;
+    imagens?: ArmazemDeMidia;
   } = {},
 ): Acervo {
   const imagens = opcoes.imagens;
@@ -1279,8 +1327,23 @@ export function criarAcervo(
    */
   async function apresentar<T extends Cartao>(
     cartao: T,
-  ): Promise<Omit<T, "imagemChave"> & { imagem?: ImagemApresentada | null }> {
-    const { imagemChave, ...resto } = cartao;
+  ): Promise<
+    Omit<T, "imagemChave" | "audioChave" | "audioDuracaoMs"> & {
+      imagem?: ImagemApresentada | null;
+      audio?: ImagemApresentada | null;
+      duracaoMs?: number;
+    }
+  > {
+    const { imagemChave, audioChave, audioDuracaoMs, ...resto } = cartao;
+
+    if (cartao.tipo === "audio" && audioChave !== undefined) {
+      const duracao = audioDuracaoMs === undefined ? {} : { duracaoMs: audioDuracaoMs };
+      try {
+        return { ...resto, ...duracao, audio: await imagens!.enderecoDeLeitura(audioChave) };
+      } catch {
+        return { ...resto, ...duracao, audio: null };
+      }
+    }
 
     if (cartao.tipo !== "imagem" || imagemChave === undefined) {
       return resto;
@@ -1293,14 +1356,14 @@ export function criarAcervo(
     }
   }
 
-  /** Remove as Imagens da fila, sem que a falha do armazém afete o caller. */
+  /** Remove as Mídias da fila, sem que a falha do armazém afete o caller. */
   async function limparImagens(): Promise<void> {
-    await processarFilaDeImagens(armazenamento, imagens);
+    await processarFilaDeMidia(armazenamento, imagens);
   }
 
-  /** Põe na fila uma Imagem confirmada cuja gravação falhou (FR-423). */
-  async function descartarImagem(chave: string): Promise<void> {
-    await armazenamento.enfileirarImagensARemover([chave]);
+  /** Põe na fila uma Mídia confirmada cuja gravação falhou (FR-423, FR-451). */
+  async function descartarMidia(chave: string): Promise<void> {
+    await armazenamento.enfileirarMidiaARemover([chave]);
     await limparImagens();
   }
 
@@ -1316,7 +1379,7 @@ export function criarAcervo(
     }
 
     try {
-      const confirmada = await imagens.confirmar(usuarioId, imagemId);
+      const confirmada = await imagens.confirmar(usuarioId, imagemId, "imagem");
 
       return confirmada.ok
         ? { ok: true, chave: confirmada.chave }
@@ -1326,6 +1389,37 @@ export function criarAcervo(
             motivo: confirmada.motivo,
             mensagem: MENSAGEM_DA_RECUSA_DA_IMAGEM[confirmada.motivo],
           };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Confirma o envio do Áudio no armazém (`028`, FR-436, FR-437). Devolve a
+   * chave ativa e a duração medida, a recusa com o motivo, ou `null` quando o
+   * armazém está indisponível. O motivo `nao_encontrada` vira `nao_encontrado`
+   * (contracts/http.md).
+   */
+  async function confirmarAudio(
+    audioId: string,
+  ): Promise<{ ok: true; chave: string; duracaoMs: number } | RecusaDoAudio | null> {
+    if (imagens === undefined) {
+      return null;
+    }
+
+    try {
+      const confirmada = await imagens.confirmar(usuarioId, audioId, "audio");
+
+      if (confirmada.ok) {
+        // Um Áudio confirmado sempre tem duração medida; a ausência é falha do armazém.
+        return confirmada.duracaoMs === undefined
+          ? null
+          : { ok: true, chave: confirmada.chave, duracaoMs: confirmada.duracaoMs };
+      }
+
+      return recusaDoAudio(
+        confirmada.motivo === "nao_encontrada" ? "nao_encontrado" : confirmada.motivo,
+      );
     } catch {
       return null;
     }
@@ -1497,6 +1591,8 @@ export function criarAcervo(
 
       registrados.push({
         posicao,
+        // O Histórico guarda o tipo das Mídias (FR-447); a chave nunca entra.
+        ...(cartao.tipo === "imagem" || cartao.tipo === "audio" ? { tipo: cartao.tipo } : {}),
         frente: cartao.frente,
         verso: cartao.verso,
         resultado: resultadoDaAvaliacao(avaliacao),
@@ -1565,9 +1661,11 @@ export function criarAcervo(
       const tipo = dados.tipo ?? "frente-verso";
       const regras = regrasDo(tipo);
       const ehImagem = tipo === "imagem";
+      const ehAudio = tipo === "audio";
       const falha = regras.validar(
         dados,
-        ehImagem && typeof dados.imagemId === "string",
+        (ehImagem && typeof dados.imagemId === "string") ||
+          (ehAudio && typeof dados.audioId === "string"),
       );
 
       if (falha !== null) {
@@ -1607,6 +1705,8 @@ export function criarAcervo(
        * nova tentativa.
        */
       let imagemChave: string | undefined;
+      let audioChave: string | undefined;
+      let audioDuracaoMs: number | undefined;
 
       if (ehImagem) {
         const confirmada = await confirmarImagem(dados.imagemId!);
@@ -1620,9 +1720,24 @@ export function criarAcervo(
         imagemChave = confirmada.chave;
       }
 
-      const recusarComImagem = async <R,>(resultado: R): Promise<R> => {
-        if (imagemChave !== undefined) {
-          await descartarImagem(imagemChave).catch(() => undefined);
+      if (ehAudio) {
+        const confirmado = await confirmarAudio(dados.audioId!);
+
+        if (confirmado === null) {
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
+        if (!confirmado.ok) {
+          return confirmado;
+        }
+        audioChave = confirmado.chave;
+        audioDuracaoMs = confirmado.duracaoMs;
+      }
+
+      /** A Mídia confirmada não chegou a valer: vai para a fila (FR-423, FR-451). */
+      const recusarComMidia = async <R,>(resultado: R): Promise<R> => {
+        const chave = imagemChave ?? audioChave;
+        if (chave !== undefined) {
+          await descartarMidia(chave).catch(() => undefined);
         }
         return resultado;
       };
@@ -1646,6 +1761,9 @@ export function criarAcervo(
                   : {}),
               }
             : {}),
+          ...(ehAudio
+            ? { tipo: "audio" as const, audioChave, audioDuracaoMs }
+            : {}),
         };
 
         const gravado = await armazenamento.inserirCartaoNoBaralho(
@@ -1663,7 +1781,7 @@ export function criarAcervo(
           frente = numerarPeloTipo(dados.frente, tipo, await chavesDoBaralho());
 
           if (frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
-            return recusarComImagem({
+            return recusarComMidia({
               ok: false,
               erro: "frente_muito_longa",
               mensagem: `Card front would exceed ${LIMITE_DE_CARACTERES_DE_CARTAO} characters after numbering.`,
@@ -1675,13 +1793,13 @@ export function criarAcervo(
         }
 
         if (gravado.erro === "nao_encontrado") {
-          return recusarComImagem({ ok: false, ...BARALHO_NAO_ENCONTRADO } as const);
+          return recusarComMidia({ ok: false, ...BARALHO_NAO_ENCONTRADO } as const);
         }
 
-        return recusarComImagem({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
+        return recusarComMidia({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
       }
 
-      return recusarComImagem({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
+      return recusarComMidia({ ok: false, ...ARMAZENAMENTO_INDISPONIVEL } as const);
     },
 
     async criarBaralho(dados) {
@@ -1817,17 +1935,25 @@ export function criarAcervo(
                   : {}),
               }
             : {}),
+          ...(origem.tipo === "audio"
+            ? {
+                tipo: "audio" as const,
+                audioChave: origem.audioChave,
+                audioDuracaoMs: origem.audioDuracaoMs,
+              }
+            : {}),
         });
       }
 
       /**
-       * A Cópia de um Cartão do tipo Imagem recebe uma Imagem própria e
-       * idêntica (FR-422): o arquivo é copiado antes da transação, e uma
-       * falha da gravação manda as cópias para a fila de remoção.
+       * A Cópia de um Cartão com Mídia (Imagem ou Áudio) recebe uma Mídia
+       * própria e idêntica (FR-422, FR-450): o arquivo é copiado antes da
+       * transação, e uma falha da gravação manda as cópias para a fila de
+       * remoção.
        */
-      const imagensCopiadas: string[] = [];
+      const midiasCopiadas: string[] = [];
 
-      if (copias.some((copia) => copia.tipo === "imagem")) {
+      if (copias.some((copia) => copia.tipo === "imagem" || copia.tipo === "audio")) {
         if (imagens === undefined) {
           return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
         }
@@ -1836,12 +1962,16 @@ export function criarAcervo(
           for (const copia of copias) {
             if (copia.tipo === "imagem" && copia.imagemChave !== undefined) {
               copia.imagemChave = await imagens.copiar(copia.imagemChave, usuarioId);
-              imagensCopiadas.push(copia.imagemChave);
+              midiasCopiadas.push(copia.imagemChave);
+            }
+            if (copia.tipo === "audio" && copia.audioChave !== undefined) {
+              copia.audioChave = await imagens.copiar(copia.audioChave, usuarioId);
+              midiasCopiadas.push(copia.audioChave);
             }
           }
         } catch {
           await armazenamento
-            .enfileirarImagensARemover(imagensCopiadas)
+            .enfileirarMidiaARemover(midiasCopiadas)
             .catch(() => undefined);
           return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
         }
@@ -1855,10 +1985,10 @@ export function criarAcervo(
       );
 
       if (!resultado.ok || !resultado.valor.novo) {
-        // Cópias de Imagem que não chegaram a valer vão para a fila (FR-423).
-        if (imagensCopiadas.length > 0) {
+        // Cópias de Mídia que não chegaram a valer vão para a fila (FR-423).
+        if (midiasCopiadas.length > 0) {
           await armazenamento
-            .enfileirarImagensARemover(imagensCopiadas)
+            .enfileirarMidiaARemover(midiasCopiadas)
             .catch(() => undefined);
           await limparImagens();
         }
@@ -1986,10 +2116,13 @@ export function criarAcervo(
       }
 
       const ehImagem = tipo === "imagem";
+      const ehAudio = tipo === "audio";
       const imagemNova = ehImagem && typeof dados.imagemId === "string";
+      const audioNovo = ehAudio && typeof dados.audioId === "string";
       const falha = regrasDo(tipo).validar(
         dados,
-        ehImagem && (imagemNova || atual.valor.imagemChave !== undefined),
+        (ehImagem && (imagemNova || atual.valor.imagemChave !== undefined)) ||
+          (ehAudio && (audioNovo || atual.valor.audioChave !== undefined)),
       );
 
       if (falha !== null) {
@@ -1997,6 +2130,8 @@ export function criarAcervo(
       }
 
       let imagemChave = atual.valor.imagemChave;
+      let audioChave = atual.valor.audioChave;
+      let audioDuracaoMs = atual.valor.audioDuracaoMs;
 
       if (imagemNova) {
         const confirmada = await confirmarImagem(dados.imagemId!);
@@ -2008,6 +2143,19 @@ export function criarAcervo(
           return confirmada;
         }
         imagemChave = confirmada.chave;
+      }
+
+      if (audioNovo) {
+        const confirmado = await confirmarAudio(dados.audioId!);
+
+        if (confirmado === null) {
+          return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+        }
+        if (!confirmado.ok) {
+          return confirmado;
+        }
+        audioChave = confirmado.chave;
+        audioDuracaoMs = confirmado.duracaoMs;
       }
 
       const gravado = await armazenamento.atualizarCartao(usuarioId, {
@@ -2024,12 +2172,14 @@ export function criarAcervo(
                 : {}),
             }
           : {}),
+        ...(ehAudio ? { tipo: "audio" as const, audioChave, audioDuracaoMs } : {}),
       });
 
       if (!gravado.ok) {
-        // A Imagem nova não chegou a valer: vai para a fila (FR-423).
-        if (imagemNova && imagemChave !== undefined) {
-          await descartarImagem(imagemChave).catch(() => undefined);
+        // A Mídia nova não chegou a valer: vai para a fila (FR-423, FR-451).
+        const nova = imagemNova ? imagemChave : audioNovo ? audioChave : undefined;
+        if (nova !== undefined) {
+          await descartarMidia(nova).catch(() => undefined);
         }
         if (gravado.erro === "nao_encontrado") {
           return { ok: false, ...CARTAO_NAO_ENCONTRADO };
@@ -2040,8 +2190,8 @@ export function criarAcervo(
         return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
       }
 
-      if (imagemNova) {
-        // A Imagem substituída entrou na fila na mesma transação (FR-421).
+      if (imagemNova || audioNovo) {
+        // A Mídia substituída entrou na fila na mesma transação (FR-421, FR-449).
         await limparImagens();
       }
 

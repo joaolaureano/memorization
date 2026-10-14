@@ -30,14 +30,17 @@ export interface DadosDoTipo {
   /** Envio confirmado da Imagem, no tipo `imagem` (FR-408). */
   imagemId?: string;
   textoAlternativo?: string;
+  /** Envio confirmado do Áudio, no tipo `audio` (`028`, FR-434). */
+  audioId?: string;
 }
 
 export interface RegrasDoTipo {
   /**
-   * Valida os textos e a presença da Imagem. `temImagem` diz se o Cartão terá
-   * Imagem depois da gravação — enviada agora ou mantida na edição.
+   * Valida os textos e a presença da Mídia do tipo (Imagem ou Áudio). `temMidia`
+   * diz se o Cartão terá a sua Mídia depois da gravação — enviada agora ou
+   * mantida na edição.
    */
-  validar(dados: DadosDoTipo, temImagem: boolean): FalhaDeRegraDeCartao | null;
+  validar(dados: DadosDoTipo, temMidia: boolean): FalhaDeRegraDeCartao | null;
   /** Chave de unicidade da Frente no Baralho; `null` fica fora da regra. */
   chaveDaFrente(frente: string): string | null;
 }
@@ -52,7 +55,7 @@ const FRENTE_VERSO: RegrasDoTipo = {
 };
 
 const IMAGEM: RegrasDoTipo = {
-  validar(dados, temImagem) {
+  validar(dados, temMidia) {
     if (dados.frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
       return validarFrente(dados.frente);
     }
@@ -76,9 +79,35 @@ const IMAGEM: RegrasDoTipo = {
       };
     }
 
-    return temImagem
+    return temMidia
       ? null
       : { erro: "imagem_ausente", mensagem: "Choose an image." };
+  },
+  chaveDaFrente(frente) {
+    return frente.trim().length === 0 ? null : normalizarFrente(frente);
+  },
+};
+
+/**
+ * Tipo áudio (`028`, FR-434, FR-435). A Mensagem é opcional e fica fora da
+ * unicidade quando vazia (FR-439), como a Frente da Imagem. A duração é medida
+ * pelo armazém ao confirmar o Áudio, não aqui.
+ */
+const AUDIO: RegrasDoTipo = {
+  validar(dados, temMidia) {
+    if (dados.frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
+      return validarFrente(dados.frente);
+    }
+
+    const falhaNoVerso = validarVerso(dados.verso);
+
+    if (falhaNoVerso !== null) {
+      return falhaNoVerso;
+    }
+
+    return temMidia
+      ? null
+      : { erro: "audio_ausente", mensagem: "Choose an audio file." };
   },
   chaveDaFrente(frente) {
     return frente.trim().length === 0 ? null : normalizarFrente(frente);
@@ -89,6 +118,7 @@ const IMAGEM: RegrasDoTipo = {
 export const TIPOS_DE_CARTAO: Readonly<Record<TipoDeCartao, RegrasDoTipo>> = {
   "frente-verso": FRENTE_VERSO,
   imagem: IMAGEM,
+  audio: AUDIO,
 };
 
 /** As regras do tipo do Cartão; `tipo` ausente é `frente-verso`. */
@@ -98,7 +128,7 @@ export function regrasDo(tipo: TipoDeCartao | undefined): RegrasDoTipo {
 
 /** Diz se o valor é um Tipo de cartão conhecido. */
 export function ehTipoDeCartao(valor: unknown): valor is TipoDeCartao {
-  return valor === "frente-verso" || valor === "imagem";
+  return valor === "frente-verso" || valor === "imagem" || valor === "audio";
 }
 
 /** Chave de unicidade da Frente do Cartão, pelas regras do seu tipo (FR-414). */

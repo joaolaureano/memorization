@@ -91,7 +91,10 @@ export const MENSAGEM_DE_SESSAO_CONCLUIDA = MENSAGENS_PT.sessaoConcluida;
  * O que um Cartão do tipo Imagem leva para a Sessão (026, FR-416): o tipo, o
  * endereço de exibição e a Descrição. Ausente nos Cartões Frente-Verso.
  */
-export type ApresentacaoDoTipo = Pick<Cartao, "tipo" | "imagem" | "textoAlternativo">;
+export type ApresentacaoDoTipo = Pick<
+  Cartao,
+  "tipo" | "imagem" | "textoAlternativo" | "audio" | "duracaoMs"
+>;
 
 /** Item de estudo com o Verso ainda oculto (FR-032). */
 export interface ItemDeEstudoOculto extends ApresentacaoDoTipo {
@@ -504,6 +507,14 @@ function congelarItem(item: ItemInterno): ItemDeEstudo {
 
 /** Só o Cartão do tipo Imagem leva campos de apresentação para a Sessão. */
 function apresentacaoDo(cartao: Cartao): ApresentacaoDoTipo {
+  if (cartao.tipo === "audio") {
+    return {
+      tipo: "audio",
+      audio: cartao.audio ?? null,
+      ...(cartao.duracaoMs !== undefined ? { duracaoMs: cartao.duracaoMs } : {}),
+    };
+  }
+
   if (cartao.tipo !== "imagem") {
     return {};
   }

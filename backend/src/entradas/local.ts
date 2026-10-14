@@ -1,12 +1,12 @@
-import { criarAcervo, processarFilaDeImagens } from "../acervo/acervo.ts";
+import { criarAcervo, processarFilaDeMidia } from "../acervo/acervo.ts";
 import {
   abrirArmazenamentoSqlite,
   type ArmazenamentoSqliteAberto,
 } from "../armazenamento/sqlite/armazenamento.ts";
 import { lerPacoteAnki } from "../importacao/anki.ts";
 import { iniciarServidor } from "../http/servidor.ts";
-import { registrarRotasDeImagensLocais } from "../http/imagens-locais.ts";
-import { criarArmazemEmDisco } from "../imagens/armazem-em-disco.ts";
+import { registrarRotasDeMidiaLocal } from "../http/midia-local.ts";
+import { criarArmazemEmDisco } from "../midia/armazem-em-disco.ts";
 import { relogioDeTeste } from "./relogio-de-teste.ts";
 import { criarIdentidade } from "../identidade/identidade.ts";
 import {
@@ -106,7 +106,7 @@ if (segredo !== null) {
       pasta: process.env.CAMINHO_DAS_IMAGENS ?? "imagens-locais",
     });
     const limparImagens = () =>
-      processarFilaDeImagens(aberto.armazenamento, imagens);
+      processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredo, {
       aposExcluirConta: limparImagens,
     });
@@ -123,7 +123,7 @@ if (segredo !== null) {
       aberto.acessos,
       lerPacoteAnki,
       imagens,
-      (servidor) => registrarRotasDeImagensLocais(servidor, imagens),
+      (servidor) => registrarRotasDeMidiaLocal(servidor, imagens),
     );
   }
 }

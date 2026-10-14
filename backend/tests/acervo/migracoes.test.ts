@@ -101,7 +101,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(17);
+      expect(versaoAtual(banco)).toBe(20);
       expect(existeTabela(banco, "pertencimento")).toBe(true);
       expect(existeTabela(banco, "vinculo")).toBe(true);
       expect(
@@ -123,7 +123,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(17);
+      expect(versaoAtual(banco)).toBe(20);
       expect(existeTabela(banco, "vinculo")).toBe(true);
 
       inserirPertencimento.run("c-compartilhado", "b1", "to travel");
@@ -137,7 +137,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(19);
+      expect(versaoAtual(banco)).toBe(21);
       expect(existeTabela(banco, "vinculo")).toBe(false);
       expect(contarLinhas(banco, "pertencimento")).toBe(4);
     } finally {
@@ -513,7 +513,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(17);
+      expect(versaoAtual(banco)).toBe(20);
       expect(contarLinhas(banco, "cartao")).toBe(1);
       expect(contarLinhas(banco, "baralho")).toBe(1);
       expect(contarLinhas(banco, "pertencimento")).toBe(0);
@@ -580,8 +580,8 @@ describe("migração 7 — repetição espaçada", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(17);
-      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(19);
+      expect(versaoAtual(banco)).toBe(20);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(21);
 
       expect(existeTabela(banco, "agendamento")).toBe(true);
       expect(existeTabela(banco, "preferencias")).toBe(true);

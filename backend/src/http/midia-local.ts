@@ -1,22 +1,66 @@
 import type { FastifyInstance } from "fastify";
 
-import { LIMITE_DE_BYTES_DA_IMAGEM } from "../imagens/armazem.ts";
 import {
   CAMINHO_DA_LEITURA_LOCAL,
   CAMINHO_DO_ENVIO_LOCAL,
   type ArmazemEmDisco,
-} from "../imagens/armazem-em-disco.ts";
+} from "../midia/armazem-em-disco.ts";
+import { MAIOR_LIMITE_DE_BYTES } from "../midia/regras.ts";
 
 /**
  * As rotas do Adapter Disco (`026`, research R3): o equivalente local do envio
  * direto ao S3 e da leitura por endereço assinado. Só a entrada local as
  * registra. Não exigem Credencial — quem autoriza é o token assinado e com
  * prazo, como as assinaturas do S3 (FR-424) —, e por isso o prefixo
- * `/imagens-locais/` é isento no hook de Credencial.
+ * `/midia-local/` é isento no hook de Credencial.
  */
 
 /** Folga para os cabeçalhos do `multipart/form-data` além do arquivo. */
 const FOLGA_DO_MULTIPART = 64 * 1024;
+
+/** Um trecho do arquivo, com os índices inclusivos de início e fim. */
+export interface Intervalo {
+  inicio: number;
+  fim: number;
+}
+
+/**
+ * Interpreta o cabeçalho `Range` de um arquivo de `total` bytes (FR-453). Só
+ * um intervalo é aceito: `bytes=a-b`, `bytes=a-` ou `bytes=-n`. Devolve o
+ * trecho, `"insatisfativel"` (416) ou `null` quando o cabeçalho deve ser
+ * ignorado e o arquivo inteiro servido (ausente, com vários intervalos ou mal
+ * formado, como manda a RFC 9110).
+ */
+export function lerIntervalo(
+  cabecalho: string | undefined,
+  total: number,
+): Intervalo | "insatisfativel" | null {
+  const casado = /^bytes=(\d*)-(\d*)$/.exec(cabecalho?.trim() ?? "");
+
+  if (casado === null || (casado[1] === "" && casado[2] === "")) {
+    return null;
+  }
+
+  const [, inicioTexto = "", fimTexto = ""] = casado;
+
+  if (inicioTexto === "") {
+    const sufixo = Number(fimTexto);
+    return sufixo === 0
+      ? "insatisfativel"
+      : { inicio: Math.max(0, total - sufixo), fim: total - 1 };
+  }
+
+  const inicio = Number(inicioTexto);
+
+  if (inicio >= total) {
+    return "insatisfativel";
+  }
+
+  const fim =
+    fimTexto === "" ? total - 1 : Math.min(Number(fimTexto), total - 1);
+
+  return fim < inicio ? null : { inicio, fim };
+}
 
 /**
  * Extrai o campo `file` de um corpo `multipart/form-data`. O envio tem a
@@ -61,7 +105,7 @@ export function lerArquivoDoMultipart(
   return null;
 }
 
-export function registrarRotasDeImagensLocais(
+export function registrarRotasDeMidiaLocal(
   servidor: FastifyInstance,
   armazem: ArmazemEmDisco,
 ): void {
@@ -70,7 +114,7 @@ export function registrarRotasDeImagensLocais(
       "multipart/form-data",
       {
         parseAs: "buffer",
-        bodyLimit: LIMITE_DE_BYTES_DA_IMAGEM + FOLGA_DO_MULTIPART,
+        bodyLimit: MAIOR_LIMITE_DE_BYTES + FOLGA_DO_MULTIPART,
       },
       (_requisicao, corpo, concluir) => concluir(null, corpo),
     );
@@ -103,18 +147,37 @@ export function registrarRotasDeImagensLocais(
 
     escopo.get(CAMINHO_DA_LEITURA_LOCAL, async (requisicao, resposta) => {
       const token = String((requisicao.query as { t?: unknown }).t ?? "");
-      const imagem = await armazem.lerParaEntrega(token);
+      const midia = await armazem.lerParaEntrega(token);
 
-      if (imagem === null) {
+      if (midia === null) {
         return resposta.status(404).send();
       }
 
-      return resposta
-        .header("content-type", imagem.formato)
+      const total = midia.bytes.length;
+      resposta
+        .header("content-type", midia.formato)
         .header("content-disposition", "inline")
         .header("x-content-type-options", "nosniff")
         .header("cache-control", "private, max-age=900")
-        .send(Buffer.from(imagem.bytes));
+        .header("accept-ranges", "bytes");
+
+      const intervalo = lerIntervalo(requisicao.headers.range, total);
+
+      if (intervalo === "insatisfativel") {
+        return resposta
+          .status(416)
+          .header("content-range", `bytes */${total}`)
+          .send();
+      }
+
+      if (intervalo === null) {
+        return resposta.send(Buffer.from(midia.bytes));
+      }
+
+      return resposta
+        .status(206)
+        .header("content-range", `bytes ${intervalo.inicio}-${intervalo.fim}/${total}`)
+        .send(Buffer.from(midia.bytes.subarray(intervalo.inicio, intervalo.fim + 1)));
     });
   });
 }

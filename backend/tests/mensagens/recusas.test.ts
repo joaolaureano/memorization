@@ -3,6 +3,7 @@ import {
   MENSAGENS_TECNICAS,
   type CodigoDeRecusa,
   recusa,
+  recusaDeAudioInvalido,
 } from "../../src/http/recusas.ts";
 
 describe("recusas", () => {
@@ -40,6 +41,8 @@ describe("recusas", () => {
     "anki_ilegivel",
     "anki_corrompido",
     "anki_incompativel",
+    "audio_ausente",
+    "audio_invalido",
   ];
 
   it("has all expected codes", () => {
@@ -102,6 +105,45 @@ describe("recusas", () => {
     expect(result).toEqual({
       erro: "nao_encontrado",
       mensagem: "Not found.",
+    });
+  });
+
+  it("audio_ausente and audio_invalido have the exact English messages", () => {
+    expect(MENSAGENS_TECNICAS.audio_ausente).toBe("Choose an audio file.");
+    expect(MENSAGENS_TECNICAS.audio_invalido).toBe("Audio is invalid.");
+  });
+
+  it("recusaDeAudioInvalido builds size refusal with limit", () => {
+    expect(recusaDeAudioInvalido("tamanho")).toEqual({
+      erro: "audio_invalido",
+      mensagem: "Audio exceeds the size limit.",
+      motivo: "tamanho",
+      limite: 10485760,
+    });
+  });
+
+  it("recusaDeAudioInvalido builds duration refusal with limit", () => {
+    expect(recusaDeAudioInvalido("duracao")).toEqual({
+      erro: "audio_invalido",
+      mensagem: "Audio exceeds the duration limit.",
+      motivo: "duracao",
+      limite: 300,
+    });
+  });
+
+  it("recusaDeAudioInvalido builds format refusal without limit", () => {
+    expect(recusaDeAudioInvalido("formato")).toEqual({
+      erro: "audio_invalido",
+      mensagem: "File is not a supported audio format.",
+      motivo: "formato",
+    });
+  });
+
+  it("recusaDeAudioInvalido builds not-found refusal without limit", () => {
+    expect(recusaDeAudioInvalido("nao_encontrado")).toEqual({
+      erro: "audio_invalido",
+      mensagem: "Audio upload was not found.",
+      motivo: "nao_encontrado",
     });
   });
 });
