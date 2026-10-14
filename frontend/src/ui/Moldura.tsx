@@ -38,6 +38,9 @@ export function Moldura({
 
   return (
     <header className="moldura">
+      {/* 027: o Seletor de idioma fica sempre à esquerda da marca. */}
+      <SeletorDeIdioma />
+
       <a className="marca" href={hashDaRota({ nome: "inicio" })}>
         <img src="/icon.svg" alt="" aria-hidden="true" />
         memorization
@@ -70,7 +73,6 @@ export function Moldura({
         </a>
       </nav>
 
-      <SeletorDeIdioma />
 
       <button type="button" className="botao-de-saida" onClick={aoSair}>
         {textos.moldura.sair}

@@ -240,6 +240,55 @@ test.describe("troca de idioma", () => {
   });
 });
 
+test.describe("menu de idiomas", () => {
+  test("fica à esquerda da marca, cada opção numa linha e o menu cabe na tela, a 360, 390 e 1280 px (FR-003, FR-017)", async ({ page }) => {
+    const ambiente = await subirAmbiente("idioma-menu");
+
+    try {
+      for (const largura of [360, 390, 1280]) {
+        await page.setViewportSize({ width: largura, height: 800 });
+        await page.goto(`${ambiente.enderecoDoFrontend}/#/entrar`);
+        const posicao = await page.evaluate(() => {
+          const seletor = document.querySelector<HTMLElement>(".seletor-de-idioma")!.getBoundingClientRect();
+          const marca = document.querySelector<HTMLElement>(".marca")!.getBoundingClientRect();
+
+          return { seletorDireita: seletor.right, marcaEsquerda: marca.left };
+        });
+
+        // O Seletor fica sempre à esquerda da marca (pedido do Product Owner).
+        expect(posicao.seletorDireita, `${largura}px`).toBeLessThanOrEqual(posicao.marcaEsquerda);
+        await page.getByRole("button", { name: "Idioma: Português" }).click();
+        await expect(page.getByRole("menu")).toBeVisible();
+
+        const medidas = await page.evaluate(() => {
+          const menu = document.querySelector<HTMLElement>('[role="menu"]')!.getBoundingClientRect();
+          const itens = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].map((item) => {
+            const texto = item.querySelector<HTMLElement>(".seletor-de-idioma__item-texto")!;
+            const linha = parseFloat(getComputedStyle(texto).lineHeight);
+
+            return {
+              linhas: Math.round(texto.getBoundingClientRect().height / linha),
+              transborda: item.scrollWidth > item.clientWidth,
+            };
+          });
+
+          return { esquerda: menu.left, direita: menu.right, largura: window.innerWidth, itens };
+        });
+
+        for (const item of medidas.itens) {
+          expect(item, `${largura}px`).toEqual({ linhas: 1, transborda: false });
+        }
+
+        expect(medidas.esquerda, `${largura}px`).toBeGreaterThanOrEqual(0);
+        expect(medidas.direita, `${largura}px`).toBeLessThanOrEqual(medidas.largura);
+        await page.keyboard.press("Escape");
+      }
+    } finally {
+      await ambiente.encerrar();
+    }
+  });
+});
+
 test.describe("idioma inicial e persistência (navegador em inglês)", () => {
   test.use({ locale: "en-US" });
 

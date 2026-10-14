@@ -169,3 +169,12 @@ Registro append-only.
 - **Correção no produto, e não na prova**: até 600 px o Seletor fica compacto (`gap 4px`, `padding 10px 8px`, mantendo o alvo de 44 px). Até 420 px a marca usa 18 px. Uma tentativa de reduzir as margens do cabeçalho para 16 px foi desfeita, porque quebrava a `refinamento-ui`.
 - **Prova nova**: o e2e de idioma verifica que o cabeçalho cabe numa linha a 390 px em espanhol. O Português é coberto pela lista de Baralhos. Em inglês, "Sign out" (117 px em DejaVu) não cabe sem encolher alvos, e o cabeçalho pode quebrar a linha, o que o FR-017 permite.
 - **Verificação**: no container com DejaVu, o commit publicado falha só na lista de Baralhos. A correção passa nas 17 provas de lista, idioma, refinamento e visual.
+
+## R16 — Posição do Seletor e menu numa linha (2026-10-14)
+
+Registro append-only.
+
+- **Defeito relatado pelo Product Owner**: ao abrir o Seletor, as opções quebravam em várias linhas. O menu era posicionado em relação ao botão compacto (cerca de 62 px), e a regra global `button { overflow-wrap: anywhere }` partia "PT Português".
+- **Correção**: o menu tem `width: max-content` e os itens têm `white-space: nowrap`. Uma prova e2e nova abre o menu a 360, 390 e 1280 px e exige cada opção numa linha, sem transbordo, com o menu dentro da tela.
+- **Pedido do Product Owner**: o Seletor fica sempre na mesma posição, à esquerda da marca, nos três cabeçalhos. O menu passa a abrir alinhado à esquerda. O contrato de UI foi atualizado, e a mesma prova e2e verifica a posição.
+- **Verificação**: macOS e container com DejaVu passam nos 21 testes de idioma, lista de Baralhos, refinamento, visual e navegação.

@@ -314,11 +314,11 @@ function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
     return (
       <>
         <header className="moldura">
+          <SeletorDeIdioma />
           <span className="marca">
             <img src="/icon.svg" alt="" aria-hidden="true" />
             memorization
           </span>
-          <SeletorDeIdioma />
         </header>
         <main className="aplicacao">
           {verificacao === "verificando" ? (
@@ -632,11 +632,11 @@ function CascaDaAplicacao({
       ) : (
         // FR-098: sem Credencial não há navegação nem "Sair" — só a marca.
         <header className="moldura">
+          <SeletorDeIdioma />
           <span className="marca">
             <img src="/icon.svg" alt="" aria-hidden="true" />
             memorization
           </span>
-          <SeletorDeIdioma />
         </header>
       )}
 

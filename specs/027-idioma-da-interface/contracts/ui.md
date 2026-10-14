@@ -30,3 +30,9 @@
 
 - Histórico, Registro, Resumo e Sessão: a origem `revisao` mostra `textos.sessao.revisaoDoDia`, e a origem `temporario` mostra `textos.sessao.baralhoTemporario`.
 - Salvar seleção como Baralho: o campo vem preenchido com `textos.sessao.baralhoTemporario` no idioma vigente na abertura do formulário. Depois de aberto, o campo é da pessoa e não muda com a troca.
+
+## Atualização (2026-10-14, pedido do Product Owner)
+
+- **Posição**: o Seletor fica sempre **à esquerda da marca** `memorization`, em todos os cabeçalhos (com e sem Credencial) e em todas as larguras. Isso substitui "entre a navegação e Sair".
+- **Menu**: abre alinhado à esquerda do botão, com a largura do conteúdo. Cada opção (`PT Português`, `EN English`, `ES Español`) fica numa só linha e o menu cabe na tela de 360 px.
+- **Telefone**: até 600 px o botão é compacto (globo e sigla, alvo de 44 px). Até 420 px a marca usa 18 px (research R15).

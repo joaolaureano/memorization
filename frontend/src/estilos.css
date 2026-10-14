@@ -229,7 +229,10 @@ summary:focus-visible {
 .seletor-de-idioma__menu {
   position: absolute;
   top: 100%;
-  right: 0;
+  /* 027: o Seletor fica à esquerda da marca; o menu abre alinhado à esquerda,
+   * com a largura do conteúdo, e cada opção numa só linha. */
+  left: 0;
+  width: max-content;
   margin-top: 4px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -255,6 +258,8 @@ summary:focus-visible {
   cursor: pointer;
   border-radius: 8px;
   min-height: 44px;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .seletor-de-idioma__item:hover,
