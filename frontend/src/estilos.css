@@ -1382,6 +1382,13 @@ details summary {
     font-size: 20px;
   }
 
+  /* 027: no telefone o Seletor de idioma fica compacto — globo e sigla, com o
+   * alvo de 44 px —, para a marca, o Seletor e Sair caberem numa linha. */
+  .seletor-de-idioma__botao {
+    gap: 4px;
+    padding: 10px 8px;
+  }
+
   /* Reserva a altura real da barra fixa (com rótulos em duas linhas) mais a
    * área segura do aparelho, para não cobrir o conteúdo. */
   .aplicacao {
@@ -2196,4 +2203,14 @@ label.campo--opcao {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+}
+
+/* 027: em telefones estreitos a marca encolhe um pouco, para o cabeçalho com
+ * o Seletor de idioma seguir numa só linha mesmo com fontes de sistema largas
+ * (FR-017, SC-079). Em inglês, "Sign out" é mais largo e o cabeçalho pode
+ * quebrar a linha, sem cortar nem sobrepor texto. */
+@media (max-width: 420px) {
+  .marca {
+    font-size: 18px;
+  }
 }

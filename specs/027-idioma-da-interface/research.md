@@ -160,3 +160,12 @@ Registro append-only. Substitui o item 2 e o item 3 da R4.
 - **Níveis de Avaliação e Tipos de cartão**: os rótulos padrão do SM-2 (Errei, Difícil, Bom, Fácil) e os nomes dos tipos vêm do catálogo pela chave (`rotuloDoNivel`, `textos.cartao.nomeDoTipo`). Um rótulo próprio de outro algoritmo aparece como veio (015).
 - **Alternativa adiada**: a troca completa da Seam para `Recusa` (R4). Não fica pendência funcional.
 - **Workers**: as Haiku entregaram vários relatórios de "concluído" com o trabalho incompleto (texto solto em 25 arquivos, `useContext` dentro de IIFE em `Aplicacao.tsx`, provas reescritas para o comportamento errado). O restante da extração, a prova T011 (varredura de texto solto) e as provas transversais foram feitos pelo Arquiteto.
+
+## R15 — Cabeçalho no telefone com o Seletor de idioma (CI, 2026-10-14)
+
+Registro append-only.
+
+- **Falha na CI** (`ubuntu-latest`): `lista-de-baralhos.spec.ts` a 390 px viu 1 linha inteira na primeira tela, em vez de 2 (SC-079). Com a fonte DejaVu Sans, que é a `system-ui` do runner, a soma marca (186) + Seletor (77) + Sair (78) + espaçamentos passava de 390 px. O Sair descia para uma segunda linha e o cabeçalho crescia de 77 para 133 px. A falha foi reproduzida localmente no container do Playwright com `fonts-dejavu-core`. A imagem padrão não tem DejaVu, por isso a passada anterior no container não a mostrou.
+- **Correção no produto, e não na prova**: até 600 px o Seletor fica compacto (`gap 4px`, `padding 10px 8px`, mantendo o alvo de 44 px). Até 420 px a marca usa 18 px. Uma tentativa de reduzir as margens do cabeçalho para 16 px foi desfeita, porque quebrava a `refinamento-ui`.
+- **Prova nova**: o e2e de idioma verifica que o cabeçalho cabe numa linha a 390 px em espanhol. O Português é coberto pela lista de Baralhos. Em inglês, "Sign out" (117 px em DejaVu) não cabe sem encolher alvos, e o cabeçalho pode quebrar a linha, o que o FR-017 permite.
+- **Verificação**: no container com DejaVu, o commit publicado falha só na lista de Baralhos. A correção passa nas 17 provas de lista, idioma, refinamento e visual.

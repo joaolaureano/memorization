@@ -87,6 +87,27 @@ async function semRolagemHorizontal(page: Page, rotulo: string): Promise<void> {
   expect(medidas, rotulo).toEqual({ documento: 0, moldura: 0 });
 }
 
+/**
+ * No telefone, marca, Seletor de idioma e Sair ficam numa só linha: o
+ * cabeçalho não cresce e não empurra o conteúdo (FR-017, SC-079).
+ */
+async function cabecalhoNumaLinha(page: Page, rotulo: string): Promise<void> {
+  const centros = await page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>(".moldura > *")]
+      .filter((filho) => getComputedStyle(filho).position !== "fixed")
+      .map((filho) => {
+        const caixa = filho.getBoundingClientRect();
+
+        return caixa.top + caixa.height / 2;
+      }),
+  );
+
+  expect(
+    Math.max(...centros) - Math.min(...centros),
+    `${rotulo}: ${JSON.stringify(centros)}`,
+  ).toBeLessThanOrEqual(4);
+}
+
 test.describe("troca de idioma", () => {
   test("troca só por teclado na tela Entrar e devolve o foco ao seletor (FR-002, FR-009, FR-010)", async ({ page }) => {
     const ambiente = await subirAmbiente("idioma-teclado");
@@ -152,7 +173,7 @@ test.describe("troca de idioma", () => {
     }
   });
 
-  test("nenhuma tela rola na horizontal em EN e ES, a 360 e 1280 px (FR-017, SC-007)", async ({ page }) => {
+  test("nenhuma tela rola na horizontal em EN e ES, a 360, 390 e 1280 px, e o cabeçalho em espanhol cabe numa linha a 390 px (FR-017, SC-007, SC-079)", async ({ page }) => {
     const ambiente = await subirAmbiente("idioma-layout");
 
     try {
@@ -182,7 +203,7 @@ test.describe("troca de idioma", () => {
           await escolherIdioma(page, atual, opcao);
         }
 
-        for (const largura of [360, 1280]) {
+        for (const largura of [360, 390, 1280]) {
           await page.setViewportSize({ width: largura, height: 800 });
 
           for (const rota of [
@@ -202,6 +223,14 @@ test.describe("troca de idioma", () => {
             await page.goto(`${ambiente.enderecoDoFrontend}/${rota}`);
             await page.getByRole("heading", { level: 1 }).first().waitFor();
             await semRolagemHorizontal(page, `${idioma} ${largura}px ${rota}`);
+
+            // A 390 px (a largura do SC-079) o cabeçalho fica numa linha; em
+            // inglês "Sign out" é mais largo e pode quebrar a linha, o que não
+            // corta nem sobrepõe texto (FR-017). O Português é coberto pela
+            // prova da lista de Baralhos.
+            if (largura === 390 && idioma === "es") {
+              await cabecalhoNumaLinha(page, `${idioma} ${largura}px ${rota}`);
+            }
           }
         }
       }
