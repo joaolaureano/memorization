@@ -140,6 +140,7 @@ export function DialogoDeExclusaoDeConta({
       <p>
         {textos.conta.nenhumDadoRecuperavel}
       </p>
+      <p><a href="#/baralhos/exportar?todos=1">{textos.exportacao.antesDeExcluir}</a></p>
 
       <CampoDeSenha
         id="campo-senha-atual-da-exclusao"

@@ -43,6 +43,9 @@ describe("recusas", () => {
     "anki_incompativel",
     "audio_ausente",
     "audio_invalido",
+    "exportacao_vazia",
+    "exportacao_grande_demais",
+    "exportacao_indisponivel",
   ];
 
   it("has all expected codes", () => {
@@ -111,6 +114,12 @@ describe("recusas", () => {
   it("audio_ausente and audio_invalido have the exact English messages", () => {
     expect(MENSAGENS_TECNICAS.audio_ausente).toBe("Choose an audio file.");
     expect(MENSAGENS_TECNICAS.audio_invalido).toBe("Audio is invalid.");
+  });
+
+  it("export refusals have stable English ASCII messages", () => {
+    expect(MENSAGENS_TECNICAS.exportacao_vazia).toBe("Nothing to export.");
+    expect(MENSAGENS_TECNICAS.exportacao_grande_demais).toBe("Export exceeds the size limit.");
+    expect(MENSAGENS_TECNICAS.exportacao_indisponivel).toBe("Export is unavailable.");
   });
 
   it("recusaDeAudioInvalido builds size refusal with limit", () => {

@@ -343,6 +343,8 @@ export interface Catalogo {
     buscarBaralhos: string;
     digiteONome: string;
     situacaoDaRevisao: string;
+    baralho: string;
+    remover: string;
     buscarCartoes: string;
     buscarNaFrenteOuVerso: string;
     salvarComoBaralhoTitulo: string;
@@ -538,6 +540,7 @@ export interface Catalogo {
     confirmarIndependentes: string;
     confirmarESalvar: string;
     cadaRotinaContaSeparado: string;
+    resumo: string;
   };
   importacao: {
     titulo: string;
@@ -557,6 +560,14 @@ export interface Catalogo {
     escolherOutro: string;
     importando: string;
     confirmar: string;
+  };
+  exportacao: {
+    titulo: string; todos: string; formato: string; opcaoFormato: string; ajuda: string;
+    resumoBaralhos: (n: number) => string; resumoCartoes: (n: number) => string;
+    resumoMidias: (imagens: number, audios: number) => string; tamanho: (bytes: string) => string;
+    marcarUm: string; exportar: string; gerando: string; pronto: (nome: string) => string;
+    baixarDeNovo: string; semMidia: (n: number) => string; falha: string;
+    antesDeExcluir: string;
   };
 }
 
@@ -918,6 +929,8 @@ export const pt: Catalogo = {
     buscarBaralhos: "Buscar baralhos",
     digiteONome: "Digite o nome do baralho",
     situacaoDaRevisao: "Situação da revisão",
+    baralho: "Baralho",
+    remover: "Remover",
     buscarCartoes: "Buscar cartões",
     buscarNaFrenteOuVerso: "Buscar na frente ou no verso",
     salvarComoBaralhoTitulo: "Salvar como baralho",
@@ -1098,6 +1111,7 @@ export const pt: Catalogo = {
   },
   rotina: {
     salvando: "Aguarde: a Rotina está sendo salva.",
+    resumo: "Resumo",
     escolhaUmBaralho: "Escolha um Baralho",
     cartoesDoBaralho: (n: number) => (n === 0 ? "sem Cartões" : n === 1 ? "1 Cartão" : `${n} Cartões`),
     diasDaSemana: "Dias da semana",
@@ -1144,5 +1158,24 @@ export const pt: Catalogo = {
     escolherOutro: "Escolher outro arquivo",
     importando: "Importando…",
     confirmar: "Confirmar importação",
+  },
+  exportacao: {
+    titulo: "Exportar",
+    todos: "Todos os Baralhos",
+    formato: "Formato",
+    opcaoFormato: "Pacote Anki (.apkg)",
+    ajuda: "Abre no Anki, no AnkiDroid e no AnkiMobile. Ao importar no Anki, marque «Importar progresso de estudo».",
+    resumoBaralhos: (n) => `${n} Baralhos`,
+    resumoCartoes: (n) => `${n} Cartões`,
+    resumoMidias: (imagens, audios) => `${imagens} com Imagem, ${audios} com Áudio`,
+    tamanho: (bytes) => `Tamanho aproximado: ${bytes}`,
+    marcarUm: "Marque ao menos um Baralho com Cartões.",
+    exportar: "Exportar arquivo",
+    gerando: "Gerando arquivo…",
+    pronto: (nome) => `Arquivo pronto: ${nome}`,
+    baixarDeNovo: "Baixar de novo",
+    semMidia: (n) => `${n} cartões foram exportados sem a mídia.`,
+    falha: "Não foi possível gerar o arquivo.",
+    antesDeExcluir: "Exportar meu acervo antes",
   },
 };

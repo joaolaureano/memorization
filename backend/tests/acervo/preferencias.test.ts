@@ -19,6 +19,7 @@ const ALGORITMO_FALSO: AlgoritmoDeRepeticao = {
     { chave: "bom", rotulo: "Bom", resultado: "acertou" },
     { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
   ],
+  descreverProgresso() { return { repeticoes: 0, intervaloEmDias: 0, facilidade: 2.5 }; },
   avaliar(_estado, avaliacao, agora) {
     return {
       estado: { algoritmo: "falso", versao: 1, dados: { avaliacao } },

@@ -316,9 +316,9 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                   )
                 }
               >
-                <option value="todos">Todos</option>
-                <option value="pendente">Pendente</option>
-                <option value="revisado">Revisado</option>
+                <option value="todos">{textos.baralhos.situacaoTodos}</option>
+                <option value="pendente">{textos.baralhos.situacaoPendente}</option>
+                <option value="revisado">{textos.baralhos.situacaoRevisado}</option>
               </select>
             </div>
           </>
@@ -339,7 +339,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
             </div>
             <div className="campo">
               <label className="rotulo" htmlFor="filtro-de-baralho-da-montagem">
-                Baralho
+                {textos.selecao.baralho}
               </label>
               <select
                 id="filtro-de-baralho-da-montagem"
@@ -348,7 +348,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                   setFiltroDeBaralho(evento.target.value as FiltroDeBaralho)
                 }
               >
-                <option value="todos">Todos</option>
+                <option value="todos">{textos.baralhos.situacaoTodos}</option>
                 {baralhos.map((baralho) => (
                   <option key={baralho.id} value={baralho.id}>
                     {baralho.nome}

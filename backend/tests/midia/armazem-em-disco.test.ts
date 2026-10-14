@@ -31,7 +31,7 @@ bateriaDoArmazem("Adapter Disco", async () => {
     },
     async ler(url) {
       const imagem = await armazem.lerParaEntrega(tokenDa(url));
-      return imagem === null ? null : { bytes: imagem.bytes, tipo: imagem.formato };
+      return imagem === null ? null : { bytes: imagem.bytes, tipo: imagem.formato, disposicao: imagem.disposicao };
     },
     async lerSemAssinatura(chave) {
       // No Disco, a única entrada de leitura é o token: uma chave crua não é token.
@@ -45,6 +45,19 @@ bateriaDoArmazem("Adapter Disco", async () => {
 });
 
 describe("Adapter Disco — detalhes locais", () => {
+  it("guarda pacote de exportação e devolve anexo de curta duração", async () => {
+    const pasta = mkdtempSync(join(tmpdir(), "armazem-exportacao-"));
+    const armazem = criarArmazemEmDisco({ pasta });
+    const bytes = Buffer.from("package bytes");
+    const endereco = await armazem.guardarExportacao("usuario-1", bytes, "Inglês.apkg", "application/octet-stream");
+    const arquivo = await armazem.lerParaEntrega(tokenDa(endereco.url));
+    expect(arquivo?.bytes).toEqual(bytes);
+    expect(arquivo?.disposicao).toContain("attachment;");
+    expect(arquivo?.disposicao).toContain("filename*=UTF-8''Ingl%C3%AAs.apkg");
+    expect(Date.parse(endereco.expiraEm) - Date.now()).toBeLessThanOrEqual(900_000);
+    expect(await readFile(join(pasta, "exportacoes/usuario-1"))).toEqual(bytes);
+  });
+
   it("recusa token adulterado ou de outra finalidade", async () => {
     const pasta = mkdtempSync(join(tmpdir(), "armazem-de-imagens-"));
     const armazem = criarArmazemEmDisco({ pasta });

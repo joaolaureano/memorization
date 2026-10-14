@@ -298,6 +298,14 @@ summary:focus-visible {
   flex-direction: column;
 }
 
+@media (min-width: 601px) {
+  .aplicacao:has(> .pagina--baralhos) {
+    /* Reserve the viewport below the top frame so the list stays centered
+     * even when its header actions wrap on platforms with wider system fonts. */
+    min-height: max(70vh, calc(100vh - 6rem));
+  }
+}
+
 .pagina--baralhos {
   display: flex;
   flex: 1;

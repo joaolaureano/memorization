@@ -522,7 +522,10 @@ describe("excluir a conta com Áudio (FR-449, FR-274)", () => {
       await identidade.excluirConta(diego.id, { senhaAtual: diego.senha }),
     ).toEqual({ ok: true });
 
-    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([chave]);
+    expect((await aberto.armazenamento.listarMidiaARemover(10)).sort()).toEqual([
+      `exportacoes/${diego.id}`,
+      chave,
+    ].sort());
     expect(existsSync(join(pasta, chave))).toBe(true);
 
     await processarFilaDeMidia(aberto.armazenamento, audios);

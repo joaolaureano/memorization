@@ -58,6 +58,8 @@ import type {
   SemanaDaAgenda,
   CartaoListado,
   ClienteDoAcervo,
+  ResultadoDeExportacao,
+  ResultadoDePreviaDaExportacao,
   Credencial,
   DadosDeBaralho,
   DadosDeSelecaoParaBaralho,
@@ -508,6 +510,32 @@ export class ClienteHttp implements ClienteDoAcervo {
     } catch {
       return this.falhaDeIndisponibilidadeDeBaralhos();
     }
+  }
+
+  async previaDaExportacao(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos" }): Promise<ResultadoDePreviaDaExportacao> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/exportacoes/previa`, {
+        method: "POST", headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify(pedido),
+      });
+      const corpo = await resposta.json();
+      if (resposta.status === 200 && typeof corpo.cartoes === "number") return { ok: true, previa: corpo };
+      if (typeof corpo.erro === "string") return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem ?? MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS, ...(typeof corpo.motivo === "string" ? { motivo: corpo.motivo } : {}), ...(typeof corpo.limite === "number" ? { limite: corpo.limite } : {}) };
+      return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS };
+    } catch { return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS }; }
+  }
+
+  async exportar(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos"; fuso: string; idioma: "pt" | "en" | "es" }): Promise<ResultadoDeExportacao> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/exportacoes`, {
+        method: "POST", headers: { "content-type": "application/json", ...this.cabecalho() },
+        body: JSON.stringify(pedido),
+      });
+      const corpo = await resposta.json();
+      if (resposta.status === 201 && typeof corpo.url === "string" && typeof corpo.nomeDoArquivo === "string") return { ok: true, url: this.absoluto(corpo.url), nomeDoArquivo: corpo.nomeDoArquivo, expiraEm: corpo.expiraEm, baralhos: corpo.baralhos, cartoes: corpo.cartoes, cartoesSemMidia: corpo.cartoesSemMidia };
+      if (typeof corpo.erro === "string") return { ok: false, erro: corpo.erro, mensagem: corpo.mensagem ?? MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS, ...(typeof corpo.motivo === "string" ? { motivo: corpo.motivo } : {}), ...(typeof corpo.limite === "number" ? { limite: corpo.limite } : {}) };
+      return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS };
+    } catch { return { ok: false, erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS }; }
   }
 
   async preverImportacaoAnki(arquivo: File) {

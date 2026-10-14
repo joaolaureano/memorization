@@ -409,6 +409,29 @@ export async function descarregarPagina(page: Page): Promise<void> {
   await page.goto("about:blank");
 }
 
+const paginasComZoomDeProva = new WeakSet<Page>();
+
+/**
+ * Emula o zoom de 200% (ou o zoom 100%) de prova. O zoom é aplicado antes da
+ * renderização, por script de inicialização e recarregamento, porque mudar
+ * `style.zoom` numa página já renderizada deixa o Chromium com layout flex
+ * defasado (a coluna de texto da lista ficava com 0 px de largura).
+ */
+export async function aplicarZoomDeProva(page: Page, zoom: 1 | 2): Promise<void> {
+  if (!paginasComZoomDeProva.has(page)) {
+    paginasComZoomDeProva.add(page);
+    await page.addInitScript(() => {
+      const z = sessionStorage.getItem("zoom-de-prova");
+      if (z) document.documentElement.style.zoom = z;
+    });
+  }
+  await page.evaluate((valor) => {
+    if (valor === null) sessionStorage.removeItem("zoom-de-prova");
+    else sessionStorage.setItem("zoom-de-prova", valor);
+  }, zoom === 2 ? "2" : null);
+  await page.reload();
+}
+
 /**
  * Lê um Baralho direto da API com os Cartões vinculados — a conferência de
  * persistência exata de Vínculos (os mesmos ids, a mesma elegibilidade e os

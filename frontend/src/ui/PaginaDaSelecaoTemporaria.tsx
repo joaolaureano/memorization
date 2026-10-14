@@ -253,7 +253,7 @@ export function PaginaDaSelecaoTemporaria({
                         aria-label={`Remover ${frente}`}
                         onClick={() => aoRemover(id)}
                       >
-                        Remover
+                        {textos.selecao.remover}
                       </button>
                     </li>
                   );
@@ -302,14 +302,14 @@ export function PaginaDaSelecaoTemporaria({
               aria-describedby="orientacao-da-selecao"
               onClick={() => void aoTentarEstudar()}
             >
-              Revisar
+                {textos.sessao.revisar}
             </button>
             <button
               type="button"
               className="botao botao--secundario"
               onClick={aoCancelar}
             >
-              Cancelar
+                {textos.comum.cancelar}
             </button>
           </div>
         </section>

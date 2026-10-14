@@ -12,6 +12,7 @@ import type {
   CartaoPendente,
   CompromissoPersistido,
   ContagemPorBaralho,
+  ConteudoArmazenado,
   ContagensDaConta,
   Desfecho,
   DesfechoDeAcesso,
@@ -546,7 +547,10 @@ UPDATE usuario SET sal = $1, hash = $2, parametros = $3 WHERE id = $4;
 const EXCLUIR_USUARIO = `
 WITH fila AS (
   INSERT INTO midia_a_remover (chave)
-  SELECT chave FROM (${chavesDeMidia("usuario_id = $1")}
+  SELECT chave FROM (
+    ${chavesDeMidia("usuario_id = $1")}
+    UNION ALL
+    SELECT 'exportacoes/' || id FROM usuario WHERE id = $1
   ) AS midias
   ON CONFLICT (chave) DO NOTHING
 )
@@ -1966,6 +1970,47 @@ export async function abrirArmazenamentoPostgresql(
       );
 
       return rows.map(cartaoDaLinha);
+    },
+
+    async lerAcervoParaExportacao(usuarioId, baralhoIds) {
+      return comDesfecho(async () => emTransacao(piscina, async (cliente) => {
+        await cliente.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;");
+        const ids = baralhoIds === "todos" ? null : [...baralhoIds];
+        if (ids?.length === 0) return NAO_ENCONTRADO;
+        const { rows: decks } = ids === null
+          ? await cliente.query<{ id: string; nome: string }>("SELECT id, nome FROM baralho WHERE usuario_id = $1 ORDER BY id", [usuarioId])
+          : await cliente.query<{ id: string; nome: string }>("SELECT id, nome FROM baralho WHERE usuario_id = $1 AND id = ANY($2::text[]) ORDER BY id", [usuarioId, ids]);
+        if (ids !== null && decks.length !== ids.length) return NAO_ENCONTRADO;
+        const { rows } = await cliente.query(`
+          SELECT c.id, c.frente, c.verso, c.tags_json, c.tipo, c.imagem_chave,
+                 c.texto_alternativo, c.audio_chave, c.audio_duracao_ms,
+                 b.id AS export_baralho_id, a.cartao_id AS progresso_cartao_id,
+                 a.algoritmo AS progresso_algoritmo, a.versao_do_algoritmo AS progresso_versao,
+                 a.estado AS progresso_estado, a.proxima_revisao_em AS progresso_proxima
+            FROM pertencimento p JOIN cartao c ON c.id = p.cartao_id
+            JOIN baralho b ON b.id = p.baralho_id
+            LEFT JOIN agendamento a ON a.cartao_id = c.id AND a.usuario_id = c.usuario_id
+           WHERE b.usuario_id = $1 AND ($2::text[] IS NULL OR b.id = ANY($2::text[]))
+           ORDER BY b.id, c.criado_em NULLS FIRST, c.ordem_de_insercao`,
+          [usuarioId, ids]);
+        const conteudo: ConteudoArmazenado = {
+          baralhos: decks.map((deck) => ({
+            id: deck.id,
+            nome: deck.nome,
+            criadoEm: null,
+            cartoes: rows.filter((row) => row.export_baralho_id === deck.id).map((row) => ({
+              ...cartaoDaLinha(row),
+              progresso: row.progresso_cartao_id === null ? null : {
+                algoritmo: row.progresso_algoritmo as string,
+                versaoDoAlgoritmo: Number(row.progresso_versao),
+                estado: row.progresso_estado,
+                proximaRevisaoEm: instanteIso(row.progresso_proxima as Date | string),
+              },
+            })),
+          })),
+        };
+        return { ok: true, valor: conteudo };
+      }));
     },
 
     async contarCartoesPorBaralho(usuarioId) {

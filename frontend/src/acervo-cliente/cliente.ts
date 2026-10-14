@@ -1116,7 +1116,22 @@ export type ResultadoDeConcluirTransicao =
  * satisfazem esta mesma Interface e passam pela mesma bateria de contrato
  * com resultados idênticos.
  */
+export interface PreviaDaExportacao {
+  formato: "apkg";
+  extensao: "apkg";
+  baralhos: number;
+  cartoes: number;
+  cartoesComImagem: number;
+  cartoesComAudio: number;
+  bytesEstimados: number;
+}
+export type FalhaDeExportacao = { ok: false; erro: string; mensagem: string; motivo?: string; limite?: number };
+export type ResultadoDePreviaDaExportacao = { ok: true; previa: PreviaDaExportacao } | FalhaDeExportacao;
+export type ResultadoDeExportacao = { ok: true; url: string; nomeDoArquivo: string; expiraEm: string; baralhos: number; cartoes: number; cartoesSemMidia: number } | FalhaDeExportacao;
+
 export interface ClienteDoAcervo {
+  previaDaExportacao(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos" }): Promise<ResultadoDePreviaDaExportacao>;
+  exportar(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos"; fuso: string; idioma: "pt" | "en" | "es" }): Promise<ResultadoDeExportacao>;
   preverImportacaoAnki(arquivo: File): Promise<{ ok: true; previa: PreviaDeImportacao } | { ok: false; mensagem: string }>;
   confirmarImportacaoAnki(baralhos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[] }> }>): Promise<{ ok: boolean; mensagem?: string }>;
   /**

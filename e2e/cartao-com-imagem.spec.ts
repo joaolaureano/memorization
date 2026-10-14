@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   aguardarApiPronta,
   aguardarProntidao,
+  aplicarZoomDeProva,
   criarBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
@@ -130,25 +131,20 @@ test("Cartão com Imagem: criar por teclado, estudar, trocar e excluir", async (
     // Larguras e zoom de 200% sem rolagem horizontal, no Baralho e na Sessão.
     for (const [largura, zoom] of [[360, 1], [390, 1], [768, 1], [1440, 1], [720, 2]] as const) {
       await page.setViewportSize({ width: largura, height: 900 });
+      await aplicarZoomDeProva(page, zoom);
       await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
       await expect(page.getByRole("img", { name: "Mapa com um estado destacado" })).toBeVisible();
-      if (zoom === 2) {
-        await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = "2"; });
-      }
       expect(await semRolagemHorizontal(page)).toBeLessThanOrEqual(0);
 
       await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
       await page.getByRole("button", { name: "Todos os cartões" }).click();
       const face = page.locator("article").getByRole("img", { name: "Mapa com um estado destacado" });
       await expect(face).toBeVisible();
-      if (zoom === 2) {
-        await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = "2"; });
-      }
       expect(await semRolagemHorizontal(page)).toBeLessThanOrEqual(0);
       const caixa = await face.boundingBox();
       expect(caixa!.width).toBeLessThanOrEqual(largura);
-      await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = ""; });
       await interromperSessao(page);
+      await aplicarZoomDeProva(page, 1);
     }
     await page.setViewportSize({ width: 1280, height: 900 });
 

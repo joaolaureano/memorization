@@ -1145,7 +1145,7 @@ export function PaginaDeEstudo({
           type="button"
           onClick={() => protegerAcao(interromper)}
         >
-          Interromper
+          {textos.sessao.interromper}
         </button>
       </div>
 
@@ -1181,7 +1181,7 @@ export function PaginaDeEstudo({
         aria-label={`Item ${estado.posicao} de ${estado.total}`}
       >
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
-          Frente
+          {textos.importacao.frente}
         </h2>
         <FaceDaPergunta
           item={estado.itemAtual}
@@ -1205,7 +1205,7 @@ export function PaginaDeEstudo({
           <>
             <hr />
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
-              Verso
+              {textos.importacao.verso}
             </h2>
             <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">

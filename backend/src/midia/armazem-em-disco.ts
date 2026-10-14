@@ -39,7 +39,7 @@ export const CAMINHO_DA_LEITURA_LOCAL = "/midia-local/arquivo";
 /** Pendentes mais antigos que isto são descartados (FR-423: até 48 horas). */
 const IDADE_MAXIMA_DO_PENDENTE_EM_MS = 24 * 60 * 60 * 1000;
 
-type Finalidade = "envio" | "leitura";
+type Finalidade = "envio" | "leitura" | "exportacao";
 
 export interface OpcoesDoArmazemEmDisco {
   /** A pasta onde as Imagens ficam. */
@@ -57,7 +57,7 @@ export interface ArmazemEmDisco extends ArmazemDeMidia {
   /** Entrega a Mídia ativa de um endereço de leitura (rota local de leitura). */
   lerParaEntrega(
     token: string,
-  ): Promise<{ bytes: Uint8Array; formato: FormatoDeImagem | FormatoDeAudio } | null>;
+  ): Promise<{ bytes: Uint8Array; formato: string; disposicao: string } | null>;
 }
 
 /**
@@ -80,6 +80,8 @@ function formatoDaMidiaAtiva(
 interface DadosDoToken {
   chave: string;
   midia?: Midia;
+  nomeDoArquivo?: string;
+  tipoDeConteudo?: string;
 }
 
 export function criarArmazemEmDisco(
@@ -103,7 +105,8 @@ export function criarArmazemEmDisco(
     chave: string,
     finalidade: Finalidade,
     validadeEmSegundos: number,
-    midia?: Midia,
+      midia?: Midia,
+      metadados?: { nomeDoArquivo: string; tipoDeConteudo: string },
   ): { token: string; expiraEm: Date } {
     const expiraEm = new Date(agora().getTime() + validadeEmSegundos * 1000);
     const conteudo = Buffer.from(
@@ -112,6 +115,7 @@ export function criarArmazemEmDisco(
         f: finalidade,
         e: expiraEm.getTime(),
         ...(midia === undefined ? {} : { m: midia }),
+        ...(metadados === undefined ? {} : { n: metadados.nomeDoArquivo, t: metadados.tipoDeConteudo }),
       }),
     ).toString("base64url");
     return { token: `${conteudo}.${assinar(conteudo)}`, expiraEm };
@@ -144,6 +148,8 @@ export function criarArmazemEmDisco(
         f: Finalidade;
         e: number;
         m?: Midia;
+        n?: string;
+        t?: string;
       };
 
       if (dados.f !== finalidade || dados.e <= agora().getTime()) {
@@ -154,7 +160,7 @@ export function criarArmazemEmDisco(
         return null;
       }
 
-      return { chave: dados.c, midia: dados.m };
+      return { chave: dados.c, midia: dados.m, nomeDoArquivo: dados.n, tipoDeConteudo: dados.t };
     } catch {
       return null;
     }
@@ -214,6 +220,31 @@ export function criarArmazemEmDisco(
         envio: { url: `${CAMINHO_DO_ENVIO_LOCAL}?t=${token}`, campos: {} },
         expiraEm: expiraEm.toISOString(),
       };
+    },
+
+    async ler(chave) {
+      if (midiaDaChave(chave) === null) return null;
+      try { return await readFile(caminhoDa(chave)); } catch (erro) {
+        if ((erro as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw erro;
+      }
+    },
+
+    async medir(chaves) {
+      const tamanhos = await Promise.all(chaves.map(async (chave) => {
+        try { return (await stat(caminhoDa(chave))).size; } catch (erro) {
+          if ((erro as NodeJS.ErrnoException).code === "ENOENT") return 0;
+          throw erro;
+        }
+      }));
+      return tamanhos.reduce((soma, tamanho) => soma + tamanho, 0);
+    },
+
+    async guardarExportacao(usuarioId, bytes, nomeDoArquivo, tipoDeConteudo) {
+      const chave = `exportacoes/${usuarioId}`;
+      await gravar(chave, bytes);
+      const { token, expiraEm } = emitirToken(chave, "exportacao", VALIDADE_DA_LEITURA_EM_SEGUNDOS, undefined, { nomeDoArquivo, tipoDeConteudo });
+      return { url: `${CAMINHO_DA_LEITURA_LOCAL}?t=${token}`, expiraEm: expiraEm.toISOString() };
     },
 
     async receberEnvio(token, arquivo) {
@@ -296,14 +327,19 @@ export function criarArmazemEmDisco(
     async lerParaEntrega(token) {
       const dados = lerToken(token, "leitura");
 
-      if (dados === null || midiaDaChave(dados.chave) === null) {
+      const exportacao = lerToken(token, "exportacao");
+      if (dados === null && exportacao === null) return null;
+      const autorizado = dados ?? exportacao!;
+      if (dados !== null && midiaDaChave(dados.chave) === null) {
         return null;
       }
 
-      const bytes = await lerSeExistir(dados.chave);
-      const formato = bytes === null ? null : formatoDaMidiaAtiva(dados.chave, bytes);
+      const bytes = await lerSeExistir(autorizado.chave);
+      const formato = bytes === null ? null : formatoDaMidiaAtiva(autorizado.chave, bytes);
 
-      return bytes === null || formato === null ? null : { bytes, formato };
+      return bytes === null ? null : exportacao !== null
+        ? { bytes, formato: exportacao.tipoDeConteudo ?? "application/octet-stream", disposicao: `attachment; filename*=UTF-8''${encodeURIComponent(exportacao.nomeDoArquivo ?? "exportacao.apkg")}` }
+        : formato === null ? null : { bytes, formato, disposicao: "inline" };
     },
 
     async remover(chaves) {

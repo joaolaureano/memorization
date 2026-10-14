@@ -34,12 +34,13 @@ export type ContextoDaRecusa =
   | "preferencias"
   | "agenda"
   | "conta"
-  | "imagens";
+  | "imagens"
+  | "exportacao";
 
 /** Todos os contextos, para quem precisa percorrer as recusas conhecidas. */
 export const CONTEXTOS_DE_RECUSA: readonly ContextoDaRecusa[] = [
   "cartoes", "baralhos", "selecao", "importacao", "transicao", "sessoes",
-  "revisao", "preferencias", "agenda", "conta", "imagens",
+  "revisao", "preferencias", "agenda", "conta", "imagens", "exportacao",
 ];
 
 /** Os códigos de `erro` do contrato HTTP (contracts/http.md). */
@@ -55,6 +56,7 @@ export const CODIGOS_DE_RECUSA: readonly string[] = [
   "credencial_invalida", "acesso_expirado", "anki_grande_demais",
   "anki_ilegivel", "anki_corrompido", "anki_incompativel", "sobreposicao",
   "audio_ausente", "audio_invalido",
+  "exportacao_vazia", "exportacao_grande_demais", "exportacao_indisponivel",
 ];
 
 /** Os `motivo`s que mudam o texto de uma recusa. */
@@ -72,6 +74,7 @@ export const MOTIVOS_DE_RECUSA: readonly string[] = [
 
 /** Deduz o contexto a partir do caminho da rota chamada. */
 export function contextoDaRota(caminho: string): ContextoDaRecusa {
+  if (caminho.startsWith("/exportacoes")) return "exportacao";
   if (caminho.startsWith("/baralhos/de-selecao")) return "selecao";
   if (caminho.startsWith("/baralhos/importacoes")) return "importacao";
   if (caminho.startsWith("/baralhos")) return "baralhos";
@@ -192,6 +195,12 @@ export const textoDaRecusaPt: TextoDaRecusa = (recusa, contexto) => {
       return "O arquivo Anki moderno está corrompido ou excede o limite de expansão.";
     case "anki_incompativel":
       return "O arquivo não contém uma coleção Anki compatível.";
+    case "exportacao_vazia":
+      return "Os Baralhos escolhidos não têm Cartões para exportar.";
+    case "exportacao_grande_demais":
+      return `A exportação excede o limite${recusa.motivo === "cartoes" ? ` de ${limite ?? 10000} Cartões` : ` de ${new Intl.NumberFormat("pt-BR").format(limite ?? 104857600)} bytes de mídia`}. Exporte em partes.`;
+    case "exportacao_indisponivel":
+      return "Não foi possível gerar o arquivo. Tente novamente.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {
@@ -318,6 +327,12 @@ export const textoDaRecusaEn: TextoDaRecusa = (recusa, contexto) => {
       return "The modern Anki file is corrupted or exceeds the expansion limit.";
     case "anki_incompativel":
       return "The file does not contain a compatible Anki collection.";
+    case "exportacao_vazia":
+      return "The selected decks have no cards to export.";
+    case "exportacao_grande_demais":
+      return `The export exceeds the limit${recusa.motivo === "cartoes" ? ` of ${limite ?? 10000} cards` : ` of ${new Intl.NumberFormat("en-US").format(limite ?? 104857600)} bytes of media`}. Export in parts.`;
+    case "exportacao_indisponivel":
+      return "The file could not be generated. Try again.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {
@@ -444,6 +459,12 @@ export const textoDaRecusaEs: TextoDaRecusa = (recusa, contexto) => {
       return "El archivo moderno de Anki está dañado o supera el límite de expansión.";
     case "anki_incompativel":
       return "El archivo no contiene una colección de Anki compatible.";
+    case "exportacao_vazia":
+      return "Los mazos elegidos no tienen tarjetas para exportar.";
+    case "exportacao_grande_demais":
+      return `La exportación supera el límite${recusa.motivo === "cartoes" ? ` de ${limite ?? 10000} tarjetas` : ` de ${new Intl.NumberFormat("es-419").format(limite ?? 104857600)} bytes de multimedia`}. Exporta en partes.`;
+    case "exportacao_indisponivel":
+      return "No se pudo generar el archivo. Inténtalo de nuevo.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {

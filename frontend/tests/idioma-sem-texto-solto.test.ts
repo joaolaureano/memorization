@@ -76,7 +76,9 @@ function achados(caminho: string): string[] {
       const conteudo = texto[1].trim();
 
       const depoisDeSeta = fonte[texto.index - 1] === "=";
-      const tipoIsolado = /^(?:void|string|number|boolean|unknown|never|null|undefined|Promise|Array|Record|Readonly|ReactNode|Element|HTMLElement|[A-Z][A-Za-z]*)$/.test(conteudo);
+      // Isolados em maiúscula também podem ser texto visível («Todos»).
+      // Só isenta nomes de tipos conhecidos; não qualquer identificador PascalCase.
+      const tipoIsolado = /^(?:void|string|number|boolean|unknown|never|null|undefined|Promise|Array|Record|Readonly|ReactNode|Element|HTMLElement)$/.test(conteudo);
 
       if (
         LETRA.test(conteudo) &&

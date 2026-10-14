@@ -34,6 +34,8 @@ import type {
   CartaoDaTransicao,
   Cartao,
   ClienteDoAcervo,
+  ResultadoDeExportacao,
+  ResultadoDePreviaDaExportacao,
   ContagensDaConta,
   Credencial,
   DadosDeBaralho,
@@ -525,6 +527,38 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     this.base.baralhos.push(baralho);
 
     return { ok: true, baralho: baralhoSemDono(baralho) };
+  }
+
+  async previaDaExportacao(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos" }): Promise<ResultadoDePreviaDaExportacao> {
+    const dono = this.dono();
+    const falhar = (erro: string): ResultadoDePreviaDaExportacao => ({ ok: false, erro, mensagem: textosDoIdiomaVigente().recusa({ erro }, "exportacao") });
+    if (this.indisponivel) return falhar("exportacao_indisponivel");
+    if (!dono) return falhar("sem_acesso");
+    if (pedido.formato !== "apkg" || (pedido.baralhos !== "todos" && (!pedido.baralhos.length || new Set(pedido.baralhos).size !== pedido.baralhos.length))) return falhar("dados_invalidos");
+    const baralhos = this.base.baralhos.filter((b) => b.usuarioId === dono.id && (pedido.baralhos === "todos" || pedido.baralhos.includes(b.id)));
+    if (pedido.baralhos !== "todos" && baralhos.length !== pedido.baralhos.length) return falhar("nao_encontrado");
+    const cartoes = this.base.cartoes.filter((c) => c.usuarioId === dono.id && baralhos.some((b) => b.id === c.baralhoId));
+    if (!cartoes.length) return falhar("exportacao_vazia");
+    if (cartoes.length > 10_000) return falhar("exportacao_grande_demais");
+    return { ok: true, previa: {
+      formato: "apkg", extensao: "apkg", baralhos: baralhos.length, cartoes: cartoes.length,
+      cartoesComImagem: cartoes.filter((c) => c.tipo === "imagem").length,
+      cartoesComAudio: cartoes.filter((c) => c.tipo === "audio").length,
+      bytesEstimados: cartoes.length * 500,
+    } };
+  }
+
+  async exportar(pedido: { formato: "apkg"; baralhos: readonly string[] | "todos"; fuso: string; idioma: "pt" | "en" | "es" }): Promise<ResultadoDeExportacao> {
+    const previa = await this.previaDaExportacao(pedido);
+    if (!previa.ok) return previa;
+    const dono = this.dono()!;
+    const baralhos = this.base.baralhos.filter((b) => b.usuarioId === dono.id && (pedido.baralhos === "todos" || pedido.baralhos.includes(b.id)));
+    const cartoes = this.base.cartoes.filter((c) => c.usuarioId === dono.id && baralhos.some((b) => b.id === c.baralhoId));
+    const nome = `${baralhos.length === 1 ? baralhos[0]!.nome : "Exportacao"}.apkg`.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "-").slice(0, 108);
+    const blob = new Blob([], { type: "application/octet-stream" });
+    return { ok: true, url: URL.createObjectURL(blob), nomeDoArquivo: nome,
+      expiraEm: new Date(Date.now() + 900_000).toISOString(), baralhos: baralhos.length,
+      cartoes: cartoes.length, cartoesSemMidia: 0 };
   }
 
   async preverImportacaoAnki() {

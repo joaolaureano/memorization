@@ -740,6 +740,49 @@ export function registrarRotasDeBaralhos(
   );
 }
 
+export function registrarRotasDeExportacao(
+  servidor: FastifyInstance,
+  acervoDe: AcervoDeUsuario,
+): void {
+  const idsOuTodos = z.union([z.literal("todos"), z.array(z.string().uuid()).min(1)]);
+  const corpoPreviaExportacao = z.object({ formato: z.string(), baralhos: idsOuTodos });
+  const corpoExportacao = corpoPreviaExportacao.extend({
+    fuso: z.string(),
+    idioma: z.enum(["pt", "en", "es"]),
+  });
+  const recusaExportacao = (resposta: FastifyReply, resultado: { erro: string; motivo?: string; limite?: number }) => {
+    const status = resultado.erro === "dados_invalidos" ? 400
+      : resultado.erro === "nao_encontrado" ? 404
+      : resultado.erro === "exportacao_vazia" || resultado.erro === "exportacao_grande_demais" ? 422
+      : 503;
+    return resposta.status(status).send(recusa(resultado.erro as Parameters<typeof recusa>[0], {
+      ...(resultado.motivo ? { motivo: resultado.motivo } : {}),
+      ...(resultado.limite === undefined ? {} : { limite: resultado.limite }),
+    }));
+  };
+
+  servidor.post("/exportacoes/previa", async (requisicao, resposta) => {
+    const corpo = corpoPreviaExportacao.safeParse(requisicao.body);
+    if (!corpo.success) return resposta.status(400).send(CORPO_INVALIDO);
+    const resultado = await acervoDe(requisicao.usuarioQueEntrou.id).previaDaExportacao(corpo.data);
+    return resultado.ok ? resposta.send(resultado.previa) : recusaExportacao(resposta, resultado);
+  });
+
+  servidor.post("/exportacoes", async (requisicao, resposta) => {
+    const corpo = corpoExportacao.safeParse(requisicao.body);
+    if (!corpo.success) return resposta.status(400).send(CORPO_INVALIDO);
+    const resultado = await acervoDe(requisicao.usuarioQueEntrou.id).exportar(corpo.data);
+    return resultado.ok ? resposta.status(201).send({
+      url: resultado.url,
+      nomeDoArquivo: resultado.nomeDoArquivo,
+      expiraEm: resultado.expiraEm,
+      baralhos: resultado.baralhos,
+      cartoes: resultado.cartoes,
+      cartoesSemMidia: resultado.cartoesSemMidia,
+    }) : recusaExportacao(resposta, resultado);
+  });
+}
+
 /**
  * Registra as rotas de transição de Cartões do contrato sobre o `Acervo` de
  * quem Entrou: `GET /acervo/transicao-cartoes` e `POST /acervo/transicao-cartoes`

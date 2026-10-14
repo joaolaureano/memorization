@@ -31,7 +31,7 @@ export interface CenarioDoArmazem {
   /** Faz o envio como o navegador; devolve o status HTTP da resposta. */
   enviar(envio: EnvioPreparado, bytes: Uint8Array): Promise<number>;
   /** Lê um endereço; `null` quando a leitura é negada. */
-  ler(url: string): Promise<{ bytes: Uint8Array; tipo: string } | null>;
+  ler(url: string): Promise<{ bytes: Uint8Array; tipo: string; disposicao?: string } | null>;
   /** Lê diretamente uma chave do armazém, sem assinatura; `null` se negado. */
   lerSemAssinatura(chave: string): Promise<Uint8Array | null>;
   /** Leva o relógio adiante, quando o Adapter permite; senão, omitido. */
@@ -88,6 +88,49 @@ export function bateriaDoArmazem(
       const endereco = await cenario.armazem.enderecoDeLeitura(confirmada.chave);
       const lida = await cenario.ler(endereco.url);
       expect(lida?.tipo).toBe(tipo);
+    });
+
+    it("lê e mede as chaves ativas; chaves ausentes contam zero", async () => {
+      const cenario = await criar();
+      const png = pngComMetadados();
+      const wav = amostraWav({ segundos: 1 });
+      const imagem = await enviarEConfirmar(cenario, "imagem", png);
+      const audio = await enviarEConfirmar(cenario, "audio", wav);
+      if (!imagem.ok || !audio.ok) throw new Error("mídia recusada");
+
+      // The upload path sanitizes image metadata; use the active stored bytes as
+      // the exact baseline for the direct-read contract.
+      const enderecoImagem = await cenario.armazem.enderecoDeLeitura(imagem.chave);
+      const imagemArmazenada = await cenario.ler(enderecoImagem.url);
+      expect(imagemArmazenada).not.toBeNull();
+      expect(Buffer.from((await cenario.armazem.ler(imagem.chave)) ?? [])).toEqual(Buffer.from(imagemArmazenada!.bytes));
+      expect(Buffer.from((await cenario.armazem.ler(audio.chave)) ?? [])).toEqual(Buffer.from(wav));
+      expect(await cenario.armazem.medir([imagem.chave, audio.chave])).toBe(imagemArmazenada!.bytes.length + wav.length);
+      expect(await cenario.armazem.medir([])).toBe(0);
+      await cenario.armazem.remover([imagem.chave]);
+      expect(await cenario.armazem.ler(imagem.chave)).toBeNull();
+      expect(await cenario.armazem.medir([imagem.chave, audio.chave])).toBe(wav.length);
+    });
+
+    it("guarda e sobrescreve Exportação com nome UTF-8 e endereço de até 15 minutos", async () => {
+      const cenario = await criar();
+      const primeiro = new TextEncoder().encode("primeiro pacote");
+      const endereco = await cenario.armazem.guardarExportacao(DONO, primeiro, "Inglês.apkg", "application/octet-stream");
+      const prazoMs = Date.parse(endereco.expiraEm) - Date.now();
+      expect(prazoMs).toBeGreaterThan(0);
+      expect(prazoMs).toBeLessThanOrEqual(VALIDADE_DA_LEITURA_EM_SEGUNDOS * 1000 + 2000);
+      const recebido = await cenario.ler(endereco.url);
+      expect(recebido).not.toBeNull();
+      expect(Buffer.from(recebido!.bytes)).toEqual(Buffer.from(primeiro));
+      expect(recebido).toMatchObject({
+        tipo: "application/octet-stream",
+        disposicao: expect.stringContaining("attachment;"),
+      });
+      expect((await cenario.ler(endereco.url))?.disposicao).toContain("filename*=UTF-8''Ingl%C3%AAs.apkg");
+
+      const segundo = new TextEncoder().encode("segundo pacote");
+      await cenario.armazem.guardarExportacao(DONO, segundo, "Inglês.apkg", "application/octet-stream");
+      expect(Buffer.from((await cenario.ler(endereco.url))?.bytes ?? [])).toEqual(Buffer.from(segundo));
     });
 
     it("remove os metadados e preserva a orientação do JPEG (FR-427)", async () => {

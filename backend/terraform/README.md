@@ -39,6 +39,16 @@ aws iam put-user-policy --profile root --user-name robot \
   --policy-document file://iam/robot-memorization-deploy.json
 ```
 
+O acesso ao bucket privado de Imagens é concedido separadamente pela policy
+[`iam/robot-s3-imagens.json`](iam/robot-s3-imagens.json), também anexada como
+inline por um perfil admin:
+
+```bash
+aws iam put-user-policy --profile root --user-name robot \
+  --policy-name memorization-s3-imagens \
+  --policy-document file://iam/robot-s3-imagens.json
+```
+
 ## Subir
 
 A ordem completa, com o porquê de cada passo, está no manual de operação

@@ -70,6 +70,8 @@ export function comGuardaDeCredencial(
     entrar: (dados: DadosDeEntrada) => cliente.entrar(dados),
     preverImportacaoAnki: (arquivo) => cliente.preverImportacaoAnki(arquivo),
     confirmarImportacaoAnki: (baralhos) => cliente.confirmarImportacaoAnki(baralhos),
+    previaDaExportacao: async (pedido) => vigiar(await cliente.previaDaExportacao(pedido)),
+    exportar: async (pedido) => vigiar(await cliente.exportar(pedido)),
 
     criarCartao: async (baralhoId: string, dados: DadosDeCartao) =>
       vigiar(await cliente.criarCartao(baralhoId, dados)),

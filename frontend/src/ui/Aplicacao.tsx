@@ -28,6 +28,7 @@ import { PaginaDaCentralDeEstudo } from "./PaginaDaCentralDeEstudo";
 import { PaginaDoFormularioDeRotina } from "./PaginaDoFormularioDeRotina";
 import { PaginaDeBaralhos } from "./PaginaDeBaralhos";
 import { PaginaDeImportacaoAnki } from "./PaginaDeImportacaoAnki";
+import { PaginaDeExportacao } from "./PaginaDeExportacao";
 import { PaginaDeCadastro } from "./PaginaDeCadastro";
 import {
   MENSAGEM_DE_CONTA_EXCLUIDA,
@@ -810,6 +811,9 @@ function TelaDaRota({
 
     case "importar-baralho":
       return <PaginaDeImportacaoAnki cliente={cliente} />;
+
+    case "exportar-baralhos":
+      return <PaginaDeExportacao cliente={cliente} baralhoId={rota.baralhoId} todos={rota.todos} />;
 
     case "novo-baralho":
       // FR-140: a criação de Baralho ganha tela própria.

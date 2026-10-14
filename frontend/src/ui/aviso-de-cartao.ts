@@ -1,12 +1,12 @@
-let avisoPendente: { baralhoId: string; texto: string } | null = null;
+let avisoPendente: { baralhoId: string; frente: string } | null = null;
 
-export function guardarAvisoDeCartao(baralhoId: string, texto: string): void {
-  avisoPendente = { baralhoId, texto };
+export function guardarAvisoDeCartao(baralhoId: string, frente: string): void {
+  avisoPendente = { baralhoId, frente };
 }
 
 export function consumirAvisoDeCartao(baralhoId: string): string | null {
   if (avisoPendente?.baralhoId !== baralhoId) return null;
-  const texto = avisoPendente.texto;
+  const frente = avisoPendente.frente;
   avisoPendente = null;
-  return texto;
+  return frente;
 }

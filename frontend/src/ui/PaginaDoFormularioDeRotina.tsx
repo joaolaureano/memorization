@@ -452,7 +452,7 @@ export function PaginaDoFormularioDeRotina({
           <form className="formulario" onSubmit={aoEnviar} noValidate>
             <div className="campo">
               <label className="rotulo" htmlFor="campo-do-baralho">
-                Baralho
+                {textos.selecao.baralho}
               </label>
               <select
                 id="campo-do-baralho"
@@ -585,7 +585,7 @@ export function PaginaDoFormularioDeRotina({
             </fieldset>
 
             <div className="agenda__resumo-da-rotina">
-              <p className="rotulo">Resumo</p>
+              <p className="rotulo">{textos.rotina.resumo}</p>
               <p aria-live="polite" data-resumo>
                 {resumo}
               </p>

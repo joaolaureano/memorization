@@ -46,7 +46,10 @@ export type CodigoDeRecusa =
   | "anki_corrompido"
   | "anki_incompativel"
   | "audio_ausente"
-  | "audio_invalido";
+  | "audio_invalido"
+  | "exportacao_vazia"
+  | "exportacao_grande_demais"
+  | "exportacao_indisponivel";
 
 export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   indisponivel: "Storage is unavailable. Try again.",
@@ -84,6 +87,9 @@ export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   anki_incompativel: "File does not contain a compatible Anki collection.",
   audio_ausente: "Choose an audio file.",
   audio_invalido: "Audio is invalid.",
+  exportacao_vazia: "Nothing to export.",
+  exportacao_grande_demais: "Export exceeds the size limit.",
+  exportacao_indisponivel: "Export is unavailable.",
 };
 
 export interface RecusaBody<C extends CodigoDeRecusa = CodigoDeRecusa> {

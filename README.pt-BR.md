@@ -24,6 +24,7 @@ uma especificação em [`specs/`](specs/).
 | Continuar conectado | Um Acesso temporário mantém a pessoa conectada enquanto usa o app e expira após um período sem atividade | [018](specs/018-acesso-temporario/) |
 | Perfil | Consultar Nome de usuário, configurar o estudo, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
 | Cartões | Criar, consultar, editar e excluir Cartões Frente-Verso e com Imagem dentro do Baralho; Imagem na Frente, com Texto da frente e descrição alternativa opcionais | [025](specs/025-criar-cartoes-baralho/), [026](specs/026-cartao-com-imagem/) |
+| Exportar | Exportar um ou todos os Baralhos em `.apkg` para Anki (até 10.000 Cartões e 100 MiB de mídia). No Anki, marque «Importar progresso de estudo» para restaurar as datas de revisão | [029](specs/029-exportar-baralhos/) |
 | Baralhos | Criar, renomear e excluir Baralhos; cada Cartão pertence a exatamente um Baralho | [002](specs/002-criar-baralho/), [025](specs/025-criar-cartoes-baralho/) |
 | Busca e filtros | Busca de Baralhos pelo nome e de Cartões pela Frente ou pelo Verso; filtro de Cartões por Baralho; filtro e etiqueta de situação nos Baralhos: Pendente ou Revisado | [022](specs/022-busca-e-filtros-no-acervo/), [024](specs/024-revisar-baralhos/) |
 | Baralho temporário | Em Baralhos, «Criar baralho temporário» abre uma montagem (`#/baralhos/temporario`) em que se adicionam Baralhos inteiros e Cartões individuais, com busca e filtros, até 1.000 Cartões; «Revisar» inicia uma Sessão embaralhada (`#/baralhos/temporario/estudo`); a Sessão aparece no Histórico; «Salvar como baralho» cria cópias dos Cartões selecionados em um Baralho permanente e preserva os Baralhos de origem | [023](specs/023-baralho-temporario/), [025](specs/025-criar-cartoes-baralho/) |
@@ -111,6 +112,7 @@ flowchart LR
 O passo a passo da entrega está em
 [`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
 e em [`backend/terraform/README.md`](backend/terraform/README.md).
+Depois de entregar esta feature, rode `tofu apply` com `-var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler` para instalar a regra de ciclo de vida de um dia para `exportacoes/`.
 
 ## Constituição
 

@@ -107,6 +107,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     const controles = controlesInterativos();
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Importar" }),
+      screen.getByRole("link", { name: "Exportar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
@@ -138,6 +139,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     expect(controles).not.toContain(botaoDeRevisao);
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Importar" }),
+      screen.getByRole("link", { name: "Exportar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),
@@ -169,6 +171,7 @@ describe("PaginaDeBaralhos por teclado", () => {
     const controles = controlesInterativos();
     expect(controles).toEqual([
       screen.getByRole("link", { name: "Importar" }),
+      screen.getByRole("link", { name: "Exportar" }),
       screen.getByRole("link", { name: "Criar baralho" }),
       screen.getByRole("link", { name: "Criar baralho temporário" }),
       screen.getByRole("searchbox", { name: "Buscar baralhos" }),

@@ -170,6 +170,7 @@ export function PaginaDeBaralhos({
         </div>
         <div className="acoes acoes--criacao">
           <a className="botao botao--secundario" href="#/baralhos/importar">{textos.baralhos.btnImportar}</a>
+          <a className="botao botao--secundario" href="#/baralhos/exportar">{textos.exportacao.titulo}</a>
           <a className="botao botao--primario" href="#/baralhos/novo">
             {textos.baralhos.btnCriarBaralho}
           </a>

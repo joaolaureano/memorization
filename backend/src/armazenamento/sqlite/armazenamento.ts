@@ -9,6 +9,7 @@ import type {
   Cartao,
   CartaoPendente,
   CartaoComDono,
+  ConteudoArmazenado,
   CompromissoPersistido,
   ContagemPorBaralho,
   ContagensDaConta,
@@ -1438,6 +1439,50 @@ export async function abrirArmazenamentoSqlite(
         .map(cartaoDaLinha);
     },
 
+    async lerAcervoParaExportacao(usuarioId, baralhoIds) {
+      return comDesfecho(() => emTransacao(banco, () => {
+        const ids = baralhoIds === "todos" ? null : [...baralhoIds];
+        if (ids?.length === 0) return NAO_ENCONTRADO;
+        const sqlBaralhos = ids === null
+          ? "SELECT id, nome FROM baralho WHERE usuario_id = ? ORDER BY rowid"
+          : `SELECT id, nome FROM baralho WHERE usuario_id = ? AND id IN (${ids.map(() => "?").join(",")}) ORDER BY rowid`;
+        const baralhos = banco.prepare(sqlBaralhos).all(usuarioId, ...(ids ?? []));
+        if (ids !== null && baralhos.length !== ids.length) return NAO_ENCONTRADO;
+        const cartoesSql = ids === null
+          ? `SELECT c.*, b.id AS export_baralho_id, a.cartao_id AS progresso_cartao_id, a.algoritmo AS progresso_algoritmo,
+                    a.versao_do_algoritmo AS progresso_versao, a.estado AS progresso_estado,
+                    a.proxima_revisao_em AS progresso_proxima
+               FROM pertencimento p JOIN cartao c ON c.id = p.cartao_id
+               JOIN baralho b ON b.id = p.baralho_id
+               LEFT JOIN agendamento a ON a.cartao_id = c.id AND a.usuario_id = c.usuario_id
+              WHERE b.usuario_id = ? ORDER BY b.rowid, c.criado_em IS NOT NULL, c.criado_em, c.rowid`
+          : `SELECT c.*, b.id AS export_baralho_id, a.cartao_id AS progresso_cartao_id,
+                    a.algoritmo AS progresso_algoritmo, a.versao_do_algoritmo AS progresso_versao,
+                    a.estado AS progresso_estado, a.proxima_revisao_em AS progresso_proxima
+               FROM pertencimento p JOIN cartao c ON c.id = p.cartao_id
+               JOIN baralho b ON b.id = p.baralho_id
+               LEFT JOIN agendamento a ON a.cartao_id = c.id AND a.usuario_id = c.usuario_id
+              WHERE b.usuario_id = ? AND b.id IN (${ids!.map(() => "?").join(",")})
+              ORDER BY b.rowid, c.criado_em IS NOT NULL, c.criado_em, c.rowid`;
+        const linhas = banco.prepare(cartoesSql).all(usuarioId, ...(ids ?? []));
+        const resultado: ConteudoArmazenado["baralhos"] = baralhos.map((linha) => {
+          const id = linha.id as string;
+          const cartoes = linhas.filter((c) => c.export_baralho_id === id).map((linhaCartao) => {
+            const cartao = cartaoDaLinha(linhaCartao);
+            const progresso = linhaCartao.progresso_cartao_id == null ? null : {
+              algoritmo: linhaCartao.progresso_algoritmo as string,
+              versaoDoAlgoritmo: Number(linhaCartao.progresso_versao),
+              estado: JSON.parse(linhaCartao.progresso_estado as string) as unknown,
+              proximaRevisaoEm: linhaCartao.progresso_proxima as string,
+            };
+            return { ...cartao, progresso };
+          });
+          return { id, nome: linha.nome as string, criadoEm: null, cartoes };
+        });
+        return { ok: true as const, valor: { baralhos: resultado } };
+      }));
+    },
+
     async contarCartoesPorBaralho(usuarioId) {
       const contagens: ContagemPorBaralho[] = contarCartoesPorBaralho
         .all(usuarioId)
@@ -2346,6 +2391,9 @@ export async function abrirArmazenamentoSqlite(
           emTransacao(banco, () => {
             enfileirarMidiasDoUsuario.run(new Date().toISOString(), id);
             enfileirarAudiosDoUsuario.run(new Date().toISOString(), id);
+            banco.prepare(
+              "INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM usuario WHERE id = ?)",
+            ).run(`exportacoes/${id}`, new Date().toISOString(), id);
             return Number(excluirUsuarioPorId.run(id).changes) === 0
               ? USUARIO_NAO_ENCONTRADO
               : { ok: true as const, valor: undefined };

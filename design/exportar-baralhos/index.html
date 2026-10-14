@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exportar Baralhos · Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="moldura">
+    <a class="marca" href="#">memorization</a>
+    <nav class="navegacao-principal" aria-label="Principal">
+      <a href="#inicio" data-i18n="navInicio">Início</a>
+      <a href="#estudo" data-i18n="navEstudo">Estudo</a>
+      <a href="#baralhos" aria-current="page" data-i18n="navBaralhos">Baralhos</a>
+      <a href="#perfil" data-i18n="navPerfil">Perfil</a>
+    </nav>
+    <div class="eb-idiomas" role="group" aria-label="Idioma" data-i18n-aria="idioma">
+      <button type="button" data-idioma="pt" aria-pressed="true">PT</button>
+      <button type="button" data-idioma="en" aria-pressed="false">EN</button>
+      <button type="button" data-idioma="es" aria-pressed="false">ES</button>
+    </div>
+  </header>
+
+  <main class="aplicacao eb-aplicacao">
+    <div class="eb-cabecalho">
+      <div>
+        <p class="sobretitulo" data-i18n="baralhos">Baralhos</p>
+        <h1 data-i18n="titulo">Exportar</h1>
+      </div>
+      <div class="eb-entradas" role="group" aria-label="Origem da exportação" data-i18n-aria="origem">
+        <button type="button" class="botao botao--secundario" data-entrada="um" aria-pressed="true" data-i18n="umBaralho">Um Baralho</button>
+        <button type="button" class="botao botao--secundario" data-entrada="varios" aria-pressed="false" data-i18n="variosBaralhos">Vários Baralhos</button>
+      </div>
+    </div>
+
+    <section class="eb-painel" aria-labelledby="titulo-conteudo">
+      <h2 id="titulo-conteudo" data-i18n="conteudo">Conteúdo</h2>
+      <div id="selecao-unica" class="eb-baralho-unico">
+        <span class="eb-nome-baralho">Inglês</span>
+        <span class="eb-contagem" data-i18n="contagemIngles">12 Cartões</span>
+      </div>
+      <fieldset id="selecao-varios" class="eb-lista-baralhos" hidden>
+        <legend data-i18n="marqueBaralhos">Marque os Baralhos</legend>
+        <label class="eb-linha-baralho eb-todos">
+          <input id="todos" type="checkbox">
+          <span data-i18n="todosBaralhos">Todos os Baralhos</span>
+        </label>
+        <label class="eb-linha-baralho">
+          <input class="baralho" type="checkbox" value="ingles">
+          <span>Inglês</span><small data-i18n="contagem12">12 Cartões</small>
+        </label>
+        <label class="eb-linha-baralho">
+          <input class="baralho" type="checkbox" value="midia">
+          <span data-i18n="nomeMidia">Mídia</span><small data-i18n="contagem2">2 Cartões</small>
+        </label>
+        <label class="eb-linha-baralho">
+          <input class="baralho" type="checkbox" value="vazio">
+          <span data-i18n="nomeVazio">Vazio</span><small data-i18n="contagem0">0 Cartões</small>
+        </label>
+      </fieldset>
+    </section>
+
+    <section class="eb-painel" aria-labelledby="titulo-formato">
+      <h2 id="titulo-formato" data-i18n="formato">Formato de exportação</h2>
+      <fieldset class="eb-formatos">
+        <legend data-i18n="escolhaFormato">Escolha o formato</legend>
+        <label class="eb-opcao-formato">
+          <input type="radio" name="formato" value="apkg" checked>
+          <span data-i18n="apkg">Pacote Anki (.apkg)</span>
+        </label>
+      </fieldset>
+      <p class="eb-ajuda" data-i18n="ajudaAnki">Abre no Anki, no AnkiDroid e no AnkiMobile. Ao importar no Anki, marque «Importar progresso de estudo».</p>
+    </section>
+
+    <section class="eb-resumo" aria-labelledby="titulo-resumo" aria-live="polite" aria-atomic="true">
+      <h2 id="titulo-resumo" data-i18n="resumo">Resumo</h2>
+      <p id="resumo-principal">1 Baralho · 12 Cartões</p>
+      <p id="resumo-midia" data-i18n="resumoMidia">1 com Imagem, 1 com Áudio</p>
+      <p id="resumo-tamanho" data-i18n="tamanho">Tamanho aproximado: 3,2 MB</p>
+    </section>
+
+    <p id="motivo" class="eb-motivo" hidden></p>
+    <div class="eb-acoes">
+      <button class="botao botao--primario" id="exportar" type="button" data-i18n="exportarArquivo">Exportar arquivo</button>
+    </div>
+    <p id="estado" class="eb-estado" role="status" aria-live="polite" aria-atomic="true"></p>
+
+    <details class="eb-ferramentas">
+      <summary data-i18n="ferramentas">Demonstração de falha e recusa</summary>
+      <p data-i18n="ferramentasAjuda">Controles de protótipo para revisar os estados.</p>
+      <button class="botao botao--secundario" type="button" data-estado="falha" data-i18n="simularFalha">Simular falha</button>
+      <button class="botao botao--secundario" type="button" data-estado="limite" data-i18n="simularRecusa">Simular limite excedido</button>
+    </details>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

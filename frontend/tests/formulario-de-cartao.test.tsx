@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MENSAGEM_DE_INDISPONIBILIDADE } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { LIMITE_DE_CARACTERES_DE_CARTAO } from "../src/acervo-cliente/validacao";
+import { ProvedorDeIdioma, useIdioma } from "../src/idioma";
 import {
   MOTIVO_DE_PENDENCIA,
   PaginaDoFormularioDeCartao,
@@ -52,6 +53,11 @@ function campoDeVerso(): HTMLTextAreaElement {
   return screen.getByLabelText("Verso") as HTMLTextAreaElement;
 }
 
+function TrocaIdiomaDeProva() {
+  const { escolher } = useIdioma();
+  return <button type="button" onClick={() => escolher("en")}>Selecionar English</button>;
+}
+
 function formulario(): HTMLFormElement {
   // Ancora no campo Frente, e não no botão "Salvar": durante um salvamento o
   // botão passa a "Salvando…", mas o formulário continua sendo o mesmo.
@@ -79,9 +85,19 @@ describe("PaginaDoFormularioDeCartao — criação", () => {
     await waitFor(() => expect(window.location.hash).toBe(`#/baralhos/${baralhoId}`));
     unmount();
 
-    render(comProtecaoDeSaida(<PaginaDoBaralho cliente={cliente} id={baralhoId} />, true));
+    render(comProtecaoDeSaida(
+      <ProvedorDeIdioma idiomaInicial="pt">
+        <TrocaIdiomaDeProva />
+        <PaginaDoBaralho cliente={cliente} id={baralhoId} />
+      </ProvedorDeIdioma>,
+      true,
+    ));
     expect(await screen.findByText("to walk (2)")).toBeInTheDocument();
     expect(screen.getByText("Cartão criado: to walk (2).")).toHaveAttribute("role", "status");
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar English" }));
+
+    expect(await screen.findByText("Card created: to walk (2).")).toHaveAttribute("role", "status");
   });
 
   it("cria o Cartão, anuncia e volta para a lista (FR-001, FR-140, FR-141)", async () => {

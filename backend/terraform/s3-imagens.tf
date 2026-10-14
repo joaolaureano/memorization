@@ -1,6 +1,7 @@
-# Midia dos Cartoes (026 e 028, research R10): o bucket guarda as Imagens
-# (prefixo imagens/, ate 5 MB) do tipo Imagem e os Audios (prefixo audios/,
-# ate 10 MB) do tipo Audio. O bucket e privado: o navegador envia por
+# Midia dos Cartoes (026 e 028, research R10) e pacotes de Exportacao (029):
+# o bucket guarda Imagens (prefixo imagens/, ate 5 MB), Audios (prefixo
+# audios/, ate 10 MB) e arquivos efemeros de Exportacao (exportacoes/). O
+# bucket e privado: o navegador envia por
 # presigned POST (limite de tamanho imposto pelo proprio S3) e le por
 # presigned GET de 15 minutos, ambos assinados pela role da Lambda. Nao ha
 # chave nova a guardar.
@@ -35,9 +36,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "imagens" {
   }
 }
 
-# Envios de Imagens e Audios que nunca viraram Cartao ficam em pendentes/ e
-# expiram em 1 dia; o S3 arredonda para a meia-noite UTC seguinte, o que da
-# ate 48 horas (FR-423, research R12).
+# Envios de Mídia que nunca viraram Cartão ficam em pendentes/, e Exportações
+# ficam em exportacoes/; ambos expiram em 1 dia. O S3 arredonda para a
+# meia-noite UTC seguinte, o que dá até 48 horas (FR-423, research R12; 029,
+# FR-481, research R10).
 resource "aws_s3_bucket_lifecycle_configuration" "imagens" {
   bucket = aws_s3_bucket.imagens.id
 
@@ -55,6 +57,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "imagens" {
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
+    }
+  }
+
+  rule {
+    id     = "exportacoes-expiram"
+    status = "Enabled"
+
+    filter {
+      prefix = "exportacoes/"
+    }
+
+    expiration {
+      days = 1
     }
   }
 }

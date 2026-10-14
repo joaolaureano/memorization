@@ -84,6 +84,23 @@ export interface Baralho {
   tags?: string[];
 }
 
+/** Snapshot isolado e ordenado usado para construir uma exportação. */
+export interface ConteudoArmazenado {
+  readonly baralhos: readonly {
+    readonly id: string;
+    readonly nome: string;
+    readonly criadoEm: string | null;
+    readonly cartoes: readonly (Cartao & {
+      readonly progresso: {
+        readonly algoritmo: string;
+        readonly versaoDoAlgoritmo: number;
+        readonly estado: unknown;
+        readonly proximaRevisaoEm: string;
+      } | null;
+    })[];
+  }[];
+}
+
 /**
  * Cartão com o seu único Baralho dono — o Pertencimento (FR-389). É a forma
  * das leituras que atravessam Baralhos, como a montagem de estudo temporário.
@@ -663,6 +680,11 @@ export interface ArmazenamentoDeAcessos {
  * exige Cartão e Baralho **no mesmo dono** (FR-093).
  */
 export interface ArmazenamentoDoAcervo {
+  /** Lê em snapshot os Baralhos e Cartões escolhidos, sem dados de outros donos. */
+  lerAcervoParaExportacao(
+    usuarioId: string,
+    baralhoIds: readonly string[] | "todos",
+  ): Promise<Desfecho<ConteudoArmazenado>>;
   /**
    * Guarda um Cartão já validado e já numerado pelo Module e o seu
    * Pertencimento a `baralhoId`, numa única transação (FR-389, FR-390). `id` é

@@ -35,6 +35,7 @@ export type Rota =
   | { nome: "registro"; id: string }
   | { nome: "baralhos" }
   | { nome: "importar-baralho" }
+  | { nome: "exportar-baralhos"; baralhoId?: string; todos?: boolean }
   | { nome: "novo-baralho" }
   | { nome: "baralho"; id: string }
   | { nome: "editar-baralho"; id: string }
@@ -90,7 +91,9 @@ export function interpretarRota(hash: string, temCredencial: boolean): Rota {
  */
 function interpretarCaminho(hash: string): Rota {
   try {
-    const segmentos = hash
+    const [caminho, consulta] = hash.split("?", 2);
+    const parametros = new URLSearchParams(consulta ?? "");
+    const segmentos = (caminho ?? hash)
       .replace(/^#\/?/, "")
       .split("/")
       .filter((segmento) => segmento.length > 0);
@@ -146,6 +149,14 @@ function interpretarCaminho(hash: string): Rota {
         const [colecao, segundo] = segmentos;
 
         if (colecao === "baralhos" && segundo === "importar") return { nome: "importar-baralho" };
+        if (colecao === "baralhos" && segundo === "exportar") {
+          const baralhoId = parametros.get("baralho");
+          return {
+            nome: "exportar-baralhos",
+            ...(baralhoId ? { baralhoId } : {}),
+            ...(parametros.get("todos") === "1" ? { todos: true } : {}),
+          };
+        }
 
         if (colecao === "baralhos") {
           if (segundo === "temporario") {
@@ -294,7 +305,11 @@ export function hashDaRota(rota: Rota): string {
       return "#/baralhos";
 
     case "importar-baralho":
+    case "exportar-baralhos":
       return "#/baralhos/importar";
+
+    case "exportar-baralhos":
+      return `#/baralhos/exportar${rota.baralhoId ? `?baralho=${encodeURIComponent(rota.baralhoId)}` : rota.todos ? "?todos=1" : ""}`;
 
     case "novo-baralho":
       return "#/baralhos/novo";
@@ -348,6 +363,7 @@ export function destinoAtivo(
 
     case "baralhos":
     case "importar-baralho":
+    case "exportar-baralhos":
     case "novo-baralho":
     case "baralho":
     case "editar-baralho":

@@ -379,6 +379,7 @@ describe("PaginaDoBaralho", () => {
       name: "Inglês",
     });
     const revisar = screen.getByRole("link", { name: "Revisar este Baralho" });
+    const exportar = screen.getByRole("link", { name: "Exportar" });
     const criar = screen.getByRole("link", { name: "Criar Cartão" });
     const renomear = screen.getByRole("link", { name: "Renomear" });
     const excluirBaralho = screen.getByRole("button", {
@@ -386,6 +387,9 @@ describe("PaginaDoBaralho", () => {
     });
 
     apertarTabAPartirDe(titulo);
+    expect(document.activeElement).toBe(exportar);
+
+    apertarTab();
     expect(document.activeElement).toBe(revisar);
 
     apertarTab();

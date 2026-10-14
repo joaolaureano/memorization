@@ -18,6 +18,7 @@ import {
   registrarRotaDeEntrada,
   registrarRotasDeAcesso,
   registrarRotasDeBaralhos,
+  registrarRotasDeExportacao,
   registrarRotasDeAgenda,
   registrarRotasDeCartoes,
   registrarRotasDeConta,
@@ -96,6 +97,10 @@ export const CAMINHO_DAS_PREVIAS = "/previas";
  * Caminho das rotas de Preferências (contrato da `015`, §4), com o mesmo CORS.
  */
 export const CAMINHO_DAS_PREFERENCIAS = "/preferencias";
+
+/** Rotas da exportação de Baralhos (`029`), com o mesmo CORS da API. */
+export const CAMINHO_DA_PREVIA_DE_EXPORTACAO = "/exportacoes/previa";
+export const CAMINHO_DAS_EXPORTACOES = "/exportacoes";
 
 /**
  * Caminho das rotas de conta do Usuário (contrato da `017`): `GET` e `DELETE`
@@ -359,6 +364,8 @@ export function criarServidor(
       CAMINHO_DAS_ESTATISTICAS,
       CAMINHO_DAS_PREVIAS,
       CAMINHO_DAS_PREFERENCIAS,
+      CAMINHO_DA_PREVIA_DE_EXPORTACAO,
+      CAMINHO_DAS_EXPORTACOES,
       CAMINHO_DA_AGENDA,
       CAMINHO_DAS_ROTINAS,
       CAMINHO_DOS_INICIOS,
@@ -389,6 +396,8 @@ export function criarServidor(
         caminho === CAMINHO_DAS_ESTATISTICAS ||
         caminho === CAMINHO_DAS_PREVIAS ||
         caminho === CAMINHO_DAS_PREFERENCIAS ||
+        caminho === CAMINHO_DA_PREVIA_DE_EXPORTACAO ||
+        caminho === CAMINHO_DAS_EXPORTACOES ||
         caminho === CAMINHO_DA_AGENDA ||
         caminho.startsWith("/agenda/") ||
         caminho === CAMINHO_DA_CONTA ||
@@ -470,6 +479,7 @@ export function registrarRotasDaAplicacao(
   registrarRotasDeImagens(servidor, imagens);
   registrarRotasDeAudios(servidor, imagens);
   registrarRotasDeBaralhos(servidor, acervoDe, lerAnki);
+  registrarRotasDeExportacao(servidor, acervoDe);
   registrarRotasDeTransicao(servidor, acervoDe);
   registrarRotasDeSessoes(servidor, acervoDe);
   registrarRotasDeRevisao(servidor, acervoDe);

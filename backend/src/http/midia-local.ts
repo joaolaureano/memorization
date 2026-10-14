@@ -156,7 +156,7 @@ export function registrarRotasDeMidiaLocal(
       const total = midia.bytes.length;
       resposta
         .header("content-type", midia.formato)
-        .header("content-disposition", "inline")
+        .header("content-disposition", midia.disposicao)
         .header("x-content-type-options", "nosniff")
         .header("cache-control", "private, max-age=900")
         .header("accept-ranges", "bytes");

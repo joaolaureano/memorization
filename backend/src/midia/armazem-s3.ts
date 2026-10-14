@@ -52,6 +52,45 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeMidia {
   const Bucket = opcoes.bucket;
 
   return {
+    async ler(chave) {
+      try {
+        const objeto = await s3.send(new GetObjectCommand({ Bucket, Key: chave }));
+        return await objeto.Body!.transformToByteArray();
+      } catch (erro) {
+        if (ehAusente(erro)) return null;
+        throw erro;
+      }
+    },
+
+    async medir(chaves) {
+      let total = 0;
+      for (let inicio = 0; inicio < chaves.length; inicio += 32) {
+        const tamanhos = await Promise.all(chaves.slice(inicio, inicio + 32).map(async (Key) => {
+          try {
+            const resposta = await s3.send(new HeadObjectCommand({ Bucket, Key }));
+            return resposta.ContentLength ?? 0;
+          } catch (erro) {
+            if (ehAusente(erro)) return 0;
+            throw erro;
+          }
+        }));
+        total += tamanhos.reduce((soma, tamanho) => soma + tamanho, 0);
+      }
+      return total;
+    },
+
+    async guardarExportacao(usuarioId, bytes, nomeDoArquivo, tipoDeConteudo) {
+      const Key = `exportacoes/${usuarioId}`;
+      const disposicao = `attachment; filename*=UTF-8''${encodeURIComponent(nomeDoArquivo)}`;
+      await s3.send(new PutObjectCommand({
+        Bucket, Key, Body: bytes, ContentType: tipoDeConteudo, ContentDisposition: disposicao,
+      }));
+      const url = await getSignedUrl(s3, new GetObjectCommand({
+        Bucket, Key, ResponseContentDisposition: disposicao,
+      }), { expiresIn: VALIDADE_DA_LEITURA_EM_SEGUNDOS });
+      return { url, expiraEm: new Date(Date.now() + VALIDADE_DA_LEITURA_EM_SEGUNDOS * 1000).toISOString() };
+    },
+
     async prepararEnvio(usuarioId, midia) {
       const envioId = randomUUID();
       const { url, fields } = await createPresignedPost(s3, {

@@ -58,6 +58,9 @@ export const sm2: AlgoritmoDeRepeticao = {
     { chave: "bom", rotulo: "Bom", resultado: "acertou" },
     { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
   ],
+  descreverProgresso(estado) {
+    return { ...lerDados(estado) };
+  },
   avaliar(estado, avaliacao, agora) {
     const anterior = lerDados(estado);
     const q = QUALIDADE[avaliacao];

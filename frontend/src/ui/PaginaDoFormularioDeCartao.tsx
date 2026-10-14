@@ -587,7 +587,7 @@ export function PaginaDoFormularioDeCartao({
       if (!emEdicao) {
         guardarAvisoDeCartao(
           baralhoId,
-          textos.cartao.cartaoCriado(resultado.cartao.frente),
+          resultado.cartao.frente,
         );
       }
       // Sucesso na criação ou edição: volta para o detalhe do Baralho.

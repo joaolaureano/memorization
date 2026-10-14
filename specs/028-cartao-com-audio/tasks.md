@@ -460,3 +460,8 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
   - o aviso "Cartão criado: …" fica no idioma em que foi gerado ao trocar o idioma (`aviso-de-cartao.ts` guarda o texto pronto; 025/027, FR-015);
   - a prova `idioma-sem-texto-solto` ignora palavras isoladas com inicial maiúscula (`tipoIsolado`), e por isso não pegou o "Todos".
 
+### Correções posteriores — 2026-10-14
+
+- O aviso de criação passou a guardar a Frente e a montar a mensagem a partir do catálogo no detalhe do Baralho; a prova de formulário confirma a troca para inglês com o aviso visível (027, FR-015).
+- `idioma-sem-texto-solto` deixou de isentar identificadores PascalCase genéricos, então palavras soltas como "Todos" são detectadas.
+

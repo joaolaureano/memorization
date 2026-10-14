@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   aguardarApiPronta,
   aguardarProntidao,
+  aplicarZoomDeProva,
   criarBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
@@ -89,7 +90,10 @@ test('detalhe, criação, edição e exclusão funcionam em 360/390/768/1440 e z
       const baralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: `Largura ${largura} zoom ${zoom}` });
       await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}`);
       await expect(page.getByRole('heading', { level: 1, name: baralho.nome })).toBeVisible();
-      if (zoom === 2) await page.locator('html').evaluate((elemento) => { (elemento as HTMLElement).style.zoom = '2'; });
+      if (zoom === 2) {
+        await aplicarZoomDeProva(page, 2);
+        await expect(page.getByRole('heading', { level: 1, name: baralho.nome })).toBeVisible();
+      }
 
       const sobreposicoes = await page.locator('main .cabecalho-da-pagina .acoes > *').evaluateAll((controles) => {
         const caixas = controles.map((controle) => controle.getBoundingClientRect());
@@ -131,7 +135,7 @@ test('detalhe, criação, edição e exclusão funcionam em 360/390/768/1440 e z
       await page.keyboard.press('Enter');
       await expect(page.getByText(`Frente ${largura}`, { exact: true })).toHaveCount(0);
       expect(await medirLargura()).toBeLessThanOrEqual(0);
-      await page.locator('html').evaluate((elemento) => { (elemento as HTMLElement).style.zoom = ''; });
+      await aplicarZoomDeProva(page, 1);
     }
   } finally {
     await encerrarProcesso(frontend);

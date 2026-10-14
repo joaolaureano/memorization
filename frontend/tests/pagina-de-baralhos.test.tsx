@@ -131,7 +131,7 @@ describe("PaginaDeBaralhos", () => {
       within(cabecalho as HTMLElement)
         .getAllByRole("link")
         .map((l) => l.textContent),
-    ).toEqual(["Importar", "Criar baralho", "Criar baralho temporário"]);
+    ).toEqual(["Importar", "Exportar", "Criar baralho", "Criar baralho temporário"]);
 
     await screen.findByText(/ainda não há Baralhos/i);
   });

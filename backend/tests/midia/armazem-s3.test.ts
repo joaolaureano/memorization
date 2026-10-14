@@ -67,6 +67,7 @@ if (configuracao === undefined) {
           ? {
               bytes: new Uint8Array(await resposta.arrayBuffer()),
               tipo: resposta.headers.get("content-type") ?? "",
+              disposicao: resposta.headers.get("content-disposition") ?? undefined,
             }
           : null;
       },

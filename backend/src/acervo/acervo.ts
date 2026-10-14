@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   Agendamento,
   ArmazenamentoDoAcervo,
+  ConteudoArmazenado,
   Baralho,
   Cartao,
   CartaoComDono,
@@ -20,6 +21,34 @@ import {
 } from "./invariantes.ts";
 
 export type { MotivoDeRecusaDoAudio };
+
+export const LIMITE_DE_CARTOES_DA_EXPORTACAO = 10_000;
+export const LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO = 104_857_600;
+const BYTES_ESTIMADOS_POR_CARTAO = 500;
+export type IdiomaDaExportacao = "pt" | "en" | "es";
+export interface PedidoDeExportacao {
+  readonly formato: string;
+  readonly baralhos: readonly string[] | "todos";
+}
+export interface PedidoDeGeracaoDeExportacao extends PedidoDeExportacao {
+  readonly fuso: string;
+  readonly idioma: IdiomaDaExportacao;
+}
+export interface PreviaDaExportacao {
+  readonly formato: "apkg";
+  readonly extensao: "apkg";
+  readonly baralhos: number;
+  readonly cartoes: number;
+  readonly cartoesComImagem: number;
+  readonly cartoesComAudio: number;
+  readonly bytesEstimados: number;
+}
+export type ResultadoDePreviaDaExportacao =
+  | { readonly ok: true; readonly previa: PreviaDaExportacao }
+  | { readonly ok: false; readonly erro: "dados_invalidos" | "nao_encontrado" | "exportacao_vazia" | "exportacao_grande_demais" | "exportacao_indisponivel"; readonly motivo?: "cartoes" | "midia"; readonly limite?: number };
+export type ResultadoDeExportacao =
+  | { readonly ok: true; readonly url: string; readonly nomeDoArquivo: string; readonly expiraEm: string; readonly baralhos: number; readonly cartoes: number; readonly cartoesSemMidia: number }
+  | Exclude<ResultadoDePreviaDaExportacao, { readonly ok: true }>;
 import {
   ALGORITMOS,
   algoritmoPorId,
@@ -42,6 +71,9 @@ import {
   normalizarTags,
 } from "./invariantes.ts";
 import { criarAgenda } from "../agenda/agenda.ts";
+import { ehFusoValido } from "../agenda/datas.ts";
+import { exportar as gerarPacoteAnki, type ConteudoExportado } from "../exportacao/apkg/pacote.ts";
+import { nomeDoArquivoDeExportacao } from "../exportacao/nome-do-arquivo.ts";
 import type {
   ArmazemDeMidia,
   MotivoDeRecusaDaMidia,
@@ -581,6 +613,8 @@ export type ResultadoDeSalvarPreferencias =
  * (FR-044, FR-045, FR-107).
  */
 export interface Acervo {
+  previaDaExportacao(pedido: PedidoDeExportacao): Promise<ResultadoDePreviaDaExportacao>;
+  exportar(pedido: PedidoDeGeracaoDeExportacao): Promise<ResultadoDeExportacao>;
   importarBaralhos(grupos: Array<{ nome: string; cartoes: Array<{ frente: string; verso: string; tags: string[] }> }>): Promise<{ ok: boolean; erro?: string; mensagem?: string }>;
   criarCartao(
     baralhoId: string,
@@ -1316,6 +1350,70 @@ export function criarAcervo(
   /** O instante de agora: toda decisão que depende de «hoje» passa por aqui. */
   const relogio = opcoes.agora ?? (() => new Date());
 
+  async function lerSnapshotExportacao(pedido: PedidoDeExportacao) {
+    if (pedido.formato !== "apkg" || (pedido.baralhos !== "todos" &&
+      (!Array.isArray(pedido.baralhos) || pedido.baralhos.length === 0 ||
+        pedido.baralhos.some((id) => typeof id !== "string" || !id) ||
+        new Set(pedido.baralhos).size !== pedido.baralhos.length))) {
+      return { ok: false as const, erro: "dados_invalidos" as const };
+    }
+    const snapshot = await armazenamento.lerAcervoParaExportacao(usuarioId, pedido.baralhos);
+    if (!snapshot.ok) return { ok: false as const, erro: snapshot.erro === "nao_encontrado" ? "nao_encontrado" as const : "exportacao_indisponivel" as const };
+    return { ok: true as const, snapshot: snapshot.valor };
+  }
+
+  function conteudoExportavel(snapshot: ConteudoArmazenado): ConteudoExportado {
+    return {
+      baralhos: snapshot.baralhos.map((baralho) => ({
+        id: baralho.id,
+        nome: baralho.nome,
+        cartoes: baralho.cartoes.map((cartao) => {
+          const agendamento = cartao.progresso;
+          const progresso = agendamento
+            ? {
+                proximaRevisaoEm: agendamento.proximaRevisaoEm,
+                ...algoritmoPorId(agendamento.algoritmo).descreverProgresso({
+                  algoritmo: agendamento.algoritmo,
+                  versao: agendamento.versaoDoAlgoritmo,
+                  dados: agendamento.estado,
+                }),
+              }
+            : null;
+          return {
+            id: cartao.id,
+            tipo: cartao.tipo ?? "frente-verso",
+            frente: cartao.frente,
+            verso: cartao.verso,
+            tags: cartao.tags ?? [],
+            ...(cartao.textoAlternativo === undefined ? {} : { descricaoAlternativa: cartao.textoAlternativo }),
+            ...((cartao.imagemChave ?? cartao.audioChave) === undefined ? {} : { midiaChave: cartao.imagemChave ?? cartao.audioChave }),
+            progresso,
+          };
+        }),
+      })),
+    };
+  }
+
+  async function medirEValidarExportacao(snapshot: ConteudoArmazenado): Promise<ResultadoDePreviaDaExportacao> {
+    const cartoes = snapshot.baralhos.flatMap((b) => b.cartoes);
+    if (!cartoes.length) return { ok: false, erro: "exportacao_vazia" };
+    if (cartoes.length > LIMITE_DE_CARTOES_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "cartoes", limite: LIMITE_DE_CARTOES_DA_EXPORTACAO };
+    if (!imagens) return { ok: false, erro: "exportacao_indisponivel" };
+    try {
+      const chaves = [...new Set(cartoes.flatMap((c) => [c.imagemChave, c.audioChave].filter((x): x is string => Boolean(x))))];
+      const bytesMidia = chaves.length ? await imagens!.medir(chaves) : 0;
+      if (bytesMidia > LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "midia", limite: LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO };
+      return { ok: true, previa: {
+        formato: "apkg", extensao: "apkg", baralhos: snapshot.baralhos.length, cartoes: cartoes.length,
+        cartoesComImagem: cartoes.filter((c) => c.tipo === "imagem").length,
+        cartoesComAudio: cartoes.filter((c) => c.tipo === "audio").length,
+        bytesEstimados: bytesMidia + cartoes.length * BYTES_ESTIMADOS_POR_CARTAO,
+      } };
+    } catch {
+      return { ok: false, erro: "exportacao_indisponivel" };
+    }
+  }
+
   /**
    * O Module `Agenda` (FR-248, FR-250) recebe a mesma Porta e o mesmo dono do
    * `Acervo`, além do relógio injetável das opções, para que a projeção da
@@ -1657,6 +1755,50 @@ export function criarAcervo(
   }
 
   return {
+    async previaDaExportacao(pedido) {
+      const lido = await lerSnapshotExportacao(pedido);
+      if (!lido.ok) return lido;
+      return medirEValidarExportacao(lido.snapshot);
+    },
+
+    async exportar(pedido) {
+      if (!ehFusoValido(pedido.fuso) || !["pt", "en", "es"].includes(pedido.idioma)) {
+        return { ok: false, erro: "dados_invalidos" };
+      }
+      const lido = await lerSnapshotExportacao(pedido);
+      if (!lido.ok) return lido;
+      const previa = await medirEValidarExportacao(lido.snapshot);
+      if (!previa.ok) return previa;
+      const conteudo = conteudoExportavel(lido.snapshot);
+      const chaves = [...new Set(conteudo.baralhos.flatMap((b) => b.cartoes.map((c) => c.midiaChave).filter((x): x is string => Boolean(x))))];
+      const bytesPorChave = new Map<string, Uint8Array | null>();
+      try {
+        for (let inicio = 0; inicio < chaves.length; inicio += 16) {
+          const lote = chaves.slice(inicio, inicio + 16);
+          const lidos = await Promise.all(lote.map((chave) => imagens!.ler(chave)));
+          lote.forEach((chave, indice) => bytesPorChave.set(chave, lidos[indice] ?? null));
+        }
+        const instante = relogio();
+        const pacote = await gerarPacoteAnki(conteudo, "apkg", {
+          idioma: pedido.idioma,
+          fuso: pedido.fuso,
+          agora: instante,
+          lerMidia: async (chave) => bytesPorChave.get(chave) ?? null,
+        });
+        const data = new Intl.DateTimeFormat("en-CA", { timeZone: pedido.fuso, year: "numeric", month: "2-digit", day: "2-digit" }).format(instante);
+        const nome = conteudo.baralhos.length === 1
+          ? nomeDoArquivoDeExportacao(conteudo.baralhos[0]!.nome)
+          : nomeDoArquivoDeExportacao(`Exportacao-${data}`);
+        const endereco = await imagens!.guardarExportacao(usuarioId, pacote.bytes, nome, "application/octet-stream");
+        return { ok: true, url: endereco.url, nomeDoArquivo: nome, expiraEm: endereco.expiraEm,
+          baralhos: conteudo.baralhos.length,
+          cartoes: conteudo.baralhos.reduce((soma, b) => soma + b.cartoes.length, 0),
+          cartoesSemMidia: pacote.cartoesSemMidia };
+      } catch {
+        return { ok: false, erro: "exportacao_indisponivel" };
+      }
+    },
+
     async criarCartao(baralhoId, dados) {
       const tipo = dados.tipo ?? "frente-verso";
       const regras = regrasDo(tipo);

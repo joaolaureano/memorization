@@ -89,6 +89,17 @@ export type ResultadoDaConfirmacao =
   | { ok: false; motivo: MotivoDeRecusaDaMidia };
 
 export interface ArmazemDeMidia {
+  /** Lê bytes de mídia ativa; objeto ausente é null, falhas de storage propagam. */
+  ler(chave: string): Promise<Uint8Array | null>;
+  /** Soma os tamanhos existentes das chaves informadas. */
+  medir(chaves: readonly string[]): Promise<number>;
+  /** Guarda e assina um pacote de exportação para download. */
+  guardarExportacao(
+    usuarioId: string,
+    bytes: Uint8Array,
+    nomeDoArquivo: string,
+    tipoDeConteudo: string,
+  ): Promise<EnderecoDeLeitura>;
   /** Prepara o envio de uma Mídia nova do Usuário, válido por 5 minutos. */
   prepararEnvio(usuarioId: string, midia: Midia): Promise<EnvioPreparado>;
 

@@ -405,7 +405,9 @@ export function bateriaDaPorta(
         expect(await armazenamento().listarMidiaARemover(10)).toEqual(["k1"]);
 
         expect((await aberto.usuarios.excluirUsuario(DONO_UM)).ok).toBe(true);
-        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual(["k1", "k2"]);
+        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual([
+          "exportacoes/dono-um", "k1", "k2",
+        ]);
       });
 
       it("enfileira por pedido explícito, sem repetir a chave (FR-423)", async () => {
@@ -510,6 +512,38 @@ export function bateriaDaPorta(
         expect((await armazenamento().inserirRegistroDeSessao(DONO_UM, registro)).ok).toBe(true);
         const lido = await armazenamento().obterRegistroDeSessao(DONO_UM, "r-audio");
         expect(lido.ok && lido.valor.itens).toEqual(registro.itens);
+      });
+    });
+
+    describe("snapshot para exportação", () => {
+      it("lê apenas Baralhos do dono, mantém ordem e inclui o progresso", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("exp-1", "Um"));
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("exp-2", "Vazio"));
+        await armazenamento().inserirBaralho(DONO_DOIS, baralhoDe("exp-alheio", "Privado"));
+        await guardarCartao(DONO_UM, { ...cartaoDe("exp-card"), tags: ["a"], tipo: "frente-verso" }, "exp-1");
+        await guardarCartao(DONO_DOIS, cartaoDe("exp-foreign"), "exp-alheio");
+        const agendamento = agendamentoDe("exp-card");
+        await armazenamento().substituirAgendamentos(DONO_UM, { algoritmo: "sm2" }, [agendamento]);
+
+        const todos = await armazenamento().lerAcervoParaExportacao(DONO_UM, "todos");
+        expect(todos.ok).toBe(true);
+        if (!todos.ok) return;
+        expect(todos.valor.baralhos.map((b) => b.id)).toEqual(["exp-1", "exp-2"]);
+        expect(todos.valor.baralhos[0]?.cartoes[0]).toMatchObject({
+          id: "exp-card", tags: ["a"], progresso: {
+            algoritmo: "sm2", versaoDoAlgoritmo: 1,
+            proximaRevisaoEm: agendamento.proximaRevisaoEm,
+          },
+        });
+        expect(todos.valor.baralhos[1]?.cartoes).toEqual([]);
+        expect(await armazenamento().lerAcervoParaExportacao(DONO_UM, ["exp-1"])).toMatchObject({ ok: true, valor: { baralhos: [{ id: "exp-1" }] } });
+      });
+
+      it("recusa id inexistente ou de outro dono sem devolver snapshot parcial", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("exp-own"));
+        await armazenamento().inserirBaralho(DONO_DOIS, baralhoDe("exp-foreign"));
+        expect(await armazenamento().lerAcervoParaExportacao(DONO_UM, ["exp-own", "missing"])).toEqual({ ok: false, erro: "nao_encontrado" });
+        expect(await armazenamento().lerAcervoParaExportacao(DONO_UM, ["exp-foreign"])).toEqual({ ok: false, erro: "nao_encontrado" });
       });
     });
 

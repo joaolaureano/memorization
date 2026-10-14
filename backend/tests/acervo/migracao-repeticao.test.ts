@@ -220,6 +220,7 @@ function criarAlgoritmoFalso(id: string): AlgoritmoEspiao {
       { chave: "bom", rotulo: "Bom", resultado: "acertou" },
       { chave: "facil", rotulo: "Fácil", resultado: "acertou" },
     ],
+    descreverProgresso() { return { repeticoes: 0, intervaloEmDias: 0, facilidade: 2.5 }; },
     get chamadas(): number {
       return chamadas;
     },

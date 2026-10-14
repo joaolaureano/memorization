@@ -7,6 +7,7 @@ import type { Page } from "@playwright/test";
 import {
   aguardarApiPronta,
   aguardarProntidao,
+  aplicarZoomDeProva,
   criarBaralhoPelaApi,
   criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
@@ -583,6 +584,7 @@ test("T057: formulário, lista e estudo com Áudio sem rolagem horizontal e com 
 
       // Formulário com o Áudio escolhido.
       await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/${baralho.id}/cartoes/novo`);
+      await aplicarZoomDeProva(page, zoom);
       await page.getByLabel("Tipo de cartão").selectOption("audio");
       await page.getByLabel("Áudio", { exact: true }).setInputFiles({
         name: "pre-escuta-com-nome-longo-para-quebrar-a-linha.wav",
@@ -590,9 +592,6 @@ test("T057: formulário, lista e estudo com Áudio sem rolagem horizontal e com 
         buffer: wav(3),
       });
       await expect(page.getByRole("button", { name: "Tocar áudio", exact: true })).toBeVisible();
-      if (zoom === 2) {
-        await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = "2"; });
-      }
       await semRolagemHorizontal(page, `formulário ${rotulo}`);
       await alvoDeAoMenos44(page, ".previa-do-audio .tocador__botao", `formulário ${rotulo}`);
       // Sair com o arquivo escolhido pede para descartá-lo.
@@ -603,9 +602,6 @@ test("T057: formulário, lista e estudo com Áudio sem rolagem horizontal e com 
       // Lista do Baralho.
       await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/${baralho.id}`);
       await expect(page.getByRole("region", { name: "Cartões do Baralho" }).getByText("Verso de layout")).toBeVisible();
-      if (zoom === 2) {
-        await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = "2"; });
-      }
       await semRolagemHorizontal(page, `lista ${rotulo}`);
       await alvoDeAoMenos44(page, ".linha-da-lista .tocador__botao", `lista ${rotulo}`);
 
@@ -613,14 +609,11 @@ test("T057: formulário, lista e estudo com Áudio sem rolagem horizontal e com 
       await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
       await page.getByRole("button", { name: "Todos os cartões", exact: true }).click();
       await expect(page.locator("article").getByRole("button", { name: "Tocar áudio", exact: true })).toBeVisible();
-      if (zoom === 2) {
-        await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = "2"; });
-      }
       await semRolagemHorizontal(page, `estudo ${rotulo}`);
       await alvoDeAoMenos44(page, "article .tocador__botao", `estudo ${rotulo}`);
 
-      await page.locator("html").evaluate((html) => { (html as HTMLElement).style.zoom = ""; });
       await interromperSessao(page);
+      await aplicarZoomDeProva(page, 1);
     }
   } finally {
     await ambiente.encerrar();

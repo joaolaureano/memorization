@@ -41,6 +41,12 @@ export interface AlgoritmoDeRepeticao {
   readonly rotulo: string; // "SM-2"
   /** Opções de Avaliação oferecidas por este algoritmo (FR-191, FR-192). */
   readonly opcoesDeAvaliacao: readonly OpcaoDeAvaliacao[];
+  /** Lê o progresso de estudo sem expor o estado opaco do algoritmo. */
+  descreverProgresso(estado: EstadoDoAgendamento | null): {
+    repeticoes: number;
+    intervaloEmDias: number;
+    facilidade: number;
+  };
   /** Pura: sem relógio, sem I/O. `estado === null` = Cartão novo. */
   avaliar(
     estado: EstadoDoAgendamento | null,

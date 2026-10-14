@@ -86,6 +86,10 @@ interface FocoAposExclusao {
   proximoCartaoId: string | null;
 }
 
+type Anuncio =
+  | { tipo: "cartao-criado"; frente: string }
+  | { tipo: "texto"; texto: string };
+
 
 export function PaginaDoBaralho({
   cliente,
@@ -101,7 +105,7 @@ export function PaginaDoBaralho({
   const [baralhoNaoEncontrado, setBaralhoNaoEncontrado] = useState<
     string | null
   >(null);
-  const [anuncio, setAnuncio] = useState<string | null>(null);
+  const [anuncio, setAnuncio] = useState<Anuncio | null>(null);
   const [sequenciaDeAnuncio, setSequenciaDeAnuncio] = useState(0);
   const [excluindoCartao, setExcluindoCartao] = useState<string | null>(null);
   const [focoAposExclusaoDeCartao, setFocoAposExclusaoDeCartao] =
@@ -171,7 +175,7 @@ export function PaginaDoBaralho({
         }
         const aviso = consumirAvisoDeCartao(id);
         if (aviso !== null) {
-          setAnuncio(aviso);
+          setAnuncio({ tipo: "cartao-criado", frente: aviso });
           setSequenciaDeAnuncio((atual) => atual + 1);
         }
       } else {
@@ -312,9 +316,10 @@ export function PaginaDoBaralho({
     }
 
     setBaralho(releitura.baralho);
-    setAnuncio(
-      textos.baralhos.cartaoExcluidoAnuncio(cartaoParaExcluir.frente),
-    );
+    setAnuncio({
+      tipo: "texto",
+      texto: textos.baralhos.cartaoExcluidoAnuncio(cartaoParaExcluir.frente),
+    });
     setSequenciaDeAnuncio((atual) => atual + 1);
     setFocoAposExclusaoDeCartao({
       cartaoId: cartaoParaExcluir.id,
@@ -451,6 +456,7 @@ export function PaginaDoBaralho({
           // nenhum: o botão fica desabilitado e a explicação vem ao lado. Criar
           // Cartão é sempre acessível (FR-392).
           <div className="acoes">
+            <a className="botao botao--secundario" href={`#/baralhos/exportar?baralho=${encodeURIComponent(id)}`}>{textos.exportacao.titulo}</a>
             {quantidadeDeCartoes === 0 ? (
               <button
                 type="button"
@@ -613,7 +619,11 @@ export function PaginaDoBaralho({
               aria-live="polite"
               aria-atomic="true"
             >
-              {anuncio}
+              {anuncio.tipo === "cartao-criado" ? (
+                textos.cartao.cartaoCriado(anuncio.frente)
+              ) : (
+                <TextoDoProduto texto={anuncio.texto} />
+              )}
             </p>
           )}
 
