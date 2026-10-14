@@ -82,7 +82,7 @@ describe("obterBaralho — leitura pela Interface", () => {
     expect(await acervo.obterBaralho("baralho-inexistente")).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 

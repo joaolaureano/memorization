@@ -9,6 +9,7 @@ declare module "node:fs" {
   export function readFileSync(caminho: string, opcoes: "utf8"): string;
   export function readdirSync(caminho: string): string[];
   export function existsSync(caminho: string): boolean;
+  export function statSync(caminho: string): { isDirectory(): boolean };
   export function mkdtempSync(prefixo: string): string;
   export function rmSync(caminho: string, opcoes: { recursive: boolean; force: boolean }): void;
 }

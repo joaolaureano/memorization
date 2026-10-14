@@ -150,7 +150,7 @@ describe("excluirCartao — exclusão pela Interface", () => {
     expect(await acervo.excluirCartao("cartao-inexistente")).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Cartão não encontrado.",
+      mensagem: "Not found.",
     });
   });
 

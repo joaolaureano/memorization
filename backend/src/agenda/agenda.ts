@@ -17,7 +17,6 @@ import {
 } from "./datas.ts";
 import {
   acrescentarVersao,
-  descreverDias,
   versaoAtual,
   versaoQueProgramaEm,
 } from "./projecao.ts";
@@ -79,15 +78,15 @@ export interface Agenda {
   ): Promise<ResultadoDeIniciarCompromisso>;
 }
 
-const MENSAGEM_DE_DATA_INVALIDA = "A data informada não é uma data válida.";
+const MENSAGEM_DE_DATA_INVALIDA = "The date is invalid.";
 const MENSAGEM_DE_INICIO_NAO_SEGUNDA =
-  "A data de início precisa ser uma segunda-feira.";
+  "The start date must be a Monday.";
 const MENSAGEM_DE_FUSO_INVALIDO =
-  "O fuso horário informado não é um fuso IANA válido.";
+  "The time zone is invalid.";
 const MENSAGEM_DE_OPERACAO_VAZIA =
-  "O identificador da operação não pode ser vazio.";
+  "The operation ID cannot be empty.";
 const MENSAGEM_DE_ARMAZENAMENTO_INDISPONIVEL =
-  "O armazenamento não está disponível. Tente novamente.";
+  "Storage is unavailable. Try again.";
 
 const ARMAZENAMENTO_INDISPONIVEL: FalhaDeAgenda = {
   ok: false,
@@ -106,12 +105,23 @@ const ACOES: readonly AcaoDeRotina[] = [
   "excluir",
 ];
 
-/** Recusa por entrada inválida, com a mensagem em português (FR-250). */
+/**
+ * Recusa por entrada inválida (FR-250): código, `motivo` estável e mensagem
+ * técnica em inglês; o texto para a pessoa vem da interface (027, FR-019).
+ */
 function recusar(
   erro: FalhaDeAgenda["erro"],
+  motivo: string,
   mensagem: string,
+  dias?: number[],
 ): FalhaDeAgenda {
-  return { ok: false, erro, mensagem };
+  return {
+    ok: false,
+    erro,
+    motivo,
+    mensagem,
+    ...(dias !== undefined ? { dias } : {}),
+  };
 }
 
 /** Configuração completa de uma Rotina, já validada (FR-224). */
@@ -136,7 +146,7 @@ function interpretarConfiguracao(
   };
 
   if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
-    return recusar("dados_invalidos", "Escolha um Baralho para a Rotina.");
+    return recusar("dados_invalidos", "baralho_ausente", "Choose a deck for the routine.");
   }
 
   if (
@@ -147,10 +157,7 @@ function interpretarConfiguracao(
     ) ||
     new Set(dias).size !== dias.length
   ) {
-    return recusar(
-      "dados_invalidos",
-      "Escolha ao menos um dia da semana, sem repetir dias.",
-    );
+    return recusar("dados_invalidos", "dias_invalidos", "Choose at least one weekday, without repeating days.");
   }
 
   if (
@@ -160,10 +167,7 @@ function interpretarConfiguracao(
       quantidade < 1 ||
       quantidade > QUANTIDADE_MAXIMA)
   ) {
-    return recusar(
-      "dados_invalidos",
-      "A quantidade precisa ser um número inteiro de 1 a 999, ou Todos os Cartões.",
-    );
+    return recusar("dados_invalidos", "quantidade_invalida", "The quantity must be an integer from 1 to 999, or all cards.");
   }
 
   return {
@@ -402,22 +406,24 @@ export function criarAgenda(
 
     return recusar(
       "sobreposicao",
-      `Já existe uma Rotina ativa deste Baralho em ${descreverDias([...comuns])}. Confirme para criar estudos independentes nesses dias.`,
+      "sobreposicao",
+      "An active routine for this deck already exists on the same days. Confirm to create independent studies on those days.",
+      [...comuns].sort((a, b) => a - b),
     );
   }
 
   return {
     async obterAgenda(inicio, fuso) {
       if (typeof inicio !== "string" || !ehDataCivilValida(inicio)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_DATA_INVALIDA);
+        return recusar("dados_invalidos", "data_invalida", MENSAGEM_DE_DATA_INVALIDA);
       }
 
       if (!ehSegundaFeira(inicio)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_INICIO_NAO_SEGUNDA);
+        return recusar("dados_invalidos", "inicio_nao_segunda", MENSAGEM_DE_INICIO_NAO_SEGUNDA);
       }
 
       if (typeof fuso !== "string" || !ehFusoValido(fuso)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_FUSO_INVALIDO);
+        return recusar("dados_invalidos", "fuso_invalido", MENSAGEM_DE_FUSO_INVALIDO);
       }
 
       const hoje = hojeNoFuso(fuso, agora());
@@ -480,20 +486,20 @@ export function criarAgenda(
 
     async salvarRotina(dados) {
       if (typeof dados.fuso !== "string" || !ehFusoValido(dados.fuso)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_FUSO_INVALIDO);
+        return recusar("dados_invalidos", "fuso_invalido", MENSAGEM_DE_FUSO_INVALIDO);
       }
 
       if (
         typeof dados.operacaoId !== "string" ||
         dados.operacaoId.trim().length === 0
       ) {
-        return recusar("dados_invalidos", MENSAGEM_DE_OPERACAO_VAZIA);
+        return recusar("dados_invalidos", "operacao_vazia", MENSAGEM_DE_OPERACAO_VAZIA);
       }
 
       const acao = dados.acao;
 
       if (!ACOES.includes(acao)) {
-        return recusar("dados_invalidos", "A ação da Rotina não é válida.");
+        return recusar("dados_invalidos", "acao_invalida", "The routine action is invalid.");
       }
 
       const exigeConfiguracao = acao === "criar" || acao === "editar";
@@ -507,7 +513,7 @@ export function criarAgenda(
 
       if (acao !== "criar") {
         if (typeof dados.id !== "string" || dados.id.trim().length === 0) {
-          return recusar("dados_invalidos", "Informe a Rotina da operação.");
+          return recusar("dados_invalidos", "rotina_ausente", "The operation routine is missing.");
         }
 
         if (
@@ -515,10 +521,7 @@ export function criarAgenda(
           !Number.isInteger(dados.versao) ||
           dados.versao < 1
         ) {
-          return recusar(
-            "dados_invalidos",
-            "Informe a versão da Rotina que você viu.",
-          );
+          return recusar("dados_invalidos", "versao_ausente", "The routine version you saw is missing.");
         }
       }
 
@@ -545,10 +548,7 @@ export function criarAgenda(
 
         if (anterior.ok) {
           if (anterior.valor.intencao !== intencao) {
-            return recusar(
-              "conflito",
-              "Este identificador de operação já foi usado por outra operação.",
-            );
+            return recusar("conflito", "operacao_reutilizada", "This operation ID was already used by another operation.");
           }
 
           return {
@@ -574,25 +574,22 @@ export function criarAgenda(
           existente = rotinas.find((rotina) => rotina.id === dados.id) ?? null;
 
           if (existente === null || existente.estado === "excluida") {
-            return recusar("nao_encontrado", "Rotina não encontrada.");
+            return recusar("nao_encontrado", "rotina_nao_encontrada", "Routine not found.");
           }
 
           if (existente.versao !== dados.versao) {
-            return recusar(
-              "conflito",
-              "A Rotina foi alterada em outro lugar. Revise os valores atuais antes de salvar.",
-            );
+            return recusar("conflito", "versao_desatualizada", "The routine was changed elsewhere. Review the current values before saving.");
           }
         }
 
         const atual = existente === null ? null : versaoAtual(existente);
 
         if (acao === "pausar" && existente?.estado !== "ativa") {
-          return recusar("dados_invalidos", "A Rotina já está pausada.");
+          return recusar("dados_invalidos", "rotina_ja_pausada", "The routine is already paused.");
         }
 
         if (acao === "retomar" && existente?.estado !== "pausada") {
-          return recusar("dados_invalidos", "A Rotina não está pausada.");
+          return recusar("dados_invalidos", "rotina_nao_pausada", "The routine is not paused.");
         }
 
         // Baralho próprio e elegível na criação e na troca (FR-223).
@@ -603,14 +600,11 @@ export function criarAgenda(
           const baralho = baralhos.get(configuracao.baralhoId);
 
           if (baralho === undefined) {
-            return recusar("nao_encontrado", "Baralho não encontrado.");
+            return recusar("nao_encontrado", "baralho_nao_encontrado", "Deck not found.");
           }
 
           if (baralho.cartoes === 0) {
-            return recusar(
-              "dados_invalidos",
-              "O Baralho escolhido não tem Cartões. Adicione Cartões a ele antes de agendar.",
-            );
+            return recusar("dados_invalidos", "baralho_sem_cartoes", "The chosen deck has no cards. Add cards before scheduling.");
           }
         }
 
@@ -742,17 +736,11 @@ export function criarAgenda(
         if (!resultado.ok) {
           switch (resultado.erro) {
             case "nao_encontrado":
-              return recusar("nao_encontrado", "Rotina não encontrada.");
+              return recusar("nao_encontrado", "rotina_nao_encontrada", "Routine not found.");
             case "conflito_de_versao":
-              return recusar(
-                "conflito",
-                "A Rotina foi alterada em outro lugar. Revise os valores atuais antes de salvar.",
-              );
+              return recusar("conflito", "versao_desatualizada", "The routine was changed elsewhere. Review the current values before saving.");
             case "conflito":
-              return recusar(
-                "conflito",
-                "Este identificador de operação já foi usado por outra operação.",
-              );
+              return recusar("conflito", "operacao_reutilizada", "This operation ID was already used by another operation.");
             default:
               return ARMAZENAMENTO_INDISPONIVEL;
           }
@@ -770,18 +758,18 @@ export function criarAgenda(
 
     async iniciarCompromisso(dados) {
       if (typeof dados.data !== "string" || !ehDataCivilValida(dados.data)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_DATA_INVALIDA);
+        return recusar("dados_invalidos", "data_invalida", MENSAGEM_DE_DATA_INVALIDA);
       }
 
       if (typeof dados.fuso !== "string" || !ehFusoValido(dados.fuso)) {
-        return recusar("dados_invalidos", MENSAGEM_DE_FUSO_INVALIDO);
+        return recusar("dados_invalidos", "fuso_invalido", MENSAGEM_DE_FUSO_INVALIDO);
       }
 
       if (
         typeof dados.rotinaId !== "string" ||
         dados.rotinaId.trim().length === 0
       ) {
-        return recusar("dados_invalidos", "Informe a Rotina do estudo.");
+        return recusar("dados_invalidos", "rotina_do_estudo_ausente", "The study routine is missing.");
       }
 
       const hoje = hojeNoFuso(dados.fuso, agora());
@@ -789,10 +777,7 @@ export function criarAgenda(
       // Só o Compromisso de hoje pode ser iniciado: nada de recuperar o passado
       // nem antecipar o futuro pela Agenda (FR-231, FR-247).
       if (dados.data !== hoje) {
-        return recusar(
-          "dados_invalidos",
-          "Só é possível iniciar o estudo programado para hoje.",
-        );
+        return recusar("dados_invalidos", "estudo_fora_de_hoje", "Only today's scheduled study can be started.");
       }
 
       try {
@@ -803,7 +788,7 @@ export function criarAgenda(
 
         if (!rotina.ok) {
           return rotina.erro === "nao_encontrado"
-            ? recusar("nao_encontrado", "Rotina não encontrada.")
+            ? recusar("nao_encontrado", "rotina_nao_encontrada", "Routine not found.")
             : ARMAZENAMENTO_INDISPONIVEL;
         }
 
@@ -815,8 +800,8 @@ export function criarAgenda(
 
         if (persistido.ok) {
           return persistido.valor.estado === "concluido"
-            ? recusar("conflito", "Este estudo já foi concluído.")
-            : recusar("nao_encontrado", "Este estudo foi cancelado.");
+            ? recusar("conflito", "estudo_concluido", "This study was already completed.")
+            : recusar("nao_encontrado", "estudo_cancelado", "This study was canceled.");
         }
 
         if (persistido.erro === "indisponivel") {
@@ -826,10 +811,7 @@ export function criarAgenda(
         const versao = versaoQueProgramaEm(rotina.valor, dados.data);
 
         if (versao === null) {
-          return recusar(
-            "nao_encontrado",
-            "Não há estudo programado para esta Rotina hoje.",
-          );
+          return recusar("nao_encontrado", "sem_estudo_hoje", "There is no scheduled study for this routine today.");
         }
 
         const baralho = await armazenamento.obterBaralho(
@@ -841,7 +823,8 @@ export function criarAgenda(
           return baralho.erro === "nao_encontrado"
             ? recusar(
                 "conflito",
-                "O Baralho desta Rotina foi excluído. Ajuste a Rotina para voltar a estudar.",
+                "baralho_da_rotina_excluido",
+                "This routine's deck was deleted. Adjust the routine to study again.",
               )
             : ARMAZENAMENTO_INDISPONIVEL;
         }
@@ -854,7 +837,8 @@ export function criarAgenda(
         if (disponiveis.length === 0) {
           return recusar(
             "conflito",
-            "O Baralho desta Rotina não tem Cartões. Adicione Cartões ou ajuste a Rotina.",
+            "baralho_da_rotina_sem_cartoes",
+            "This routine's deck has no cards. Add cards or adjust the routine.",
           );
         }
 
@@ -881,7 +865,7 @@ export function criarAgenda(
 
         if (!gravado.ok) {
           return gravado.erro === "nao_encontrado"
-            ? recusar("nao_encontrado", "Rotina não encontrada.")
+            ? recusar("nao_encontrado", "rotina_nao_encontrada", "Routine not found.")
             : ARMAZENAMENTO_INDISPONIVEL;
         }
 

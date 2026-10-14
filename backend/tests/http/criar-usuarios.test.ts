@@ -54,7 +54,7 @@ const ENTRADA_LOCAL = join(RAIZ_DO_BACKEND, "src", "entradas", "local.ts");
 
 const RECUSA_DE_CORPO_INVALIDO = {
   erro: "corpo_invalido",
-  mensagem: "O corpo da requisição não é válido.",
+  mensagem: "Request body is invalid.",
 };
 
 /** Uma Senha gerada com exatamente `tamanho` caracteres, para os limites. */
@@ -191,7 +191,7 @@ describe("POST /usuarios — recusas do contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toMatchObject({
       erro: "nome_de_usuario_invalido",
-      mensagem: expect.stringContaining("pelo menos 3 caracteres"),
+      mensagem: expect.stringContaining("at least 3 characters"),
     });
   });
 
@@ -204,7 +204,7 @@ describe("POST /usuarios — recusas do contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toMatchObject({
       erro: "nome_de_usuario_invalido",
-      mensagem: expect.stringContaining("no máximo 50 caracteres"),
+      mensagem: expect.stringContaining("at most 50 characters"),
     });
   });
 
@@ -218,7 +218,7 @@ describe("POST /usuarios — recusas do contrato", () => {
       expect(resposta.statusCode, nomeDeUsuario).toBe(400);
       expect(resposta.json()).toMatchObject({
         erro: "nome_de_usuario_invalido",
-        mensagem: expect.stringContaining("letras de A a Z"),
+        mensagem: expect.stringContaining("A-Z"),
       });
     }
   });
@@ -233,7 +233,7 @@ describe("POST /usuarios — recusas do contrato", () => {
       expect(resposta.statusCode).toBe(400);
       expect(resposta.json()).toMatchObject({
         erro: "senha_invalida",
-        mensagem: expect.stringContaining("entre 8 e 128 caracteres"),
+        mensagem: expect.stringContaining("between 8 and 128 characters"),
       });
       expect(resposta.body).not.toContain(senha);
     }
@@ -253,7 +253,7 @@ describe("POST /usuarios — recusas do contrato", () => {
     expect(resposta.statusCode).toBe(409);
     expect(resposta.json()).toMatchObject({
       erro: "nome_de_usuario_existente",
-      mensagem: expect.stringContaining("já existe"),
+      mensagem: expect.stringContaining("already exists"),
     });
   });
 
@@ -333,7 +333,7 @@ describe("POST /usuarios — armazenamento indisponível", () => {
       expect(resposta.statusCode).toBe(503);
       expect(resposta.json()).toEqual({
         erro: "indisponivel",
-        mensagem: "O armazenamento não está disponível. Tente novamente.",
+        mensagem: "Storage is unavailable. Try again.",
       });
     } finally {
       await outro.close();

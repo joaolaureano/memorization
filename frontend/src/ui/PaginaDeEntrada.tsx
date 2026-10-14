@@ -1,3 +1,5 @@
+import { TextoDoProduto } from "../idioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -6,6 +8,7 @@ import type {
   Credencial,
   Usuario,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import { CampoDeSenha } from "./CampoDeSenha";
 
 /**
@@ -52,14 +55,13 @@ export interface AvisoDaEntrada {
  * A conclusão de «Excluir conta», anunciada na tela "Entrar" (017, FR-276):
  * a Credencial foi descartada junto com a conta.
  */
-export const MENSAGEM_DE_CONTA_EXCLUIDA =
-  "Conta excluída. Todos os dados do Usuário foram removidos.";
+export const MENSAGEM_DE_CONTA_EXCLUIDA = MENSAGENS_PT.contaExcluida;
 
 /**
  * A conclusão de Sair, anunciada na tela "Entrar" como status acessível
  * (FR-096; 020, FR-327): o texto exato é «Você saiu com sucesso.».
  */
-export const MENSAGEM_DE_SAIDA = "Você saiu com sucesso.";
+export const MENSAGEM_DE_SAIDA = MENSAGENS_PT.saida;
 
 /**
  * O que a tela entrega a quem passará a manter o acesso (018): quem entrou e se
@@ -133,10 +135,12 @@ export function PaginaDeEntrada({
     campoDaSenha.current?.focus();
   }
 
+  const { textos } = useIdioma();
+
   return (
     <section className="acesso">
       <div className="cartao">
-        <h1>Entrar</h1>
+        <h1>{textos.acesso.entrar_rotulo}</h1>
 
         {aviso !== null &&
           (aviso.tipo !== "falha" ? (
@@ -150,10 +154,10 @@ export function PaginaDeEntrada({
               aria-live="polite"
               aria-atomic="true"
               aria-label={
-                aviso.tipo === "saida" ? "Saída concluída" : "Conta excluída"
+                aviso.tipo === "saida" ? textos.acesso.aria_saida_concluida : textos.acesso.aria_conta_excluida
               }
             >
-              {aviso.texto}
+              <TextoDoProduto texto={aviso.texto} />
             </p>
           ) : (
             // FR-091 e FR-096: a recusa que descartou a Credencial chega como
@@ -161,9 +165,9 @@ export function PaginaDeEntrada({
             <p
               className="aviso aviso--erro"
               role="alert"
-              aria-label="Credencial recusada"
+              aria-label={textos.acesso.aria_credencial_recusada}
             >
-              {aviso.texto}
+              <TextoDoProduto texto={aviso.texto} />
             </p>
           ))}
 
@@ -176,9 +180,9 @@ export function PaginaDeEntrada({
           <p
             className="aviso aviso--erro"
             role="alert"
-            aria-label="Falha ao Entrar"
+            aria-label={textos.acesso.aria_falha_ao_entrar}
           >
-            {falha}
+            <TextoDoProduto texto={falha} />
           </p>
         )}
 
@@ -188,7 +192,7 @@ export function PaginaDeEntrada({
               className="rotulo"
               htmlFor="campo-nome-de-usuario-da-entrada"
             >
-              Nome de usuário
+              {textos.acesso.nomeDeUsuario}
             </label>
             <input
               id="campo-nome-de-usuario-da-entrada"
@@ -202,7 +206,7 @@ export function PaginaDeEntrada({
 
           <CampoDeSenha
             id="campo-senha-da-entrada"
-            rotulo="Senha"
+            rotulo={textos.acesso.senha}
             valor={senha}
             aoMudar={(valor) => setSenha(valor)}
             autoComplete="current-password"
@@ -221,7 +225,7 @@ export function PaginaDeEntrada({
                 checked={continuarConectado}
                 onChange={(evento) => setContinuarConectado(evento.target.checked)}
               />
-              <span>Continuar conectado neste navegador</span>
+              <span>{textos.acesso.continuarConectado}</span>
             </label>
           </div>
 
@@ -230,12 +234,12 @@ export function PaginaDeEntrada({
             type="submit"
             disabled={submetendo}
           >
-            {submetendo ? "Entrando…" : "Entrar"}
+            {submetendo ? textos.acesso.entrando : textos.acesso.botaoEntrar}
           </button>
         </form>
 
         <p className="ajuda">
-          Ainda não tem conta? <a href="#/criar-conta">Criar conta</a>
+          {textos.acesso.ainda_nao_tem_conta} <a href="#/criar-conta">{textos.acesso.link_criar_conta}</a>
         </p>
       </div>
     </section>

@@ -5,18 +5,20 @@
  * tela. Vive só na memória do módulo — nada vai para o armazenamento do
  * navegador.
  */
-let pendente: string | null = null;
+let pendente: ((textos: { salvarRotina: string }) => string) | null = null;
 
 /** Deixa o aviso para a próxima tela de Gerenciar agenda. */
-export function deixarAvisoDaAgenda(mensagem: string): void {
-  pendente = mensagem;
+export function deixarAvisoDaAgenda(
+  mensagemFn: (textos: { salvarRotina: string }) => string,
+): void {
+  pendente = mensagemFn;
 }
 
 /** Entrega o aviso pendente e o esquece. */
-export function receberAvisoDaAgenda(): string | null {
+export function receberAvisoDaAgenda(textos: { salvarRotina: string }): string | null {
   const aviso = pendente;
 
   pendente = null;
 
-  return aviso;
+  return aviso ? aviso(textos) : null;
 }

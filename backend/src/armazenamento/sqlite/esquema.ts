@@ -107,7 +107,7 @@ export function aplicarMigracoes(
         banco.prepare("PRAGMA foreign_key_check;").all().length > 0
       ) {
         throw new Error(
-          `A migração ${migracao.versao} deixaria chaves estrangeiras órfãs.`,
+          `Migration ${migracao.versao} would leave orphaned foreign keys.`,
         );
       }
       elevarVersao.run(migracao.versao);

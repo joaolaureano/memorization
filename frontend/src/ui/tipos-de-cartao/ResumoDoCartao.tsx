@@ -1,7 +1,8 @@
+import { useIdioma, type Catalogo } from "../../idioma";
 import type { ReactNode } from "react";
 
 import type { Cartao } from "../../acervo-cliente/cliente";
-import { regrasDo, textoAlternativoDa, tipoDo } from "../../acervo-cliente/tipos-de-cartao";
+import { textoAlternativoDa, tipoDo } from "../../acervo-cliente/tipos-de-cartao";
 import { ImagemDoCartao } from "./ImagemDoCartao";
 
 /**
@@ -18,6 +19,7 @@ export function ResumoDoCartao({
   aoFalharImagem?: () => void;
   children?: ReactNode;
 }) {
+  const { textos } = useIdioma();
   const tipo = tipoDo(cartao);
 
   return (
@@ -25,14 +27,14 @@ export function ResumoDoCartao({
       {tipo === "imagem" && (
         <ImagemDoCartao
           url={cartao.imagem?.url ?? null}
-          textoAlternativo={textoAlternativoDa(cartao)}
+          textoAlternativo={textoAlternativoDa(cartao, textos.cartao.imagemSemDescricao)}
           descricao={cartao.textoAlternativo}
           variante="miniatura"
           aoFalhar={aoFalharImagem}
         />
       )}
       <div className="linha-da-lista__conteudo">
-        <span className="selo selo--tipo">{regrasDo(tipo).rotulo}</span>
+        <span className="selo selo--tipo">{textos.cartao.nomeDoTipo[tipo]}</span>
         {(tipo !== "imagem" || cartao.frente.trim() !== "") && (
           <p className="linha-da-lista__titulo">{cartao.frente}</p>
         )}
@@ -44,6 +46,8 @@ export function ResumoDoCartao({
 }
 
 /** Como o Cartão é nomeado em ações e anúncios (FR-426). */
-export function rotuloDoCartao(cartao: Cartao): string {
-  return tipoDo(cartao) === "imagem" ? textoAlternativoDa(cartao) : cartao.frente;
+export function rotuloDoCartao(cartao: Cartao, textos: Catalogo): string {
+  return tipoDo(cartao) === "imagem"
+    ? textoAlternativoDa(cartao, textos.cartao.imagemSemDescricao)
+    : cartao.frente;
 }

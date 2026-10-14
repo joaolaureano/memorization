@@ -40,7 +40,7 @@ export class AleatoriedadeDeterministica implements Aleatoriedade {
   proximo(): number {
     if (this.indice >= this.valores.length) {
       throw new Error(
-        "A sequência determinística de Aleatoriedade terminou.",
+        "The deterministic randomness sequence is exhausted.",
       );
     }
 

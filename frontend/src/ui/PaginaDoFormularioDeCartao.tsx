@@ -1,5 +1,8 @@
+import { pt } from "../idioma/pt";
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useIdioma } from "../idioma";
 import { CampoDeTags } from "./CampoDeTags";
 
 import type {
@@ -12,7 +15,6 @@ import {
   LIMITE_DA_DESCRICAO_ALTERNATIVA,
   ORDEM_DOS_TIPOS,
   conferirArquivoDeImagem,
-  regrasDo,
   textoAlternativoDa,
 } from "../acervo-cliente/tipos-de-cartao";
 import {
@@ -92,20 +94,8 @@ const CAMPO_PARA_CORRECAO: Readonly<
   tipo_imutavel: null,
 };
 
-/** O anúncio da troca de campos, para leitores de tela (FR-425). */
-const ANUNCIO_DOS_CAMPOS: Readonly<Record<TipoDeCartao, string>> = {
-  "frente-verso": "Campos do tipo Frente-Verso",
-  imagem: "Campos do tipo Imagem",
-};
 
-export const MOTIVO_DE_PENDENCIA = "Aguarde: o Cartão está sendo salvo.";
-
-const PROTECAO_DE_DESCARTE = {
-  tipo: "descarte",
-  titulo: "Descartar as alterações?",
-  descricao: "O texto digitado será perdido.",
-  rotuloDeConfirmacao: "Descartar",
-} as const;
+export const MOTIVO_DE_PENDENCIA = pt.cartao.pendenciaDeSalvamento;
 
 interface PropriedadesDoFormularioDeCartao {
   cliente: ClienteDoAcervo;
@@ -118,6 +108,7 @@ export function PaginaDoFormularioDeCartao({
   baralhoId,
   id,
 }: PropriedadesDoFormularioDeCartao) {
+  const { textos } = useIdioma();
   const emEdicao = id !== undefined;
 
   const [carregando, setCarregando] = useState(emEdicao);
@@ -187,17 +178,42 @@ export function PaginaDoFormularioDeCartao({
 
   const navegarSemProtecao = useNavegarSemProtecao();
 
+  const avisoDeLimite = (comprimento: number): string | null => {
+    const restantes = LIMITE_DE_CARACTERES_DE_CARTAO - comprimento;
+
+    if (restantes > FOLGA_PARA_AVISO_DE_LIMITE) {
+      return null;
+    }
+
+    if (restantes < 0) {
+      return textos.cartao.aviseLimiteExcedido(LIMITE_DE_CARACTERES_DE_CARTAO);
+    }
+
+    if (restantes === 0) {
+      return textos.cartao.aviseLimiteCheio(LIMITE_DE_CARACTERES_DE_CARTAO);
+    }
+
+    return textos.cartao.aviseLimite(restantes, LIMITE_DE_CARACTERES_DE_CARTAO);
+  };
+
   // Há uma única proteção vigente e a pendência tem precedência: enquanto o
   // salvamento corre, sair é bloqueado e o motivo é anunciado (FR-154); fora
   // dele, sair com conteúdo diferente do inicial pede confirmação (FR-148).
   // Duas chamadas de `useProtecaoDeSaida` não servem aqui: a última gravaria
   // por cima da primeira e o descarte venceria a pendência, liberando a
   // navegação exatamente quando ela precisa ficar parada.
+  const protecaoDeDescarte = {
+    tipo: "descarte" as const,
+    titulo: textos.cartao.descartarAlteracoes,
+    descricao: textos.cartao.descartarTexto,
+    rotuloDeConfirmacao: textos.cartao.descartarConfirm,
+  };
+
   useProtecaoDeSaida(
     salvando
-      ? { tipo: "pendencia", motivo: MOTIVO_DE_PENDENCIA }
+      ? { tipo: "pendencia", motivo: textos.cartao.pendenciaDeSalvamento }
       : estaSujo
-        ? PROTECAO_DE_DESCARTE
+        ? protecaoDeDescarte
         : null,
   );
 
@@ -280,7 +296,10 @@ export function PaginaDoFormularioDeCartao({
     setTipo(novo);
     setCampoComErro(null);
     setFalhaDaImagem(null);
-    setAnuncio(ANUNCIO_DOS_CAMPOS[novo]);
+    const anuncio = novo === "frente-verso"
+      ? textos.cartao.anunciarFrenteVerso
+      : textos.cartao.anunciarImagem;
+    setAnuncio(anuncio);
   }
 
   function escolherTipo(novo: TipoDeCartao) {
@@ -350,7 +369,7 @@ export function PaginaDoFormularioDeCartao({
     // Na edição, a Imagem removida sem outra no lugar não pode ser salva: o
     // tipo Imagem exige uma (US3-3).
     if (ehImagem && emEdicao && imagemRemovida && arquivo === null) {
-      setFalhaDeSalvamento("Escolha uma imagem.");
+      setFalhaDeSalvamento(textos.cartao.naoEscolheuImagem);
       focarCampo("imagem");
       setSalvando(false);
       return;
@@ -359,7 +378,7 @@ export function PaginaDoFormularioDeCartao({
     let imagemId: string | undefined;
 
     if (ehImagem && arquivo !== null) {
-      setAnuncio("Enviando imagem…");
+      setAnuncio(textos.cartao.btnEnviandoImagem);
       const enviada = await cliente.enviarImagem(arquivo);
 
       if (!enviada.ok) {
@@ -395,7 +414,7 @@ export function PaginaDoFormularioDeCartao({
       if (!emEdicao) {
         guardarAvisoDeCartao(
           baralhoId,
-          `Cartão criado: ${resultado.cartao.frente || "Imagem"}.`,
+          textos.cartao.cartaoCriado(resultado.cartao.frente),
         );
       }
       // Sucesso na criação ou edição: volta para o detalhe do Baralho.
@@ -434,8 +453,8 @@ export function PaginaDoFormularioDeCartao({
   if (carregando) {
     return (
       <div className="pagina">
-        <h1>{emEdicao ? "Editar Cartão" : "Criar cartão"}</h1>
-        <EstadoDaCarga estado="carregando" mensagem="Carregando Cartões…" />
+        <h1>{emEdicao ? textos.cartao.editarCartao : textos.cartao.criarCartao}</h1>
+        <EstadoDaCarga estado="carregando" mensagem={textos.cartao.carregandoCartoes} />
       </div>
     );
   }
@@ -443,9 +462,9 @@ export function PaginaDoFormularioDeCartao({
   if (naoEncontrado) {
     return (
       <div className="pagina">
-        <h1>Cartão não encontrado</h1>
+        <h1>{textos.cartao.cartaoNaoEncontrado}</h1>
         <p className="aviso aviso--erro" role="alert">
-          O Cartão não existe ou não pertence a você.
+          {textos.cartao.cartaoNaoEncontradoMsg}
         </p>
       </div>
     );
@@ -454,7 +473,7 @@ export function PaginaDoFormularioDeCartao({
   if (falhaDeCarga !== null) {
     return (
       <div className="pagina">
-        <h1>{emEdicao ? "Editar Cartão" : "Criar cartão"}</h1>
+        <h1>{emEdicao ? textos.cartao.editarCartao : textos.cartao.criarCartao}</h1>
         <EstadoDaCarga
           estado="falha"
           mensagem={falhaDeCarga}
@@ -466,7 +485,7 @@ export function PaginaDoFormularioDeCartao({
 
   return (
     <div className="pagina">
-      <h1>{emEdicao ? "Editar Cartão" : "Criar cartão"}</h1>
+      <h1>{emEdicao ? textos.cartao.editarCartao : textos.cartao.criarCartao}</h1>
 
       <div className="cartao">
         <form className="formulario" onSubmit={salvar}>
@@ -475,11 +494,11 @@ export function PaginaDoFormularioDeCartao({
           </p>
 
           {emEdicao ? (
-            <p className="ajuda">Tipo: {regrasDo(tipo).rotulo}</p>
+            <p className="ajuda">{textos.cartao.tipoAtual(textos.cartao.nomeDoTipo[tipo])}</p>
           ) : (
             <div className="campo">
               <label htmlFor="campo-tipo" className="rotulo">
-                Tipo de cartão
+                {textos.cartao.tipoCartaoLabel}
               </label>
               <select
                 id="campo-tipo"
@@ -489,7 +508,7 @@ export function PaginaDoFormularioDeCartao({
               >
                 {ORDEM_DOS_TIPOS.map((opcao) => (
                   <option key={opcao} value={opcao}>
-                    {regrasDo(opcao).rotulo}
+                    {textos.cartao.nomeDoTipo[opcao]}
                   </option>
                 ))}
               </select>
@@ -500,7 +519,7 @@ export function PaginaDoFormularioDeCartao({
             <>
               <div className="campo">
                 <label htmlFor="campo-imagem" className="rotulo">
-                  Imagem
+                  {textos.cartao.imagemLabel}
                 </label>
                 <input
                   id="campo-imagem"
@@ -513,18 +532,18 @@ export function PaginaDoFormularioDeCartao({
                   aria-describedby={`ajuda-da-imagem${falhaDaImagem !== null ? " erro-da-imagem" : campoComErro === "imagem" ? " erro-do-formulario" : ""}`}
                 />
                 <p id="ajuda-da-imagem" className="ajuda">
-                  JPEG, PNG, WebP ou GIF, até 5 MB.
+                  {textos.cartao.imagemHint}
                 </p>
                 {falhaDaImagem !== null && (
                   <p id="erro-da-imagem" className="erro" role="alert">
-                    {falhaDaImagem}
+                    <TextoDoProduto texto={falhaDaImagem} />
                   </p>
                 )}
                 {(previa !== null || arquivo !== null || (imagemAtual !== undefined && !imagemRemovida)) && (
                   <div className="previa-da-imagem">
                     <ImagemDoCartao
                       url={previa ?? (arquivo === null ? imagemAtual?.url ?? null : null)}
-                      textoAlternativo={arquivo?.name ?? textoAlternativoDa({ frente, textoAlternativo })}
+                      textoAlternativo={arquivo?.name ?? textoAlternativoDa({ frente, textoAlternativo }, textos.cartao.imagemSemDescricao)}
                       variante="previa"
                     />
                     <div className="acoes">
@@ -533,14 +552,14 @@ export function PaginaDoFormularioDeCartao({
                         className="botao botao--secundario"
                         onClick={() => campoDeImagem.current?.click()}
                       >
-                        Trocar imagem
+                        {textos.cartao.btnTrocarImagem}
                       </button>
                       <button
                         type="button"
                         className="botao botao--secundario"
                         onClick={removerImagem}
                       >
-                        Remover imagem
+                        {textos.cartao.btnRemoverImagem}
                       </button>
                     </div>
                   </div>
@@ -549,7 +568,7 @@ export function PaginaDoFormularioDeCartao({
 
               <div className="campo">
                 <label htmlFor="campo-descricao" className="rotulo">
-                  Descrição da imagem (opcional)
+                  {textos.cartao.descricaoLabel}
                 </label>
                 <textarea
                   id="campo-descricao"
@@ -560,10 +579,10 @@ export function PaginaDoFormularioDeCartao({
                   aria-describedby={`ajuda-da-descricao contador-da-descricao${campoComErro === "descricao" ? " erro-do-formulario" : ""}`}
                 />
                 <p id="ajuda-da-descricao" className="ajuda">
-                  Descreva a imagem sem revelar a resposta.
+                  {textos.cartao.descricaoHint}
                 </p>
                 <p id="contador-da-descricao" className="contador">
-                  {textoAlternativo.length} / {LIMITE_DA_DESCRICAO_ALTERNATIVA} caracteres
+                  {textoAlternativo.length} / {LIMITE_DA_DESCRICAO_ALTERNATIVA} {textos.cartao.caracteres}
                 </p>
               </div>
             </>
@@ -571,7 +590,7 @@ export function PaginaDoFormularioDeCartao({
 
           <div className="campo">
             <label htmlFor="campo-frente" className="rotulo">
-              {ehImagem ? "Texto da frente (opcional)" : "Frente"}
+              {ehImagem ? textos.cartao.textoFrenteFront : textos.cartao.textoFrente}
             </label>
             <textarea
               id="campo-frente"
@@ -586,7 +605,7 @@ export function PaginaDoFormularioDeCartao({
               }
             />
             <p id="contador-da-frente" className="contador">
-              {frente.length} / {LIMITE_DE_CARACTERES_DE_CARTAO} caracteres
+              {frente.length} / {LIMITE_DE_CARACTERES_DE_CARTAO} {textos.cartao.caracteres}
             </p>
             {avisoDeLimite(frente.length) !== null && (
               <p id="aviso-da-frente" className="aviso-de-limite">
@@ -597,7 +616,7 @@ export function PaginaDoFormularioDeCartao({
 
           <div className="campo">
             <label htmlFor="campo-verso" className="rotulo">
-              Verso
+              {textos.cartao.textoVerso}
             </label>
             <textarea
               id="campo-verso"
@@ -612,7 +631,7 @@ export function PaginaDoFormularioDeCartao({
               }
             />
             <p id="contador-do-verso" className="contador">
-              {verso.length} / {LIMITE_DE_CARACTERES_DE_CARTAO} caracteres
+              {verso.length} / {LIMITE_DE_CARACTERES_DE_CARTAO} {textos.cartao.caracteres}
             </p>
             {avisoDeLimite(verso.length) !== null && (
               <p id="aviso-do-verso" className="aviso-de-limite">
@@ -630,11 +649,11 @@ export function PaginaDoFormularioDeCartao({
               role="alert"
               aria-label={
                 emEdicao
-                  ? "Falha na edição do Cartão"
-                  : "Falha na criação do Cartão"
+                  ? textos.cartao.falhaNaEdicao
+                  : textos.cartao.falhaNaCriacao
               }
             >
-              {falhaDeSalvamento}
+              <TextoDoProduto texto={falhaDeSalvamento} />
             </p>
           )}
 
@@ -644,14 +663,14 @@ export function PaginaDoFormularioDeCartao({
               type="submit"
               disabled={salvando}
             >
-              {salvando ? (ehImagem && arquivo !== null ? "Enviando imagem…" : "Salvando…") : "Salvar"}
+              {salvando ? (ehImagem && arquivo !== null ? textos.cartao.btnEnviandoImagem : textos.cartao.btnSalvando) : textos.cartao.btnSalvar}
             </button>
             <button
               className="botao botao--secundario"
               type="button"
               onClick={() => voltarParaAPaginaAnterior(baralhoId)}
             >
-              Cancelar
+              {textos.cartao.btnCancelar}
             </button>
           </div>
         </form>
@@ -659,40 +678,15 @@ export function PaginaDoFormularioDeCartao({
 
       <DialogoDeConfirmacao
         aberto={confirmandoDescarte}
-        titulo="Descartar a imagem?"
-        rotuloDeConfirmacao="Descartar imagem"
+        titulo={textos.cartao.descartarImagemTitle}
+        rotuloDeConfirmacao={textos.cartao.descartarImagemConfirm}
         aoConfirmar={() => fecharDescarte(true)}
         aoCancelar={() => fecharDescarte(false)}
       >
-        A imagem escolhida não existe no tipo Frente-Verso e será descartada.
+        {textos.cartao.descartarImagemMsg}
       </DialogoDeConfirmacao>
     </div>
   );
-}
-
-/**
- * Comunicação da contagem e do limite durante a digitação (FR-053).
- *
- * Devolve `null` longe do limite e, perto dele, um aviso explícito sobre o
- * texto como digitado — sem recusar nada: a recusa é sempre do
- * `ClienteDoAcervo`, e esta função não a antecipa nem a reproduz.
- */
-function avisoDeLimite(comprimento: number): string | null {
-  const restantes = LIMITE_DE_CARACTERES_DE_CARTAO - comprimento;
-
-  if (restantes > FOLGA_PARA_AVISO_DE_LIMITE) {
-    return null;
-  }
-
-  if (restantes < 0) {
-    return `Atenção: o texto excede o limite de ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`;
-  }
-
-  if (restantes === 0) {
-    return `Atenção: o texto atingiu o limite de ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`;
-  }
-
-  return `Atenção: faltam ${restantes} caracteres para o limite de ${LIMITE_DE_CARACTERES_DE_CARTAO}.`;
 }
 
 /**

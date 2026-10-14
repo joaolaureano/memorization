@@ -33,6 +33,7 @@ uma especificação em [`specs/`](specs/).
 | Início e Estudo | O Início mostra saudação e Agenda de hoje; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Estatísticas e histórico | Itens estudados, Sessões concluídas e Taxa de acerto nos últimos 7 dias, gráfico por dia e o Registro de cada Sessão, com acertos e erros | [013](specs/013-estatisticas-e-historico/) |
 | Interface | Interface navegável no celular e no desktop (360 a 1440 px, zoom de 200%), utilizável por teclado e leitor de tela | [012](specs/012-interface-visual-navegavel/) |
+| Idioma | Interface em Português, English e Español pelo seletor no cabeçalho; a escolha fica salva neste navegador. Mensagens técnicas da API são em inglês | [027](specs/027-idioma-da-interface/) |
 
 As demais specs cobrem a plataforma: Porta de persistência com SQLite e
 PostgreSQL ([009](specs/009-porta-de-persistencia/),

@@ -171,7 +171,7 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     expect(edicaoDeInexistente).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Cartão não encontrado.",
+      mensagem: "Not found.",
     });
   });
 
@@ -234,7 +234,7 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     expect(await bruno.obterBaralho(baralhoDeAna.id)).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
 
     // Cada um vê apenas seus Baralhos
@@ -273,7 +273,7 @@ describe("acervo por usuário — cada um vê e opera somente o seu", () => {
     expect(await bruno.obterBaralho(baralhoDeAna.id)).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
 
     /** E as listagens do outro dono continuam apenas com seus próprios Baralhos e Cartões. */

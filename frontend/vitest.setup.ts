@@ -23,6 +23,19 @@ beforeEach(() => {
     now: INSTANTE_DE_TESTE,
     shouldAdvanceTime: true,
   });
+
+  // R7: Provas existentes continuam em Português
+  Object.defineProperty(navigator, "languages", {
+    value: ["pt-BR"],
+    configurable: true,
+  });
+  Object.defineProperty(navigator, "language", {
+    value: "pt-BR",
+    configurable: true,
+  });
+  try {
+    localStorage.removeItem("memorization.idioma");
+  } catch {}
 });
 
 afterEach(() => {

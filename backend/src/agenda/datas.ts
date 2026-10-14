@@ -77,7 +77,7 @@ export function ehFusoValido(fuso: string): boolean {
  */
 export function hojeNoFuso(fuso: string, agora: Date): string {
   if (!ehFusoValido(fuso)) {
-    throw new Error(`Fuso horário inválido: ${fuso}`);
+    throw new Error("Invalid time zone.");
   }
 
   return new Intl.DateTimeFormat("en-CA", {

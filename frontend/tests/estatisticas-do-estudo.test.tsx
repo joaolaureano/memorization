@@ -138,7 +138,7 @@ function itensDaListaTextual(): number[] {
 
   return itens.map((item) =>
     Number(
-      /:\s*(\d+)\s+Itens$/.exec(item.textContent ?? "")?.[1] ?? Number.NaN,
+      /:\s*(\d+)\s+Itens estudados$/.exec(item.textContent ?? "")?.[1] ?? Number.NaN,
     ),
   );
 }
@@ -173,7 +173,7 @@ describe("ResumoDeSeteDias e PainelDaSemana", () => {
     expect(valorDaEstatistica("Taxa de acerto")).toBe("84%");
 
     // A lista textual é a do gráfico, com os sete dias somando os mesmos 120.
-    expect(screen.getByText("Hoje: 60 Itens")).toBeTruthy();
+    expect(screen.getByText("Hoje: 60 Itens estudados")).toBeTruthy();
 
     const itens = itensDaListaTextual();
 
@@ -292,23 +292,23 @@ describe("UltimasSessoes", () => {
     expect(screen.getByRole("link", { name: /Revisão do dia/ })).toBeTruthy();
   });
 
-  it("chama de 'Estudo com baralho temporário' a Sessão do baralho temporário (FR-376, T2318)", () => {
+  it("mostra o rótulo localizado para a Sessão do baralho temporário", () => {
     render(
       <UltimasSessoes
         recentes={[
           registroDeProva("sessao-1", { estudados: 2, acertos: 1 }, {
             origem: "temporario",
-            nomeDoBaralho: "Estudo com baralho temporário",
+            nomeDoBaralho: "",
           }),
         ]}
       />,
     );
 
     expect(
-      screen.getByText("Estudo com baralho temporário"),
+      screen.getByText("Baralho temporário"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /Estudo com baralho temporário/ }),
+      screen.getByRole("link", { name: /Baralho temporário/ }),
     ).toBeInTheDocument();
   });
 

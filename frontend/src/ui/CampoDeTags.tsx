@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIdioma } from "../idioma";
 
 /** Campo reutilizável para adicionar tags com Enter e remover cada etiqueta. */
 export function CampoDeTags({
@@ -8,6 +9,7 @@ export function CampoDeTags({
   tags: readonly string[];
   aoAlterar: (tags: string[]) => void;
 }) {
+  const { textos } = useIdioma();
   const [texto, setTexto] = useState("");
 
   function adicionar(evento: React.KeyboardEvent<HTMLInputElement>) {
@@ -20,13 +22,13 @@ export function CampoDeTags({
 
   return (
     <div className="campo campo--tags">
-      <label className="rotulo" htmlFor="campo-tag">Tags</label>
-      <input id="campo-tag" value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={adicionar} placeholder="Digite uma tag e pressione Enter" />
-      <ul className="lista-de-tags" aria-label="Tags adicionadas">
+      <label className="rotulo" htmlFor="campo-tag">{textos.cartao.tagsLabel}</label>
+      <input id="campo-tag" value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={adicionar} placeholder={textos.cartao.tagsPlaceholder} />
+      <ul className="lista-de-tags" aria-label={textos.cartao.tagsAriaLabel}>
         {tags.map((tag) => (
           <li key={tag} className="tag">
             <span>{tag}</span>
-            <button type="button" aria-label={`Remover tag ${tag}`} onClick={() => aoAlterar(tags.filter((item) => item !== tag))}>×</button>
+            <button type="button" aria-label={textos.cartao.removerTagAriaLabel(tag)} onClick={() => aoAlterar(tags.filter((item) => item !== tag))}>×</button>
           </li>
         ))}
       </ul>
@@ -43,10 +45,11 @@ export function OpcoesDeTags({
   selecionadas: readonly string[];
   aoAlterar: (tags: string[]) => void;
 }) {
+  const { textos } = useIdioma();
   if (opcoes.length === 0) return null;
   return (
     <fieldset className="filtro-de-tags">
-      <legend>Tags</legend>
+      <legend>{textos.cartao.tagsFilterLabel}</legend>
       <div className="filtro-de-tags__opcoes">
         {opcoes.map((tag) => (
           <label key={tag}>
@@ -60,6 +63,8 @@ export function OpcoesDeTags({
 }
 
 export function EtiquetasDeTags({ tags }: { tags?: readonly string[] }) {
+  const { textos } = useIdioma();
+
   if (!tags?.length) return null;
-  return <ul className="lista-de-tags" aria-label="Tags">{tags.map((tag) => <li key={tag} className="tag">{tag}</li>)}</ul>;
+  return <ul className="lista-de-tags" aria-label={textos.cartao.tags}>{tags.map((tag) => <li key={tag} className="tag">{tag}</li>)}</ul>;
 }

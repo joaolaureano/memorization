@@ -32,12 +32,12 @@ import {
  */
 
 /** Prefixo das recusas de configuração deste comando. */
-const PREFIXO_DA_RECUSA = "Migração recusada";
+const PREFIXO_DA_RECUSA = "Migration rejected";
 
 /** Falha ao aplicar as migrações: genérica, em português, sem nada do driver. */
 const FALHA_NA_MIGRACAO =
-  "Falha na migração da nuvem: não foi possível aplicar as migrações. " +
-  "Nenhuma migração ficou pela metade.";
+  "Cloud migration failure: could not apply migrations. " +
+  "No migration was left incomplete.";
 
 /**
  * Lê e valida `DB_URL` — e o `DB_CA_CERT` opcional —, ou devolve `null` depois
@@ -78,13 +78,13 @@ async function migrar(configuracao: ConfiguracaoDaConexao): Promise<void> {
 
     if (versao < corrente) {
       console.log(
-        `Migração concluída: o esquema da base está na versão ${versao}. ` +
-        "A migração final está adiada enquanto houver Cartões pendentes de transição. " +
-        "Execute este comando novamente depois que todos os Usuários concluírem.",
+        `Migration completed: database schema is at version ${versao}. ` +
+        "Final migration is deferred while card transitions are pending. " +
+        "Run this command again after all users complete.",
       );
     } else {
       console.log(
-        `Migração concluída: o esquema da base está na versão ${versao}.`,
+        `Migration completed: database schema is at version ${versao}.`,
       );
     }
   } catch (erro) {

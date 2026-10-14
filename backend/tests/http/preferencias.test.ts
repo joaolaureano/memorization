@@ -58,7 +58,7 @@ const PADRAO = {
 
 const DADOS_DAS_PREFERENCIAS_INVALIDOS = {
   erro: "dados_invalidos",
-  mensagem: "Os dados das Preferências são inválidos.",
+  mensagem: "Invalid data.",
 };
 
 describe("GET /preferencias — leitura conforme o contrato (FR-212)", () => {

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { BaralhoListado, CartaoListado } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import {
   classificarBaralhos,
   filtrarBaralhos,
@@ -47,6 +48,7 @@ import { EstadoDaCarga } from "./EstadoDaCarga";
  * `aoAdicionar`.
  */
 export function FontesDaSelecao(props: PropriedadesDasFontes) {
+  const { textos } = useIdioma();
   const {
     carga,
     baralhos,
@@ -144,7 +146,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
       return (
         <EstadoDaCarga
           estado="falha"
-          mensagem="Não foi possível carregar o acervo."
+          mensagem={textos.selecao.naoFoiPossivelCarregar}
           aoTentarNovamente={aoTentarNovamente}
         />
       );
@@ -154,10 +156,10 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
       return (
         <EstadoDaCarga
           estado="vazio"
-          mensagem="Seu acervo está vazio. Crie cartões para montar um estudo."
+          mensagem={textos.selecao.acervoVazio}
           acao={
             <a className="botao botao--primario" href="#/baralhos">
-              Ver baralhos
+              {textos.selecao.verBaralhos}
             </a>
           }
         />
@@ -167,13 +169,13 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
     if (quantidadeDeResultados === 0) {
       return (
         <div className="estado-vazio">
-          <p>Nenhum resultado encontrado. Altere a busca ou os filtros.</p>
+          <p>{textos.selecao.nenhumResultado}</p>
           <button
             type="button"
             className="botao botao--secundario"
             onClick={limparFiltrosDaFonteAtiva}
           >
-            Limpar filtros
+            {textos.selecao.limparFiltros}
           </button>
         </div>
       );
@@ -198,7 +200,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                 <div className="linha-da-lista__texto">
                   <p className="linha-da-lista__titulo">{baralho.nome}</p>
                   <p className="linha-da-lista__detalhe">
-                    {detalheDoBaralho(ids.length)}
+                    {detalheDoBaralho(ids.length, textos)}
                   </p>
                 </div>
                 <div className="linha-da-lista__acoes">
@@ -261,7 +263,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
   const conteudo = montarConteudo();
 
   return (
-    <section className="fontes" aria-label="Conteúdo disponível">
+    <section className="fontes" aria-label={textos.selecao.conteudoDisponivel}>
       <div className="alternar-fontes">
         <button
           type="button"
@@ -269,7 +271,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           aria-pressed={fonte === "baralhos"}
           onClick={() => trocarFonte("baralhos")}
         >
-          Adicionar baralhos
+          {textos.selecao.adicionarBaralhos}
         </button>
         <button
           type="button"
@@ -277,7 +279,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           aria-pressed={fonte === "cartoes"}
           onClick={() => trocarFonte("cartoes")}
         >
-          Adicionar cartões
+          {textos.selecao.adicionarCartoes}
         </button>
       </div>
 
@@ -286,13 +288,13 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           <>
             <div className="campo">
               <label className="rotulo" htmlFor="busca-de-baralhos-da-montagem">
-                Buscar baralhos
+                {textos.selecao.buscarBaralhos}
               </label>
               <input
                 id="busca-de-baralhos-da-montagem"
                 type="search"
                 autoComplete="off"
-                placeholder="Digite o nome do baralho"
+                placeholder={textos.selecao.digiteONome}
                 value={consultaDeBaralhos}
                 onChange={(evento) => setConsultaDeBaralhos(evento.target.value)}
               />
@@ -303,7 +305,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                 className="rotulo"
                 htmlFor="filtro-de-situacao-da-montagem"
               >
-                Situação da revisão
+                {textos.selecao.situacaoDaRevisao}
               </label>
               <select
                 id="filtro-de-situacao-da-montagem"
@@ -324,13 +326,13 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           <>
             <div className="campo">
               <label className="rotulo" htmlFor="busca-de-cartoes-da-montagem">
-                Buscar cartões
+                {textos.selecao.buscarCartoes}
               </label>
               <input
                 id="busca-de-cartoes-da-montagem"
                 type="search"
                 autoComplete="off"
-                placeholder="Buscar na frente ou no verso"
+                placeholder={textos.selecao.buscarNaFrenteOuVerso}
                 value={consultaDeCartoes}
                 onChange={(evento) => setConsultaDeCartoes(evento.target.value)}
               />
@@ -362,7 +364,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
       <div className="resultado-cabecalho">
         <p role="status" aria-live="polite" aria-atomic="true">
           {carga === "pronta" && cartoes.length > 0
-            ? contagemDeResultados(quantidadeDeResultados)
+            ? contagemDeResultados(quantidadeDeResultados, textos)
             : null}
         </p>
         <button
@@ -370,7 +372,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
           className="botao botao--secundario"
           onClick={limparFiltrosDaFonteAtiva}
         >
-          Limpar filtros
+          {textos.selecao.limparFiltros}
         </button>
       </div>
 
@@ -380,17 +382,17 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
 }
 
 /** Texto da contagem de resultados anunciada na região viva. */
-function contagemDeResultados(quantidade: number): string {
-  return `${quantidade} ${quantidade === 1 ? "resultado" : "resultados"}`;
+function contagemDeResultados(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return `${textos.selecao.contagem(quantidade)}`;
 }
 
 /**
  * Detalhe exibido sob o nome do Baralho: quantidade de Cartões ou aviso de
  * baralho vazio.
  */
-function detalheDoBaralho(quantidade: number): string {
-  if (quantidade === 0) return "0 Cartões · Baralho vazio";
-  return `${quantidade} ${quantidade === 1 ? "Cartão" : "Cartões"}`;
+function detalheDoBaralho(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  if (quantidade === 0) return textos.selecao.naoHaCartoes;
+  return textos.selecao.contagem(quantidade);
 }
 
 interface PropriedadesDasFontes {

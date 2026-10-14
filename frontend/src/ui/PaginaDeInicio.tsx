@@ -4,6 +4,7 @@ import type {
   ClienteDoAcervo,
   InicioDeCompromisso,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import { AgendaDeEstudo } from "./AgendaDeEstudo";
 
 /**
@@ -87,17 +88,19 @@ export function PaginaDeInicio({
     void carregarAcervo();
   }, [carregarAcervo]);
 
+  const { textos } = useIdioma();
+
   return (
     <div className="pagina">
       {/* O cabeçalho é o cumprimento e, quando o acervo está vazio, o convite
           a criar o primeiro Cartão — nada além disso (FR-330). */}
       <div className="inicio__cabecalho">
-        <h1>Olá, {nomeDeUsuario}</h1>
+        <h1>{textos.inicio.ola(nomeDeUsuario)}</h1>
 
         {acervoVazio ? (
           <p>
             <a className="botao botao--primario" href="#/baralhos">
-              Ver Baralhos
+              {textos.inicio.ver_baralhos}
             </a>
           </p>
         ) : null}

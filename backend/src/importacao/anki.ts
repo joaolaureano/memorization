@@ -3,6 +3,22 @@ import { unzipSync } from "fflate/browser";
 import initSqlJs from "sql.js/dist/sql-asm.js";
 
 export const LIMITE_APKG = 4 * 1024 * 1024;
+
+export class AnkiError extends Error {
+  readonly codigo: "anki_grande_demais" | "anki_ilegivel" | "anki_corrompido" | "anki_incompativel";
+  readonly limite?: number;
+
+  constructor(
+    codigo: "anki_grande_demais" | "anki_ilegivel" | "anki_corrompido" | "anki_incompativel",
+    message: string,
+    limite?: number,
+  ) {
+    super(message);
+    this.name = "AnkiError";
+    this.codigo = codigo;
+    this.limite = limite;
+  }
+}
 export interface CartaoImportado { frente: string; verso: string; tags: string[]; estado: "adicionado" | "modificado"; }
 export interface BaralhoImportado { nome: string; cartoes: CartaoImportado[]; }
 export interface PreviaImportacao { baralhos: BaralhoImportado[]; avisos: { notasIgnoradas: number; conteudoIgnorado: number }; }
@@ -25,7 +41,7 @@ function tipoDoNotetype(config: Uint8Array): number {
 }
 
 export async function lerPacoteAnki(bytes: Buffer): Promise<PreviaImportacao> {
-  if (bytes.length > LIMITE_APKG) throw new Error("O arquivo deve ter no máximo 4 MiB.");
+  if (bytes.length > LIMITE_APKG) throw new AnkiError("anki_grande_demais", "Anki file exceeds the size limit.", LIMITE_APKG);
   let zip: ReturnType<typeof unzipSync>;
   try {
     zip = unzipSync(bytes, {
@@ -34,14 +50,14 @@ export async function lerPacoteAnki(bytes: Buffer): Promise<PreviaImportacao> {
         file.originalSize <= 16 * 1024 * 1024,
     });
   }
-  catch { throw new Error("Não foi possível ler este arquivo Anki."); }
+  catch { throw new AnkiError("anki_ilegivel", "Anki file could not be read."); }
   let dbBytes: Uint8Array | undefined;
   if (zip["collection.anki21b"]) {
     try { dbBytes = new Uint8Array(zstdDecompressSync(zip["collection.anki21b"], { maxOutputLength: 16 * 1024 * 1024 })); }
-    catch { throw new Error("O arquivo Anki moderno está corrompido ou excede o limite de expansão."); }
+    catch { throw new AnkiError("anki_corrompido", "Anki file is corrupted or exceeds the expansion limit."); }
   }
   dbBytes ??= zip["collection.anki21"] ?? zip["collection.anki2"];
-  if (!dbBytes || dbBytes.length > 16 * 1024 * 1024) throw new Error("O arquivo não contém uma coleção Anki compatível.");
+  if (!dbBytes || dbBytes.length > 16 * 1024 * 1024) throw new AnkiError("anki_incompativel", "File does not contain a compatible Anki collection.");
   try {
     const sql = await initSqlJs();
     const db = new sql.Database(dbBytes);
@@ -54,7 +70,7 @@ export async function lerPacoteAnki(bytes: Buffer): Promise<PreviaImportacao> {
         models = Object.fromEntries((db.exec("SELECT id, config FROM notetypes")[0]?.values ?? []).map(([id, config]) => [String(id), { type: tipoDoNotetype(config instanceof Uint8Array ? config : new Uint8Array()) }]));
       } else {
         const colunas = db.exec("SELECT decks, models FROM col LIMIT 1")[0];
-        if (!colunas) throw new Error("Coleção Anki inválida.");
+        if (!colunas) throw new AnkiError("anki_incompativel", "File does not contain a compatible Anki collection.");
         decks = JSON.parse(String(colunas.values[0][0])) as Record<string, { name: string }>;
         models = JSON.parse(String(colunas.values[0][1])) as Record<string, { type: number }>;
       }
@@ -90,13 +106,13 @@ export async function lerPacoteAnki(bytes: Buffer): Promise<PreviaImportacao> {
         group.cartoes.push({ frente: finalFront, verso: back, tags, estado: duplicate ? "modificado" : "adicionado" });
         result.set(deck.name, group);
       }
-      if (result.size === 0) throw new Error("Nenhum cartão básico válido foi encontrado.");
+      if (result.size === 0) throw new AnkiError("anki_ilegivel", "Anki file could not be read.");
       const previa = { baralhos: [...result.values()], avisos: { notasIgnoradas, conteudoIgnorado } };
-      if (Buffer.byteLength(JSON.stringify(previa)) > LIMITE_APKG) throw new Error("A prévia gerada excede o limite de 4 MiB.");
+      if (Buffer.byteLength(JSON.stringify(previa)) > LIMITE_APKG) throw new AnkiError("anki_grande_demais", "Anki file exceeds the size limit.", LIMITE_APKG);
       return previa;
     } finally { db.close(); }
   } catch (error) {
-    if (error instanceof Error && (error.message.startsWith("O arquivo") || error.message.startsWith("A prévia") || error.message.startsWith("Pacotes") || error.message.startsWith("Coleção") || error.message.startsWith("Nenhum cartão"))) throw error;
-    throw new Error("Não foi possível ler este arquivo Anki.");
+    if (error instanceof AnkiError) throw error;
+    throw new AnkiError("anki_ilegivel", "Anki file could not be read.");
   }
 }

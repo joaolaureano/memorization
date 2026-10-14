@@ -138,7 +138,7 @@ describe("DELETE /baralhos/{id} — exclusão conforme o contrato", () => {
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 

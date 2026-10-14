@@ -9,46 +9,6 @@
  * semanas e informa o seu fuso. Nenhum código do servidor entra no bundle.
  */
 
-const NOMES_DOS_DIAS = [
-  "segunda",
-  "terça",
-  "quarta",
-  "quinta",
-  "sexta",
-  "sábado",
-  "domingo",
-] as const;
-
-const NOMES_DOS_MESES = [
-  "janeiro",
-  "fevereiro",
-  "março",
-  "abril",
-  "maio",
-  "junho",
-  "julho",
-  "agosto",
-  "setembro",
-  "outubro",
-  "novembro",
-  "dezembro",
-] as const;
-
-const ABREVIACOES_DOS_MESES = [
-  "jan",
-  "fev",
-  "mar",
-  "abr",
-  "mai",
-  "jun",
-  "jul",
-  "ago",
-  "set",
-  "out",
-  "nov",
-  "dez",
-] as const;
-
 /** Partes numéricas de uma data civil `YYYY-MM-DD`. */
 function partes(data: string): { ano: number; mes: number; dia: number } {
   return {
@@ -56,6 +16,11 @@ function partes(data: string): { ano: number; mes: number; dia: number } {
     mes: Number(data.slice(5, 7)),
     dia: Number(data.slice(8, 10)),
   };
+}
+
+function dataCivilUTC(data: string): Date {
+  const { ano, mes, dia } = partes(data);
+  return new Date(Date.UTC(ano, mes - 1, dia, 12));
 }
 
 /** `true` quando `texto` é uma data civil `YYYY-MM-DD` que existe de verdade. */
@@ -129,35 +94,53 @@ export function diasDaSemana(inicio: string): string[] {
   return Array.from({ length: 7 }, (_, indice) => somarDias(inicio, indice));
 }
 
-/** O nome do dia da semana (1 = segunda): "segunda", "terça"… */
-export function nomeDoDia(dia: number): string {
-  return NOMES_DOS_DIAS[dia - 1];
+/** O nome do dia da semana (1 = segunda), no locale da interface. */
+export function nomeDoDia(dia: number, locale = "pt-BR"): string {
+  const data = new Date(Date.UTC(2024, 0, dia, 12));
+  const nome = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(data);
+  return locale.toLowerCase().startsWith("pt")
+    ? nome.replace("-feira", "")
+    : nome;
 }
 
-/** Lista legível de dias: "segunda e quinta", "segunda, quarta e sexta". */
-export function descreverDias(dias: readonly number[]): string {
-  const nomes = [...dias].sort((a, b) => a - b).map(nomeDoDia);
+/** Lista legível dos dias da semana, com conjunção do locale. */
+export function descreverDias(dias: readonly number[], locale = "pt-BR"): string {
+  const nomes = [...dias].sort((a, b) => a - b).map((dia) => nomeDoDia(dia, locale));
+  return new Intl.ListFormat(locale, { type: "conjunction" }).format(nomes);
+}
 
-  if (nomes.length <= 1) {
-    return nomes.join("");
+/** Dia e mês abreviado, para a linha do calendário. */
+export function dataCurta(data: string, locale = "pt-BR"): string {
+  const formatador = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+  const dataUTC = dataCivilUTC(data);
+  if (locale.toLowerCase().startsWith("pt")) {
+    const tokens = formatador.formatToParts(dataUTC);
+    const dia = tokens.find((token) => token.type === "day")?.value ?? "";
+    const mes = tokens.find((token) => token.type === "month")?.value.replace(/\.$/, "") ?? "";
+    return `${dia} ${mes}`;
   }
-
-  return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
+  return formatador.format(dataUTC);
 }
 
-/** "3 out" — o dia e o mês abreviado, para a linha do calendário. */
-export function dataCurta(data: string): string {
-  const { mes, dia } = partes(data);
-
-  return `${dia} ${ABREVIACOES_DOS_MESES[mes - 1]}`;
-}
-
-/** "segunda, 5 de outubro de 2026" — a data completa do dia selecionado. */
-export function dataPorExtenso(data: string): string {
-  const { ano, mes, dia } = partes(data);
-  const nome = NOMES_DOS_DIAS[diaDaSemana(data) - 1];
-
-  return `${nome}, ${dia} de ${NOMES_DOS_MESES[mes - 1]} de ${ano}`;
+/** Data completa do dia selecionado, no locale da interface. */
+export function dataPorExtenso(data: string, locale = "pt-BR"): string {
+  const formatada = new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(dataCivilUTC(data));
+  return locale.toLowerCase().startsWith("pt")
+    ? formatada.replace("-feira", "")
+    : formatada;
 }
 
 /**
@@ -165,20 +148,35 @@ export function dataPorExtenso(data: string): string {
  * "5 a 11 de outubro de 2026", "28 de setembro a 4 de outubro de 2026",
  * "28 de dezembro de 2026 a 3 de janeiro de 2027".
  */
-export function descreverSemana(inicio: string): string {
+export function descreverSemana(inicio: string, locale = "pt-BR"): string {
   const fim = somarDias(inicio, 6);
   const a = partes(inicio);
   const b = partes(fim);
 
+  if (!locale.toLowerCase().startsWith("pt")) {
+    const formatador = new Intl.DateTimeFormat(locale, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+    return `${formatador.format(dataCivilUTC(inicio))} – ${formatador.format(dataCivilUTC(fim))}`;
+  }
+
+  const nomeDoMes = (mes: number, ano: number) =>
+    new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(
+      new Date(Date.UTC(ano, mes - 1, 15, 12)),
+    );
+
   if (a.ano !== b.ano) {
-    return `${a.dia} de ${NOMES_DOS_MESES[a.mes - 1]} de ${a.ano} a ${b.dia} de ${NOMES_DOS_MESES[b.mes - 1]} de ${b.ano}`;
+    return `${a.dia} de ${nomeDoMes(a.mes, a.ano)} de ${a.ano} a ${b.dia} de ${nomeDoMes(b.mes, b.ano)} de ${b.ano}`;
   }
 
   if (a.mes !== b.mes) {
-    return `${a.dia} de ${NOMES_DOS_MESES[a.mes - 1]} a ${b.dia} de ${NOMES_DOS_MESES[b.mes - 1]} de ${b.ano}`;
+    return `${a.dia} de ${nomeDoMes(a.mes, a.ano)} a ${b.dia} de ${nomeDoMes(b.mes, b.ano)} de ${b.ano}`;
   }
 
-  return `${a.dia} a ${b.dia} de ${NOMES_DOS_MESES[b.mes - 1]} de ${b.ano}`;
+  return `${a.dia} a ${b.dia} de ${nomeDoMes(b.mes, b.ano)} de ${b.ano}`;
 }
 
 /** Quantos milissegundos faltam para a próxima meia-noite civil no fuso. */

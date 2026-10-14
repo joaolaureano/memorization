@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ReactNode, Ref } from "react";
+import { useIdioma } from "../idioma";
 
 /**
  * Campo de senha com o botão Mostrar/Ocultar (FR-142).
@@ -49,6 +50,9 @@ export function CampoDeSenha({
   children?: ReactNode;
 }) {
   const [visivel, setVisivel] = useState(false);
+  const { textos } = useIdioma();
+
+  const acao = visivel ? textos.acesso.ocultar : textos.acesso.mostrar;
 
   return (
     <div className="campo">
@@ -74,10 +78,10 @@ export function CampoDeSenha({
           className="botao botao--secundario"
           aria-pressed={visivel}
           aria-controls={id}
-          aria-label={`${visivel ? "Ocultar" : "Mostrar"} ${rotulo}`}
+          aria-label={`${acao} ${rotulo}`}
           onClick={() => setVisivel((atual) => !atual)}
         >
-          {visivel ? "Ocultar" : "Mostrar"}
+          {acao}
         </button>
       </div>
 

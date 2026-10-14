@@ -88,7 +88,7 @@ describe("migração 17 — Tipo de cartão (PostgreSQL)", () => {
     try {
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(18);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(19);
       expect(
         (
           await piscina.query(

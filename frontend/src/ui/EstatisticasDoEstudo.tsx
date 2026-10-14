@@ -11,6 +11,8 @@ import {
   itensPorDia,
   taxaDeAcerto,
 } from "../estatisticas/estatisticas";
+import { useIdioma } from "../idioma";
+import { rotuloDoBaralhoDoRegistro } from "../idioma/rotulo-do-baralho";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
@@ -213,23 +215,27 @@ export function ResumoDeSeteDias({
 }: {
   estatisticas: Estatisticas;
 }) {
+  const { textos, formatarNumero } = useIdioma();
   const registros = estatisticas.registrosDaJanela;
   const taxa = taxaDeAcerto(registros);
 
   if (taxa === null) {
     return (
       <p className="resumo-de-sete-dias">
-        Últimos 7 dias: nenhum Item estudado.
+        {textos.estatisticas.ultimosSeteDialosNenhumItem}
       </p>
     );
   }
 
   const itens = totalDeItens(registros);
-  const contagem = itens === 1 ? "1 Item estudado" : `${itens} Itens estudados`;
+  const contagem = textos.estatisticas.itemEstudado(itens);
 
   return (
     <p className="resumo-de-sete-dias">
-      {`Últimos 7 dias: ${contagem} · ${taxa}% de acerto`}
+      {textos.estatisticas.resumoSeteDias(
+        contagem,
+        formatarNumero(taxa / 100, { style: "percent", maximumFractionDigits: 0 }),
+      )}
     </p>
   );
 }
@@ -253,6 +259,7 @@ export function PainelDaSemana({
   estatisticas: Estatisticas;
   agora: Date;
 }) {
+  const { textos, formatarNumero, formatarData } = useIdioma();
   const registros = estatisticas.registrosDaJanela;
   const taxa = taxaDeAcerto(registros);
   const dias = itensPorDia(registros, agora);
@@ -265,22 +272,22 @@ export function PainelDaSemana({
       <div className="resumo resumo--tres">
         <div className="estatistica">
           <span className="estatistica__valor">{totalDeItens(registros)}</span>
-          <span className="estatistica__rotulo">Itens estudados</span>
+          <span className="estatistica__rotulo">{textos.estatisticas.itensEstudados}</span>
         </div>
         <div className="estatistica">
           <span className="estatistica__valor">{registros.length}</span>
-          <span className="estatistica__rotulo">Sessões concluídas</span>
+          <span className="estatistica__rotulo">{textos.estatisticas.rotuloSessoesConcluidas}</span>
         </div>
         <div className="estatistica">
           {/* Sem Itens não há taxa: o travessão ocupa o lugar do número, e a
               explicação fica disponível a quem não a vê (FR-314). */}
           <span className="estatistica__valor">
-            {taxa === null ? "—" : `${taxa}%`}
+            {taxa === null ? "—" : formatarNumero(taxa / 100, { style: "percent", maximumFractionDigits: 0 })}
           </span>
-          <span className="estatistica__rotulo">Taxa de acerto</span>
+          <span className="estatistica__rotulo">{textos.estatisticas.taxaDeAcerto}</span>
           {taxa === null ? (
             <span className="visualmente-oculto">
-              Sem Itens estudados nos últimos 7 dias
+              {textos.estatisticas.semItensEstudadosNos7Dias}
             </span>
           ) : null}
         </div>
@@ -288,7 +295,7 @@ export function PainelDaSemana({
 
       <section
         className="cartao"
-        aria-label="Itens estudados nos últimos 7 dias"
+        aria-label={textos.estatisticas.itensEstudadosNos7Dias}
       >
         {/* A barra é decoração: os mesmos números vêm na lista seguinte, que é
             o que um leitor de tela anuncia (FR-324). */}
@@ -320,7 +327,7 @@ export function PainelDaSemana({
                       : "grafico-semanal__rotulo"
                   }
                 >
-                  {dia.rotulo}
+                  {rotuloDoDia(dia, textos, formatarData)}
                 </span>
               </li>
             );
@@ -328,7 +335,7 @@ export function PainelDaSemana({
         </ul>
         <ul className="lista visualmente-oculto">
           {dias.map((dia) => (
-            <li key={dia.data}>{`${dia.rotulo}: ${dia.itens} Itens`}</li>
+            <li key={dia.data}>{`${rotuloDoDia(dia, textos, formatarData)}: ${textos.estatisticas.itemEstudado(dia.itens)}`}</li>
           ))}
         </ul>
       </section>
@@ -348,13 +355,14 @@ export function UltimasSessoes({
 }: {
   recentes: RegistroResumido[];
 }) {
+  const { textos, formatarData, formatarNumero } = useIdioma();
   const sessoes = recentes.slice(0, SESSOES_RECENTES);
 
   if (sessoes.length === 0) {
     return (
       <EstadoDaCarga
         estado="vazio"
-        mensagem="Você ainda não concluiu nenhuma Sessão."
+        mensagem={textos.estatisticas.nenhumaSessao}
       />
     );
   }
@@ -362,9 +370,9 @@ export function UltimasSessoes({
   return (
     <ul className="lista">
       {sessoes.map((registro) => {
-        const titulo = tituloDaSessao(registro);
-        const quando = instanteLocal(registro.concluidaEm);
-        const percentual = percentualDe(registro);
+        const titulo = rotuloDoBaralhoDoRegistro(registro, textos);
+        const quando = instanteLocal(registro.concluidaEm, formatarData);
+        const percentual = percentualDe(registro, formatarNumero);
 
         return (
           <li key={registro.id}>
@@ -401,23 +409,11 @@ function totalDeItens(registros: RegistroResumido[]): number {
   return registros.reduce((total, registro) => total + registro.estudados, 0);
 }
 
-/**
- * O nome da Sessão: o Baralho, a Revisão do dia quando foi ela (FR-315) ou o
- * estudo com baralho temporário (FR-376, T2318).
- */
-function tituloDaSessao(registro: RegistroResumido): string {
-  if (registro.origem === "revisao") {
-    return "Revisão do dia";
-  }
-  const nome = registro.nomeDoBaralho || "";
-  if (registro.origem === "temporario") {
-    return nome.trim() ? nome : "Estudo com baralho temporário";
-  }
-  return nome || "Estudo com baralho temporário"; // Fallback para nomes vazios (unlikely)
-}
-
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-315). */
-function instanteLocal(instante: string): string {
+function instanteLocal(
+  instante: string,
+  formatarData: (data: Date, opcoes: Intl.DateTimeFormatOptions) => string,
+): string {
   const quando = new Date(instante);
 
   // Um instante ilegível não pode derrubar a lista: mostramos o que veio.
@@ -425,17 +421,33 @@ function instanteLocal(instante: string): string {
     return instante;
   }
 
-  return quando.toLocaleString("pt-BR", {
+  return formatarData(quando, {
     dateStyle: "short",
     timeStyle: "short",
   });
 }
 
 /** O percentual de acertos de uma Sessão, ou travessão quando não há Itens. */
-function percentualDe(registro: RegistroResumido): string {
+function percentualDe(
+  registro: RegistroResumido,
+  formatarNumero: (numero: number, opcoes?: Intl.NumberFormatOptions) => string,
+): string {
   if (registro.estudados === 0) {
     return "—";
   }
 
-  return `${Math.round((registro.acertos / registro.estudados) * 100)}%`;
+  return formatarNumero(registro.acertos / registro.estudados, {
+    style: "percent",
+    maximumFractionDigits: 0,
+  });
+}
+
+function rotuloDoDia(
+  dia: { data: string; ehHoje: boolean },
+  textos: ReturnType<typeof useIdioma>["textos"],
+  formatarData: (data: Date, opcoes: Intl.DateTimeFormatOptions) => string,
+): string {
+  if (dia.ehHoje) return textos.estatisticas.hoje;
+  const [ano, mes, data] = dia.data.split("-").map(Number);
+  return formatarData(new Date(ano, mes - 1, data, 12), { weekday: "short" });
 }

@@ -485,13 +485,13 @@ describe("Transição de Pertencimento (FR-397)", () => {
 
       aberto = await abrirArmazenamentoSqlite(caminhoV13);
 
-      // Versão deve ser 14
+      // Versão deve ser 19 (migrações 18 e 19 com precondição já aplicadas)
       banco = abrirBanco(caminhoV13);
 
       const versao = banco
         .prepare("SELECT versao FROM versao_do_esquema")
         .get();
-      expect(versao?.versao).toBe(18);
+      expect(versao?.versao).toBe(19);
 
       // Tabela vinculo deve ter sido removida
       expect(existeTabela(banco, "vinculo")).toBe(false);

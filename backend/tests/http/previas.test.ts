@@ -72,7 +72,7 @@ async function criarCartao(): Promise<string> {
 
 const DADOS_DA_REVISAO_INVALIDOS = {
   erro: "dados_invalidos",
-  mensagem: "Os dados da Revisão são inválidos.",
+  mensagem: "Invalid data.",
 };
 
 describe("POST /previas — prévia do estudo livre (FR-221, FR-219)", () => {

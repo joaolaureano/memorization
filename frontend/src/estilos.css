@@ -198,6 +198,85 @@ summary:focus-visible {
   margin-left: auto;
 }
 
+/* Seletor de idioma: menu-button com globo, sigla e menu dropdown */
+.seletor-de-idioma {
+  position: relative;
+  display: inline-flex;
+}
+
+.seletor-de-idioma__botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seletor-de-idioma__botao svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.seletor-de-idioma__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.seletor-de-idioma__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  min-height: 44px;
+}
+
+.seletor-de-idioma__item:hover,
+.seletor-de-idioma__item:focus-visible {
+  background: var(--surface-2);
+}
+
+.seletor-de-idioma__item[aria-checked="true"] {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.seletor-de-idioma__item-texto {
+  flex: 1;
+}
+
+.seletor-de-idioma__checkmark {
+  flex: 0 0 auto;
+  color: var(--success);
+  font-weight: 700;
+}
+
 .aplicacao {
   max-width: 1080px;
   min-height: 70vh;

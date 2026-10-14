@@ -178,7 +178,7 @@ describe("excluirBaralho — exclusão pela Interface", () => {
     expect(await acervo.excluirBaralho("baralho-inexistente")).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 
@@ -190,7 +190,7 @@ describe("excluirBaralho — exclusão pela Interface", () => {
     expect(await acervo.excluirBaralho(baralhoInexistente)).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 });

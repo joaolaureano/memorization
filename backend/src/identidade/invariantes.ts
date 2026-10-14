@@ -67,8 +67,8 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        `O nome de usuário deve ter pelo menos ${LIMITE_MINIMO_DE_NOME_DE_USUARIO} caracteres; ` +
-        `o informado tem ${nomeDeUsuario.length}.`,
+        `Username must be at least ${LIMITE_MINIMO_DE_NOME_DE_USUARIO} characters; ` +
+        `provided has ${nomeDeUsuario.length}.`,
     };
   }
 
@@ -76,8 +76,8 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        `O nome de usuário deve ter no máximo ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres; ` +
-        `o informado tem ${nomeDeUsuario.length}.`,
+        `Username must be at most ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO} characters; ` +
+        `provided has ${nomeDeUsuario.length}.`,
     };
   }
 
@@ -85,8 +85,8 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        "O nome de usuário aceita apenas letras de A a Z, sem acento, " +
-        "dígitos, ponto, sublinhado e hífen.",
+        "Username accepts only letters A-Z without accents, " +
+        "digits, period, underscore, and hyphen.",
     };
   }
 
@@ -109,8 +109,8 @@ export function validarSenha(senha: string): FalhaDeRegraDeCadastro | null {
     return {
       erro: "senha_invalida",
       mensagem:
-        `A senha deve ter entre ${LIMITE_MINIMO_DE_SENHA} e ` +
-        `${LIMITE_MAXIMO_DE_SENHA} caracteres; a informada tem ${senha.length}.`,
+        `Password must be between ${LIMITE_MINIMO_DE_SENHA} and ` +
+        `${LIMITE_MAXIMO_DE_SENHA} characters; provided has ${senha.length}.`,
     };
   }
 
@@ -120,11 +120,11 @@ export function validarSenha(senha: string): FalhaDeRegraDeCadastro | null {
 /**
  * A recusa do Nome de usuário já cadastrado. A mensagem diz claramente que ele
  * já existe — o que é intencional num Cadastro aberto e foi confirmado no
- * clarify da spec (FR-074).
+ * clarify da spec (FR-074, FR-018).
  */
 export const NOME_DE_USUARIO_EXISTENTE = {
   erro: "nome_de_usuario_existente",
-  mensagem: "Este nome de usuário já existe. Escolha outro.",
+  mensagem: "This username already exists. Choose another.",
 } as const;
 
 /**
@@ -134,12 +134,12 @@ export const NOME_DE_USUARIO_EXISTENTE = {
 export type CodigoDeErroDeEntrada = "credencial_invalida";
 
 /**
- * A **única** recusa de Entrar (FR-088): a mesma mensagem, e o mesmo código,
+ * A **única** recusa de Entrar (FR-088): a mesma mensagem técnica, e o mesmo código,
  * exista ou não o Nome de usuário informado. Ela não revela qual parte da
  * Credencial falhou, e é a resposta tanto da verificação da Senha quanto do
- * cabeçalho ausente ou malformado, no Adapter HTTP.
+ * cabeçalho ausente ou malformado, no Adapter HTTP (FR-018).
  */
 export const CREDENCIAL_INVALIDA = {
   erro: "credencial_invalida",
-  mensagem: "Nome de usuário ou Senha incorretos.",
+  mensagem: "Username or password is incorrect.",
 } as const;

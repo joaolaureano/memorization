@@ -1,3 +1,4 @@
+import { pt, type Catalogo } from "../idioma/pt";
 /**
  * Módulo puro do dia (FR-204, FR-221).
  *
@@ -25,11 +26,15 @@ const MILISSEGUNDOS_DE_UM_DIA = 86_400_000;
  * pessoa reconhece no rótulo. Um instante no passado conta como zero, e um
  * instante ilegível também — a tela nunca é derrubada por uma data ruim.
  */
-export function rotuloDaPrevia(agora: Date, iso: string): string {
+export function rotuloDaPrevia(
+  agora: Date,
+  iso: string,
+  textos: Catalogo = pt,
+): string {
   const dias = diasAte(agora, new Date(iso));
   const d = Number.isFinite(dias) ? Math.max(0, dias) : 0;
 
-  return d === 1 ? "1 dia" : `${d} dias`;
+  return textos.sessao.previaEmDias(d);
 }
 
 /**
@@ -40,12 +45,13 @@ export function rotuloDaPrevia(agora: Date, iso: string): string {
 export function nomeAcessivelDaAvaliacao(
   rotulo: string,
   previa: string | null,
+  textos: Catalogo = pt,
 ): string {
   if (previa === null) {
     return rotulo;
   }
 
-  return `${rotulo}, próxima revisão em ${previa}`;
+  return textos.sessao.proximaRevisaoEm(rotulo, previa);
 }
 
 /** A meia-noite local do dia de um instante (FR-204). */

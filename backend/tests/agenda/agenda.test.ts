@@ -262,7 +262,8 @@ describe("US1: programar o estudo (FR-222–FR-226, SC-095)", () => {
     const recusada = await m.acervo.salvarRotina(sobreposta);
 
     expect(recusada).toMatchObject({ ok: false, erro: "sobreposicao" });
-    expect(recusada.ok === false && recusada.mensagem).toContain("segunda");
+    // 027: os dias em comum vão como dado (1 = segunda); o texto é da interface.
+    expect(recusada).toMatchObject({ motivo: "sobreposicao", dias: [1] });
     expect(await m.acervo.listarRotinas()).toMatchObject({
       rotinas: [{ dias: [1, 4] }],
     });

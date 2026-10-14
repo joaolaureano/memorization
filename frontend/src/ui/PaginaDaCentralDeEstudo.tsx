@@ -2,6 +2,7 @@ import type {
   ClienteDoAcervo,
   InicioDeCompromisso,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import { AgendaDeEstudo } from "./AgendaDeEstudo";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import {
@@ -38,6 +39,7 @@ export function PaginaDaCentralDeEstudo({
   /** Entrega o início autorizado à casca, que abre a Sessão (FR-231). */
   aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
 }) {
+  const { textos } = useIdioma();
   const { estado, tentarNovamente } = useEstatisticasDoEstudo(cliente);
   const dados = estado.dados;
 
@@ -45,17 +47,17 @@ export function PaginaDaCentralDeEstudo({
     <div className="pagina pilha">
       <div className="cabecalho-da-pagina">
         <div>
-          <h1>Estudo</h1>
+          <h1>{textos.inicio.estudo_titulo}</h1>
           <p className="texto-secundario">
-            Acompanhe a semana, seus resultados e as últimas Sessões.
+            {textos.inicio.estudo_descricao}
           </p>
         </div>
         <div className="acoes">
           <a className="botao botao--primario" href="#/agenda/nova">
-            Agendar estudo
+            {textos.inicio.agendar_estudo}
           </a>
           <a className="botao botao--secundario" href="#/agenda">
-            Gerenciar rotinas
+            {textos.inicio.gerenciar_rotinas}
           </a>
         </div>
       </div>
@@ -67,12 +69,12 @@ export function PaginaDaCentralDeEstudo({
       />
 
       <section className="pilha" aria-labelledby="titulo-das-estatisticas">
-        <h2 id="titulo-das-estatisticas">Seu estudo nos últimos 7 dias</h2>
+        <h2 id="titulo-das-estatisticas">{textos.inicio.estatisticas_titulo}</h2>
 
         {dados === null && estado.carregando ? (
           <EstadoDaCarga
             estado="carregando"
-            mensagem="Carregando o seu estudo…"
+            mensagem={textos.inicio.carregando_estudo}
           />
         ) : null}
 
@@ -91,22 +93,21 @@ export function PaginaDaCentralDeEstudo({
             {estado.falha !== null ? (
               <div role="alert" className="aviso aviso--erro">
                 <p>
-                  Não foi possível atualizar as Estatísticas. Os dados abaixo
-                  podem estar desatualizados. {estado.falha}
+                  {textos.inicio.nao_foi_possivel_atualizar} {estado.falha}
                 </p>
                 <button
                   type="button"
                   className="botao botao--secundario"
                   onClick={tentarNovamente}
                 >
-                  Tentar novamente
+                  {textos.comum.tentarNovamente}
                 </button>
               </div>
             ) : null}
 
             {estado.carregando ? (
               <p role="status" className="carregando">
-                Atualizando…
+                {textos.inicio.atualizando}
               </p>
             ) : null}
 
@@ -119,7 +120,7 @@ export function PaginaDaCentralDeEstudo({
       </section>
 
       <section className="pilha" aria-labelledby="titulo-das-ultimas">
-        <h2 id="titulo-das-ultimas">Últimas sessões</h2>
+        <h2 id="titulo-das-ultimas">{textos.inicio.ultimas_sessoes_titulo}</h2>
 
         {dados !== null ? (
           <UltimasSessoes recentes={dados.estatisticas.recentes} />
@@ -128,7 +129,7 @@ export function PaginaDaCentralDeEstudo({
         {dados === null && estado.carregando ? (
           <EstadoDaCarga
             estado="carregando"
-            mensagem="Carregando as últimas Sessões…"
+            mensagem={textos.inicio.carregando_sessoes}
           />
         ) : null}
 
@@ -136,7 +137,7 @@ export function PaginaDaCentralDeEstudo({
             aqui a falha só se explica, sem um segundo botão (FR-318). */}
         {dados === null && !estado.carregando ? (
           <p className="texto-secundario">
-            Não foi possível carregar as últimas Sessões.
+            {textos.inicio.nao_foi_possivel_carregar_sessoes}
           </p>
         ) : null}
       </section>

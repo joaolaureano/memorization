@@ -28,6 +28,7 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     timezoneId: 'America/Sao_Paulo',
+    locale: 'pt-BR',
     trace: 'on-first-retry',
   },
   projects: [

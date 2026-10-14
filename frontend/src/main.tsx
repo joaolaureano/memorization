@@ -32,7 +32,7 @@ function criarCliente(
 const raiz = document.getElementById("raiz");
 
 if (raiz === null) {
-  throw new Error("Elemento raiz não encontrado.");
+  throw new Error("Root element not found.");
 }
 
 createRoot(raiz).render(

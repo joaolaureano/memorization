@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BaralhoListado,
@@ -5,6 +6,7 @@ import type {
   CartaoListado,
   ClienteDoAcervo,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import {
   adicionarCartoes,
   indisponiveis,
@@ -21,14 +23,6 @@ import { useNavegarSemProtecao, useProtecaoDeSaida } from "./protecao-de-saida";
 type Carga = "carregando" | "falha" | "pronta";
 type Situacao = ReturnType<typeof situacaoDaSelecao>;
 
-/** Proteção de saída exibida quando há cartões na seleção (FR-375). */
-const DESCARTE = {
-  tipo: "descarte",
-  titulo: "Descartar este percurso?",
-  descricao: "A seleção e os campos não salvos serão descartados.",
-  rotuloDeConfirmacao: "Descartar",
-} as const;
-
 /**
  * Montagem do baralho temporário em `#/baralhos/temporario` (FR-363, FR-364,
  * FR-365, FR-367, FR-375).
@@ -40,6 +34,15 @@ export function PaginaDaSelecaoTemporaria({
   cliente: ClienteDoAcervo;
   aoEstudar: (cartoes: readonly Cartao[], nomeDoBaralho: string) => void;
 }) {
+  const { textos } = useIdioma();
+
+  /** Proteção de saída exibida quando há cartões na seleção (FR-375). */
+  const DESCARTE = {
+    tipo: "descarte",
+    titulo: textos.selecao.descartarSelecionado,
+    descricao: textos.selecao.selecaoDescartada,
+    rotuloDeConfirmacao: textos.selecao.descartar,
+  } as const;
   const [carga, setCarga] = useState<Carga>("carregando");
   const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
   const [cartoes, setCartoes] = useState<CartaoListado[]>([]);
@@ -94,12 +97,12 @@ export function PaginaDaSelecaoTemporaria({
       setSelecao(nova);
       setIndisponiveisAoEstudar([]);
       setAnuncio(
-        `${contagemDeCartoes(nova.length)} na seleção. ` +
-          "Cartões repetidos entram uma só vez.",
+        textos.selecao.naSelecao(contagemDeCartoes(nova.length, textos)) +
+          textos.selecao.cartoesRepetidosUmaVez,
       );
       setSequenciaDoAnuncio((sequencia) => sequencia + 1);
     },
-    [selecao],
+    [selecao, textos],
   );
 
   const aoRemover = useCallback((id: string) => {
@@ -159,7 +162,7 @@ export function PaginaDaSelecaoTemporaria({
       });
     }
 
-    aoEstudar(capturados, nomeDoBaralho || "Baralho temporário");
+    aoEstudar(capturados, nomeDoBaralho);
     navegarSemProtecao("#/baralhos/temporario/estudo");
   }, [aoEstudar, cliente, navegarSemProtecao, selecao, nomeDoBaralho]);
 
@@ -174,11 +177,10 @@ export function PaginaDaSelecaoTemporaria({
       <header className="cabecalho-da-pagina">
         <div>
           <h1 tabIndex={-1} ref={refDoTitulo}>
-            Criar baralho temporário
+            {textos.selecao.criarTemporario}
           </h1>
           <p className="texto-secundario">
-            Escolha o conteúdo para esta Sessão. Você poderá salvar o baralho ao
-            terminar.
+            {textos.selecao.escolhaOConteudo}
           </p>
         </div>
       </header>
@@ -208,9 +210,9 @@ export function PaginaDaSelecaoTemporaria({
         <section className="selecao" aria-labelledby="titulo-da-selecao">
           <div className="titulo-contagem">
             <h2 id="titulo-da-selecao" tabIndex={-1} ref={refDaSelecao}>
-              Seleção do estudo
+              {textos.selecao.selecaoDoEstudo}
             </h2>
-            <span>{contagemDeCartoes(selecao.length)}</span>
+            <span>{contagemDeCartoes(selecao.length, textos)}</span>
           </div>
 
           <div className="campo-de-texto">
@@ -223,7 +225,7 @@ export function PaginaDaSelecaoTemporaria({
               maxLength={100}
               value={nomeDoBaralho}
               onChange={(e) => setNomeDoBaralho(e.currentTarget.value)}
-              placeholder="Baralho temporário"
+              placeholder={textos.sessao.baralhoTemporario}
             />
             <p className="contador-caracteres">
               {nomeDoBaralho.length}/100
@@ -232,10 +234,9 @@ export function PaginaDaSelecaoTemporaria({
 
           {selecao.length === 0 ? (
             <div className="estado-vazio">
-              <h3>Seu estudo começa aqui</h3>
+              <h3>{textos.selecao.seuEstudoComeca}</h3>
               <p>
-                Adicione baralhos ou cartões individuais. Cartões repetidos
-                entram uma só vez.
+                {textos.selecao.adicioneConteudo}
               </p>
             </div>
           ) : (
@@ -263,32 +264,32 @@ export function PaginaDaSelecaoTemporaria({
                 className="botao botao--secundario"
                 onClick={aoLimpar}
               >
-                Limpar seleção
+                {textos.selecao.limparSelecao}
               </button>
             </>
           )}
 
           {indisponiveisAoEstudar.length > 0 && (
             <div role="alert" className="aviso aviso--erro">
-              <p>{textoDeIndisponiveis(indisponiveisAoEstudar.length)}</p>
+              <p>{textoDeIndisponiveis(indisponiveisAoEstudar.length, textos)}</p>
               <button
                 type="button"
                 className="botao botao--secundario"
                 onClick={aoRetirarIndisponiveis}
               >
-                Retirar indisponíveis
+                {textos.selecao.retirarIndisponiveis}
               </button>
             </div>
           )}
 
           {falhaAoEstudar !== null && (
             <p role="alert" className="erro">
-              {falhaAoEstudar}
+              <TextoDoProduto texto={falhaAoEstudar} />
             </p>
           )}
 
           <p className="nota-selecao" id="orientacao-da-selecao">
-            {orientacao(situacao)}
+            {orientacao(situacao, textos)}
           </p>
 
           <div className="acoes-selecao">
@@ -330,25 +331,23 @@ function mesclarFrentes(
 }
 
 /** "1 Cartão" ou "N Cartões". */
-function contagemDeCartoes(n: number): string {
-  return n === 1 ? "1 Cartão" : `${n} Cartões`;
+function contagemDeCartoes(n: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return textos.selecao.cartao(n);
 }
 
 /** Aviso de cartões que saíram do acervo. */
-function textoDeIndisponiveis(n: number): string {
-  return n === 1
-    ? "1 Cartão não está mais disponível."
-    : `${n} Cartões não estão mais disponíveis.`;
+function textoDeIndisponiveis(n: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return textos.selecao.cartaoIndisponivel(n);
 }
 
 /** Orientação da seleção exibida junto ao botão Revisar. */
-function orientacao(situacao: Situacao): string {
+function orientacao(situacao: Situacao, textos: ReturnType<typeof useIdioma>["textos"]): string {
   switch (situacao) {
     case "vazia":
-      return "Adicione pelo menos um cartão para revisar.";
+      return textos.selecao.adicioneUmCartao;
     case "acima-do-limite":
-      return "Reduza a seleção para no máximo 1.000 cartões.";
+      return textos.selecao.reduza;
     default:
-      return "Todos os cartões selecionados serão revisados em ordem aleatória.";
+      return textos.selecao.todosEmOrdenAleatoria;
   }
 }

@@ -1,3 +1,9 @@
+import { MENSAGENS_PT } from "../idioma/mensagens";
+import { textosDoIdiomaVigente } from "../idioma/ProvedorDeIdioma";
+import {
+  contextoDaRota,
+  type RecusaDoServidor,
+} from "../idioma/recusas";
 import {
   INDISPONIVEL,
   MENSAGEM_DE_AGENDA_INDISPONIVEL,
@@ -153,8 +159,10 @@ export class ClienteHttp implements ClienteDoAcervo {
    * Acesso temporário (018, FR-297). O cookie é `HttpOnly`: nenhum script — este
    * inclusive — consegue lê-lo.
    */
-  private pedir(url: string, init: RequestInit = {}): Promise<Response> {
-    return fetch(url, { ...init, credentials: "include" });
+  private async pedir(url: string, init: RequestInit = {}): Promise<Response> {
+    const resposta = await fetch(url, { ...init, credentials: "include" });
+
+    return comRecusaNoIdiomaVigente(resposta, url);
   }
 
   /**
@@ -353,7 +361,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: "Escolhas inválidas.",
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
 
@@ -361,7 +369,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "conflito",
-          mensagem: "Conflito na transição.",
+          mensagem: MENSAGENS_PT.conflitoNaTransicao,
         };
       }
 
@@ -412,7 +420,7 @@ export class ClienteHttp implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "nao_encontrado",
-          mensagem: "Baralho não encontrado.",
+          mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "baralhos"),
         };
       }
 
@@ -425,7 +433,7 @@ export class ClienteHttp implements ClienteDoAcervo {
           ok: false,
           erro,
           mensagem:
-            corpo.mensagem ?? "Já existe um cartão com esta frente neste baralho.",
+            corpo.mensagem ?? textosDoIdiomaVigente().recusa({ erro: "frente_duplicada" }, "cartoes"),
         };
       }
 
@@ -2566,4 +2574,58 @@ function lerInicioDeCompromisso(corpo: unknown): InicioDeCompromisso | null {
     cartoes: cartoes as Cartao[],
     quantidadeSolicitada: campos.quantidadeSolicitada as number | null,
   };
+}
+
+/**
+ * Troca a `mensagem` técnica de uma recusa (em inglês, nunca mostrada à pessoa)
+ * pelo texto do Idioma da interface vigente na chegada da resposta, escolhido
+ * pelo código `erro` e pelo contexto da rota (027, FR-016, FR-019). Respostas
+ * de sucesso e corpos fora do contrato de recusa passam intactos.
+ */
+async function comRecusaNoIdiomaVigente(
+  resposta: Response,
+  url: string,
+): Promise<Response> {
+  if (resposta.ok) {
+    return resposta;
+  }
+
+  let corpo: unknown;
+
+  try {
+    corpo = await resposta.clone().json();
+  } catch {
+    return resposta;
+  }
+
+  if (
+    typeof corpo !== "object" ||
+    corpo === null ||
+    typeof (corpo as { erro?: unknown }).erro !== "string" ||
+    typeof (corpo as { mensagem?: unknown }).mensagem !== "string"
+  ) {
+    return resposta;
+  }
+
+  const recusa = corpo as RecusaDoServidor;
+  const caminho = new URL(url, "http://local").pathname.replace(
+    /^\/api(?=\/)/,
+    "",
+  );
+  const mensagem = textosDoIdiomaVigente().recusa(
+    {
+      erro: recusa.erro,
+      ...(typeof recusa.motivo === "string" ? { motivo: recusa.motivo } : {}),
+      ...(typeof recusa.limite === "number" ? { limite: recusa.limite } : {}),
+      ...(Array.isArray(recusa.dias) ? { dias: recusa.dias } : {}),
+      ...(typeof recusa.campo === "string" ? { campo: recusa.campo } : {}),
+    },
+    contextoDaRota(caminho),
+  );
+
+  return new Response(JSON.stringify({ ...corpo, mensagem }), {
+    status: resposta.status,
+    statusText: resposta.statusText,
+    headers: resposta.headers,
+  });
 }

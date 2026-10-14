@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import type { Avaliacao, OpcaoDeAvaliacao } from "../acervo-cliente/cliente";
 import { OPCOES_DE_AVALIACAO_SM2 } from "../acervo-cliente/cliente-em-memoria";
+import { rotuloDoNivel, useIdioma } from "../idioma";
+import { rotuloDoBaralhoDoRegistro } from "../idioma/rotulo-do-baralho";
 
 /**
  * Placar da Sessão (T1208; specs/013-estatisticas-e-historico/contracts/contratos.md §7;
@@ -61,12 +63,19 @@ export function ResumoDaSessao({
   itens,
   opcoes = OPCOES_DE_AVALIACAO_SM2,
   children,
+  origem,
+  nomeDoBaralho = "",
 }: {
   itens: readonly ItemDoResumo[];
   opcoes?: readonly OpcaoDeAvaliacao[];
   origem?: "baralho" | "revisao" | "temporario";
+  nomeDoBaralho?: string;
   children?: ReactNode;
 }) {
+  const { textos } = useIdioma();
+  const rotuloDoRegistro = origem === undefined
+    ? null
+    : rotuloDoBaralhoDoRegistro({ origem, nomeDoBaralho }, textos);
   const estudados = itens.length;
   const acertos = itens.filter((item) => item.resultado === "acertou");
   const percentual =
@@ -140,19 +149,22 @@ export function ResumoDaSessao({
           >
             {item.tipo === "imagem" ? (
               <>
-                <span className="selo selo--tipo">Cartão do tipo Imagem</span>{" "}
-                {item.frente.trim() === "" ? "sem texto" : item.frente}
+                <span className="selo selo--tipo">{textos.sessao.cartaoDoTipoImagem}</span>{" "}
+                {item.frente.trim() === "" ? textos.sessao.semTexto : item.frente}
               </>
             ) : (
               item.frente
             )}
           </button>
           <div className="resumo__verso" id={idDoVerso} hidden={!expandido}>
-            <p className="lado-do-cartao">Verso</p>
+            <p className="lado-do-cartao">{textos.sessao.verso}</p>
             <p className="conteudo-do-cartao">{item.verso}</p>
             {item.avaliacaoRotulo != null && (
               <p className="resumo__nivel">
-                Avaliação: {item.avaliacaoRotulo}
+                {textos.sessao.avaliacao}{" "}
+                {item.avaliacao != null
+                  ? rotuloDoNivel(item.avaliacao, item.avaliacaoRotulo, textos)
+                  : item.avaliacaoRotulo}
               </p>
             )}
           </div>
@@ -168,13 +180,17 @@ export function ResumoDaSessao({
 
   return (
     <div className="pilha">
-      <section className="placar" aria-label="Placar da Sessão">
+      <section
+        className="placar"
+        aria-label={rotuloDoRegistro === null
+          ? textos.sessao.placarDaSessao
+          : `${textos.sessao.placarDaSessao}: ${rotuloDoRegistro}`}
+      >
         <p className="placar__percentual">
-          {percentual}%<span className="visualmente-oculto"> de acertos</span>
+          {percentual}%<span className="visualmente-oculto"> {textos.sessao.deAcertos}</span>
         </p>
         <p className="placar__total">
-          {acertos.length} de {estudados}{" "}
-          {estudados === 1 ? "Cartão" : "Cartões"}
+          {acertos.length} de {estudados} {textos.sessao.cartaoNoun(estudados)}
         </p>
 
         <div className="placar__barra" aria-hidden="true">
@@ -196,15 +212,15 @@ export function ResumoDaSessao({
         </div>
         <ul
           className="placar__legenda"
-          aria-label="Contagem por opção de Avaliação"
+          aria-label={textos.sessao.contagemPorOpcao}
         >
-          {opcoes.map(({ chave, rotulo }) => (
+          {opcoes.map(({ chave, rotulo: rotuloDoServidor }) => (
             <li key={chave}>
               <span
                 className={`placar__marca placar__marca--${chave}`}
                 aria-hidden="true"
               />{" "}
-              {rotulo} {contagemPorOpcao[chave]}
+              {rotuloDoNivel(chave, rotuloDoServidor, textos)} {contagemPorOpcao[chave]}
             </li>
           ))}
           {contagemSemAvaliacao > 0 && (
@@ -213,13 +229,14 @@ export function ResumoDaSessao({
                 className="placar__marca placar__marca--sem-avaliacao"
                 aria-hidden="true"
               />{" "}
-              Sem avaliação {contagemSemAvaliacao}
+              {textos.sessao.semAvaliacao} {contagemSemAvaliacao}
             </li>
           )}
         </ul>
       </section>
 
-      {opcoes.map(({ chave, rotulo }) => {
+      {opcoes.map(({ chave, rotulo: rotuloDoServidor }) => {
+        const rotulo = rotuloDoNivel(chave, rotuloDoServidor, textos);
         const itensDoGrupo = itens.filter((item) => item.avaliacao === chave);
         const idDoGrupo = useId();
         const idDaLista = useId();
@@ -243,7 +260,7 @@ export function ResumoDaSessao({
 
             {vazio && (
               <p id={descricaoDoGrupo} className="ajuda">
-                Nenhum Cartão avaliado como {rotulo}
+                {textos.sessao.nenhumCartaoAvaliado(rotulo)}
               </p>
             )}
 
@@ -274,7 +291,7 @@ export function ResumoDaSessao({
                   aria-controls={idDaLista}
                   onClick={() => alternarGrupo(idDoGrupo)}
                 >
-                  Sem avaliação ({itensSemAvaliacao.length})
+                  {textos.sessao.semAvaliacao} ({itensSemAvaliacao.length})
                 </button>
 
                 <ul

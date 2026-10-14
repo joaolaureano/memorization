@@ -272,26 +272,6 @@ export function cartoesPendentes<C extends CartaoPesquisavel>(
   );
 }
 
-/**
- * O rótulo textual da situação de um Baralho (FR-380, SC-152).
- *
- * "Sem cartões" é neutro e tem maiúscula de início de frase; "Pendente" e
- * "Revisado" também começam a frase — o chamador usa o mesmo texto na
- * etiqueta e no anúncio.
- */
-export function rotuloDaSituacaoDoBaralho(
-  situacao: SituacaoDoBaralho,
-): string {
-  switch (situacao) {
-    case "sem-cartoes":
-      return "Sem cartões";
-    case "pendente":
-      return "Pendente";
-    case "revisado":
-      return "Revisado";
-  }
-}
-
 /** O texto de comparação: sem acentos e em minúsculas (FR-348, FR-350). */
 function normalizar(texto: string): string {
   return texto

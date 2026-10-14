@@ -1,3 +1,5 @@
+import { useIdioma } from "../idioma";
+import { SeletorDeIdioma } from "../idioma";
 import { destinoAtivo, hashDaRota } from "./navegacao";
 import type { Rota } from "./navegacao";
 
@@ -32,6 +34,7 @@ export function Moldura({
   aoSair: () => void;
 }) {
   const destino = destinoAtivo(rota);
+  const { textos } = useIdioma();
 
   return (
     <header className="moldura">
@@ -40,35 +43,37 @@ export function Moldura({
         memorization
       </a>
 
-      <nav aria-label="Principal" className="navegacao-principal">
+      <nav aria-label={textos.moldura.labelNav} className="navegacao-principal">
         <a
           href={hashDaRota({ nome: "inicio" })}
           aria-current={destino === "inicio" ? "page" : undefined}
         >
-          Início
+          {textos.moldura.inicio}
         </a>
         <a
           href={hashDaRota({ nome: "central-de-estudo" })}
           aria-current={destino === "estudo" ? "page" : undefined}
         >
-          Estudo
+          {textos.moldura.estudo}
         </a>
         <a
           href={hashDaRota({ nome: "baralhos" })}
           aria-current={destino === "baralhos" ? "page" : undefined}
         >
-          Baralhos
+          {textos.moldura.baralhos}
         </a>
         <a
           href={hashDaRota({ nome: "preferencias" })}
           aria-current={destino === "preferencias" ? "page" : undefined}
         >
-          Perfil
+          {textos.moldura.perfil}
         </a>
       </nav>
 
+      <SeletorDeIdioma />
+
       <button type="button" className="botao-de-saida" onClick={aoSair}>
-        Sair
+        {textos.moldura.sair}
       </button>
     </header>
   );

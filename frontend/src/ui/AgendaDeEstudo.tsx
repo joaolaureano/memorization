@@ -1,3 +1,5 @@
+import { MENSAGENS_PT } from "../idioma/mensagens";
+import { TextoDoProduto } from "../idioma";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
@@ -19,13 +21,10 @@ import {
   somarDias,
 } from "../agenda/datas";
 import {
-  descreverQuantidade,
   resumirDia,
-  rotuloDoCompromisso,
-  rotuloDoEstadoDoDia,
-  textoDaContagem,
 } from "../agenda/estado-do-dia";
 import type { ResumoDoDia } from "../agenda/estado-do-dia";
+import { LOCALE, useIdioma } from "../idioma";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 
 /**
@@ -77,6 +76,7 @@ export function AgendaDeEstudo({
   /** Entrega o início autorizado à casca, que abre a Sessão (FR-231). */
   aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
 }) {
+  const { textos, idioma } = useIdioma();
   const [fuso] = useState(fusoDoNavegador);
   const [estado, setEstado] = useState<EstadoDaAgenda>({
     dados: null,
@@ -130,7 +130,7 @@ export function AgendaDeEstudo({
         resultado = {
           ok: false,
           erro: "indisponivel",
-          mensagem: "A Agenda não está disponível agora. Tente novamente.",
+          mensagem: MENSAGENS_PT.agendaIndisponivel,
         };
       }
 
@@ -257,11 +257,11 @@ export function AgendaDeEstudo({
       aria-labelledby="titulo-da-agenda"
     >
       <h2 id="titulo-da-agenda">
-        {modo === "hoje" ? "Agenda de hoje" : "Agenda semanal"}
+        {modo === "hoje" ? textos.agenda.agendaDeHoje : textos.agenda.agendaSemanal}
       </h2>
 
       {dados === null && estado.carregando ? (
-        <EstadoDaCarga estado="carregando" mensagem="Carregando a agenda…" />
+        <EstadoDaCarga estado="carregando" mensagem={textos.agenda.carregandoAgenda} />
       ) : null}
 
       {dados === null && !estado.carregando && estado.falha !== null ? (
@@ -277,22 +277,21 @@ export function AgendaDeEstudo({
           {estado.falha !== null ? (
             <div role="alert" className="aviso aviso--erro">
               <p>
-                Não foi possível atualizar a agenda. Os dados abaixo podem estar
-                desatualizados. {estado.falha}
+                {textos.agenda.naoFoiPossivelAtualizarAgenda} {estado.falha}
               </p>
               <button
                 type="button"
                 className="botao botao--secundario"
                 onClick={atualizar}
               >
-                Tentar novamente
+                {textos.comum.tentarNovamente}
               </button>
             </div>
           ) : null}
 
           {estado.carregando ? (
             <p role="status" className="carregando">
-              Atualizando a agenda…
+              {textos.agenda.atualizandoAgenda}
             </p>
           ) : null}
 
@@ -302,6 +301,7 @@ export function AgendaDeEstudo({
               iniciando={iniciando}
               falhaDeInicio={falhaDeInicio}
               aoEstudar={(compromisso) => void estudar(compromisso)}
+              textos={textos}
             />
           ) : (
             <>
@@ -312,6 +312,8 @@ export function AgendaDeEstudo({
                 aoSelecionar={selecionarDia}
                 aoIrParaSemana={irParaSemana}
                 aoIrParaHoje={irParaHoje}
+                textos={textos}
+                locale={LOCALE[idioma]}
               />
 
               <EstudosDoDia
@@ -320,6 +322,8 @@ export function AgendaDeEstudo({
                 iniciando={iniciando}
                 falhaDeInicio={falhaDeInicio}
                 aoEstudar={(compromisso) => void estudar(compromisso)}
+                textos={textos}
+                locale={LOCALE[idioma]}
               />
             </>
           )}
@@ -340,11 +344,13 @@ function AgendaDeHoje({
   iniciando,
   falhaDeInicio,
   aoEstudar,
+  textos,
 }: {
   dados: SemanaDaAgenda;
   iniciando: string | null;
   falhaDeInicio: string | null;
   aoEstudar: (compromisso: CompromissoDeEstudo) => void;
+  textos: ReturnType<typeof useIdioma>["textos"];
 }) {
   const resumo = resumirDia(dados.hoje, dados.hoje, dados.compromissosDeHoje);
   // Os Compromissos de hoje na ordem recebida, sem os cancelados; só os três
@@ -357,19 +363,19 @@ function AgendaDeHoje({
   return (
     <>
       {resumo.total === 0 ? (
-        <p>Nenhum estudo agendado para hoje</p>
+        <p>{textos.agenda.nenhumEstudoAgendadoParaHoje}</p>
       ) : resumo.concluidos === resumo.total ? (
         <>
-          <p>Agenda de hoje concluída</p>
-          <p className="texto-secundario">{textoDaContagem(resumo)}</p>
+          <p>{textos.agenda.agendaDeHojeConcluida}</p>
+          <p className="texto-secundario">{textos.agenda.contagem(resumo)}</p>
         </>
       ) : (
-        <p>{textoDaContagem(resumo)}</p>
+        <p>{textos.agenda.contagem(resumo)}</p>
       )}
 
       {falhaDeInicio !== null ? (
         <p className="erro" role="alert">
-          {falhaDeInicio}
+          <TextoDoProduto texto={falhaDeInicio} />
         </p>
       ) : null}
 
@@ -383,12 +389,12 @@ function AgendaDeHoje({
               <div className="agenda__estudo-texto">
                 <p className="titulo-do-item">{compromisso.nomeDoBaralho}</p>
                 <p className="texto-secundario">
-                  {descreverQuantidade(compromisso.quantidade)} ·{" "}
-                  {rotuloDoCompromisso(compromisso.estado)}
+                  {textos.agenda.quantidadeCartoes(compromisso.quantidade)} ·{" "}
+                  {textos.agenda.estadoDoCompromisso[compromisso.estado]}
                   {compromisso.indisponivel ? (
                     <>
                       {" · "}
-                      <strong>Baralho indisponível</strong>
+                      <strong>{textos.agenda.baralhoIndisponivel}</strong>
                     </>
                   ) : null}
                 </p>
@@ -398,6 +404,7 @@ function AgendaDeHoje({
                 hoje={dados.hoje}
                 iniciando={iniciando}
                 aoEstudar={aoEstudar}
+                textos={textos}
               />
             </li>
           ))}
@@ -405,7 +412,7 @@ function AgendaDeHoje({
       ) : null}
 
       <a className="botao botao--secundario" href="#/estudo">
-        {deHoje.length > 3 ? "Ver todos em Estudo" : "Ver agenda semanal"}
+        {deHoje.length > 3 ? textos.agenda.verTodosEmEstudo : textos.agenda.verAgendaSemanal}
       </a>
     </>
   );
@@ -419,6 +426,8 @@ function Semana({
   aoSelecionar,
   aoIrParaSemana,
   aoIrParaHoje,
+  textos,
+  locale,
 }: {
   dados: SemanaDaAgenda;
   selecionado: string | null;
@@ -426,6 +435,8 @@ function Semana({
   aoSelecionar: (data: string) => void;
   aoIrParaSemana: (deslocamento: number) => void;
   aoIrParaHoje: () => void;
+  textos: ReturnType<typeof useIdioma>["textos"];
+  locale: string;
 }) {
   const dias = diasDaSemana(dados.inicio);
   const dataSelecionada =
@@ -442,7 +453,7 @@ function Semana({
       aria-labelledby="titulo-da-agenda"
     >
       <p className="agenda__intervalo" aria-live="polite">
-        {descreverSemana(dados.inicio)}
+        {descreverSemana(dados.inicio, locale)}
       </p>
 
       <div className="agenda__controles">
@@ -452,7 +463,7 @@ function Semana({
           onClick={() => aoIrParaSemana(-7)}
           disabled={atualizando}
         >
-          Semana anterior
+          {textos.agenda.semanaAnterior}
         </button>
         <button
           type="button"
@@ -460,7 +471,7 @@ function Semana({
           onClick={aoIrParaHoje}
           disabled={atualizando}
         >
-          Hoje
+          {textos.agenda.hoje}
         </button>
         <button
           type="button"
@@ -468,7 +479,7 @@ function Semana({
           onClick={() => aoIrParaSemana(7)}
           disabled={atualizando}
         >
-          Semana seguinte
+          {textos.agenda.semanaSeguinte}
         </button>
       </div>
 
@@ -495,12 +506,12 @@ function Semana({
                   .filter(Boolean)
                   .join(" ")}
                 aria-pressed={ehSelecionado}
-                aria-label={nomeAcessivelDoDia(resumo, ehHoje)}
+                aria-label={nomeAcessivelDoDia(resumo, ehHoje, locale, textos)}
                 data-data={data}
                 onClick={() => aoSelecionar(data)}
               >
                 <span className="agenda__dia-semana" aria-hidden="true">
-                  {abreviacaoDoDia(diaDaSemana(data))}
+                  {abreviacaoDoDia(diaDaSemana(data), locale)}
                 </span>
                 <span className="agenda__dia-numero" aria-hidden="true">
                   {Number(data.slice(8, 10))}
@@ -520,20 +531,25 @@ function Semana({
 }
 
 /** O nome acessível de um dia: data, hoje, estado e contagem (FR-252). */
-function nomeAcessivelDoDia(resumo: ResumoDoDia, ehHoje: boolean): string {
+function nomeAcessivelDoDia(
+  resumo: ResumoDoDia,
+  ehHoje: boolean,
+  locale: string,
+  textos: ReturnType<typeof useIdioma>["textos"],
+): string {
   return [
-    dataPorExtenso(resumo.data),
-    ehHoje ? "hoje" : null,
-    rotuloDoEstadoDoDia(resumo.estado),
-    textoDaContagem(resumo),
+    dataPorExtenso(resumo.data, locale),
+    ehHoje ? textos.agenda.hoje.toLocaleLowerCase(locale) : null,
+    textos.agenda.estadoDoDia[resumo.estado],
+    textos.agenda.contagem(resumo),
   ]
     .filter((parte) => parte !== null)
     .join(", ");
 }
 
 /** "Seg", "Ter"… — a abreviação visual do dia (o nome completo vai no rótulo). */
-function abreviacaoDoDia(dia: number): string {
-  return nomeDoDia(dia).slice(0, 3).replace(/^./, (letra) => letra.toUpperCase());
+function abreviacaoDoDia(dia: number, locale: string): string {
+  return nomeDoDia(dia, locale).slice(0, 3).replace(/^./, (letra) => letra.toUpperCase());
 }
 
 /**
@@ -549,12 +565,16 @@ function EstudosDoDia({
   iniciando,
   falhaDeInicio,
   aoEstudar,
+  textos,
+  locale,
 }: {
   dados: SemanaDaAgenda;
   selecionado: string;
   iniciando: string | null;
   falhaDeInicio: string | null;
   aoEstudar: (compromisso: CompromissoDeEstudo) => void;
+  textos: ReturnType<typeof useIdioma>["textos"];
+  locale: string;
 }) {
   const dia = dados.compromissos.some((c) => c.data === selecionado)
     ? resumirDia(selecionado, dados.hoje, dados.compromissos)
@@ -567,23 +587,23 @@ function EstudosDoDia({
   return (
     <section aria-labelledby="titulo-dos-estudos-do-dia" className="agenda__dia-detalhe">
       <h3 id="titulo-dos-estudos-do-dia">
-        {dataPorExtenso(selecionado)}
+        {dataPorExtenso(selecionado, locale)}
         {selecionado === dados.hoje ? " (hoje)" : ""}
       </h3>
       {falhaDeInicio !== null ? (
         <p className="erro" role="alert">
-          {falhaDeInicio}
+          <TextoDoProduto texto={falhaDeInicio} />
         </p>
       ) : null}
 
       {dia.compromissos.length === 0 ? (
         <p className="texto-secundario">
-          Nenhum estudo agendado para este dia.
+          {textos.agenda.nenhumEstudoAgendadoParaEsteDia}
         </p>
       ) : (
         <>
           <p className="texto-secundario" aria-live="polite">
-            {rotuloDoEstadoDoDia(dia.estado)} · {textoDaContagem(dia)}
+            {textos.agenda.estadoDoDia[dia.estado]} · {textos.agenda.contagem(dia)}
           </p>
           <ul className="lista agenda__estudos">
           {dia.compromissos.map((compromisso) => (
@@ -594,13 +614,13 @@ function EstudosDoDia({
               <div className="agenda__estudo-texto">
                 <p className="titulo-do-item">{compromisso.nomeDoBaralho}</p>
                 <p className="texto-secundario">
-                  {descreverQuantidade(compromisso.quantidade)} ·{" "}
-                  {rotuloDoCompromisso(compromisso.estado)}
+                  {textos.agenda.quantidadeCartoes(compromisso.quantidade)} ·{" "}
+                  {textos.agenda.estadoDoCompromisso[compromisso.estado]}
                   {compromisso.indisponivel &&
                   compromisso.estado !== "cancelado" ? (
                     <>
                       {" · "}
-                      <strong>Baralho indisponível</strong>
+                      <strong>{textos.agenda.baralhoIndisponivel}</strong>
                     </>
                   ) : null}
                 </p>
@@ -610,6 +630,7 @@ function EstudosDoDia({
                 hoje={dados.hoje}
                 iniciando={iniciando}
                 aoEstudar={aoEstudar}
+                textos={textos}
               />
             </li>
           ))}
@@ -626,20 +647,22 @@ function AcaoDoCompromisso({
   hoje,
   iniciando,
   aoEstudar,
+  textos,
 }: {
   compromisso: CompromissoDeEstudo;
   hoje: string;
   iniciando: string | null;
   aoEstudar: (compromisso: CompromissoDeEstudo) => void;
+  textos: ReturnType<typeof useIdioma>["textos"];
 }) {
   if (compromisso.estado === "concluido" && compromisso.registroId !== null) {
     return (
       <a
         className="botao botao--secundario"
         href={`#/sessoes/${encodeURIComponent(compromisso.registroId)}`}
-        aria-label={`Ver Sessão de ${compromisso.nomeDoBaralho}`}
+        aria-label={`${textos.agenda.verSessao} de ${compromisso.nomeDoBaralho}`}
       >
-        Ver Sessão
+        {textos.agenda.verSessao}
       </a>
     );
   }
@@ -653,9 +676,9 @@ function AcaoDoCompromisso({
       <a
         className="botao botao--secundario"
         href={`#/agenda/${encodeURIComponent(compromisso.rotinaId)}/editar`}
-        aria-label={`Ajustar rotina de ${compromisso.nomeDoBaralho}`}
+        aria-label={`${textos.agenda.ajustarRotina} de ${compromisso.nomeDoBaralho}`}
       >
-        Ajustar rotina
+        {textos.agenda.ajustarRotina}
       </a>
     );
   }
@@ -666,10 +689,10 @@ function AcaoDoCompromisso({
         type="button"
         className="botao botao--primario"
         disabled={iniciando !== null}
-        aria-label={`Estudar ${compromisso.nomeDoBaralho}`}
+        aria-label={`${textos.agenda.estudar} ${compromisso.nomeDoBaralho}`}
         onClick={() => aoEstudar(compromisso)}
       >
-        {iniciando === compromisso.rotinaId ? "Iniciando…" : "Estudar"}
+        {iniciando === compromisso.rotinaId ? textos.agenda.iniciando : textos.agenda.estudar}
       </button>
     );
   }

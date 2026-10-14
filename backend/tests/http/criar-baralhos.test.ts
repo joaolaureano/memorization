@@ -26,7 +26,7 @@ const NOME_VALIDO = "Inglês";
 
 const RECUSA_DE_CORPO_INVALIDO = {
   erro: "corpo_invalido",
-  mensagem: "O corpo da requisição não é válido.",
+  mensagem: "Request body is invalid.",
 };
 
 let servidor: FastifyInstance;
@@ -132,7 +132,7 @@ describe("POST /baralhos — criação conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
   });
 
@@ -142,7 +142,7 @@ describe("POST /baralhos — criação conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
   });
 
@@ -153,7 +153,8 @@ describe("POST /baralhos — criação conforme o contrato", () => {
     expect(resposta.json()).toEqual({
       erro: "nome_muito_longo",
       mensagem:
-        "O nome do baralho deve ter no máximo 100 caracteres; o informado tem 101.",
+        "Deck name is too long. Maximum 100 characters; provided has 101.",
+      limite: 100,
     });
   });
 });

@@ -63,7 +63,7 @@ describe("criarBaralho — criação pela Interface", () => {
     expect(await acervo.criarBaralho({ nome: "" })).toEqual({
       ok: false,
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
   });
 
@@ -71,18 +71,18 @@ describe("criarBaralho — criação pela Interface", () => {
     expect(await acervo.criarBaralho({ nome: "   " })).toEqual({
       ok: false,
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
   });
 
   it("recusa nome com 101 caracteres, informando limite e tamanho atual (FR-023, SC-016)", async () => {
-    expect(
-      await acervo.criarBaralho({ nome: "a".repeat(LIMITE_DO_NOME + 1) }),
-    ).toEqual({
+    const result = await acervo.criarBaralho({ nome: "a".repeat(LIMITE_DO_NOME + 1) });
+    expect(result).toEqual({
       ok: false,
       erro: "nome_muito_longo",
       mensagem:
-        "O nome do baralho deve ter no máximo 100 caracteres; o informado tem 101.",
+        "Deck name is too long. Maximum 100 characters; provided has 101.",
+      limite: 100,
     });
   });
 

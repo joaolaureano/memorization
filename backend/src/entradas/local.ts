@@ -50,8 +50,8 @@ const LINHA_DE_INICIO = "Armazenamento: SQLite (arquivo local)";
  * se o armazenamento existisse (FR-044, FR-045).
  */
 const FALHA_NO_INICIO =
-  "Falha no armazenamento local: não foi possível abrir o arquivo configurado. " +
-  "A aplicação não foi iniciada.";
+  "Local storage failure: could not open configured file. " +
+  "Application failed to initialize.";
 
 /**
  * Lê o segredo do servidor, ou devolve `null` depois de reportar a recusa.

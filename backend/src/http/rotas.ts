@@ -13,6 +13,8 @@ import type { AcaoDeRotina } from "../agenda/tipos.ts";
 import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 import { credencialDoCabecalho } from "./credencial.ts";
+import { recusa } from "./recusas.ts";
+import { AnkiError } from "../importacao/anki.ts";
 
 /**
  * O construtor do `Acervo` de **um** Usuário. As rotas o chamam por
@@ -69,7 +71,7 @@ const corpoDeCartao = z.object({
  */
 function responderRecusaDeCartao(
   resposta: FastifyReply,
-  resultado: { erro: string; mensagem: string; motivo?: string },
+  resultado: { erro: string; mensagem: string; motivo?: string; limite?: number },
 ) {
   if (resultado.erro === "imagem_invalida") {
     return resposta.status(422).send({
@@ -79,9 +81,13 @@ function responderRecusaDeCartao(
     });
   }
 
+  const body: Record<string, unknown> = { erro: resultado.erro, mensagem: resultado.mensagem };
+  if (resultado.limite !== undefined) {
+    body.limite = resultado.limite;
+  }
   return resposta
     .status(resultado.erro === "tipo_imutavel" ? 409 : 400)
-    .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+    .send(body);
 }
 
 /**
@@ -99,28 +105,21 @@ const corpoDeSelecaoParaBaralho = z.object({
 
 /**
  * FR-374 — resposta de forma inválida ou de dados recusados pelo `Acervo`.
- * Única mensagem em português para os dois casos, sem detalhar o motivo.
+ * Única mensagem em inglês técnico para os dois casos, sem detalhar o motivo.
  */
-const DADOS_DA_SELECAO_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados da seleção são inválidos.",
-};
+const DADOS_DA_SELECAO_INVALIDOS = recusa("dados_invalidos");
 
 /**
- * FR-374 — mensagem do 409 de Cartões que não existem ou não são do Usuário.
+ * FR-374 — mensagem técnica em inglês do 409 de Cartões que não existem ou não são do Usuário.
  * A lista de ids acompanha a resposta e nunca revela dados alheios.
  */
-const CARTOES_INDISPONIVEIS_MENSAGEM =
-  "Alguns cartões não estão mais disponíveis.";
+const CARTOES_INDISPONIVEIS_MENSAGEM = recusa("cartoes_indisponiveis").mensagem;
 
 /**
- * FR-374 — resposta do 409 de colisão de `id` com outro Usuário; nada foi
+ * FR-374 — resposta técnica em inglês do 409 de colisão de `id` com outro Usuário; nada foi
  * gravado e a mesma tentativa pode ser repetida.
  */
-const CONFLITO_DE_BARALHO = {
-  erro: "conflito",
-  mensagem: "Não foi possível salvar o baralho. Tente novamente.",
-};
+const CONFLITO_DE_BARALHO = recusa("conflito");
 
 /**
  * Forma do corpo de `POST /baralhos` e `PUT /baralhos/{id}`: exatamente o
@@ -266,13 +265,10 @@ const corpoDePreferencias = z.object({
 /**
  * Recusa uniforme de forma inválida na borda. Regra de domínio exige mensagem
  * útil ao usuário; forma inválida não — mas a resposta é estável e em
- * português, como toda a interface (FR-046). O código `corpo_invalido` não é
+ * inglês técnico para debugging (FR-046, FR-018). O código `corpo_invalido` não é
  * código de regra de Cartão: ele não aparece na tabela do contrato.
  */
-export const CORPO_INVALIDO = {
-  erro: "corpo_invalido",
-  mensagem: "O corpo da requisição não é válido.",
-} as const;
+export const CORPO_INVALIDO = recusa("corpo_invalido");
 
 /**
  * Status da falha do armazenamento: o serviço não conseguiu ler nem gravar, e
@@ -282,8 +278,8 @@ const INDISPONIVEL = 503;
 
 /**
  * Recusas das rotas de Histórico, cada uma com o código estável e a mensagem
- * em português — a mesma forma `{ erro, mensagem }` de todas as demais rotas
- * (FR-046).
+ * em inglês técnico — a mesma forma `{ erro, mensagem }` de todas as demais rotas
+ * (FR-046, FR-018).
  *
  * Os resultados desta feature carregam apenas o código (contrato da `013`), e
  * quem traduz a falha em frase para a tela é o cliente; ainda assim a resposta
@@ -292,52 +288,38 @@ const INDISPONIVEL = 503;
  * como inexistente, e é `nao_encontrado` que a leitura de um registro de outro
  * Usuário recebe (FR-166, FR-179).
  */
-const DADOS_DO_REGISTRO_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados da Sessão são inválidos.",
-} as const;
-const REGISTRO_EM_CONFLITO = {
-  erro: "conflito",
-  mensagem: "Esta Sessão já foi registrada por outro Usuário.",
-} as const;
-const REGISTRO_NAO_ENCONTRADO = {
-  erro: "nao_encontrado",
-  mensagem: "Sessão não encontrada.",
-} as const;
-const INDISPONIVEL_DO_ARMAZENAMENTO = {
-  erro: "indisponivel",
-  mensagem: "O armazenamento está indisponível.",
-} as const;
+const DADOS_DO_REGISTRO_INVALIDOS = recusa("dados_invalidos");
+const REGISTRO_EM_CONFLITO = recusa("conflito");
+const REGISTRO_NAO_ENCONTRADO = recusa("nao_encontrado");
+const INDISPONIVEL_DO_ARMAZENAMENTO = recusa("indisponivel");
 
 /**
  * Recusas das rotas de Revisão e de Preferências (contrato da `015`, §4), na
- * mesma forma `{ erro, mensagem }` das demais. Como nas rotas de Histórico, o
+ * mesma forma `{ erro, mensagem }` das demais, em inglês técnico. Como nas rotas de Histórico, o
  * corpo carrega só o código estável, e é o Adapter do cliente que o traduz em
- * frase para a tela (FR-044).
+ * frase para a tela (FR-044, FR-018).
  */
-const DADOS_DA_REVISAO_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados da Revisão são inválidos.",
-} as const;
-const DADOS_DAS_PREFERENCIAS_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados das Preferências são inválidos.",
-} as const;
+const DADOS_DA_REVISAO_INVALIDOS = recusa("dados_invalidos");
+const DADOS_DAS_PREFERENCIAS_INVALIDOS = recusa("dados_invalidos");
 
 /**
- * Responde a falha do armazenamento com o código estável e a mensagem em
- * português que o `Acervo` produziu, e com nada mais: nenhum detalhe do
+ * Responde a falha do armazenamento com o código estável e a mensagem técnica
+ * em inglês que o `Acervo` produziu, e com nada mais: nenhum detalhe do
  * driver, caminho de arquivo, URL, senha ou cadeia de conexão atravessa a
  * resposta (FR-107, FR-108).
  */
 function responderIndisponivel(
   resposta: FastifyReply,
-  recusa: { erro: string; mensagem: string },
+  recusaBody: { erro: string; mensagem: string; limite?: number },
 ) {
-  return resposta.status(INDISPONIVEL).send({
-    erro: recusa.erro,
-    mensagem: recusa.mensagem,
-  });
+  const body: Record<string, unknown> = {
+    erro: recusaBody.erro,
+    mensagem: recusaBody.mensagem,
+  };
+  if (recusaBody.limite !== undefined) {
+    body.limite = recusaBody.limite;
+  }
+  return resposta.status(INDISPONIVEL).send(body);
 }
 
 /**
@@ -366,10 +348,7 @@ export function registrarRotasDeImagens(
 ): void {
   servidor.post(CAMINHO_DOS_ENVIOS_DE_IMAGEM, async (requisicao, resposta) => {
     if (imagens === undefined) {
-      return responderIndisponivel(resposta, {
-        erro: "indisponivel",
-        mensagem: "O envio de imagens não está disponível.",
-      });
+      return responderIndisponivel(resposta, recusa("indisponivel"));
     }
 
     try {
@@ -381,10 +360,7 @@ export function registrarRotasDeImagens(
         formatos: FORMATOS_ACEITOS,
       });
     } catch {
-      return responderIndisponivel(resposta, {
-        erro: "indisponivel",
-        mensagem: "O envio de imagens não está disponível. Tente novamente.",
-      });
+      return responderIndisponivel(resposta, recusa("indisponivel"));
     }
   });
 }
@@ -479,15 +455,20 @@ export function registrarRotasDeBaralhos(
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
 ): void {
   servidor.post("/baralhos/importacoes/previa", async (requisicao, resposta) => {
-    if (!Buffer.isBuffer(requisicao.body)) return resposta.status(400).send({ mensagem: "Envie um arquivo .apkg válido." });
+    if (!Buffer.isBuffer(requisicao.body)) return resposta.status(400).send({ erro: "corpo_invalido", mensagem: "Request body is invalid." });
     const cabecalhoDoNome = requisicao.headers["x-file-name"];
     const nomeBruto = (Array.isArray(cabecalhoDoNome) ? cabecalhoDoNome[0] : cabecalhoDoNome) ?? "";
     const nomeDoArquivo = decodificarNome(nomeBruto).toLowerCase();
-    if (nomeDoArquivo.endsWith(".colpkg") || nomeDoArquivo === "collection.apkg") return resposta.status(400).send({ mensagem: "Pacotes de coleção do Anki não são aceitos." });
-    if (!nomeDoArquivo.endsWith(".apkg")) return resposta.status(400).send({ mensagem: "Envie um arquivo .apkg válido." });
-    if (!lerAnki) return resposta.status(501).send({ mensagem: "Importação Anki indisponível." });
+    if (nomeDoArquivo.endsWith(".colpkg") || nomeDoArquivo === "collection.apkg") return resposta.status(400).send({ erro: "corpo_invalido", mensagem: "Request body is invalid." });
+    if (!nomeDoArquivo.endsWith(".apkg")) return resposta.status(400).send({ erro: "corpo_invalido", mensagem: "Request body is invalid." });
+    if (!lerAnki) return resposta.status(501).send(recusa("indisponivel"));
     try { return resposta.send(await lerAnki(requisicao.body)); }
-    catch (erro) { return resposta.status(400).send({ mensagem: erro instanceof Error ? erro.message : "Não foi possível ler este arquivo Anki." }); }
+    catch (erro) {
+      if (erro instanceof AnkiError) {
+        return resposta.status(422).send(recusa(erro.codigo, { limite: erro.limite }));
+      }
+      return resposta.status(400).send(recusa("corpo_invalido"));
+    }
   });
 
   servidor.post("/baralhos/importacoes", async (requisicao, resposta) => {
@@ -501,7 +482,7 @@ export function registrarRotasDeBaralhos(
     }).safeParse(requisicao.body);
     if (!corpo.success) return resposta.status(400).send(CORPO_INVALIDO);
     const resultado = await acervoDe(requisicao.usuarioQueEntrou.id).importarBaralhos(corpo.data.baralhos.map((b) => ({ nome: b.nome, cartoes: b.cartoes.map((c) => ({ ...c, tags: c.tags ?? [] })) })));
-    if (!resultado.ok && resultado.erro === "indisponivel") return resposta.status(503).send({ mensagem: resultado.mensagem });
+    if (!resultado.ok && resultado.erro === "indisponivel") return resposta.status(503).send({ erro: "indisponivel", mensagem: resultado.mensagem });
     return resultado.ok ? resposta.status(201).send({ ok: true }) : resposta.status(400).send({ erro: resultado.erro, mensagem: resultado.mensagem });
   });
 
@@ -520,10 +501,14 @@ export function registrarRotasDeBaralhos(
         return responderIndisponivel(resposta, resultado);
       }
 
-      return resposta.status(400).send({
+      const body: Record<string, unknown> = {
         erro: resultado.erro,
         mensagem: resultado.mensagem,
-      });
+      };
+      if ("limite" in resultado && typeof resultado.limite === "number") {
+        body.limite = resultado.limite;
+      }
+      return resposta.status(400).send(body);
     }
 
     return resposta.status(201).send(resultado.baralho);
@@ -728,10 +713,7 @@ export function registrarRotasDeTransicao(
       const corpo = corpoDeTransicao.safeParse(requisicao.body);
 
       if (!corpo.success) {
-        return resposta.status(400).send({
-          erro: "escolhas_invalidas",
-          mensagem: "As escolhas devem ser uma lista válida.",
-        });
+        return resposta.status(400).send(recusa("escolhas_invalidas"));
       }
 
       const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
@@ -861,6 +843,24 @@ export function registrarRotasDeSessoes(
  * 409, sobreposição a confirmar 409 e armazenamento indisponível 503. O corpo é
  * sempre `{ erro, mensagem }`, com a mensagem em português do `Acervo`.
  */
+/**
+ * O corpo da recusa da Agenda: código, `motivo` e, na sobreposição, os dias em
+ * comum, para a interface montar o texto no idioma da pessoa (027, FR-019).
+ */
+function corpoDaRecusaDaAgenda(falha: {
+  erro: string;
+  mensagem: string;
+  motivo?: string;
+  dias?: number[];
+}): Record<string, unknown> {
+  return {
+    erro: falha.erro,
+    mensagem: falha.mensagem,
+    ...(falha.motivo !== undefined ? { motivo: falha.motivo } : {}),
+    ...(falha.dias !== undefined ? { dias: falha.dias } : {}),
+  };
+}
+
 const STATUS_DA_AGENDA = {
   dados_invalidos: 400,
   nao_encontrado: 404,
@@ -869,10 +869,7 @@ const STATUS_DA_AGENDA = {
   indisponivel: INDISPONIVEL,
 } as const;
 
-const DADOS_DA_AGENDA_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados da Agenda são inválidos.",
-} as const;
+const DADOS_DA_AGENDA_INVALIDOS = recusa("dados_invalidos");
 
 /**
  * Registra as rotas da Agenda de estudo sobre o `Acervo` de quem Entrou:
@@ -903,7 +900,7 @@ export function registrarRotasDeAgenda(
     if (!resultado.ok) {
       return resposta
         .status(STATUS_DA_AGENDA[resultado.erro])
-        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+        .send(corpoDaRecusaDaAgenda(resultado));
     }
 
     return resposta.status(200).send(resultado.agenda);
@@ -917,7 +914,7 @@ export function registrarRotasDeAgenda(
     if (!resultado.ok) {
       return resposta
         .status(STATUS_DA_AGENDA[resultado.erro])
-        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+        .send(corpoDaRecusaDaAgenda(resultado));
     }
 
     return resposta.status(200).send({ rotinas: resultado.rotinas });
@@ -938,7 +935,7 @@ export function registrarRotasDeAgenda(
     if (!resultado.ok) {
       return resposta
         .status(STATUS_DA_AGENDA[resultado.erro])
-        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+        .send(corpoDaRecusaDaAgenda(resultado));
     }
 
     return resposta
@@ -960,7 +957,7 @@ export function registrarRotasDeAgenda(
     if (!resultado.ok) {
       return resposta
         .status(STATUS_DA_AGENDA[resultado.erro])
-        .send({ erro: resultado.erro, mensagem: resultado.mensagem });
+        .send(corpoDaRecusaDaAgenda(resultado));
     }
 
     return resposta.status(201).send({ inicio: resultado.inicio });
@@ -1128,38 +1125,42 @@ const corpoDeExclusaoDeConta = z.object({
   senhaAtual: z.string(),
 });
 
-const DADOS_DA_CONTA_INVALIDOS = {
-  erro: "dados_invalidos",
-  mensagem: "Os dados informados são inválidos.",
-} as const;
+const DADOS_DA_CONTA_INVALIDOS = recusa("dados_invalidos");
 
 /**
  * Traduz a recusa da gestão da conta em resposta: `400` para regra violada,
  * `403` para a Senha atual incorreta — e não `401`, que é reservado à Credencial
  * recusada e dispararia o descarte da Credencial (FR-091, FR-279) — e `503`
- * para a falha do armazenamento. A resposta carrega apenas código, mensagem e
- * campo: nunca a Senha (FR-078).
+ * para a falha do armazenamento. A resposta carrega apenas código, mensagem,
+ * campo e opcionalmente limite: nunca a Senha (FR-078).
  */
 function responderRecusaDeConta(
   resposta: FastifyReply,
-  recusa: {
+  recusaBody: {
     erro: string;
     mensagem: string;
     campo?: string;
+    limite?: number;
   },
 ) {
   const status =
-    recusa.erro === "senha_atual_incorreta"
+    recusaBody.erro === "senha_atual_incorreta"
       ? 403
-      : recusa.erro === "indisponivel"
+      : recusaBody.erro === "indisponivel"
         ? INDISPONIVEL
         : 400;
 
-  return resposta.status(status).send({
-    erro: recusa.erro,
-    mensagem: recusa.mensagem,
-    ...(recusa.campo === undefined ? {} : { campo: recusa.campo }),
-  });
+  const body: Record<string, unknown> = {
+    erro: recusaBody.erro,
+    mensagem: recusaBody.mensagem,
+  };
+  if (recusaBody.campo !== undefined) {
+    body.campo = recusaBody.campo;
+  }
+  if (recusaBody.limite !== undefined) {
+    body.limite = recusaBody.limite;
+  }
+  return resposta.status(status).send(body);
 }
 
 /**

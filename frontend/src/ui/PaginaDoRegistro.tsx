@@ -5,6 +5,8 @@ import type {
   RegistroDeSessao,
 } from "../acervo-cliente/cliente";
 import { MENSAGEM_DE_SESSAO_NAO_ENCONTRADA } from "../acervo-cliente/cliente";
+import { TextoDoProduto, useIdioma } from "../idioma";
+import { rotuloDoBaralhoDoRegistro } from "../idioma/rotulo-do-baralho";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { ResumoDaSessao } from "./ResumoDaSessao";
 
@@ -50,6 +52,7 @@ export function PaginaDoRegistro({
   cliente: ClienteDoAcervo;
   id: string;
 }) {
+  const { textos, formatarData } = useIdioma();
   const [registro, setRegistro] = useState<EstadoDoRegistro>({
     estado: "carregando",
   });
@@ -85,11 +88,11 @@ export function PaginaDoRegistro({
   return (
     <div className="pagina">
       <p className="voltar">
-        <a href="#/estudo">← Voltar para Estudo</a>
+        <a href="#/estudo">← {textos.estatisticas.voltarParaEstudo}</a>
       </p>
 
       {registro.estado === "carregando" ? (
-        <EstadoDaCarga estado="carregando" mensagem="Carregando a Sessão…" />
+        <EstadoDaCarga estado="carregando" mensagem={textos.estatisticas.carregandoSessao} />
       ) : null}
 
       {registro.estado === "falha" ? (
@@ -102,9 +105,9 @@ export function PaginaDoRegistro({
 
       {registro.estado === "ausente" ? (
         <div role="alert" className="aviso aviso--erro">
-          <p>{MENSAGEM_DE_SESSAO_NAO_ENCONTRADA}</p>
+          <p><TextoDoProduto texto={MENSAGEM_DE_SESSAO_NAO_ENCONTRADA} /></p>
           <a className="botao botao--secundario" href="#/estudo">
-            Voltar para Estudo
+            {textos.estatisticas.voltarParaEstudo}
           </a>
         </div>
       ) : null}
@@ -113,25 +116,25 @@ export function PaginaDoRegistro({
         <>
           <header className="cabecalho-da-pagina resumo__cabecalho">
             <div>
-              <h1>Sessão concluída</h1>
+              <h1>{textos.estatisticas.sessaoConcluida}</h1>
               <p className="texto-secundario">
-                {tituloDaSessao(registro.registro)}
+                {rotuloDoBaralhoDoRegistro(registro.registro, textos)}
               </p>
             </div>
           </header>
 
           <p className="texto-secundario">
-            {instanteLocal(registro.registro.concluidaEm)}
+            {instanteLocal(registro.registro.concluidaEm, formatarData)}
           </p>
 
           {registro.registro.origem === "baralho" ? (
             <p>
               {registro.baralhoExiste ? (
                 <a href={`#/baralhos/${registro.registro.baralhoId}`}>
-                  Ver baralho
+                  {textos.estatisticas.verBaralho}
                 </a>
               ) : (
-                <span className="selo">Baralho excluído</span>
+                <span className="selo">{textos.estatisticas.baralhoExcluido}</span>
               )}
             </p>
           ) : null}
@@ -139,6 +142,7 @@ export function PaginaDoRegistro({
           <ResumoDaSessao
             itens={registro.registro.itens}
             origem={registro.registro.origem}
+            nomeDoBaralho={registro.registro.nomeDoBaralho}
           />
         </>
       ) : null}
@@ -146,31 +150,11 @@ export function PaginaDoRegistro({
   );
 }
 
-/** O nome próprio da Revisão do dia, exibido no lugar do Baralho (FR-215). */
-const TITULO_DA_REVISAO = "Revisão do dia";
-
-/** O nome do estudo com baralho temporário (FR-376). */
-const TITULO_DO_TEMPORARIO = "Estudo com baralho temporário";
-
-/**
- * O título do Registro: o nome do Baralho no estudo livre, o nome próprio da
- * Revisão do dia (FR-215) ou o do estudo com baralho temporário (FR-376).
- * Registros anteriores à 015 são de estudo livre e seguem trazendo o nome do
- * Baralho (FR-197, T2318).
- */
-function tituloDaSessao(registro: RegistroDeSessao): string {
-  if (registro.origem === "revisao") {
-    return TITULO_DA_REVISAO;
-  }
-  const nome = registro.nomeDoBaralho || "";
-  if (registro.origem === "temporario") {
-    return nome.trim() ? nome : TITULO_DO_TEMPORARIO;
-  }
-  return nome || TITULO_DO_TEMPORARIO; // Fallback para nomes vazios (unlikely)
-}
-
 /** A data e a hora locais de um instante, no formato curto de pt-BR (FR-177). */
-function instanteLocal(instante: string): string {
+function instanteLocal(
+  instante: string,
+  formatarData: (data: Date, opcoes: Intl.DateTimeFormatOptions) => string,
+): string {
   const quando = new Date(instante);
 
   // Um instante ilegível não pode derrubar a tela: mostramos o que veio.
@@ -178,7 +162,7 @@ function instanteLocal(instante: string): string {
     return instante;
   }
 
-  return quando.toLocaleString("pt-BR", {
+  return formatarData(quando, {
     dateStyle: "short",
     timeStyle: "short",
   });

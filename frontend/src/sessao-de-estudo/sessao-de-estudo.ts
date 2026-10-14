@@ -1,3 +1,4 @@
+import { MENSAGENS_COM_VALOR, MENSAGENS_PT } from "../idioma/mensagens";
 import type { Avaliacao, Cartao } from "../acervo-cliente/cliente";
 import { AleatoriedadeReal } from "./aleatoriedade";
 import type { Aleatoriedade } from "./aleatoriedade";
@@ -74,23 +75,17 @@ export type CodigoDeErroDeSessao =
   (typeof CODIGOS_DE_ERRO_DE_SESSAO)[number];
 
 /** Mensagens em português devolvidas nas recusas (FR-046). */
-export const MENSAGEM_DE_BARALHO_INELEGIVEL =
-  "Este Baralho não pode ser estudado porque não tem Cartões vinculados.";
+export const MENSAGEM_DE_BARALHO_INELEGIVEL = MENSAGENS_PT.baralhoInelegivel;
 
-export const MENSAGEM_DE_QUANTIDADE_INVALIDA =
-  "Informe uma quantidade inteira de Cartões, ao menos igual a 1.";
+export const MENSAGEM_DE_QUANTIDADE_INVALIDA = MENSAGENS_PT.quantidadeInvalida;
 
-export const MENSAGEM_DE_REVISAO_VAZIA =
-  "Não há Cartões para revisar hoje.";
+export const MENSAGEM_DE_REVISAO_VAZIA = MENSAGENS_PT.revisaoVazia;
 
-export const MENSAGEM_DE_AVALIACAO_INVALIDA =
-  "A avaliação do item deve ser errei, dificil, bom ou facil.";
+export const MENSAGEM_DE_AVALIACAO_INVALIDA = MENSAGENS_PT.avaliacaoInvalida;
 
-export const MENSAGEM_DE_REVELACAO_AUSENTE =
-  "Revele o Verso antes de registrar a avaliação.";
+export const MENSAGEM_DE_REVELACAO_AUSENTE = MENSAGENS_PT.revelacaoAusente;
 
-export const MENSAGEM_DE_SESSAO_CONCLUIDA =
-  "A Sessão já foi concluída.";
+export const MENSAGEM_DE_SESSAO_CONCLUIDA = MENSAGENS_PT.sessaoConcluida;
 
 /**
  * O que um Cartão do tipo Imagem leva para a Sessão (026, FR-416): o tipo, o
@@ -496,12 +491,7 @@ function embaralhar<T>(itens: readonly T[], aleatoriedade: Aleatoriedade): T[] {
 }
 
 function montarAvisoDeLimite(solicitada: number, disponiveis: number): string {
-  const item = disponiveis === 1 ? "Item" : "Itens";
-
-  return (
-    `Você pediu ${solicitada} Cartões, mas este Baralho tem ${disponiveis}. ` +
-    `A Sessão terá ${disponiveis} ${item}.`
-  );
+  return MENSAGENS_COM_VALOR.quantidadeAcimaDoBaralho.pt(solicitada, disponiveis);
 }
 
 function congelarItem(item: ItemInterno): ItemDeEstudo {

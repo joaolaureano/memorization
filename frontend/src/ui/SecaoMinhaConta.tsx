@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useRef, useState } from "react";
 
 import type {
@@ -5,6 +6,7 @@ import type {
   Credencial,
   DadosDaConta,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import { DialogoDeExclusaoDeConta } from "./DialogoDeExclusaoDeConta";
 import { FormularioDeTrocaDeSenha } from "./FormularioDeTrocaDeSenha";
 
@@ -41,6 +43,7 @@ export function SecaoMinhaConta({
   aoExcluirConta,
   aoIrParaEntrar,
 }: PropriedadesDaSecaoMinhaConta) {
+  const { textos } = useIdioma();
   const [dados, setDados] = useState<DadosDaConta | null>(null);
   const [falhaDeCarregamento, setFalhaDeCarregamento] = useState<string | null>(
     null,
@@ -97,7 +100,7 @@ export function SecaoMinhaConta({
 
   return (
     <section className="cartao" aria-labelledby="titulo-minha-conta">
-      <h2 id="titulo-minha-conta">Minha conta</h2>
+      <h2 id="titulo-minha-conta">{textos.conta.minhaConta}</h2>
 
       {dados === null ? (
         falhaDeCarregamento !== null ? (
@@ -105,9 +108,9 @@ export function SecaoMinhaConta({
             <p
               className="erro"
               role="alert"
-              aria-label="Falha ao carregar a conta"
+              aria-label={textos.conta.falhaAoCarregarConta}
             >
-              {falhaDeCarregamento}
+              <TextoDoProduto texto={falhaDeCarregamento} />
             </p>
             <div className="acoes">
               <button
@@ -115,17 +118,17 @@ export function SecaoMinhaConta({
                 type="button"
                 onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
               >
-                Tentar novamente
+                {textos.comum.tentarNovamente}
               </button>
             </div>
           </>
         ) : (
-          <p className="carregando">Carregando a conta…</p>
+          <p className="carregando">{textos.conta.carregandoConta}</p>
         )
       ) : (
         <>
           <p>
-            Nome de usuário: <strong>{dados.nomeDeUsuario}</strong>
+            {textos.conta.nomeDeUsuario} <strong>{dados.nomeDeUsuario}</strong>
           </p>
 
           {confirmacao !== null && (
@@ -145,7 +148,7 @@ export function SecaoMinhaConta({
                   setAcao("senha");
                 }}
               >
-                Trocar Senha
+                {textos.conta.trocarSenha}
               </button>
               <button
                 ref={botaoDeExcluir}
@@ -156,7 +159,7 @@ export function SecaoMinhaConta({
                   setAcao("excluir");
                 }}
               >
-                Excluir conta
+                {textos.conta.excluirConta}
               </button>
             </div>
           )}
@@ -166,7 +169,7 @@ export function SecaoMinhaConta({
               cliente={cliente}
               nomeDeUsuario={dados.nomeDeUsuario}
               aoConcluir={(nova) => {
-                setConfirmacao("Senha trocada.");
+                setConfirmacao(textos.conta.senhaTrocada);
                 fechar();
                 aoSubstituirCredencial(nova);
               }}

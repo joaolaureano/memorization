@@ -68,14 +68,14 @@ describe("itensPorDia", () => {
       "2026-10-01",
       "2026-10-02",
     ]);
-    expect(dias.map((dia) => dia.rotulo)).toEqual([
-      "sáb",
-      "dom",
-      "seg",
-      "ter",
-      "qua",
-      "qui",
-      "Hoje",
+    expect(dias.map((dia) => dia.ehHoje)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
     ]);
     expect(dias.map((dia) => dia.itens)).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
@@ -91,7 +91,7 @@ describe("itensPorDia", () => {
 
     expect(dias.at(-1)).toEqual({
       data: "2026-10-02",
-      rotulo: "Hoje",
+      ehHoje: true,
       itens: 7,
     });
   });
@@ -129,8 +129,8 @@ describe("itensPorDia", () => {
       AGORA,
     );
 
-    expect(dias[5]).toEqual({ data: "2026-10-01", rotulo: "qui", itens: 2 });
-    expect(dias[6]).toEqual({ data: "2026-10-02", rotulo: "Hoje", itens: 3 });
+    expect(dias[5]).toEqual({ data: "2026-10-01", ehHoje: false, itens: 2 });
+    expect(dias[6]).toEqual({ data: "2026-10-02", ehHoje: true, itens: 3 });
   });
 
   it("ignora um `concluidaEm` que não é um instante válido", () => {

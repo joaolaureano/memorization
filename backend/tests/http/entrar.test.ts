@@ -38,7 +38,7 @@ import {
 /** A recusa uniforme de Credencial, como o contrato a publica (FR-088). */
 const CREDENCIAL_INVALIDA = {
   erro: "credencial_invalida",
-  mensagem: "Nome de usuário ou Senha incorretos.",
+  mensagem: "Username or password is incorrect.",
 };
 
 let contrato: ServidorDeContrato;

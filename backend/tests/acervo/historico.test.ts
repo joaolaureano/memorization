@@ -188,6 +188,26 @@ async function criarAcervoDeOutroUsuario(): Promise<Acervo> {
 }
 
 describe("registrarSessao — registro da Sessão concluída", () => {
+  it.each(["revisao"] as const)(
+    "deriva nomeDoBaralho vazio para origem %s, ignorando o nome enviado",
+    async (origem) => {
+      const registro = registroDo(
+        await acervo.registrarSessao(
+          corpoDeRegistro({
+            origem,
+            nomeDoBaralho: "nome escrito pelo cliente",
+          }),
+        ),
+      );
+
+      expect(registro).toMatchObject({ origem, nomeDoBaralho: "" });
+      expect((await acervo.obterRegistroDeSessao(registro.id))).toMatchObject({
+        ok: true,
+        registro: { origem, nomeDoBaralho: "" },
+      });
+    },
+  );
+
   it("registra a Sessão derivando totais, resultados e posições dos Itens", async () => {
     const primeiro = itemDe(FRENTE, VERSO, "bom");
     const segundo = itemDe("To run", "Correr", "errei");

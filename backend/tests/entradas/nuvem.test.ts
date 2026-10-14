@@ -65,21 +65,20 @@ const LINHA_DE_INICIO = "Armazenamento: PostgreSQL (nuvem)";
 
 /** A recusa por falta de URL: nomeia a variável e não repete o valor. */
 const URL_NAO_INFORMADA =
-  "Nuvem recusada: a variável de ambiente DB_URL não foi informada.";
+  "Cloud startup rejected: environment variable DB_URL was not provided.";
 
 /** A recusa por valor inutilizável: nomeia a variável e o motivo genérico. */
 const URL_INVALIDA =
-  "Nuvem recusada: a variável de ambiente DB_URL não é uma URL de conexão válida.";
+  "Cloud startup rejected: environment variable DB_URL is not a valid connection URL.";
 
 /** A recusa por URL que pede conexão sem verificação do certificado. */
 const CIFRA_REBAIXADA =
-  "Nuvem recusada: a URL de DB_URL pede conexão sem verificação de certificado; " +
-  "a conexão cifrada com certificado verificado é obrigatória.";
+  "Cloud startup rejected: DB_URL requests connection without certificate verification; " +
+  "encrypted connection with verified certificate is required.";
 
 /** A falha de acesso à base: genérica, em português, sem nada do driver. */
 const FALHA_NO_ACESSO =
-  "Falha no armazenamento da nuvem: não foi possível acessar a base. " +
-  "A aplicação não foi iniciada.";
+  "Cloud storage failure: database access failed. Application failed to initialize.";
 
 /**
  * A senha de teste desta execução: gerada agora, nunca versionada e sempre
@@ -581,10 +580,9 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
 
     expect(codigo).toBe(1);
     expect(saida).toContain(
-      "Início recusado: o esquema da base está na versão 0 e a versão " +
-        `corrente é ${corrente}.`,
+      `Startup rejected: database schema is at version 0 but current version is ${corrente}.`,
     );
-    expect(saida).toContain("comando de migração");
+    expect(saida).toContain("cloud migration command");
     expect(saida).not.toContain("Armazenamento:");
     expect(saida).not.toContain(servidor.configuracao.senha);
 
@@ -660,10 +658,9 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
 
     expect(codigo).toBe(1);
     expect(saida).toContain(
-      "Início recusado: o esquema da base está na versão 12 e a versão " +
-        `corrente é ${corrente}.`,
+      `Startup rejected: database schema is at version 12 but current version is ${corrente}.`,
     );
-    expect(saida).toContain("comando de migração");
+    expect(saida).toContain("cloud migration command");
     expect(saida).not.toContain("Armazenamento:");
 
     await expect(

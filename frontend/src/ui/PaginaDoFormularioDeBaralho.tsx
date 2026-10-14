@@ -1,6 +1,8 @@
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
+import { useIdioma } from "../idioma";
 import type {
   BaralhoComCartoes,
   ClienteDoAcervo,
@@ -62,6 +64,7 @@ export function PaginaDoFormularioDeBaralho({
   cliente,
   id,
 }: PropriedadesDoFormularioDeBaralho) {
+  const { textos } = useIdioma();
   const renomeando = id !== undefined;
 
   const [nome, setNome] = useState("");
@@ -126,13 +129,13 @@ export function PaginaDoFormularioDeBaralho({
   // motivo anunciado); só depois de estabilizar a operação a proteção volta a
   // ser a de descarte das alterações não salvas.
   const protecao: Protecao | null = salvando
-    ? { tipo: "pendencia", motivo: "Aguarde: o Baralho está sendo salvo." }
+    ? { tipo: "pendencia", motivo: textos.baralhos.pendingSaveBaralho }
     : sujo
       ? {
           tipo: "descarte",
-          titulo: "Descartar as alterações?",
-          descricao: "O nome digitado será perdido.",
-          rotuloDeConfirmacao: "Descartar",
+          titulo: textos.baralhos.descartarAlteracoes,
+          descricao: textos.baralhos.descartarTexto,
+          rotuloDeConfirmacao: textos.baralhos.descartarConfirm,
         }
       : null;
 
@@ -177,16 +180,34 @@ export function PaginaDoFormularioDeBaralho({
 
   const rotuloDeVolta =
     id !== undefined && !recursoAusente
-      ? "← Voltar para o Baralho"
-      : "← Voltar para Baralhos";
+      ? textos.baralhos.voltarBaralho
+      : textos.baralhos.voltarBaralhos;
 
-  const aviso = avisoDeLimiteDeBaralho(nome.length);
+  const avisoDeLimite = (comprimento: number): string | null => {
+    const restantes = LIMITE_DE_CARACTERES_DE_BARALHO - comprimento;
+
+    if (restantes > FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO) {
+      return null;
+    }
+
+    if (restantes < 0) {
+      return textos.baralhos.aviseLimiteExcedido(LIMITE_DE_CARACTERES_DE_BARALHO);
+    }
+
+    if (restantes === 0) {
+      return textos.baralhos.aviseLimiteCheio(LIMITE_DE_CARACTERES_DE_BARALHO);
+    }
+
+    return textos.baralhos.aviseLimite(restantes, LIMITE_DE_CARACTERES_DE_BARALHO);
+  };
+
+  const aviso = avisoDeLimite(nome.length);
 
   const titulo = recursoAusente
-    ? "Baralho não encontrado"
+    ? textos.baralhos.deckNotFound
     : renomeando
-      ? "Renomear Baralho"
-      : "Criar baralho";
+      ? textos.baralhos.renomearBaralho
+      : textos.baralhos.criarBaralho;
 
   return (
     <div className="pagina">
@@ -197,14 +218,14 @@ export function PaginaDoFormularioDeBaralho({
       <h1>{titulo}</h1>
 
       {carregando ? (
-        <p className="carregando">Carregando Baralho…</p>
+        <p className="carregando">{textos.baralhos.carregandoBaralho}</p>
       ) : recursoAusente ? (
-        <p className="erro" role="alert" aria-label="Baralho não encontrado">
-          {naoEncontrado}
+        <p className="erro" role="alert" aria-label={textos.baralhos.deckNotFound}>
+          <TextoDoProduto texto={naoEncontrado} />
         </p>
       ) : falhaDeCarregamento !== null ? (
-        <p className="erro" role="alert" aria-label="Falha ao carregar o Baralho">
-          {falhaDeCarregamento}
+        <p className="erro" role="alert" aria-label={textos.baralhos.carregandoBaralho}>
+          <TextoDoProduto texto={falhaDeCarregamento} />
         </p>
       ) : (
         <section className="cartao">
@@ -214,7 +235,7 @@ export function PaginaDoFormularioDeBaralho({
           >
             <div className="campo">
               <label className="rotulo" htmlFor="campo-nome">
-                Nome
+                {textos.baralhos.nomeLabel}
               </label>
               <input
                 id="campo-nome"
@@ -228,11 +249,11 @@ export function PaginaDoFormularioDeBaralho({
                 }
               />
               <p id="contador-do-nome" className="contador">
-                {nome.length} / {LIMITE_DE_CARACTERES_DE_BARALHO} caracteres
+                {nome.length} / {LIMITE_DE_CARACTERES_DE_BARALHO} {textos.baralhos.caracteres}
               </p>
               {aviso !== null && (
                 <p id="aviso-do-nome" className="aviso-de-limite">
-                  {aviso}
+                  <TextoDoProduto texto={aviso} />
                 </p>
               )}
             </div>
@@ -241,7 +262,7 @@ export function PaginaDoFormularioDeBaralho({
 
             {renomeando && baralho !== null && (
               <p className="alcance-da-edicao">
-                {descricaoDeAlcanceDeRenomeacao(baralho.cartoes.length)}
+                {textos.baralhos.descricaoAlcance(baralho.cartoes.length)}
               </p>
             )}
 
@@ -249,9 +270,9 @@ export function PaginaDoFormularioDeBaralho({
               <p
                 className="erro"
                 role="alert"
-                aria-label="Falha ao salvar o Baralho"
+                aria-label={textos.baralhos.falhaSalvar}
               >
-                {falha}
+                <TextoDoProduto texto={falha} />
               </p>
             )}
 
@@ -261,10 +282,10 @@ export function PaginaDoFormularioDeBaralho({
                 type="submit"
                 disabled={salvando}
               >
-                {salvando ? "Salvando…" : "Salvar"}
+                {salvando ? textos.baralhos.salvando : textos.baralhos.salvar}
               </button>
               <a className="botao" href={linkDeVolta}>
-                Cancelar
+                {textos.comum.cancelar}
               </a>
             </div>
           </form>
@@ -272,46 +293,4 @@ export function PaginaDoFormularioDeBaralho({
       )}
     </div>
   );
-}
-
-/**
- * Comunicação da contagem e do limite durante a digitação (FR-061).
- *
- * Devolve `null` longe do limite e, perto dele, um aviso explícito sobre o
- * texto como digitado — sem recusar nada: a recusa é sempre do
- * `ClienteDoAcervo`, e esta função não a antecipa nem a reproduz.
- */
-function avisoDeLimiteDeBaralho(comprimento: number): string | null {
-  const restantes = LIMITE_DE_CARACTERES_DE_BARALHO - comprimento;
-
-  if (restantes > FOLGA_PARA_AVISO_DE_LIMITE_DE_BARALHO) {
-    return null;
-  }
-
-  if (restantes < 0) {
-    return `Atenção: o nome excede o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  if (restantes === 0) {
-    return `Atenção: o nome atingiu o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres.`;
-  }
-
-  return `Atenção: faltam ${restantes} caracteres para o limite de ${LIMITE_DE_CARACTERES_DE_BARALHO}.`;
-}
-
-/**
- * Informa o alcance da renomeação de um Baralho (FR-015): quantos Cartões
- * estão vinculados a ele. Preservada da tela anterior de detalhe, para que a
- * renomeação continue declarando o que será renomeado junto.
- */
-function descricaoDeAlcanceDeRenomeacao(quantidade: number): string {
-  if (quantidade === 0) {
-    return "Este Baralho não tem Cartões vinculados.";
-  }
-
-  if (quantidade === 1) {
-    return "Este Baralho tem 1 Cartão vinculado.";
-  }
-
-  return `Este Baralho tem ${quantidade} Cartões vinculados.`;
 }

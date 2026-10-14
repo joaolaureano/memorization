@@ -197,7 +197,7 @@ test("Cadastro pela UI persiste após reiniciar API e frontend, sem cookie nem d
       expect(JSON.stringify(resposta.corpo)).not.toContain(SENHA_DOS_USUARIOS);
       expect(resposta.corpo).toEqual({
         erro: "nome_de_usuario_existente",
-        mensagem: "Este nome de usuário já existe. Escolha outro.",
+        mensagem: "This username already exists. Choose another.",
       });
     }
 

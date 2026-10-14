@@ -9,6 +9,7 @@ import type { ReactElement } from "react";
 import type { Credencial } from "../src/acervo-cliente/cliente";
 import { ClienteEmMemoria } from "../src/acervo-cliente/cliente-em-memoria";
 import { ProvedorDeProtecaoDeSaida } from "../src/ui/protecao-de-saida";
+import { ProvedorDeIdioma, type Idioma } from "../src/idioma";
 
 /**
  * Apoio das provas de tela e de cliente (T711, T712, T713;
@@ -182,4 +183,21 @@ export function observarOperacao<T extends object, K extends keyof T>(
     // navegação que o `then` da página pede, por exemplo) também assentam.
     await act(async () => {});
   };
+}
+
+/**
+ * Envolve um componente em um `ProvedorDeIdioma` para testes que renderizam
+ * componentes isolados fora da `Aplicacao`. O idioma inicial padrão é `pt`.
+ *
+ * Usa `createElement` (e não JSX) porque este apoio é um `.ts`: o arquivo não
+ * passa pelo transform de JSX.
+ */
+export function renderizarComIdioma(
+  ui: ReactElement,
+  idioma: Idioma = "pt",
+): ReactElement {
+  return createElement(ProvedorDeIdioma, {
+    idiomaInicial: idioma,
+    children: ui,
+  });
 }

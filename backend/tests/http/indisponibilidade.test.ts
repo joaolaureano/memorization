@@ -34,7 +34,7 @@ import {
 
 const INDISPONIVEL = {
   erro: "indisponivel",
-  mensagem: "O armazenamento não está disponível. Tente novamente.",
+  mensagem: "Storage is unavailable. Try again.",
 };
 
 let servidor: FastifyInstance;
@@ -200,7 +200,7 @@ describe("falha do armazenamento — resposta sem detalhe do driver", () => {
     expect(resposta.statusCode).toBe(401);
     expect(resposta.json()).toEqual({
       erro: "credencial_invalida",
-      mensagem: "Nome de usuário ou Senha incorretos.",
+      mensagem: "Username or password is incorrect.",
     });
   });
 });

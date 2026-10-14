@@ -324,11 +324,24 @@ SELECT baralho.id AS "baralhoId",
  * `concluida_em` recebe o instante informado pelo Module, já como
  * `TIMESTAMPTZ`, e o `RETURNING` devolve o que o servidor efetivamente gravou:
  * a resposta é o Registro **guardado**, e não o que o cliente mandou (FR-164).
+ *
+ * Compatibilidade (027, FR-020): enquanto a migração 19 está pendente junto
+ * com a 18, o CHECK antigo recusa `nome_do_baralho` vazio, e as origens
+ * derivadas gravam o rótulo legado. O `Acervo` normaliza a leitura para `""`,
+ * então a diferença não chega ao contrato. Removível quando todas as bases
+ * estiverem na 19.
  */
 const INSERIR_REGISTRO_DE_SESSAO = `
 INSERT INTO registro_de_sessao
        (id, usuario_id, baralho_id, nome_do_baralho, origem, concluida_em, estudados, acertos, erros)
-VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9)
+VALUES ($1, $2, $3,
+        CASE
+          WHEN (SELECT versao FROM versao_do_esquema) >= 19 THEN $4
+          WHEN $5 = 'revisao' THEN 'Revisão do dia'
+          WHEN $5 = 'temporario' AND $4 = '' THEN 'Baralho temporário'
+          ELSE $4
+        END,
+        $5, $6::timestamptz, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
 RETURNING concluida_em AS "concluidaEm";
 `;

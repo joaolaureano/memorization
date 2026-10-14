@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type {
@@ -6,7 +7,7 @@ import type {
   RotinaDeEstudo,
 } from "../acervo-cliente/cliente";
 import { descreverDias, fusoDoNavegador } from "../agenda/datas";
-import { descreverQuantidade } from "../agenda/estado-do-dia";
+import { LOCALE, useIdioma } from "../idioma";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { EstadoDaCarga } from "./EstadoDaCarga";
 import { receberAvisoDaAgenda } from "./aviso-da-agenda";
@@ -28,14 +29,6 @@ import { useProtecaoDeSaida } from "./protecao-de-saida";
  * sobrescrita em silêncio.
  */
 
-/** O verbo anunciado depois de cada ação, no particípio. */
-const ANUNCIO_DA_ACAO: Record<AcaoDeRotina, string> = {
-  criar: "criada",
-  editar: "alterada",
-  pausar: "pausada",
-  retomar: "retomada",
-  excluir: "excluída",
-};
 
 /** Uma ação aguardando confirmação (FR-239). */
 interface ConfirmacaoPendente {
@@ -56,11 +49,13 @@ export function resumoDaRotina(rotina: {
   nomeDoBaralho: string;
   dias: readonly number[];
   quantidade: number | null;
-}): string {
-  return `${rotina.nomeDoBaralho} · ${descreverDias(rotina.dias)} · ${descreverQuantidade(rotina.quantidade)}`;
+}, locale: string, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return `${rotina.nomeDoBaralho} · ${descreverDias(rotina.dias, locale)} · ${textos.agenda.quantidadeCartoes(rotina.quantidade)}`;
 }
 
 export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
+  const { textos, idioma } = useIdioma();
+  const locale = LOCALE[idioma];
   const [fuso] = useState(fusoDoNavegador);
   const [rotinas, setRotinas] = useState<RotinaDeEstudo[] | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -132,12 +127,12 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
   // O aviso deixado pelo formulário é lido uma única vez. Só sobrescreve quando
   // há aviso: o efeito pode rodar duas vezes em desenvolvimento.
   useEffect(() => {
-    const recebido = receberAvisoDaAgenda();
+    const recebido = receberAvisoDaAgenda(textos.agenda);
 
     if (recebido !== null) {
       setAviso(recebido);
     }
-  }, []);
+  }, [textos]);
 
   // O foco volta à Rotina alterada, ou a um destino estável quando ela saiu da
   // lista (FR-252). É um efeito de layout, como nas demais telas: sem foco
@@ -165,7 +160,7 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
 
   useProtecaoDeSaida(
     operando !== null
-      ? { tipo: "pendencia", motivo: "Aguarde: a Rotina está sendo salva." }
+      ? { tipo: "pendencia", motivo: textos.agenda.rotinaSendoSalva }
       : null,
   );
 
@@ -203,7 +198,7 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
       // versão antiga da Rotina, e quem agisse ao ver «retomada» tocaria numa
       // Rotina já alterada e receberia um conflito.
       await carregar();
-      setAviso(`Rotina de ${rotina.nomeDoBaralho} ${ANUNCIO_DA_ACAO[acao]}.`);
+      setAviso(textos.agenda.rotinaAlterada(rotina.nomeDoBaralho, acao));
       return;
     }
 
@@ -247,34 +242,34 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
     <div className="pagina">
       <p className="voltar">
         <a href="#/estudo">
-          <span aria-hidden="true">←</span> Voltar para Estudo
+          <span aria-hidden="true">←</span> {textos.agenda.voltarParaEstudo}
         </a>
       </p>
 
       <div className="cabecalho-da-pagina">
         <div>
-          <h1>Rotinas de estudo</h1>
+          <h1>{textos.agenda.rotinasDeEstudo}</h1>
         </div>
         <div className="acoes">
           <a className="botao botao--primario" href="#/agenda/nova">
-            Agendar estudo
+            {textos.agenda.agendar}
           </a>
         </div>
       </div>
 
       <div aria-live="polite" role="status" className="agenda__anuncio">
-        {aviso !== null ? <p className="aviso aviso--sucesso">{aviso}</p> : null}
-        {operando !== null ? <p className="carregando">Salvando…</p> : null}
+        {aviso !== null ? <p className="aviso aviso--sucesso"><TextoDoProduto texto={aviso} /></p> : null}
+        {operando !== null ? <p className="carregando">{textos.comum.salvar}</p> : null}
       </div>
 
       {falhaDeOperacao !== null ? (
         <p className="erro" role="alert">
-          {falhaDeOperacao}
+          <TextoDoProduto texto={falhaDeOperacao} />
         </p>
       ) : null}
 
       {rotinas === null && carregando ? (
-        <EstadoDaCarga estado="carregando" mensagem="Carregando as Rotinas…" />
+        <EstadoDaCarga estado="carregando" mensagem={textos.agenda.carregandoRotinas} />
       ) : null}
 
       {rotinas === null && !carregando && falha !== null ? (
@@ -288,21 +283,20 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
       {rotinas !== null ? (
         <section aria-labelledby="titulo-das-rotinas" className="pilha">
           <h2 id="titulo-das-rotinas" ref={titulo} tabIndex={-1}>
-            Suas rotinas
+            {textos.agenda.suasRotinas}
           </h2>
 
           {falha !== null ? (
             <div role="alert" className="aviso aviso--erro">
               <p>
-                Não foi possível atualizar a lista. Os dados abaixo podem estar
-                desatualizados. {falha}
+                {textos.agenda.naoFoiPossivelAtualizarAgenda} <TextoDoProduto texto={falha} />
               </p>
               <button
                 type="button"
                 className="botao botao--secundario"
                 onClick={() => void carregar()}
               >
-                Tentar novamente
+                {textos.comum.tentarNovamente}
               </button>
             </div>
           ) : null}
@@ -310,10 +304,10 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
           {rotinas.length === 0 ? (
             <EstadoDaCarga
               estado="vazio"
-              mensagem="Você ainda não tem Rotinas de estudo."
+              mensagem={textos.agenda.naoTemRotinas}
               acao={
                 <a className="botao botao--primario" href="#/agenda/nova">
-                  Agendar estudo
+                  {textos.agenda.agendar}
                 </a>
               }
             />
@@ -336,16 +330,16 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
                 >
                   <div className="agenda__rotina-texto">
                     <h3 className="titulo-do-item">{rotina.nomeDoBaralho}</h3>
-                    <p>{resumoDaRotina(rotina)}</p>
+                    <p>{resumoDaRotina(rotina, locale, textos)}</p>
                     <p className="texto-secundario">
-                      Situação:{" "}
+                      {textos.agenda.situacao}{" "}
                       <span className="agenda__rotina-status">
-                        {rotina.estado === "pausada" ? "Pausada" : "Ativa"}
+                        {rotina.estado === "pausada" ? textos.agenda.pausada : textos.agenda.ativa}
                       </span>
                       {rotina.indisponivel ? (
                         <>
                           {" · "}
-                          <strong>Baralho indisponível</strong>
+                          <strong>{textos.agenda.baralhoIndisponivel}</strong>
                         </>
                       ) : null}
                     </p>
@@ -355,26 +349,26 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
                     <a
                       className="botao botao--secundario"
                       href={`#/agenda/${encodeURIComponent(rotina.id)}/editar`}
-                      aria-label={`Editar rotina de ${rotina.nomeDoBaralho}`}
+                      aria-label={textos.agenda.rotuloEditar(rotina.nomeDoBaralho)}
                     >
-                      Editar
+                      {textos.agenda.editar}
                     </a>
                     {rotina.estado === "pausada" ? (
                       <button
                         type="button"
                         className="botao botao--secundario"
                         disabled={operando !== null}
-                        aria-label={`Retomar rotina de ${rotina.nomeDoBaralho}`}
+                        aria-label={textos.agenda.rotuloRetomar(rotina.nomeDoBaralho)}
                         onClick={() => void executar("retomar", rotina)}
                       >
-                        Retomar
+                        {textos.agenda.retomar}
                       </button>
                     ) : (
                       <button
                         type="button"
                         className="botao botao--secundario"
                         disabled={operando !== null}
-                        aria-label={`Pausar rotina de ${rotina.nomeDoBaralho}`}
+                        aria-label={textos.agenda.rotuloPausar(rotina.nomeDoBaralho)}
                         onClick={(evento) =>
                           setConfirmacao({
                             acao: "pausar",
@@ -383,14 +377,14 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
                           })
                         }
                       >
-                        Pausar
+                        {textos.agenda.pausar}
                       </button>
                     )}
                     <button
                       type="button"
                       className="botao botao--secundario"
                       disabled={operando !== null}
-                      aria-label={`Excluir rotina de ${rotina.nomeDoBaralho}`}
+                      aria-label={textos.agenda.rotuloExcluir(rotina.nomeDoBaralho)}
                       onClick={(evento) =>
                         setConfirmacao({
                           acao: "excluir",
@@ -399,7 +393,7 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
                         })
                       }
                     >
-                      Excluir
+                      {textos.agenda.excluir}
                     </button>
                   </div>
                 </li>
@@ -414,33 +408,28 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
         titulo={
           confirmacao === null
             ? ""
-            : `${confirmacao.acao === "pausar" ? "Pausar" : "Excluir"} a Rotina de ${confirmacao.rotina.nomeDoBaralho}?`
+            : confirmacao.acao === "pausar"
+              ? textos.agenda.pausarRotina(confirmacao.rotina.nomeDoBaralho)
+              : textos.agenda.excluirRotina(confirmacao.rotina.nomeDoBaralho)
         }
         rotuloDeConfirmacao={
-          confirmacao?.acao === "excluir" ? "Excluir Rotina" : "Pausar Rotina"
+          confirmacao?.acao === "excluir" ? textos.agenda.excluirConfirm : textos.agenda.pausarConfirm
         }
         aoConfirmar={confirmar}
         aoCancelar={cancelarConfirmacao}
       >
         <p>
-          Os estudos de hoje que ainda não foram concluídos serão cancelados, e
-          nenhum novo estudo será programado
-          {confirmacao?.acao === "pausar" ? " até você retomar" : ""}. Os estudos
-          passados e concluídos, os Cartões, os Baralhos, os Registros de sessão
-          e o Histórico permanecem.
+          {textos.agenda.efeitoDaPausaOuExclusao(confirmacao?.acao === "pausar")}
         </p>
         <p>
-          Sessões já iniciadas ainda poderão concluir o estudo de hoje.
-          {confirmacao?.acao === "excluir"
-            ? " Excluir uma Rotina não pode ser desfeito."
-            : ""}
+          {textos.agenda.sessoesIniciadasConcluem(confirmacao?.acao === "excluir")}
         </p>
       </DialogoDeConfirmacao>
 
       <DialogoDeConfirmacao
         aberto={sobreposicao !== null}
-        titulo="Confirmar estudos independentes?"
-        rotuloDeConfirmacao="Confirmar"
+        titulo={textos.agenda.confirmarIndependentes}
+        rotuloDeConfirmacao={textos.agenda.confirmarRotulo}
         aoConfirmar={() => {
           const pendente = sobreposicao;
 
@@ -452,7 +441,7 @@ export function PaginaDaAgenda({ cliente }: { cliente: ClienteDoAcervo }) {
         }}
         aoCancelar={() => setSobreposicao(null)}
       >
-        <p>{sobreposicao?.mensagem}</p>
+        <p><TextoDoProduto texto={sobreposicao?.mensagem} /></p>
       </DialogoDeConfirmacao>
     </div>
   );

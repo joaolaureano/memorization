@@ -117,7 +117,7 @@ describe("criar Cartão do tipo Imagem (FR-408, FR-409, FR-412, FR-414)", () => 
   it("recusa o tipo Imagem sem Imagem (imagem_ausente)", async () => {
     expect(
       await acervo.criarCartao(baralhoId, { tipo: "imagem", frente: "", verso: "Pernambuco" }),
-    ).toEqual({ ok: false, erro: "imagem_ausente", mensagem: "Escolha uma imagem." });
+    ).toEqual({ ok: false, erro: "imagem_ausente", mensagem: "Choose an image." });
   });
 
   it("aplica as regras de texto vigentes ao Verso e o limite de 250 à Descrição", async () => {
@@ -169,7 +169,7 @@ describe("criar Cartão do tipo Imagem (FR-408, FR-409, FR-412, FR-414)", () => 
       ok: false,
       erro: "imagem_invalida",
       motivo: "formato",
-      mensagem: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
+      mensagem: "File is not a JPEG, PNG, WebP, or GIF image.",
     });
 
     const outro = await criarDonoDeTeste(aberto.usuarios, "dono-dois", "bruno.costa");

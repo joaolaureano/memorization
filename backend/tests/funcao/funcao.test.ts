@@ -91,7 +91,7 @@ const CREDENCIAL_QUE_NAO_CONFERE = `Basic ${Buffer.from(
 ).toString("base64")}`;
 
 /** Corpo da recusa da guarda de origem, o mesmo da stub da infraestrutura. */
-const PROIBIDO = { sucesso: false, mensagem: "Proibido" };
+const PROIBIDO = { sucesso: false, mensagem: "Forbidden" };
 
 let servidor: ServidorAutonomo;
 let certificado: CertificadoDaAutoridade;
@@ -614,7 +614,7 @@ describe("a paridade das rotas entre a entrada local e a da nuvem (013)", () => 
     expect(registro.status).toBe(404);
     expect(registro.corpo).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Sessão não encontrada.",
+      mensagem: "Not found.",
     });
     expect(registro.bruto).not.toMatch(/Route .* not found/);
 
@@ -1174,8 +1174,8 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
 
         if (chamadas === 1) {
           throw new ParametroAusenteError(
-            `Parâmetro ausente no cofre: ${PREFIXO_DE_TESTE}/DB_URL. ` +
-              "Provisione o parâmetro sob o prefixo configurado e tente de novo.",
+          `Missing parameter in vault: ${PREFIXO_DE_TESTE}/DB_URL. ` +
+              "Provision the parameter under the configured prefix and try again.",
           );
         }
 
@@ -1208,8 +1208,8 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     const sempreFalho: LeitorDeSegredos = {
       async ler(): Promise<SegredosDaFuncao> {
         throw new ParametroAusenteError(
-          `Parâmetro ausente no cofre: ${PREFIXO_DE_TESTE}/SEGREDO_DAS_SENHAS. ` +
-            "Provisione o parâmetro sob o prefixo configurado e tente de novo.",
+          `Missing parameter in vault: ${PREFIXO_DE_TESTE}/SEGREDO_DAS_SENHAS. ` +
+            "Provision the parameter under the configured prefix and try again.",
         );
       },
     };
@@ -1247,9 +1247,9 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     /** O registro nomeia as duas versões e manda executar a migração da nuvem. */
     const registrado = registroDeProcesso.join("\n");
 
-    expect(registrado).toContain("o esquema da base está na versão 0");
-    expect(registrado).toContain(`a versão corrente é ${versaoCorrenteConhecida()}`);
-    expect(registrado).toContain("comando de migração");
+    expect(registrado).toContain("database schema is at version 0");
+    expect(registrado).toContain(`current version is ${versaoCorrenteConhecida()}`);
+    expect(registrado).toContain("cloud migration command");
     expect(registrado).not.toContain(servidor.configuracao.senha);
 
     /** Nenhuma migração foi aplicada: a base continua sem tabela alguma. */
@@ -1312,9 +1312,9 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     /** O registro nomeia as duas versões e manda executar a migração da nuvem. */
     const registrado = registroDeProcesso.join("\n");
 
-    expect(registrado).toContain("o esquema da base está na versão 12");
-    expect(registrado).toContain(`a versão corrente é ${versaoCorrenteConhecida()}`);
-    expect(registrado).toContain("comando de migração");
+    expect(registrado).toContain("database schema is at version 12");
+    expect(registrado).toContain(`current version is ${versaoCorrenteConhecida()}`);
+    expect(registrado).toContain("cloud migration command");
   }, 60_000);
 
   it("responde 503 quando a base não pode ser alcançada, sem revelar valor algum", async () => {
@@ -1334,7 +1334,7 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
 
     const registrado = registroDeProcesso.join("\n");
 
-    expect(registrado).toContain("Falha no armazenamento da nuvem");
+    expect(registrado).toContain("Cloud storage failure: database access failed.");
     expect(registrado).toMatch(/SQLSTATE [0-9A-Z]{5}/);
     expect(registrado).not.toContain(servidor.configuracao.senha);
     expect(registrado).not.toContain("postgresql://");

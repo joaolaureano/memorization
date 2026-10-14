@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from "vitest";
  * A entrada local real é executada como processo filho, apontando o arquivo
  * para um diretório que não existe — a mesma indisponibilidade de um diretório
  * somente leitura, sem depender de permissão. O que a prova exige: falha
- * reportada em português, código de saída 1, processo que **não** escuta, e
+ * reportada em inglês técnico, código de saída 1, processo que **não** escuta, e
  * nenhum caminho, URL, senha ou cadeia de conexão na saída.
  *
  * A prova de que a falha do armazenamento nunca passa por operação concluída
@@ -47,7 +47,7 @@ const DIRETORIO_TEMPORARIO = mkdtempSync(
 const SEGREDO = randomBytes(48).toString("base64url");
 
 /** A frase da falha do início: em português, sem caminho e sem driver. */
-const FALHA_NO_INICIO = /falha no armazenamento local/i;
+const FALHA_NO_INICIO = /local storage failure/i;
 
 afterAll(() => {
   rmSync(DIRETORIO_TEMPORARIO, { recursive: true, force: true });

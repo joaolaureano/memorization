@@ -213,7 +213,7 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
     expect(resultado).toMatchObject({ ok: false, erro: INDISPONIVEL });
   });
 
-  it("registrarSessao temporária devolve baralhoId vazio e o nome Baralho temporário (FR-369)", async () => {
+  it("registrarSessao temporária sem nome devolve baralhoId e nome vazios (FR-369, FR-020)", async () => {
     const cliente = clienteDeProva();
 
     const baralho = await cliente.criarBaralho({ nome: "Baralho" });
@@ -238,10 +238,12 @@ describe("ClienteEmMemoria — salvarSelecaoComoBaralho", () => {
     });
     exigirSucesso(resultado);
 
+    // 027 (FR-020): sem nome, guarda-se a falta de nome; a interface mostra o
+    // rótulo "Baralho temporário" no idioma vigente.
     expect(resultado.registro).toMatchObject({
       origem: "temporario",
       baralhoId: "",
-      nomeDoBaralho: "Baralho temporário",
+      nomeDoBaralho: "",
     });
   });
 });

@@ -152,6 +152,13 @@ describe("ClienteHttp.enviarImagem", () => {
     });
     expect(
       await cliente.criarCartao("b1", { tipo: "imagem", imagemId: "ruim", frente: "", verso: "V" }),
-    ).toEqual({ ok: false, erro: "imagem_invalida", motivo: "formato", mensagem: "Não é imagem." });
+    // 027 (FR-019): a mensagem técnica do servidor nunca chega à pessoa; o
+    // texto vem do catálogo pelo código e pelo motivo.
+    ).toEqual({
+      ok: false,
+      erro: "imagem_invalida",
+      motivo: "formato",
+      mensagem: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
+    });
   });
 });

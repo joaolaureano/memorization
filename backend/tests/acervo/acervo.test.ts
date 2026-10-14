@@ -89,7 +89,7 @@ describe("criarCartao — criação pela Interface", () => {
       {
         ok: false,
         erro: "frente_vazia",
-        mensagem: "A frente do cartão não pode ficar vazia.",
+        mensagem: "Card front cannot be empty.",
       },
     );
   });
@@ -102,7 +102,7 @@ describe("criarCartao — criação pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "verso_vazio",
-      mensagem: "O verso do cartão não pode ficar vazio.",
+      mensagem: "Card back cannot be empty.",
     });
   });
 
@@ -114,7 +114,7 @@ describe("criarCartao — criação pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
   });
 
@@ -130,7 +130,8 @@ describe("criarCartao — criação pela Interface", () => {
       ok: false,
       erro: "frente_muito_longa",
       mensagem:
-        "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
+        "Card front is too long. Maximum 1000 characters; provided has 1001.",
+      limite: 1000,
     });
   });
 
@@ -160,7 +161,7 @@ describe("criarCartao — criação pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 
@@ -248,7 +249,8 @@ describe("criarCartao — criação pela Interface", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "frente_muito_longa",
-      mensagem: expect.stringContaining("1000 caracteres"),
+      mensagem: expect.stringContaining("1000 characters"),
+      limite: 1000,
     });
 
     // Verifica que nenhum segundo Cartão foi criado

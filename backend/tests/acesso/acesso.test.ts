@@ -229,7 +229,7 @@ describe("cookie", () => {
   it("a mensagem de expiração é a exigida pela spec (FR-294)", () => {
     expect(ACESSO_EXPIRADO).toEqual({
       erro: "acesso_expirado",
-      mensagem: "Seu acesso expirou. Entre novamente.",
+      mensagem: "Session expired.",
     });
   });
 });

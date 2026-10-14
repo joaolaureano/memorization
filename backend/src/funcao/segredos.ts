@@ -102,8 +102,8 @@ export function exigirValorDoParametro(
 ): string {
   if (valor === undefined || valor.trim() === "") {
     throw new ParametroAusenteError(
-      `Parâmetro ausente no cofre: ${nomeCompleto}. ` +
-        "Provisione o parâmetro sob o prefixo configurado e tente de novo.",
+      `Missing parameter in vault: ${nomeCompleto}. ` +
+        "Provision the parameter under the configured prefix and try again.",
     );
   }
 

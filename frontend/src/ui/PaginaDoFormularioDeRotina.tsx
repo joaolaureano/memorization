@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -7,7 +8,7 @@ import type {
   RotinaDeEstudo,
 } from "../acervo-cliente/cliente";
 import { descreverDias, fusoDoNavegador, nomeDoDia } from "../agenda/datas";
-import { descreverQuantidade } from "../agenda/estado-do-dia";
+import { LOCALE, useIdioma } from "../idioma";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { deixarAvisoDaAgenda } from "./aviso-da-agenda";
 import { resumoDaRotina } from "./PaginaDaAgenda";
@@ -56,8 +57,9 @@ const RASCUNHO_VAZIO: Rascunho = {
 /** Os sete dias, na numeração da Rotina, com o nome completo (FR-252). */
 const DIAS = [1, 2, 3, 4, 5, 6, 7] as const;
 
-function nomeCompletoDoDia(dia: number): string {
-  return dia <= 5 ? `${nomeDoDia(dia)}-feira` : nomeDoDia(dia);
+function nomeCompletoDoDia(dia: number, locale: string): string {
+  const nome = nomeDoDia(dia, locale);
+  return locale.toLowerCase().startsWith("pt") && dia <= 5 ? `${nome}-feira` : nome;
 }
 
 function rascunhoDaRotina(rotina: RotinaDeEstudo): Rascunho {
@@ -89,6 +91,8 @@ export function PaginaDoFormularioDeRotina({
   /** Ausente em «Agendar estudo»; presente em «Editar rotina». */
   id?: string;
 }) {
+  const { textos, idioma } = useIdioma();
+  const locale = LOCALE[idioma];
   const editando = id !== undefined;
   const [fuso] = useState(fusoDoNavegador);
   const [baralhos, setBaralhos] = useState<BaralhoListado[] | null>(null);
@@ -153,7 +157,7 @@ export function PaginaDoFormularioDeRotina({
         );
 
         if (encontrada === undefined) {
-          setNaoEncontrada("Rotina não encontrada.");
+          setNaoEncontrada(textos.agenda.naoEncontrada);
           setCarregando(false);
           return;
         }
@@ -177,13 +181,13 @@ export function PaginaDoFormularioDeRotina({
     falhaDeCarga === null &&
     !mesmoRascunho(rascunho, inicial);
   const protecao: Protecao | null = salvando
-    ? { tipo: "pendencia", motivo: "Aguarde: a Rotina está sendo salva." }
+    ? { tipo: "pendencia", motivo: textos.rotina.salvando }
     : sujo
       ? {
           tipo: "descarte",
-          titulo: "Descartar as alterações?",
-          descricao: "A programação digitada será perdida.",
-          rotuloDeConfirmacao: "Descartar",
+          titulo: textos.agenda.descartarAlteracoes,
+          descricao: textos.agenda.descartarAlteracaoProgramacao,
+          rotuloDeConfirmacao: textos.agenda.descartarConfirm,
         }
       : null;
 
@@ -242,11 +246,11 @@ export function PaginaDoFormularioDeRotina({
     let quantidade: number | null = null;
 
     if (rascunho.baralhoId === "") {
-      novos.baralho = "Escolha um Baralho para a Rotina.";
+      novos.baralho = textos.agenda.escolhaBaralho;
     }
 
     if (rascunho.dias.length === 0) {
-      novos.dias = "Escolha ao menos um dia da semana.";
+      novos.dias = textos.agenda.escolhaDia;
     }
 
     if (rascunho.modo === "definir") {
@@ -258,8 +262,7 @@ export function PaginaDoFormularioDeRotina({
         valor < 1 ||
         valor > 999
       ) {
-        novos.quantidade =
-          "Informe um número inteiro de 1 a 999 Cartões, ou escolha Todos os Cartões.";
+        novos.quantidade = textos.agenda.informeQuantidade;
       } else {
         quantidade = valor;
       }
@@ -314,9 +317,7 @@ export function PaginaDoFormularioDeRotina({
 
     if (resultado.ok) {
       operacao.current = null;
-      deixarAvisoDaAgenda(
-        `Rotina de ${resultado.rotina.nomeDoBaralho} ${editando ? "alterada" : "criada"}: ${resumoDaRotina(resultado.rotina)}.`,
-      );
+      deixarAvisoDaAgenda(() => `Rotina de ${resultado.rotina.nomeDoBaralho} ${editando ? "alterada" : "criada"}: ${resumoDaRotina(resultado.rotina, locale, textos)}.`);
       // A navegação de sucesso não pode ser barrada pela proteção que a própria
       // operação criou (FR-251).
       navegarSemProtecao("#/agenda");
@@ -376,7 +377,7 @@ export function PaginaDoFormularioDeRotina({
     baralhoEscolhido?.nome ?? rotina?.nomeDoBaralho ?? "";
   const resumo =
     rascunho.baralhoId !== "" && rascunho.dias.length > 0
-      ? `${nomeDoEscolhido} · ${descreverDias(rascunho.dias)} · ${descreverQuantidade(
+      ? `${nomeDoEscolhido} · ${descreverDias(rascunho.dias, locale)} · ${textos.agenda.quantidadeCartoes(
           rascunho.modo === "todos"
             ? null
             : Number.isInteger(Number(rascunho.quantidade)) &&
@@ -385,7 +386,7 @@ export function PaginaDoFormularioDeRotina({
               : null,
         )}${
           rascunho.modo === "definir" && rascunho.quantidade === ""
-            ? " (informe a quantidade)"
+            ? ` ${textos.agenda.quantidadePendente}`
             : ""
         }`
       : "Escolha o Baralho e ao menos um dia para ver o resumo.";
@@ -396,23 +397,23 @@ export function PaginaDoFormularioDeRotina({
       <p className="voltar">
         <a href={voltar}>
           <span aria-hidden="true">←</span>{" "}
-          Voltar para Rotinas de estudo
+          {textos.agenda.voltarParaRotinas.replace("← ", "")}
         </a>
       </p>
 
-      <h1>{editando ? "Editar rotina" : "Agendar estudo"}</h1>
+      <h1>{editando ? textos.agenda.editarRotina : textos.agenda.agendar}</h1>
 
-      {carregando ? <p className="carregando">Carregando…</p> : null}
+      {carregando ? <p className="carregando">{textos.agenda.carregando}</p> : null}
 
       {!carregando && falhaDeCarga !== null ? (
         <div role="alert" className="aviso aviso--erro">
-          <p>{falhaDeCarga}</p>
+          <p><TextoDoProduto texto={falhaDeCarga} /></p>
           <button
             type="button"
             className="botao botao--secundario"
             onClick={() => setTentativaDeCarga((n) => n + 1)}
           >
-            Tentar novamente
+            {textos.comum.tentarNovamente}
           </button>
         </div>
       ) : null}
@@ -429,15 +430,14 @@ export function PaginaDoFormularioDeRotina({
       semBaralhoElegivel ? (
         <section className="estado-vazio">
           <p>
-            Você ainda não tem um Baralho com Cartões para agendar. Crie um
-            Baralho, ou adicione Cartões a um Baralho existente.
+            {textos.agenda.baralhoSemCartoes}
           </p>
           <div className="acoes">
             <a className="botao botao--primario" href="#/baralhos/novo">
-              Criar Baralho
+              {textos.agenda.criarBaralhoLinkText}
             </a>
             <a className="botao botao--secundario" href="#/baralhos">
-              Ir para Baralhos
+              {textos.agenda.irParaBaralhosLinkText}
             </a>
           </div>
         </section>
@@ -465,7 +465,7 @@ export function PaginaDoFormularioDeRotina({
                   erros.baralho !== undefined ? "erro-do-baralho" : undefined
                 }
               >
-                <option value="">Escolha um Baralho</option>
+                <option value="">{textos.rotina.escolhaUmBaralho}</option>
                 {baralhos.map((baralho) => (
                   <option
                     key={baralho.id}
@@ -475,11 +475,7 @@ export function PaginaDoFormularioDeRotina({
                     }
                   >
                     {baralho.nome} (
-                    {baralho.quantidadeDeCartoes === 0
-                      ? "sem Cartões"
-                      : baralho.quantidadeDeCartoes === 1
-                        ? "1 Cartão"
-                        : `${baralho.quantidadeDeCartoes} Cartões`}
+                    {textos.rotina.cartoesDoBaralho(baralho.quantidadeDeCartoes)}
                     )
                   </option>
                 ))}
@@ -505,9 +501,9 @@ export function PaginaDoFormularioDeRotina({
                   : "ajuda-dos-dias"
               }
             >
-              <legend className="rotulo">Dias da semana</legend>
+              <legend className="rotulo">{textos.rotina.diasDaSemana}</legend>
               <p id="ajuda-dos-dias" className="ajuda">
-                Escolha um ou mais dias. A rotina se repete toda semana.
+                {textos.rotina.ajudaDosDias}
               </p>
               <div className="agenda__escolha-de-dias">
                 {DIAS.map((dia, indice) => (
@@ -518,7 +514,7 @@ export function PaginaDoFormularioDeRotina({
                       checked={rascunho.dias.includes(dia)}
                       onChange={() => alternarDia(dia)}
                     />
-                    <span>{nomeCompletoDoDia(dia)}</span>
+                    <span>{nomeCompletoDoDia(dia, locale)}</span>
                   </label>
                 ))}
               </div>
@@ -530,7 +526,7 @@ export function PaginaDoFormularioDeRotina({
             </fieldset>
 
             <fieldset className="campo campo--grupo">
-              <legend className="rotulo">Quantidade de Cartões</legend>
+              <legend className="rotulo">{textos.rotina.quantidadeDeCartoes}</legend>
               <label className="campo--opcao">
                 <input
                   type="radio"
@@ -538,7 +534,7 @@ export function PaginaDoFormularioDeRotina({
                   checked={rascunho.modo === "todos"}
                   onChange={() => alterar({ modo: "todos" })}
                 />
-                <span>Todos os Cartões</span>
+                <span>{textos.rotina.todosOsCartoes}</span>
               </label>
               <label className="campo--opcao">
                 <input
@@ -547,12 +543,12 @@ export function PaginaDoFormularioDeRotina({
                   checked={rascunho.modo === "definir"}
                   onChange={() => alterar({ modo: "definir" })}
                 />
-                <span>Definir quantidade</span>
+                <span>{textos.rotina.definirQuantidade}</span>
               </label>
               {rascunho.modo === "definir" ? (
                 <div className="campo">
                   <label className="rotulo" htmlFor="campo-da-quantidade">
-                    Quantos Cartões por estudo
+                    {textos.rotina.quantosCartoes}
                   </label>
                   <input
                     id="campo-da-quantidade"
@@ -573,8 +569,7 @@ export function PaginaDoFormularioDeRotina({
                     }
                   />
                   <p id="ajuda-da-quantidade" className="ajuda">
-                    De 1 a 999. Se o Baralho tiver menos Cartões, o estudo usa
-                    todos os disponíveis.
+                    {textos.rotina.ajudaDaQuantidade}
                   </p>
                   {erros.quantidade !== undefined ? (
                     <p id="erro-da-quantidade" className="erro" role="alert">
@@ -584,8 +579,7 @@ export function PaginaDoFormularioDeRotina({
                 </div>
               ) : (
                 <p className="ajuda">
-                  O estudo usa todos os Cartões do Baralho no momento em que
-                  começa.
+                  {textos.rotina.ajudaDeTodos}
                 </p>
               )}
             </fieldset>
@@ -599,10 +593,10 @@ export function PaginaDoFormularioDeRotina({
 
             {conflito !== null ? (
               <div role="alert" className="aviso aviso--erro">
-                <p>{conflito.mensagem}</p>
+                <p><TextoDoProduto texto={conflito.mensagem} /></p>
                 {conflito.atual !== null ? (
                   <>
-                    <p>Valores atuais: {resumoDaRotina(conflito.atual)}.</p>
+                    <p>{textos.agenda.valoresAtuais}: {resumoDaRotina(conflito.atual, locale, textos)}.</p>
                     <div className="acoes">
                       <button
                         type="button"
@@ -619,7 +613,7 @@ export function PaginaDoFormularioDeRotina({
                           setConflito(null);
                         }}
                       >
-                        Usar os valores atuais
+                        {textos.rotina.usarValoresAtuais}
                       </button>
                       <button
                         type="button"
@@ -634,7 +628,7 @@ export function PaginaDoFormularioDeRotina({
                           setConflito(null);
                         }}
                       >
-                        Manter o que digitei
+                        {textos.rotina.manterODigitado}
                       </button>
                     </div>
                   </>
@@ -643,13 +637,13 @@ export function PaginaDoFormularioDeRotina({
             ) : null}
 
             {falha !== null ? (
-              <p className="erro" role="alert" aria-label="Falha ao salvar a Rotina">
-                {falha}
+              <p className="erro" role="alert" aria-label={textos.rotina.falhaAoSalvar}>
+                <TextoDoProduto texto={falha} />
               </p>
             ) : null}
 
             <div aria-live="polite" role="status">
-              {salvando ? <p className="carregando">Salvando…</p> : null}
+              {salvando ? <p className="carregando">{textos.rotina.salvandoStatus}</p> : null}
             </div>
 
             <div className="acoes">
@@ -659,13 +653,13 @@ export function PaginaDoFormularioDeRotina({
                 disabled={salvando}
               >
                 {salvando
-                  ? "Salvando…"
+                  ? textos.agenda.rotuloEnviando
                   : editando
-                    ? "Salvar alterações"
-                    : "Salvar agendamento"}
+                    ? textos.agenda.salvarAlteracoes
+                    : textos.agenda.salvarAgendamento}
               </button>
               <a className="botao" href={voltar}>
-                Cancelar
+                {textos.comum.cancelar}
               </a>
             </div>
           </form>
@@ -678,9 +672,9 @@ export function PaginaDoFormularioDeRotina({
         return (
           <DialogoDeConfirmacao
             aberto={confirmacaoDeEdicao}
-            titulo="Confirmar alterações"
-            rotuloDeConfirmacao="Confirmar"
-            rotuloDeCancelamento="Voltar"
+            titulo={textos.rotina.confirmarAlteracoes}
+            rotuloDeConfirmacao={textos.rotina.confirmar}
+            rotuloDeCancelamento={textos.rotina.voltar}
             aoConfirmar={() => {
               setConfirmacaoDeEdicao(false);
               void enviar(false);
@@ -690,25 +684,24 @@ export function PaginaDoFormularioDeRotina({
             <div className="agenda__confirmacao-de-edicao">
               {efeitos.diasRemovidos ? (
                 <p>
-                  <strong>Dias removidos:</strong> cancelam o estudo pendente de
-                  hoje.
+                  <strong>{textos.rotina.diasRemovidos}</strong>{" "}
+                  {textos.rotina.efeitoDiasRemovidos}
                 </p>
               ) : null}
               {efeitos.diasAdicionados ? (
                 <p>
-                  <strong>Dias adicionados:</strong> podem criar o estudo de
-                  hoje.
+                  <strong>{textos.rotina.diasAdicionados}</strong>{" "}
+                  {textos.rotina.efeitoDiasAdicionados}
                 </p>
               ) : null}
               {efeitos.baralhoOuQuantidadeMudaram ? (
                 <p>
-                  <strong>Baralho ou quantidade mudaram:</strong> atualizam os
-                  compromissos pendentes de hoje e futuros.
+                  <strong>{textos.rotina.baralhoOuQuantidadeMudaram}</strong>{" "}
+                  {textos.rotina.efeitoBaralhoOuQuantidade}
                 </p>
               ) : null}
               <p className="texto-secundario">
-                Estudos passados e concluídos são preservados. Sessões já
-                iniciadas ainda poderão concluir o estudo capturado.
+                {textos.rotina.preservados}
               </p>
             </div>
           </DialogoDeConfirmacao>
@@ -717,17 +710,17 @@ export function PaginaDoFormularioDeRotina({
 
       <DialogoDeConfirmacao
         aberto={sobreposicao !== null}
-        titulo="Confirmar estudos independentes?"
-        rotuloDeConfirmacao="Confirmar e salvar"
+        titulo={textos.rotina.confirmarIndependentes}
+        rotuloDeConfirmacao={textos.rotina.confirmarESalvar}
         aoConfirmar={() => {
           setSobreposicao(null);
           void enviar(true);
         }}
         aoCancelar={() => setSobreposicao(null)}
       >
-        <p>{sobreposicao}</p>
+        <p><TextoDoProduto texto={sobreposicao} /></p>
         <p>
-          Cada Rotina gera o seu próprio estudo, e os dois contam separadamente.
+          {textos.rotina.cadaRotinaContaSeparado}
         </p>
       </DialogoDeConfirmacao>
     </div>

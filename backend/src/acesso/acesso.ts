@@ -29,17 +29,17 @@ import type { ArmazenamentoDeAcessos } from "../armazenamento/porta.ts";
 
 /**
  * As recusas do Acesso temporário, com o código estável e a mensagem em
- * português que a interface exibe tal qual (FR-046, FR-294). Em `acesso_expirado`
- * a mensagem é a exigida pela spec — «Seu acesso expirou. Entre novamente.».
+ * técnico em inglês; a interface traduz o código estável conforme o idioma
+ * escolhido (027, FR-015, FR-018).
  */
 export const ACESSO_EXPIRADO = {
   erro: "acesso_expirado",
-  mensagem: "Seu acesso expirou. Entre novamente.",
+  mensagem: "Session expired.",
 } as const;
 
 export const SEM_ACESSO = {
   erro: "sem_acesso",
-  mensagem: "Não há acesso neste navegador. Entre para continuar.",
+  mensagem: "Access denied.",
 } as const;
 
 /** O nome do cookie do Acesso temporário. */
@@ -74,7 +74,7 @@ export function validadeConfigurada(env: NodeJS.ProcessEnv = process.env): numbe
 
   if (!/^[0-9]+$/.test(bruto.trim()) || !Number.isInteger(numero) || numero < 1) {
     throw new ValidadeInvalidaError(
-      `${VARIAVEL_DA_VALIDADE} inválida: informe um número inteiro de segundos maior que zero.`,
+      `${VARIAVEL_DA_VALIDADE} is invalid: provide an integer number of seconds greater than zero.`,
     );
   }
 

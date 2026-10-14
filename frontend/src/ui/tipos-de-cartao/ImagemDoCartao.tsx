@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useIdioma } from "../../idioma";
 
 /**
  * A Imagem de um Cartão do tipo Imagem, como aparece no Baralho, na Sessão e
@@ -41,6 +42,7 @@ export function ImagemDoCartao({
   variante,
   aoFalhar,
 }: PropriedadesDaImagemDoCartao) {
+  const { textos } = useIdioma();
   const [falhas, setFalhas] = useState(0);
   const [reduzido] = useState(pedeMovimentoReduzido);
   const tela = useRef<HTMLCanvasElement>(null);
@@ -80,7 +82,7 @@ export function ImagemDoCartao({
   if (indisponivel) {
     return (
       <div className={`${classe} imagem-do-cartao--indisponivel`} role="img" aria-label={textoAlternativo}>
-        <span className="imagem-do-cartao__aviso">Imagem indisponível</span>
+        <span className="imagem-do-cartao__aviso">{textos.cartao.imagemIndisponivel}</span>
         {descricao && variante !== "miniatura" && (
           <span className="imagem-do-cartao__descricao">{descricao}</span>
         )}

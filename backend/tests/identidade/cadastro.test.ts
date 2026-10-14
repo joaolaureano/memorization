@@ -142,7 +142,7 @@ describe("recusa de Nome de usuário", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "nome_de_usuario_invalido",
-      mensagem: expect.stringContaining("pelo menos 3 caracteres"),
+      mensagem: expect.stringContaining("at least 3 characters"),
     });
   });
 
@@ -152,7 +152,7 @@ describe("recusa de Nome de usuário", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "nome_de_usuario_invalido",
-      mensagem: expect.stringContaining("no máximo 50 caracteres"),
+      mensagem: expect.stringContaining("at most 50 characters"),
     });
   });
 
@@ -162,7 +162,7 @@ describe("recusa de Nome de usuário", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "nome_de_usuario_invalido",
-      mensagem: expect.stringContaining("letras de A a Z"),
+      mensagem: expect.stringContaining("A-Z"),
     });
   });
 
@@ -195,7 +195,7 @@ describe("recusa de Nome de usuário", () => {
       expect(resultado).toEqual({
         ok: false,
         erro: "nome_de_usuario_existente",
-        mensagem: expect.stringContaining("já existe"),
+        mensagem: expect.stringContaining("already exists"),
       });
     }
   });
@@ -217,7 +217,7 @@ describe("recusa de Senha", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "senha_invalida",
-      mensagem: expect.stringContaining("entre 8 e 128 caracteres"),
+      mensagem: expect.stringContaining("between 8 and 128 characters"),
     });
   });
 
@@ -227,7 +227,7 @@ describe("recusa de Senha", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "senha_invalida",
-      mensagem: expect.stringContaining("entre 8 e 128 caracteres"),
+      mensagem: expect.stringContaining("between 8 and 128 characters"),
     });
   });
 
@@ -273,7 +273,7 @@ describe("falha do armazenamento", () => {
     expect(resultado).toEqual({
       ok: false,
       erro: "indisponivel",
-      mensagem: "O armazenamento não está disponível. Tente novamente.",
+      mensagem: "Storage is unavailable. Try again.",
     });
     expect(JSON.stringify(resultado)).not.toContain(SENHA);
   });

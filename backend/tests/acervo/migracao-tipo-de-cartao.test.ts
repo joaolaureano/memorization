@@ -70,7 +70,7 @@ describe("migração 17 — Tipo de cartão", () => {
 
     aplicarEsquema(banco);
 
-    expect(versao(banco)).toBe(18);
+    expect(versao(banco)).toBe(19);
     expect(
       banco
         .prepare(

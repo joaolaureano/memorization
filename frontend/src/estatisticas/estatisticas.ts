@@ -17,26 +17,12 @@ import type { RegistroResumido } from "../acervo-cliente/cliente";
 /** Quantidade de dias da janela, contando hoje (FR-162). */
 const DIAS_DA_JANELA = 7;
 
-/** Abreviações dos dias da semana, indexadas por `Date.getDay()` (0 = domingo). */
-const ROTULOS_DA_SEMANA = [
-  "dom",
-  "seg",
-  "ter",
-  "qua",
-  "qui",
-  "sex",
-  "sáb",
-] as const;
-
-/** O rótulo do dia corrente, no lugar da abreviação do dia da semana (FR-162). */
-const ROTULO_DE_HOJE = "Hoje";
-
 /** Um dia da janela, já agregado para o gráfico (FR-162). */
 export interface DiaDeEstudo {
   /** A data local em AAAA-MM-DD; é a chave do dia. */
   data: string;
-  /** A abreviação do dia da semana, ou "Hoje" para o dia corrente. */
-  rotulo: string;
+  /** Identifica o dia corrente sem embutir texto de apresentação. */
+  ehHoje: boolean;
   /** O total de Itens estudados naquele dia. */
   itens: number;
 }
@@ -86,7 +72,7 @@ export function itensPorDia(
     contagens.set(chave, 0);
     dias.push({
       data: chave,
-      rotulo: chave === chaveDeHoje ? ROTULO_DE_HOJE : rotuloDaSemana(data),
+      ehHoje: chave === chaveDeHoje,
       itens: 0,
     });
   }
@@ -142,6 +128,3 @@ function chaveDoDia(data: Date): string {
 }
 
 /** A abreviação do dia da semana de um dia local. */
-function rotuloDaSemana(data: Date): string {
-  return ROTULOS_DA_SEMANA[data.getDay()] ?? "";
-}

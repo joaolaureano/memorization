@@ -28,12 +28,12 @@ import {
 /** A recusa de `id` inexistente, como o contrato a publica (SC-030). */
 const CARTAO_NAO_ENCONTRADO = {
   erro: "nao_encontrado",
-  mensagem: "Cartão não encontrado.",
+  mensagem: "Not found.",
 };
 
 const BARALHO_NAO_ENCONTRADO = {
   erro: "nao_encontrado",
-  mensagem: "Baralho não encontrado.",
+  mensagem: "Not found.",
 };
 
 let contrato: ServidorDeContrato;

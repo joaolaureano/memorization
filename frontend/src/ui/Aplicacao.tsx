@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -16,6 +17,8 @@ import type {
   ResultadoDeObterAcesso,
 } from "../acervo-cliente/cliente";
 import { decidirRenovacao } from "../acesso/atividade";
+import { ContextoDeIdioma, ProvedorDeIdioma, SeletorDeIdioma, TextoDoProduto, useIdioma } from "../idioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
 import { Moldura } from "./Moldura";
 import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
@@ -112,6 +115,21 @@ interface Sessao {
 }
 
 export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
+  const contextoDeIdioma = useContext(ContextoDeIdioma);
+
+  if (contextoDeIdioma === null) {
+    return (
+      <ProvedorDeIdioma>
+        <AplicacaoInterna criarCliente={criarCliente} />
+      </ProvedorDeIdioma>
+    );
+  }
+
+  return <AplicacaoInterna criarCliente={criarCliente} />;
+}
+
+function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
+  const { textos } = useIdioma();
   const [sessao, setSessao] = useState<Sessao | null>(null);
   const [avisoDaEntrada, setAvisoDaEntrada] = useState<AvisoDaEntrada | null>(
     null,
@@ -287,8 +305,7 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
     setSessao(null);
     setAvisoDaEntrada({
       tipo: "falha",
-      texto:
-        "Entre novamente para conferir o estado da sua conta: a última alteração não pôde ser confirmada.",
+      texto: MENSAGENS_PT.confiraConta,
     });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
@@ -301,20 +318,21 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
             <img src="/icon.svg" alt="" aria-hidden="true" />
             memorization
           </span>
+          <SeletorDeIdioma />
         </header>
         <main className="aplicacao">
           {verificacao === "verificando" ? (
             <p className="carregando" role="status">
-              Verificando o acesso…
+              {textos.acesso.verificandoAcesso}
             </p>
           ) : (
             <section className="cartao">
               <p
                 className="aviso aviso--erro"
                 role="alert"
-                aria-label="Falha ao verificar o acesso"
+                aria-label={textos.acesso.falhaAoVerificarAcesso}
               >
-                {MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO}
+                <TextoDoProduto texto={MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO} />
               </p>
               <div className="acoes">
                 <button
@@ -322,7 +340,7 @@ export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
                   type="button"
                   onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
                 >
-                  Tentar novamente
+                  {textos.comum.tentarNovamente}
                 </button>
               </div>
             </section>
@@ -390,6 +408,7 @@ function CascaDaAplicacao({
   aoExcluirConta,
   aoIrParaEntrar,
 }: PropriedadesDaCasca) {
+  const { textos } = useIdioma();
   const rota = useRotaExibida();
   const protegerAcao = useAcaoProtegida();
   const descartarProtecao = useDescartarProtecao();
@@ -617,6 +636,7 @@ function CascaDaAplicacao({
             <img src="/icon.svg" alt="" aria-hidden="true" />
             memorization
           </span>
+          <SeletorDeIdioma />
         </header>
       )}
 
@@ -627,15 +647,15 @@ function CascaDaAplicacao({
           <p
             className="aviso aviso--erro"
             role="alert"
-            aria-label="Falha ao Sair"
+            aria-label={textos.acesso.aria_falha_ao_sair}
           >
-            {falhaDeSaida}
+            <TextoDoProduto texto={falhaDeSaida} />
           </p>
         )}
 
         {temCredencial && transicao !== "concluida" ? (
           transicao === "carregando" ? (
-            <p role="status">Verificando Cartões existentes…</p>
+            <p role="status">{textos.inicio.verificando_cartoes}</p>
           ) : transicao.ok ? (
             <PaginaDaTransicaoDeCartoes
               cliente={cliente}
@@ -644,14 +664,16 @@ function CascaDaAplicacao({
               aoConcluir={() => setTransicao("concluida")}
             />
           ) : (
-            <section className="pagina">
-              <h1>Organizar Cartões existentes</h1>
-              <p role="alert">{transicao.mensagem}</p>
-              <button type="button" onClick={() => {
-                setTransicao("carregando");
-                setTentativaDaTransicao((atual) => atual + 1);
-              }}>Tentar novamente</button>
-            </section>
+            (
+                <section className="pagina">
+                  <h1>{textos.inicio.organizar_cartoes_titulo}</h1>
+                  <p role="alert"><TextoDoProduto texto={transicao.mensagem} /></p>
+                  <button type="button" onClick={() => {
+                    setTransicao("carregando");
+                    setTentativaDaTransicao((atual) => atual + 1);
+                  }}>{textos.comum.tentarNovamente}</button>
+                </section>
+              )
           )
         ) : <TelaDaRota
           rota={rota}
@@ -874,11 +896,13 @@ function TelaDaRota({
  * pessoa volta a Início (FR-234).
  */
 function VoltarParaInicio() {
+  const { textos } = useIdioma();
+
   useEffect(() => {
     window.location.replace("#/inicio");
   }, []);
 
-  return <p className="carregando">Voltando para Início…</p>;
+  return <p className="carregando">{textos.acesso.voltandoParaInicio}</p>;
 }
 
 /**
@@ -887,9 +911,11 @@ function VoltarParaInicio() {
  * para Baralhos (FR-366).
  */
 function VoltarParaBaralhos() {
+  const { textos } = useIdioma();
+
   useEffect(() => {
     window.location.replace("#/baralhos");
   }, []);
 
-  return <p className="carregando">Voltando para Baralhos…</p>;
+  return <p className="carregando">{textos.acesso.voltandoParaBaralhos}</p>;
 }

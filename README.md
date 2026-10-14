@@ -35,6 +35,7 @@ every feature started from a specification in [`specs/`](specs/).
 | Home and Study | Home shows a greeting and today's schedule; the Study area holds the week, statistics and recent Sessions | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
 | Statistics and history | Items studied, Sessions completed and hit rate over the last 7 days, a daily chart and the record of each Session, with what was right and wrong | [013](specs/013-estatisticas-e-historico/) |
 | Interface | Navigable interface for phone and desktop (360 to 1440 px, 200% zoom), usable by keyboard and screen reader | [012](specs/012-interface-visual-navegavel/) |
+| Language | Switch between Português, English and Español from the header. The choice is stored in this browser; technical API messages are in English | [027](specs/027-idioma-da-interface/) |
 
 The remaining specs cover the platform: persistence Port with SQLite and
 PostgreSQL ([009](specs/009-porta-de-persistencia/),

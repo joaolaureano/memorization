@@ -221,17 +221,17 @@ export interface DadosDeExclusaoDeConta {
 }
 
 /**
- * A recusa única da Senha atual (FR-279): a mesma frase para trocar a Senha e
- * excluir a conta, sem revelar a Senha, qualquer derivado ou outro Usuário.
+ * A recusa única da Senha atual (FR-279): a mesma frase técnica para trocar a Senha e
+ * excluir a conta, sem revelar a Senha, qualquer derivado ou outro Usuário (FR-018).
  */
 export const SENHA_ATUAL_INCORRETA = {
   erro: "senha_atual_incorreta",
-  mensagem: "A Senha atual está incorreta.",
+  mensagem: "Current password is incorrect.",
 } as const;
 
 const MESMA_SENHA = {
   erro: "mesma_senha",
-  mensagem: "A nova Senha é igual à atual.",
+  mensagem: "New password is the same as current password.",
 } as const;
 
 /**
@@ -272,13 +272,13 @@ export interface GestaoDeConta {
 export { CREDENCIAL_INVALIDA } from "./invariantes.ts";
 
 /**
- * Recusa por indisponibilidade do armazenamento: a mesma frase do `Acervo` — a
+ * Recusa por indisponibilidade do armazenamento: a mesma frase técnica do `Acervo` — a
  * operação **não** passou por concluída e o conteúdo informado continua
- * disponível para nova tentativa (FR-044, FR-045).
+ * disponível para nova tentativa (FR-044, FR-045, FR-018).
  */
 const ARMAZENAMENTO_INDISPONIVEL = {
   erro: "indisponivel",
-  mensagem: "O armazenamento não está disponível. Tente novamente.",
+  mensagem: "Storage is unavailable. Try again.",
 } as const;
 
 /** Bytes de aleatoriedade da Senha descartável que nunca é apresentada. */
@@ -409,7 +409,7 @@ export function criarIdentidade(
         return {
           ok: false,
           erro: "dados_invalidos",
-          mensagem: "A confirmação da Senha não confere com a nova Senha.",
+          mensagem: "Password confirmation does not match new password.",
           campo: "confirmacaoDaSenha",
         };
       }

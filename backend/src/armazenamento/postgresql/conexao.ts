@@ -30,23 +30,23 @@ export interface ConfiguracaoDaConexao {
 export class UrlDeConexaoInvalidaError extends Error {}
 
 /** Motivo: a variável não foi informada — ausente ou vazia. */
-const URL_NAO_INFORMADA = "a variável de ambiente DB_URL não foi informada.";
+const URL_NAO_INFORMADA = "environment variable DB_URL was not provided.";
 
 /** Motivo: o valor informado não é uma URL de conexão utilizável. */
 const URL_INVALIDA =
-  "a variável de ambiente DB_URL não é uma URL de conexão válida.";
+  "environment variable DB_URL is not a valid connection URL.";
 
 /**
  * Motivo: a URL pede conexão sem verificação do certificado. A cifra é
  * obrigatória, e o objeto `ssl` do Adapter é que manda (FR-115).
  */
 const CIFRA_REBAIXADA =
-  "a URL de DB_URL pede conexão sem verificação de certificado; " +
-  "a conexão cifrada com certificado verificado é obrigatória.";
+  "DB_URL requests connection without certificate verification; " +
+  "encrypted connection with verified certificate is required.";
 
 /** Motivo: o caminho informado não entrega um PEM legível. */
 const CA_ILEGIVEL =
-  "a variável de ambiente DB_CA_CERT não aponta um certificado legível.";
+  "environment variable DB_CA_CERT does not point to a readable certificate.";
 
 /** Protocolos aceitos numa URL de conexão de PostgreSQL. */
 const PROTOCOLOS_ACEITOS = new Set(["postgres:", "postgresql:"]);

@@ -32,7 +32,7 @@ const NOME_VALIDO = "Inglês para a próxima viagem";
 
 const DADOS_DA_SELECAO_INVALIDOS = {
   erro: "dados_invalidos",
-  mensagem: "Os dados da seleção são inválidos.",
+  mensagem: "Invalid data.",
 };
 
 let servidor: FastifyInstance;
@@ -186,7 +186,7 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
 
     const leitura = await lerBaralhos();
@@ -242,7 +242,7 @@ describe("POST /baralhos/de-selecao — salvar a seleção como Baralho", () => 
     expect(resposta.statusCode).toBe(409);
     expect(resposta.json()).toEqual({
       erro: "cartoes_indisponiveis",
-      mensagem: "Alguns cartões não estão mais disponíveis.",
+      mensagem: "Some cards are no longer available.",
       cartaoIds: [inexistente],
     });
 

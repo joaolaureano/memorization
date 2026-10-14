@@ -26,7 +26,7 @@ const NOME_EDITADO = "Inglês britânico";
 
 const RECUSA_DE_CORPO_INVALIDO = {
   erro: "corpo_invalido",
-  mensagem: "O corpo da requisição não é válido.",
+  mensagem: "Request body is invalid.",
 };
 
 let servidor: FastifyInstance;
@@ -110,7 +110,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
   });
 
@@ -124,7 +124,7 @@ describe("PUT /baralhos/{id} — edição conforme o contrato", () => {
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 

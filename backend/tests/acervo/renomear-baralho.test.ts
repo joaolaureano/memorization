@@ -128,7 +128,7 @@ describe("renomearBaralho — edição pela Interface", () => {
     expect(await acervo.renomearBaralho(baralho.id, { nome: "" })).toEqual({
       ok: false,
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
 
     expect(await acervo.listarBaralhos()).toEqual([
@@ -150,7 +150,8 @@ describe("renomearBaralho — edição pela Interface", () => {
       ok: false,
       erro: "nome_muito_longo",
       mensagem:
-        "O nome do baralho deve ter no máximo 100 caracteres; o informado tem 101.",
+        "Deck name is too long. Maximum 100 characters; provided has 101.",
+      limite: 100,
     });
   });
 
@@ -162,7 +163,7 @@ describe("renomearBaralho — edição pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 });

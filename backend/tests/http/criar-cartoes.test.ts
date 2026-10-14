@@ -27,7 +27,7 @@ const NOME_DO_BARALHO = "Inglês";
 
 const RECUSA_DE_CORPO_INVALIDO = {
   erro: "corpo_invalido",
-  mensagem: "O corpo da requisição não é válido.",
+  mensagem: "Request body is invalid.",
 };
 
 let servidor: FastifyInstance;
@@ -162,7 +162,7 @@ describe("POST /baralhos/{id}/cartoes — criação conforme o contrato", () => 
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
   });
 
@@ -175,7 +175,7 @@ describe("POST /baralhos/{id}/cartoes — criação conforme o contrato", () => 
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
   });
 
@@ -192,7 +192,7 @@ describe("POST /baralhos/{id}/cartoes — criação conforme o contrato", () => 
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Baralho não encontrado.",
+      mensagem: "Not found.",
     });
 
     // Verifica que nada foi criado no Baralho do primeiro usuário

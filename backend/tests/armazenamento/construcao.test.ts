@@ -665,7 +665,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
     });
 
     expect(resultado.status).toBe(0);
-    expect(saidaDe(resultado)).toContain("Migração concluída");
+    expect(saidaDe(resultado)).toContain("Migration completed");
 
     const tabelas = await servidor.consultar<{ nome: string }>(
       nomeDaBase,

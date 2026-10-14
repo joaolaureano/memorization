@@ -42,16 +42,16 @@ export function segredoConfigurado(
 
   if (segredo === undefined || segredo.length === 0) {
     throw new SegredoAusenteError(
-      `A variável de ambiente ${VARIAVEL_DO_SEGREDO} não foi informada. ` +
-        `Informe um segredo com pelo menos ${COMPRIMENTO_MINIMO_DO_SEGREDO} caracteres.`,
+      `Environment variable ${VARIAVEL_DO_SEGREDO} was not provided. ` +
+        `Provide a secret with at least ${COMPRIMENTO_MINIMO_DO_SEGREDO} characters.`,
     );
   }
 
   if (segredo.length < COMPRIMENTO_MINIMO_DO_SEGREDO) {
     throw new SegredoAusenteError(
-      `A variável de ambiente ${VARIAVEL_DO_SEGREDO} tem menos de ` +
-        `${COMPRIMENTO_MINIMO_DO_SEGREDO} caracteres. ` +
-        `Informe um segredo com pelo menos ${COMPRIMENTO_MINIMO_DO_SEGREDO} caracteres.`,
+      `Environment variable ${VARIAVEL_DO_SEGREDO} has fewer than ` +
+        `${COMPRIMENTO_MINIMO_DO_SEGREDO} characters. ` +
+        `Provide a secret with at least ${COMPRIMENTO_MINIMO_DO_SEGREDO} characters.`,
     );
   }
 

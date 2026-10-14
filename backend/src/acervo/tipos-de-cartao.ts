@@ -70,14 +70,15 @@ const IMAGEM: RegrasDoTipo = {
       return {
         erro: "descricao_muito_longa",
         mensagem:
-          `A descrição da imagem deve ter no máximo ${LIMITE_DA_DESCRICAO_ALTERNATIVA} caracteres; ` +
-          `a informada tem ${dados.textoAlternativo.length}.`,
+          `Description is too long. Maximum ${LIMITE_DA_DESCRICAO_ALTERNATIVA} characters; ` +
+          `provided has ${dados.textoAlternativo.length}.`,
+        limite: LIMITE_DA_DESCRICAO_ALTERNATIVA,
       };
     }
 
     return temImagem
       ? null
-      : { erro: "imagem_ausente", mensagem: "Escolha uma imagem." };
+      : { erro: "imagem_ausente", mensagem: "Choose an image." };
   },
   chaveDaFrente(frente) {
     return frente.trim().length === 0 ? null : normalizarFrente(frente);

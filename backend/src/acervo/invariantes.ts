@@ -40,10 +40,12 @@ export type CodigoDeErroDeCartao =
 /**
  * Falha de regra de domínio. É resultado previsto da Interface, não exceção:
  * o caller decide o que fazer com `erro` e `mensagem` sem capturar exceção.
+ * O `limite` é incluído quando a validação tem um limite numérico.
  */
 export interface FalhaDeRegraDeCartao {
   erro: CodigoDeErroDeCartao;
   mensagem: string;
+  limite?: number;
 }
 
 /**
@@ -61,7 +63,7 @@ export function validarFrente(frente: string): FalhaDeRegraDeCartao | null {
   if (frente.trim().length === 0) {
     return {
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     };
   }
 
@@ -69,8 +71,9 @@ export function validarFrente(frente: string): FalhaDeRegraDeCartao | null {
     return {
       erro: "frente_muito_longa",
       mensagem:
-        `A frente do cartão deve ter no máximo ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres; ` +
-        `a informada tem ${frente.length}.`,
+        `Card front is too long. Maximum ${LIMITE_DE_CARACTERES_DE_CARTAO} characters; ` +
+        `provided has ${frente.length}.`,
+      limite: LIMITE_DE_CARACTERES_DE_CARTAO,
     };
   }
 
@@ -84,7 +87,7 @@ export function validarVerso(verso: string): FalhaDeRegraDeCartao | null {
   if (verso.trim().length === 0) {
     return {
       erro: "verso_vazio",
-      mensagem: "O verso do cartão não pode ficar vazio.",
+      mensagem: "Card back cannot be empty.",
     };
   }
 
@@ -92,8 +95,9 @@ export function validarVerso(verso: string): FalhaDeRegraDeCartao | null {
     return {
       erro: "verso_muito_longo",
       mensagem:
-        `O verso do cartão deve ter no máximo ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres; ` +
-        `o informado tem ${verso.length}.`,
+        `Card back is too long. Maximum ${LIMITE_DE_CARACTERES_DE_CARTAO} characters; ` +
+        `provided has ${verso.length}.`,
+      limite: LIMITE_DE_CARACTERES_DE_CARTAO,
     };
   }
 
@@ -118,6 +122,8 @@ export type CodigoDeErroDeBaralho =
 export interface FalhaDeRegraDeBaralho {
   erro: CodigoDeErroDeBaralho;
   mensagem: string;
+  /** O limite em caracteres, quando a recusa é por tamanho (027, contracts/http.md). */
+  limite?: number;
 }
 
 /**
@@ -137,7 +143,7 @@ export function validarNomeDeBaralho(
   if (nome.trim().length === 0) {
     return {
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     };
   }
 
@@ -145,8 +151,9 @@ export function validarNomeDeBaralho(
     return {
       erro: "nome_muito_longo",
       mensagem:
-        `O nome do baralho deve ter no máximo ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres; ` +
-        `o informado tem ${nome.length}.`,
+        `Deck name is too long. Maximum ${LIMITE_DE_CARACTERES_DE_BARALHO} characters; ` +
+        `provided has ${nome.length}.`,
+      limite: LIMITE_DE_CARACTERES_DE_BARALHO,
     };
   }
 

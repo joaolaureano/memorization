@@ -7,7 +7,6 @@ import {
   filtrarBaralhos,
   filtrarBaralhosPorSituacao,
   filtrarCartoes,
-  rotuloDaSituacaoDoBaralho,
   situacaoDaRevisao,
   situacaoDoBaralho,
 } from "../src/acervo-cliente/busca-no-acervo";
@@ -17,6 +16,7 @@ import type {
   CriteriosDeCartoes,
   SituacaoDoBaralho,
 } from "../src/acervo-cliente/busca-no-acervo";
+import { pt } from "../src/idioma/pt";
 
 /** O instante fixo dos testes: 5 de outubro de 2026, 9h locais. */
 const AGORA = new Date(2026, 9, 5, 9, 0);
@@ -340,10 +340,10 @@ describe("cartoesPendentes", () => {
   });
 });
 
-describe("rotuloDaSituacaoDoBaralho", () => {
+describe("rótulos da situação do Baralho", () => {
   it('rotula as três situações: "Sem cartões", "Pendente" e "Revisado" (FR-380, SC-152)', () => {
-    expect(rotuloDaSituacaoDoBaralho("sem-cartoes")).toBe("Sem cartões");
-    expect(rotuloDaSituacaoDoBaralho("pendente")).toBe("Pendente");
-    expect(rotuloDaSituacaoDoBaralho("revisado")).toBe("Revisado");
+    expect(pt.baralhos.rotuloDaSituacao["sem-cartoes"]).toBe("Sem cartões");
+    expect(pt.baralhos.rotuloDaSituacao.pendente).toBe("Pendente");
+    expect(pt.baralhos.rotuloDaSituacao.revisado).toBe("Revisado");
   });
 });

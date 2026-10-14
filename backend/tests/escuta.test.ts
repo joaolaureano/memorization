@@ -44,7 +44,7 @@ describe("constantes e configuração de escuta", () => {
         PortaInvalidaError,
       );
       expect(() => portaConfigurada({ PORTA: valor })).toThrow(
-        `PORTA inválida: ${JSON.stringify(valor)}. Informe um número inteiro entre 1 e 65535.`,
+        `Invalid PORT: ${JSON.stringify(valor)}. Provide an integer between 1 and 65535.`,
       );
     },
   );

@@ -1,4 +1,5 @@
-import { descreverDias, diaDaSemana, diasDaSemana, ehDataCivilValida, ehFusoValido, hojeNoFuso } from "../agenda/datas";
+import { textosDoIdiomaVigente } from "../idioma/ProvedorDeIdioma";
+import { diaDaSemana, diasDaSemana, ehDataCivilValida, ehFusoValido, hojeNoFuso } from "../agenda/datas";
 import type {
   Cartao,
   CodigoDeErroDeAgenda,
@@ -93,8 +94,23 @@ export interface ContextoDaAgenda {
 
 type Falha = { ok: false; erro: CodigoDeErroDeAgenda; mensagem: string };
 
-function falha(erro: CodigoDeErroDeAgenda, mensagem: string): Falha {
-  return { ok: false, erro, mensagem };
+/**
+ * A recusa da Agenda com o texto que o `ClienteHttp` mostraria: o do catálogo,
+ * pelo código e pelo `motivo`, no idioma vigente (027, FR-019).
+ */
+function falha(
+  erro: CodigoDeErroDeAgenda,
+  motivo: string,
+  dias?: readonly number[],
+): Falha {
+  return {
+    ok: false,
+    erro,
+    mensagem: textosDoIdiomaVigente().recusa(
+      { erro, motivo, ...(dias !== undefined ? { dias } : {}) },
+      "agenda",
+    ),
+  };
 }
 
 const ATUAL = (rotina: RotinaDaBase): VersaoDaRotina =>
@@ -241,21 +257,15 @@ export function obterAgendaEmMemoria(
   fuso: string,
 ): { ok: true; agenda: SemanaDaAgenda } | Falha {
   if (!ehDataCivilValida(inicio)) {
-    return falha("dados_invalidos", "A data informada não é uma data válida.");
+    return falha("dados_invalidos", "data_invalida");
   }
 
   if (diaDaSemana(inicio) !== 1) {
-    return falha(
-      "dados_invalidos",
-      "A data de início precisa ser uma segunda-feira.",
-    );
+    return falha("dados_invalidos", "inicio_nao_segunda");
   }
 
   if (!ehFusoValido(fuso)) {
-    return falha(
-      "dados_invalidos",
-      "O fuso horário informado não é um fuso IANA válido.",
-    );
+    return falha("dados_invalidos", "fuso_invalido");
   }
 
   const hoje = hojeNoFuso(fuso, contexto.agora);
@@ -298,7 +308,7 @@ function interpretarConfiguracao(dados: DadosDeRotina): Configuracao | Falha {
   const { baralhoId, dias, quantidade } = dados;
 
   if (typeof baralhoId !== "string" || baralhoId.trim().length === 0) {
-    return falha("dados_invalidos", "Escolha um Baralho para a Rotina.");
+    return falha("dados_invalidos", "baralho_ausente");
   }
 
   if (
@@ -307,10 +317,7 @@ function interpretarConfiguracao(dados: DadosDeRotina): Configuracao | Falha {
     dias.some((dia) => !Number.isInteger(dia) || dia < 1 || dia > 7) ||
     new Set(dias).size !== dias.length
   ) {
-    return falha(
-      "dados_invalidos",
-      "Escolha ao menos um dia da semana, sem repetir dias.",
-    );
+    return falha("dados_invalidos", "dias_invalidos");
   }
 
   if (
@@ -318,10 +325,7 @@ function interpretarConfiguracao(dados: DadosDeRotina): Configuracao | Falha {
     (quantidade !== null &&
       (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 999))
   ) {
-    return falha(
-      "dados_invalidos",
-      "A quantidade precisa ser um número inteiro de 1 a 999, ou Todos os Cartões.",
-    );
+    return falha("dados_invalidos", "quantidade_invalida");
   }
 
   return { baralhoId, dias: [...dias].sort((a, b) => a - b), quantidade };
@@ -339,23 +343,17 @@ export function salvarRotinaEmMemoria(
   dados: DadosDeRotina,
 ): { ok: true; rotina: RotinaDeEstudo } | Falha {
   if (!ehFusoValido(dados.fuso)) {
-    return falha(
-      "dados_invalidos",
-      "O fuso horário informado não é um fuso IANA válido.",
-    );
+    return falha("dados_invalidos", "fuso_invalido");
   }
 
   if (dados.operacaoId.trim().length === 0) {
-    return falha(
-      "dados_invalidos",
-      "O identificador da operação não pode ser vazio.",
-    );
+    return falha("dados_invalidos", "operacao_vazia");
   }
 
   const acao = dados.acao;
 
   if (!["criar", "editar", "pausar", "retomar", "excluir"].includes(acao)) {
-    return falha("dados_invalidos", "A ação da Rotina não é válida.");
+    return falha("dados_invalidos", "acao_invalida");
   }
 
   const configuracao =
@@ -369,7 +367,7 @@ export function salvarRotinaEmMemoria(
 
   if (acao !== "criar") {
     if (typeof dados.id !== "string" || dados.id.trim().length === 0) {
-      return falha("dados_invalidos", "Informe a Rotina da operação.");
+      return falha("dados_invalidos", "rotina_ausente");
     }
 
     if (
@@ -377,10 +375,7 @@ export function salvarRotinaEmMemoria(
       !Number.isInteger(dados.versao) ||
       dados.versao < 1
     ) {
-      return falha(
-        "dados_invalidos",
-        "Informe a versão da Rotina que você viu.",
-      );
+      return falha("dados_invalidos", "versao_ausente");
     }
   }
 
@@ -396,10 +391,7 @@ export function salvarRotinaEmMemoria(
   if (anterior !== undefined) {
     return anterior.intencao === intencao
       ? { ok: true, rotina: rotinaPublica(anterior.rotina, contexto) }
-      : falha(
-          "conflito",
-          "Este identificador de operação já foi usado por outra operação.",
-        );
+      : falha("conflito", "operacao_reutilizada");
   }
 
   const hoje = hojeNoFuso(dados.fuso, contexto.agora);
@@ -410,25 +402,22 @@ export function salvarRotinaEmMemoria(
     existente = rotinas.find((rotina) => rotina.id === dados.id) ?? null;
 
     if (existente === null || existente.estado === "excluida") {
-      return falha("nao_encontrado", "Rotina não encontrada.");
+      return falha("nao_encontrado", "rotina_nao_encontrada");
     }
 
     if (existente.versao !== dados.versao) {
-      return falha(
-        "conflito",
-        "A Rotina foi alterada em outro lugar. Revise os valores atuais antes de salvar.",
-      );
+      return falha("conflito", "versao_desatualizada");
     }
   }
 
   const atual = existente === null ? null : ATUAL(existente);
 
   if (acao === "pausar" && existente?.estado !== "ativa") {
-    return falha("dados_invalidos", "A Rotina já está pausada.");
+    return falha("dados_invalidos", "rotina_ja_pausada");
   }
 
   if (acao === "retomar" && existente?.estado !== "pausada") {
-    return falha("dados_invalidos", "A Rotina não está pausada.");
+    return falha("dados_invalidos", "rotina_nao_pausada");
   }
 
   if (
@@ -438,14 +427,11 @@ export function salvarRotinaEmMemoria(
     const baralho = contexto.baralhos.get(configuracao.baralhoId);
 
     if (baralho === undefined) {
-      return falha("nao_encontrado", "Baralho não encontrado.");
+      return falha("nao_encontrado", "baralho_nao_encontrado");
     }
 
     if (baralho.cartoes.length === 0) {
-      return falha(
-        "dados_invalidos",
-        "O Baralho escolhido não tem Cartões. Adicione Cartões a ele antes de agendar.",
-      );
+      return falha("dados_invalidos", "baralho_sem_cartoes");
     }
   }
 
@@ -486,10 +472,7 @@ export function salvarRotinaEmMemoria(
     }
 
     if (comuns.size > 0) {
-      return falha(
-        "sobreposicao",
-        `Já existe uma Rotina ativa deste Baralho em ${descreverDias([...comuns])}. Confirme para criar estudos independentes nesses dias.`,
-      );
+      return falha("sobreposicao", "sobreposicao", [...comuns].sort((a, b) => a - b));
     }
   }
 
@@ -572,21 +555,15 @@ export function iniciarCompromissoEmMemoria(
   dados: DadosDeInicioDeCompromisso,
 ): { ok: true; inicio: InicioDeCompromisso } | Falha {
   if (!ehDataCivilValida(dados.data)) {
-    return falha("dados_invalidos", "A data informada não é uma data válida.");
+    return falha("dados_invalidos", "data_invalida");
   }
 
   if (!ehFusoValido(dados.fuso)) {
-    return falha(
-      "dados_invalidos",
-      "O fuso horário informado não é um fuso IANA válido.",
-    );
+    return falha("dados_invalidos", "fuso_invalido");
   }
 
   if (dados.data !== hojeNoFuso(dados.fuso, contexto.agora)) {
-    return falha(
-      "dados_invalidos",
-      "Só é possível iniciar o estudo programado para hoje.",
-    );
+    return falha("dados_invalidos", "estudo_fora_de_hoje");
   }
 
   const rotina = base.rotinas.find(
@@ -594,7 +571,7 @@ export function iniciarCompromissoEmMemoria(
   );
 
   if (rotina === undefined) {
-    return falha("nao_encontrado", "Rotina não encontrada.");
+    return falha("nao_encontrado", "rotina_nao_encontrada");
   }
 
   const persistido = base.compromissos.find(
@@ -606,33 +583,24 @@ export function iniciarCompromissoEmMemoria(
 
   if (persistido !== undefined) {
     return persistido.estado === "concluido"
-      ? falha("conflito", "Este estudo já foi concluído.")
-      : falha("nao_encontrado", "Este estudo foi cancelado.");
+      ? falha("conflito", "estudo_concluido")
+      : falha("nao_encontrado", "estudo_cancelado");
   }
 
   const versao = versaoQueProgramaEm(rotina, dados.data);
 
   if (versao === null) {
-    return falha(
-      "nao_encontrado",
-      "Não há estudo programado para esta Rotina hoje.",
-    );
+    return falha("nao_encontrado", "sem_estudo_hoje");
   }
 
   const baralho = contexto.baralhos.get(versao.baralhoId);
 
   if (baralho === undefined) {
-    return falha(
-      "conflito",
-      "O Baralho desta Rotina foi excluído. Ajuste a Rotina para voltar a estudar.",
-    );
+    return falha("conflito", "baralho_da_rotina_excluido");
   }
 
   if (baralho.cartoes.length === 0) {
-    return falha(
-      "conflito",
-      "O Baralho desta Rotina não tem Cartões. Adicione Cartões ou ajuste a Rotina.",
-    );
+    return falha("conflito", "baralho_da_rotina_sem_cartoes");
   }
 
   const total = Math.min(

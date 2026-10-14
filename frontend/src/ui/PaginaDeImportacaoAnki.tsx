@@ -1,3 +1,5 @@
+import { TextoDoProduto, textosDoIdiomaVigente, useIdioma } from "../idioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import { useState } from "react";
 import type { ClienteDoAcervo, PreviaDeImportacao } from "../acervo-cliente/cliente";
 import { irParaRota } from "./navegacao";
@@ -10,6 +12,7 @@ function tagsIguais(a: readonly string[], b: readonly string[]): boolean {
 }
 
 export function PaginaDeImportacaoAnki({ cliente }: { cliente: ClienteDoAcervo }) {
+  const { textos } = useIdioma();
   const [previa, setPrevia] = useState<PreviaDeImportacao | null>(null);
   const [original, setOriginal] = useState<PreviaDeImportacao | null>(null);
   const [falha, setFalha] = useState("");
@@ -22,7 +25,7 @@ export function PaginaDeImportacaoAnki({ cliente }: { cliente: ClienteDoAcervo }
   async function selecionar(arquivo?: File) {
     if (!arquivo) return;
     if (!arquivo.name.toLowerCase().endsWith(".apkg")) {
-      setFalha("Selecione um arquivo .apkg do Anki.");
+      setFalha(MENSAGENS_PT.selecioneApkg);
       return;
     }
     setArquivoNome(arquivo.name);
@@ -69,38 +72,38 @@ export function PaginaDeImportacaoAnki({ cliente }: { cliente: ClienteDoAcervo }
     })));
     setSalvando(false);
     if (resultado.ok) irParaRota("#/baralhos");
-    else setFalha(resultado.mensagem ?? "Não foi possível concluir a importação.");
+    else setFalha(resultado.mensagem ?? textosDoIdiomaVigente().recusa({ erro: "indisponivel" }, "importacao"));
   }
 
   return (
     <section className="pagina pagina--importacao-anki">
       <header className="cabecalho-da-pagina">
-        <div><h1>Importar baralho</h1><p>Importe arquivos Anki no formato .apkg.</p></div>
-        <button className="botao botao--secundario" onClick={() => irParaRota("#/baralhos")}>Cancelar</button>
+        <div><h1>{textos.importacao.titulo}</h1><p>{textos.importacao.descricao}</p></div>
+        <button className="botao botao--secundario" onClick={() => irParaRota("#/baralhos")}>{textos.comum.cancelar}</button>
       </header>
-      {!previa && <label className="campo"><span>Arquivo .apkg</span><input type="file" accept=".apkg,application/octet-stream" onChange={(evento) => void selecionar(evento.currentTarget.files?.[0])} />{arquivoNome && <small>{arquivoNome}</small>}</label>}
-      {carregando && <p role="status">Lendo arquivo Anki…</p>}
-      {falha && <p className="mensagem mensagem--erro" role="alert">{falha}</p>}
+      {!previa && <label className="campo"><span>{textos.importacao.arquivo}</span><input type="file" accept=".apkg,application/octet-stream" onChange={(evento) => void selecionar(evento.currentTarget.files?.[0])} />{arquivoNome && <small>{arquivoNome}</small>}</label>}
+      {carregando && <p role="status">{textos.importacao.lendo}</p>}
+      {falha && <p className="mensagem mensagem--erro" role="alert"><TextoDoProduto texto={falha} /></p>}
       {previa && <>
-        {(previa.avisos.notasIgnoradas > 0 || previa.avisos.conteudoIgnorado > 0) && <p className="aviso" role="status">Conteúdo ignorado: {previa.avisos.notasIgnoradas} notas não básicas ou incompletas e {previa.avisos.conteudoIgnorado} cartões com HTML ou mídia. HTML é convertido em texto e mídias não são importadas.</p>}
+        {(previa.avisos.notasIgnoradas > 0 || previa.avisos.conteudoIgnorado > 0) && <p className="aviso" role="status">{textos.importacao.conteudoIgnorado(previa.avisos.notasIgnoradas, previa.avisos.conteudoIgnorado)}</p>}
         {previa.baralhos.map((baralho, bi) => <section className="grupo-importacao" key={bi}>
-          <div className="editor-do-titulo"><h2>{baralho.nome}</h2><button className="botao botao--secundario" onClick={() => setTituloEditando(tituloEditando === bi ? null : bi)}>{tituloEditando === bi ? "Concluir edição" : "Editar título"}</button></div>
-          {tituloEditando === bi && <label className="campo"><span>Nome do baralho</span><input value={baralho.nome} maxLength={100} onChange={(e) => atualizarGrupo(bi, (grupo) => ({ ...grupo, nome: e.target.value }))} /></label>}
+          <div className="editor-do-titulo"><h2>{baralho.nome}</h2><button className="botao botao--secundario" onClick={() => setTituloEditando(tituloEditando === bi ? null : bi)}>{tituloEditando === bi ? textos.importacao.concluirEdicao : textos.importacao.editarTitulo}</button></div>
+          {tituloEditando === bi && <label className="campo"><span>{textos.importacao.nomeDoBaralho}</span><input value={baralho.nome} maxLength={100} onChange={(e) => atualizarGrupo(bi, (grupo) => ({ ...grupo, nome: e.target.value }))} /></label>}
           <ul className="lista lista--compacta">{baralho.cartoes.map((cartao, ci) => {
             const chave = `${bi}:${ci}`;
             const editando = cartaoEditando === chave;
             return <li className={`linha-da-lista linha-importacao linha-importacao--${cartao.estado}${editando ? " linha-importacao--editando" : ""}`} key={chave}>
-              <span className={`etiqueta etiqueta--${cartao.estado}`}>{cartao.estado === "adicionado" ? "Adicionado" : "Modificado"}</span>
+              <span className={`etiqueta etiqueta--${cartao.estado}`}>{cartao.estado === "adicionado" ? textos.importacao.adicionado : textos.importacao.modificado}</span>
               {editando ? <>
-                <label className="campo"><span>Frente</span><textarea value={cartao.frente} onChange={(e) => atualizarCartao(bi, ci, (c) => ({ ...c, frente: e.target.value }))} /></label>
-                <label className="campo"><span>Verso</span><textarea value={cartao.verso} onChange={(e) => atualizarCartao(bi, ci, (c) => ({ ...c, verso: e.target.value }))} /></label>
+                <label className="campo"><span>{textos.importacao.frente}</span><textarea value={cartao.frente} onChange={(e) => atualizarCartao(bi, ci, (c) => ({ ...c, frente: e.target.value }))} /></label>
+                <label className="campo"><span>{textos.importacao.verso}</span><textarea value={cartao.verso} onChange={(e) => atualizarCartao(bi, ci, (c) => ({ ...c, verso: e.target.value }))} /></label>
                 <CampoDeTags tags={cartao.tags} aoAlterar={(tags) => atualizarCartao(bi, ci, (c) => ({ ...c, tags }))} />
               </> : <div className="importacao-cartao__texto"><strong>{cartao.frente}</strong><p>{cartao.verso}</p></div>}
-              <button className="botao botao--secundario" onClick={() => setCartaoEditando(editando ? null : chave)}>{editando ? "Concluir" : "Editar"}</button>
+              <button className="botao botao--secundario" onClick={() => setCartaoEditando(editando ? null : chave)}>{editando ? textos.importacao.concluir : textos.importacao.editar}</button>
             </li>;
           })}</ul>
         </section>)}
-        <footer className="acoes-da-pagina"><button className="botao botao--secundario" onClick={() => { setPrevia(null); setOriginal(null); setArquivoNome(""); }}>Escolher outro arquivo</button><button className="botao botao--primario" disabled={salvando || previa.baralhos.length === 0} onClick={() => void confirmar()}>{salvando ? "Importando…" : "Confirmar importação"}</button></footer>
+        <footer className="acoes-da-pagina"><button className="botao botao--secundario" onClick={() => { setPrevia(null); setOriginal(null); setArquivoNome(""); }}>{textos.importacao.escolherOutro}</button><button className="botao botao--primario" disabled={salvando || previa.baralhos.length === 0} onClick={() => void confirmar()}>{salvando ? textos.importacao.importando : textos.importacao.confirmar}</button></footer>
       </>}
     </section>
   );

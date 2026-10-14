@@ -29,7 +29,7 @@ export const CABECALHO_DE_ORIGEM = "x-origin-secret";
  * A recusa única da origem: em todos os casos o mesmo corpo, sem motivo. É o
  * corpo que a stub da infraestrutura já devolvia, mantido palavra por palavra.
  */
-export const PROIBIDO = { sucesso: false, mensagem: "Proibido" } as const;
+export const PROIBIDO = { sucesso: false, mensagem: "Forbidden" } as const;
 
 /** Status da recusa por origem (FR-125). */
 const NAO_PERMITIDO = 403;

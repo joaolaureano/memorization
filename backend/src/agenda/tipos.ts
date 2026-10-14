@@ -143,7 +143,12 @@ export type CodigoDeErroDeAgenda =
 export interface FalhaDeAgenda {
   ok: false;
   erro: CodigoDeErroDeAgenda;
+  /** Mensagem técnica em inglês; nunca mostrada à pessoa (027, FR-018). */
   mensagem: string;
+  /** Distingue recusas do mesmo código; a interface escolhe o texto por ele (027, FR-019). */
+  motivo?: string;
+  /** Dias da semana (1 = segunda) em comum na `sobreposicao`. */
+  dias?: number[];
 }
 
 /** Resultado de `obterAgenda`: a Semana da Agenda, ou a recusa. */

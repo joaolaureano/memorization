@@ -1,3 +1,5 @@
+import { textosDoIdiomaVigente } from "../idioma/ProvedorDeIdioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import {
   INDISPONIVEL,
   MENSAGEM_DE_ACESSO_EXPIRADO,
@@ -372,7 +374,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "baralhos"),
       };
     }
 
@@ -503,11 +505,11 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
   }
 
   async preverImportacaoAnki() {
-    return { ok: false as const, mensagem: "A importação Anki exige conexão com o servidor." };
+    return { ok: false as const, mensagem: MENSAGENS_PT.importacaoExigeServidor };
   }
 
   async confirmarImportacaoAnki() {
-    return { ok: false, mensagem: "A importação Anki exige conexão com o servidor." };
+    return { ok: false, mensagem: MENSAGENS_PT.importacaoExigeServidor };
   }
 
   /**
@@ -550,7 +552,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "conflito",
-          mensagem: "Não foi possível salvar o baralho. Tente novamente.",
+          mensagem: textosDoIdiomaVigente().recusa({ erro: "conflito" }, "selecao"),
         };
       }
 
@@ -569,7 +571,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "cartoes_indisponiveis",
-        mensagem: "Alguns cartões não estão mais disponíveis.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "cartoes_indisponiveis" }, "selecao"),
         cartaoIds: indisponiveis,
       };
     }
@@ -686,7 +688,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "baralhos"),
       };
     }
 
@@ -742,7 +744,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Cartão não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "cartoes"),
       };
     }
 
@@ -750,7 +752,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "tipo_imutavel",
-        mensagem: "O tipo do cartão não pode ser alterado depois da criação.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "tipo_imutavel" }, "cartoes"),
       };
     }
 
@@ -785,7 +787,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "frente_duplicada",
-        mensagem: "Já existe um cartão com esta frente neste baralho.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "frente_duplicada" }, "cartoes"),
       };
     }
 
@@ -858,7 +860,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         ok: false,
         erro: "imagem_invalida",
         motivo: "nao_encontrada",
-        mensagem: "A imagem enviada não foi encontrada. Escolha a imagem de novo.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "imagem_invalida", motivo: "nao_encontrada" }, "cartoes"),
       };
     }
 
@@ -869,7 +871,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         ok: false,
         erro: "imagem_invalida",
         motivo: "formato",
-        mensagem: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "imagem_invalida", motivo: "formato" }, "cartoes"),
       };
     }
 
@@ -903,7 +905,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "baralhos"),
       };
     }
 
@@ -946,7 +948,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Cartão não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "cartoes"),
       };
     }
 
@@ -989,7 +991,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "nao_encontrado",
-        mensagem: "Baralho não encontrado.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "nao_encontrado" }, "baralhos"),
       };
     }
 
@@ -1257,10 +1259,12 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       // Na Revisão do dia e no Baralho temporário, o Baralho é derivado: sem
       // Baralho e com o nome fixo (FR-196, D5, FR-369, FR-371).
       baralhoId: semBaralho ? "" : dados.baralhoId,
+      // 027 (FR-020, FR-021): como o servidor, guarda a falta de nome; o
+      // nome digitado do temporário é Conteúdo do Usuário e é preservado.
       nomeDoBaralho: ehTemporario
-        ? dados.nomeDoBaralho || "Baralho temporário"
+        ? dados.nomeDoBaralho.trim()
         : ehRevisao
-          ? "Revisão do dia"
+          ? ""
           : (inicioDaAgenda?.nomeDoBaralho ?? dados.nomeDoBaralho),
       concluidaEm: agora.toISOString(),
       estudados,
@@ -1515,7 +1519,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "dados_invalidos",
-        mensagem: "A confirmação da Senha não confere com a nova Senha.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "dados_invalidos", campo: "confirmacaoDaSenha" }, "conta"),
         campo: "confirmacaoDaSenha",
       };
     }
@@ -1528,7 +1532,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "mesma_senha",
-        mensagem: "A nova Senha é igual à atual.",
+        mensagem: textosDoIdiomaVigente().recusa({ erro: "mesma_senha" }, "conta"),
       };
     }
 
@@ -1673,7 +1677,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       return {
         ok: false,
         erro: "escolhas_invalidas",
-        mensagem: "Escolhas inválidas.",
+        mensagem: MENSAGENS_PT.escolhasInvalidas,
       };
     }
 
@@ -1755,7 +1759,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: "Cada escolha deve ser um objeto.",
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
 
@@ -1768,7 +1772,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: "Cartão e baralho devem ser strings.",
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
 
@@ -1776,7 +1780,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: "Cartão repetido nas escolhas.",
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
 
@@ -1789,7 +1793,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: `Cartão ${cartaoId} não está pendente.`,
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
     }
@@ -1811,7 +1815,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
         return {
           ok: false,
           erro: "escolhas_invalidas",
-          mensagem: `Cartão ${cartaoId} não está pendente.`,
+          mensagem: MENSAGENS_PT.escolhasInvalidas,
         };
       }
 
@@ -1825,7 +1829,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Baralho ${baralhoId} não existe.`,
+            mensagem: MENSAGENS_PT.escolhasInvalidas,
           };
         }
       } else {
@@ -1834,7 +1838,7 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Baralho ${baralhoId} não é um dos baralhos legados do cartão.`,
+            mensagem: MENSAGENS_PT.escolhasInvalidas,
           };
         }
       }

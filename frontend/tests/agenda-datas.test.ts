@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   dataPorExtenso,
+  dataCurta,
   descreverDias,
   descreverSemana,
   diaDaSemana,
+  nomeDoDia,
   diasDaSemana,
   ehDataCivilValida,
   hojeNoFuso,
@@ -12,15 +14,9 @@ import {
   segundaFeiraDe,
   somarDias,
 } from "../src/agenda/datas";
-import {
-  descreverQuantidade,
-  proximoCompromissoElegivel,
-  resumirDia,
-  rotuloDoCompromisso,
-  rotuloDoEstadoDoDia,
-  textoDaContagem,
-} from "../src/agenda/estado-do-dia";
+import { proximoCompromissoElegivel, resumirDia } from "../src/agenda/estado-do-dia";
 import type { CompromissoDeEstudo } from "../src/acervo-cliente/cliente";
+import { pt } from "../src/idioma/pt";
 
 /**
  * Datas civis e estados do calendário da Agenda (016, FR-228, FR-229, FR-246):
@@ -108,6 +104,16 @@ describe("datas civis (FR-246)", () => {
       "28 de dezembro de 2026 a 3 de janeiro de 2027",
     );
   });
+
+  it("formata dias e datas no idioma escolhido", () => {
+    expect(nomeDoDia(1, "en-US")).toBe("Monday");
+    expect(descreverDias([1, 4], "en-US")).toBe("Monday and Thursday");
+    expect(descreverDias([1, 4], "es-419")).toBe("lunes y jueves");
+    expect(dataCurta("2026-10-03", "pt-BR")).toBe("3 out");
+    expect(dataPorExtenso("2026-10-05", "en-US")).toBe("Monday, October 5, 2026");
+    expect(dataPorExtenso("2026-10-05", "es-419")).toBe("lunes, 5 de octubre de 2026");
+    expect(descreverSemana("2026-10-05", "en-US")).toContain("October");
+  });
 });
 
 describe("estado do dia (FR-229, tabela de estados)", () => {
@@ -117,7 +123,7 @@ describe("estado do dia (FR-229, tabela de estados)", () => {
     const resumo = resumirDia("2026-10-08", hoje, []);
 
     expect(resumo).toMatchObject({ estado: "sem_estudos", total: 0 });
-    expect(textoDaContagem(resumo)).toBe("Nenhum estudo agendado");
+    expect(pt.agenda.contagem(resumo)).toBe("Nenhum estudo agendado");
   });
 
   it.each([
@@ -136,7 +142,7 @@ describe("estado do dia (FR-229, tabela de estados)", () => {
     );
 
     expect(resumo.estado).toBe(esperado);
-    expect(textoDaContagem(resumo)).toBe(texto);
+    expect(pt.agenda.contagem(resumo)).toBe(texto);
   });
 
   it("cancelados ficam fora do total, mas aparecem nos detalhes", () => {
@@ -169,11 +175,11 @@ describe("estado do dia (FR-229, tabela de estados)", () => {
   });
 
   it("rotula estados e quantidades em texto", () => {
-    expect(rotuloDoEstadoDoDia("parcial")).toBe("Parcial");
-    expect(rotuloDoCompromisso("nao_realizado")).toBe("Não realizado");
-    expect(descreverQuantidade(null)).toBe("Todos os Cartões");
-    expect(descreverQuantidade(1)).toBe("1 Cartão");
-    expect(descreverQuantidade(20)).toBe("20 Cartões");
+    expect(pt.agenda.estadoDoDia.parcial).toBe("Parcial");
+    expect(pt.agenda.estadoDoCompromisso.nao_realizado).toBe("Não realizado");
+    expect(pt.agenda.quantidadeCartoes(null)).toBe("Todos os Cartões");
+    expect(pt.agenda.quantidadeCartoes(1)).toBe("1 Cartão");
+    expect(pt.agenda.quantidadeCartoes(20)).toBe("20 Cartões");
   });
 
   it("o próximo elegível é o primeiro pendente com Baralho disponível, na ordem de criação", () => {

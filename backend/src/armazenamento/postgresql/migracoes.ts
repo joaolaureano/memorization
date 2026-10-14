@@ -565,4 +565,24 @@ export const MIGRACOES: readonly Migracao[] = [
     sql: ESQUEMA_FINALIZAR_TRANSICAO,
     precondicao: PODE_REMOVER_VINCULO,
   },
+  /**
+   * A 19 troca por vazio o rótulo padrão gravado como nome: sempre na Revisão
+   * do dia e, no temporário, só quando o nome é "Baralho temporário" — o nome
+   * digitado pela pessoa é preservado (FR-006, FR-020, FR-021). Mesma precondição da 18: a 19 só roda depois da transição de
+   * Pertencimento; enquanto ela estiver pendente, as duas ficam para a próxima
+   * aplicação. Remove a restrição CHECK que proíbe nomes vazios, atualiza os dados
+   * e recria a restrição permitindo nomes vazios só para origens derivadas.
+   */
+  {
+    versao: 19,
+    sql: `
+      ALTER TABLE registro_de_sessao DROP CONSTRAINT IF EXISTS registro_de_sessao_nome_do_baralho_check;
+      UPDATE registro_de_sessao SET nome_do_baralho = ''
+       WHERE origem = 'revisao'
+          OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');
+      ALTER TABLE registro_de_sessao ADD CONSTRAINT registro_de_sessao_nome_do_baralho_check
+        CHECK ((origem IN ('revisao','temporario') AND nome_do_baralho = '') OR (char_length(btrim(nome_do_baralho)) > 0 AND char_length(nome_do_baralho) <= 100));
+    `,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
 ];

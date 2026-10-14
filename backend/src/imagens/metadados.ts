@@ -42,7 +42,7 @@ function juntar(partes: readonly Uint8Array[]): Uint8Array {
 
 function exigir(condicao: boolean): void {
   if (!condicao) {
-    throw new Error("arquivo malformado");
+    throw new Error("Malformed image metadata.");
   }
 }
 

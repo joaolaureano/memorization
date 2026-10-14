@@ -1,3 +1,5 @@
+import { TextoDoProduto } from "../idioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -8,6 +10,7 @@ import {
   LIMITE_MINIMO_DE_SENHA,
 } from "../acervo-cliente/validacao";
 import { verificarResultadoIncerto } from "../conta/verificar-resultado";
+import { useIdioma } from "../idioma";
 import { CampoDeSenha } from "./CampoDeSenha";
 import { useProtecaoDeSaida } from "./protecao-de-saida";
 import type { Protecao } from "./protecao-de-saida";
@@ -26,11 +29,9 @@ import type { Protecao } from "./protecao-de-saida";
  * perdida segue o mesmo caminho de verificação do Nome de usuário (FR-280..FR-283).
  */
 
-export const MENSAGEM_DE_RESULTADO_DESCONHECIDO_DA_SENHA =
-  "Não foi possível confirmar se a Senha foi trocada.";
+export const MENSAGEM_DE_RESULTADO_DESCONHECIDO_DA_SENHA = MENSAGENS_PT.resultadoDesconhecidoDaSenha;
 
-export const MENSAGEM_DE_SENHA_NAO_TROCADA =
-  "Não foi possível trocar a Senha agora. Nada foi alterado. Tente novamente.";
+export const MENSAGEM_DE_SENHA_NAO_TROCADA = MENSAGENS_PT.senhaNaoTrocada;
 
 interface PropriedadesDoFormularioDeTrocaDeSenha {
   cliente: ClienteDoAcervo;
@@ -48,6 +49,7 @@ export function FormularioDeTrocaDeSenha({
   aoCancelar,
   aoIrParaEntrar,
 }: PropriedadesDoFormularioDeTrocaDeSenha) {
+  const { textos } = useIdioma();
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmacao, setConfirmacao] = useState("");
@@ -84,7 +86,7 @@ export function FormularioDeTrocaDeSenha({
     if (decisao === "aplicada") {
       concluir(nova);
     } else if (decisao === "nao_aplicada") {
-      setFalha(MENSAGEM_DE_SENHA_NAO_TROCADA);
+      setFalha(textos.conta.naoTrocada);
     } else {
       setIncerto(true);
     }
@@ -134,13 +136,13 @@ export function FormularioDeTrocaDeSenha({
   }
 
   const protecao: Protecao | null = enviando
-    ? { tipo: "pendencia", motivo: "Aguarde: a Senha está sendo trocada." }
+    ? { tipo: "pendencia", motivo: textos.conta.aguardeTroca }
     : senhaAtual !== "" || novaSenha !== "" || confirmacao !== ""
       ? {
           tipo: "descarte",
-          titulo: "Descartar a troca de Senha?",
-          descricao: "Os campos preenchidos serão perdidos.",
-          rotuloDeConfirmacao: "Descartar",
+          titulo: textos.conta.descartarTrocaSenha,
+          descricao: textos.conta.camposPreenchidosPerdidos,
+          rotuloDeConfirmacao: textos.conta.descartar,
         }
       : null;
 
@@ -149,13 +151,13 @@ export function FormularioDeTrocaDeSenha({
   return (
     <form
       className="formulario"
-      aria-label="Trocar Senha"
+      aria-label={textos.conta.trocarSenhaForm}
       noValidate
       onSubmit={(evento) => void enviar(evento)}
     >
       <CampoDeSenha
         id="campo-senha-atual-da-troca"
-        rotulo="Senha atual"
+        rotulo={textos.conta.senhaAtual}
         valor={senhaAtual}
         aoMudar={setSenhaAtual}
         autoComplete="current-password"
@@ -164,7 +166,7 @@ export function FormularioDeTrocaDeSenha({
 
       <CampoDeSenha
         id="campo-nova-senha"
-        rotulo="Nova Senha"
+        rotulo={textos.conta.novaSenha}
         valor={novaSenha}
         aoMudar={setNovaSenha}
         autoComplete="new-password"
@@ -172,14 +174,13 @@ export function FormularioDeTrocaDeSenha({
         referencia={campoDaNovaSenha}
       >
         <p id="regras-da-nova-senha" className="ajuda">
-          De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres:
-          qualquer caractere, inclusive espaços.
+          {textos.acesso.regras_senha(LIMITE_MINIMO_DE_SENHA, LIMITE_MAXIMO_DE_SENHA)}
         </p>
       </CampoDeSenha>
 
       <CampoDeSenha
         id="campo-confirmacao-da-nova-senha"
-        rotulo="Confirmação da Senha"
+        rotulo={textos.conta.confirmacaoDaSenha}
         valor={confirmacao}
         aoMudar={setConfirmacao}
         autoComplete="new-password"
@@ -190,9 +191,9 @@ export function FormularioDeTrocaDeSenha({
         <p
           className="aviso aviso--erro"
           role="alert"
-          aria-label="Falha ao trocar a Senha"
+          aria-label={textos.conta.falhaAoTrocarSenha}
         >
-          {falha}
+          <TextoDoProduto texto={falha} />
         </p>
       )}
 
@@ -200,23 +201,23 @@ export function FormularioDeTrocaDeSenha({
         <div
           className="aviso aviso--erro"
           role="alert"
-          aria-label="Resultado desconhecido"
+          aria-label={textos.conta.resultadoDesconhecido}
         >
-          <p>{MENSAGEM_DE_RESULTADO_DESCONHECIDO_DA_SENHA}</p>
+          <p>{textos.conta.desconhecidoSenha}</p>
           <div className="acoes">
             <button
               className="botao botao--primario"
               type="button"
               onClick={() => void conferir()}
             >
-              Tentar novamente
+              {textos.comum.tentarNovamente}
             </button>
             <button
               className="botao botao--secundario"
               type="button"
               onClick={aoIrParaEntrar}
             >
-              Ir para Entrar
+              {textos.conta.irParaEntrar}
             </button>
           </div>
         </div>
@@ -228,7 +229,7 @@ export function FormularioDeTrocaDeSenha({
           type="submit"
           disabled={enviando || incerto}
         >
-          {enviando ? "Trocando…" : "Trocar Senha"}
+          {enviando ? textos.conta.trocando : textos.conta.trocarSenha}
         </button>
         <button
           className="botao botao--secundario"
@@ -236,7 +237,7 @@ export function FormularioDeTrocaDeSenha({
           disabled={enviando}
           onClick={aoCancelar}
         >
-          Cancelar
+          {textos.conta.cancelar}
         </button>
       </div>
     </form>

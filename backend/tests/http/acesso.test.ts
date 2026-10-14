@@ -231,7 +231,7 @@ describe("GET /acesso (§2.2)", () => {
     expect(resposta.statusCode).toBe(401);
     expect(resposta.json()).toEqual({
       erro: "acesso_expirado",
-      mensagem: "Seu acesso expirou. Entre novamente.",
+      mensagem: "Session expired.",
     });
     expect(String(resposta.headers["set-cookie"])).toMatch(
       /^acesso=; .*Max-Age=0/,

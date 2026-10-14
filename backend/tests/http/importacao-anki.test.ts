@@ -2,6 +2,7 @@ import type { FastifyInstance, InjectOptions } from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { montarServidorDeContrato, pedirComCredencial, type ServidorDeContrato } from "./apoio-de-contrato.ts";
 import { registrarRotasDeBaralhos } from "../../src/http/rotas.ts";
+import { AnkiError, LIMITE_APKG } from "../../src/importacao/anki.ts";
 
 let servidor: FastifyInstance;
 let contrato: ServidorDeContrato;
@@ -38,6 +39,25 @@ describe("importação de baralho Anki por HTTP", () => {
     const colecao = await pedir({ method: "POST", url: "/baralhos/importacoes/previa", headers: { "content-type": "application/octet-stream", "x-file-name": encodeURIComponent("Coleção.colpkg") }, payload: Buffer.from("zip") });
     expect(colecao.statusCode).toBe(400);
     expect(parser).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["anki_grande_demais", "Anki file exceeds the size limit.", LIMITE_APKG],
+    ["anki_ilegivel", "Anki file could not be read.", undefined],
+    ["anki_corrompido", "Anki file is corrupted or exceeds the expansion limit.", undefined],
+    ["anki_incompativel", "File does not contain a compatible Anki collection.", undefined],
+  ] as const)("responde 422 com recusa técnica ASCII %s", async (codigo, mensagem, limite) => {
+    parser.mockRejectedValueOnce(new AnkiError(codigo, mensagem, limite));
+    const resposta = await pedir({
+      method: "POST",
+      url: "/baralhos/importacoes/previa",
+      headers: { "content-type": "application/octet-stream", "x-file-name": "curso.apkg" },
+      payload: Buffer.from("zip"),
+    });
+    expect(resposta.statusCode).toBe(422);
+    expect(resposta.json()).toMatchObject({ erro: codigo, mensagem });
+    expect(resposta.json().limite).toBe(limite);
+    expect(mensagem).toMatch(/^[\x20-\x7E]+$/);
   });
 
   it("confirma todos os grupos com tags normalizadas e persistência atômica", async () => {

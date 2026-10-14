@@ -289,7 +289,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
       );
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(18);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(19);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -1131,7 +1131,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
 
     expect(codigo).toBe(0);
     expect(saida).toContain(
-      `o esquema da base está na versão ${versaoCorrenteConhecida()}`,
+      `database schema is at version ${versaoCorrenteConhecida()}`,
     );
 
     expect(await tabelasDaBase(nomeDaBase)).toEqual([
@@ -1192,7 +1192,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
     /** Reaplicar o DDL de uma migração já aplicada teria falhado. */
     expect(repeticao.codigo).toBe(0);
     expect(repeticao.saida).toContain(
-      `o esquema da base está na versão ${versaoCorrenteConhecida()}`,
+      `database schema is at version ${versaoCorrenteConhecida()}`,
     );
 
     const gravado = await servidor.consultar<{ id: string }>(
@@ -1305,12 +1305,12 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       const { codigo, saida } = await executarComando(ambienteDoComando);
 
       expect(codigo).toBe(1);
-      expect(saida).toContain("Migração recusada:");
+      expect(saida).toContain("Migration rejected:");
       expect(saida).toContain("DB_URL");
       expect(saida).not.toContain(SENHA_GERADA);
       expect(saida).not.toContain("exemplo.invalid");
       expect(saida).not.toMatch(/:\/\//);
-      expect(saida).not.toContain("Migração concluída");
+      expect(saida).not.toContain("Migration completed");
     },
     60_000,
   );

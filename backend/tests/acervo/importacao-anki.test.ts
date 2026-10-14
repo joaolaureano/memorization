@@ -51,7 +51,11 @@ describe("importação Anki", () => {
   });
 
   it("recusa pacotes que excedem o limite de upload", async () => {
-    await expect(lerPacoteAnki(Buffer.alloc(LIMITE_APKG + 1))).rejects.toThrow("4 MiB");
+    await expect(lerPacoteAnki(Buffer.alloc(LIMITE_APKG + 1))).rejects.toMatchObject({
+      codigo: "anki_grande_demais",
+      limite: LIMITE_APKG,
+      message: "Anki file exceeds the size limit.",
+    });
   });
 
   it("lê o formato moderno com SQLite comprimido em Zstandard", async () => {
@@ -60,7 +64,19 @@ describe("importação Anki", () => {
   });
 
   it("recusa um ZIP inválido de forma controlada", async () => {
-    await expect(lerPacoteAnki(Buffer.from("não é zip"))).rejects.toThrow("Não foi possível ler");
+    await expect(lerPacoteAnki(Buffer.from("não é zip"))).rejects.toMatchObject({
+      codigo: "anki_ilegivel",
+      message: "Anki file could not be read.",
+    });
+  });
+
+  it("distingue arquivo corrompido de ZIP sem uma coleção Anki", async () => {
+    await expect(
+      lerPacoteAnki(Buffer.from(zipSync({ "collection.anki21b": new Uint8Array([1, 2, 3]) }))),
+    ).rejects.toMatchObject({ codigo: "anki_corrompido" });
+    await expect(
+      lerPacoteAnki(Buffer.from(zipSync({ "readme.txt": new Uint8Array([1, 2, 3]) }))),
+    ).rejects.toMatchObject({ codigo: "anki_incompativel" });
   });
 
   it("lê o pacote moderno real: prefere collection.anki21b ao aviso em collection.anki2 e lê decks e notetypes do esquema novo", async () => {

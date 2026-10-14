@@ -376,7 +376,7 @@ describe("POST /sessoes — idempotência pelo id (FR-163)", () => {
 describe("POST /sessoes — recusas de dados inválidos, sem gravar nada", () => {
   const RECUSA = {
     erro: "dados_invalidos",
-    mensagem: "Os dados da Sessão são inválidos.",
+    mensagem: "Invalid data.",
   };
 
   it("recusa id fora da forma canônica de UUID com 400 (FR-161)", async () => {
@@ -517,7 +517,7 @@ describe("Isolamento entre Usuários (FR-166, FR-179)", () => {
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Sessão não encontrada.",
+      mensagem: "Not found.",
     });
   });
 
@@ -535,7 +535,7 @@ describe("Isolamento entre Usuários (FR-166, FR-179)", () => {
     expect(resposta.statusCode).toBe(409);
     expect(resposta.json()).toEqual({
       erro: "conflito",
-      mensagem: "Esta Sessão já foi registrada por outro Usuário.",
+      mensagem: "Conflict. Try again.",
     });
   });
 
@@ -613,7 +613,7 @@ describe("GET /estatisticas — leitura conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "dados_invalidos",
-      mensagem: "Os dados da Sessão são inválidos.",
+      mensagem: "Invalid data.",
     });
   });
 
@@ -625,7 +625,7 @@ describe("GET /estatisticas — leitura conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "dados_invalidos",
-      mensagem: "Os dados da Sessão são inválidos.",
+      mensagem: "Invalid data.",
     });
   });
 
@@ -635,7 +635,7 @@ describe("GET /estatisticas — leitura conforme o contrato", () => {
     expect(resposta.statusCode).toBe(400);
     expect(resposta.json()).toEqual({
       erro: "dados_invalidos",
-      mensagem: "Os dados da Sessão são inválidos.",
+      mensagem: "Invalid data.",
     });
   });
 });
@@ -688,7 +688,7 @@ describe("GET /sessoes/:id — leitura conforme o contrato", () => {
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Sessão não encontrada.",
+      mensagem: "Not found.",
     });
   });
 });
@@ -750,7 +750,7 @@ describe("Indisponibilidade do armazenamento (FR-173)", () => {
     expect(resposta.statusCode).toBe(503);
     expect(resposta.json()).toEqual({
       erro: "indisponivel",
-      mensagem: "O armazenamento está indisponível.",
+      mensagem: "Storage is unavailable. Try again.",
     });
   });
 
@@ -765,7 +765,7 @@ describe("Indisponibilidade do armazenamento (FR-173)", () => {
     expect(resposta.statusCode).toBe(503);
     expect(resposta.json()).toEqual({
       erro: "indisponivel",
-      mensagem: "O armazenamento está indisponível.",
+      mensagem: "Storage is unavailable. Try again.",
     });
   });
 
@@ -778,13 +778,13 @@ describe("Indisponibilidade do armazenamento (FR-173)", () => {
     expect(resposta.statusCode).toBe(503);
     expect(resposta.json()).toEqual({
       erro: "indisponivel",
-      mensagem: "O armazenamento está indisponível.",
+      mensagem: "Storage is unavailable. Try again.",
     });
   });
 });
 
 describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
-  it("deriva Baralho vazio e o nome 'Revisão do dia', ignorando o corpo", async () => {
+  it("deriva Baralho vazio e o nome '', ignorando o corpo para revisao (FR-020)", async () => {
     const resposta = await postarSessao(
       registroCru({
         origem: "revisao",
@@ -798,10 +798,10 @@ describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
     const registro = resposta.json() as RegistroEsperado;
     expect(registro.origem).toBe("revisao");
     expect(registro.baralhoId).toBe("");
-    expect(registro.nomeDoBaralho).toBe("Revisão do dia");
+    expect(registro.nomeDoBaralho).toBe("");
   });
 
-  it("deriva Baralho vazio e o nome 'Baralho temporário', sem Baralho na leitura e sem duplicar no reenvio (FR-369)", async () => {
+  it("deriva Baralho vazio e o nome '', sem Baralho na leitura e sem duplicar no reenvio (FR-369, FR-021)", async () => {
     const corpo = registroCru({
       origem: "temporario",
       baralhoId: "ignorado",
@@ -814,7 +814,7 @@ describe("POST /sessoes — Sessão da Revisão do dia (FR-196)", () => {
     const registro = resposta.json() as RegistroEsperado;
     expect(registro.origem).toBe("temporario");
     expect(registro.baralhoId).toBe("");
-    expect(registro.nomeDoBaralho).toBe("Baralho temporário");
+    expect(registro.nomeDoBaralho).toBe("");
 
     const leitura = await pedir({
       method: "GET",

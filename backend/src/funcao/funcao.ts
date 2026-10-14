@@ -120,7 +120,7 @@ export interface OpcoesDaFuncao {
 export class InicializacaoRecusadaError extends Error {}
 
 /** A única linha de reporte da falha de inicialização. */
-const FALHA_NA_INICIALIZACAO = "Falha na inicialização da função";
+const FALHA_NA_INICIALIZACAO = "Function initialization failed";
 
 /**
  * A recusa da inicialização, na resposta: genérica, em português, e sem o
@@ -129,7 +129,7 @@ const FALHA_NA_INICIALIZACAO = "Falha na inicialização da função";
  */
 const INICIALIZACAO_INDISPONIVEL = {
   erro: "indisponivel",
-  mensagem: "A aplicação não pôde ser inicializada. Tente novamente.",
+  mensagem: "Application failed to initialize. Try again.",
 } as const;
 
 /**
@@ -137,7 +137,7 @@ const INICIALIZACAO_INDISPONIVEL = {
  * a URL, nem o usuário, nem a senha, nem o endereço (FR-118, FR-123).
  */
 const FALHA_NO_ACESSO =
-  "Falha no armazenamento da nuvem: não foi possível acessar a base.";
+  "Cloud storage failure: database access failed.";
 
 /** A resposta de falha de inicialização, com o status e o corpo únicos. */
 function respostaDeInicializacaoFalha(): RespostaDaFuncao {
@@ -175,7 +175,7 @@ function mensagemRegistravel(erro: unknown): string {
     erro instanceof SegredoAusenteError ||
     erro instanceof InicializacaoRecusadaError
     ? erro.message
-    : "A causa não pôde ser detalhada sem revelar valor de segredo.";
+    : "Root cause cannot be detailed without revealing secret value.";
 }
 
 /**
@@ -185,8 +185,8 @@ function mensagemRegistravel(erro: unknown): string {
  * (FR-127, SC-055, FR-397). Uma base atrasada demais recusa a inicialização,
  * e nenhuma migração é aplicada.
  *
- * Versões aceitas: a versão corrente, e a versão anterior **se** a última
- * migração tiver `precondicao` (um estado legítimo e transitório).
+ * Versões aceitas: a versão corrente, e versões anteriores **se** todas as
+ * migrações pendentes tiverem `precondicao` (um estado legítimo e transitório).
  */
 async function conferirVersaoDoEsquema(
   configuracao: ConfiguracaoDaConexao,
@@ -199,9 +199,9 @@ async function conferirVersaoDoEsquema(
 
     if (!versaoAceitaNoInicio(encontrada)) {
       throw new InicializacaoRecusadaError(
-        "Início recusado: o esquema da base está na versão " +
-          `${encontrada} e a versão corrente é ${corrente}. ` +
-          "Execute o comando de migração da nuvem antes de publicar.",
+        "Startup rejected: database schema is at version " +
+          `${encontrada} but current version is ${corrente}. ` +
+          "Run the cloud migration command before publishing.",
       );
     }
   } catch (erro) {

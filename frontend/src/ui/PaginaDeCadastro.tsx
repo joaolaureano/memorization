@@ -1,3 +1,5 @@
+import { TextoDoProduto } from "../idioma";
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -10,6 +12,7 @@ import {
   ehCodigoDeErroDeCadastro,
   type CodigoDeErroDeCadastro,
 } from "../acervo-cliente/validacao";
+import { useIdioma, type Catalogo } from "../idioma";
 import { CampoDeSenha } from "./CampoDeSenha";
 import { useProtecaoDeSaida, type Protecao } from "./protecao-de-saida";
 
@@ -65,15 +68,13 @@ const FOLGA_PARA_AVISO_DE_LIMITE = 10;
  * Confirmação existe só na tela, e a API nunca recebe esse campo
  * (`contracts/api-usuarios.md`).
  */
-export const MENSAGEM_DE_CONFIRMACAO_DIVERGENTE =
-  "A Senha e a Confirmação da Senha estão diferentes. Digite a mesma Senha nos dois campos.";
+export const MENSAGEM_DE_CONFIRMACAO_DIVERGENTE = MENSAGENS_PT.confirmacaoDivergente;
 
 /**
  * O motivo da saída bloqueada enquanto o Cadastro é enviado (FR-154). Não é
  * código do contrato: é a razão anunciada pela proteção de saída.
  */
-export const MENSAGEM_DE_SAIDA_BLOQUEADA =
-  "Aguarde: o Cadastro está sendo enviado.";
+export const MENSAGEM_DE_SAIDA_BLOQUEADA = MENSAGENS_PT.saidaBloqueadaDoCadastro;
 
 /**
  * Campo a corrigir para cada recusa de regra de Cadastro (FR-081).
@@ -99,6 +100,7 @@ interface PropriedadesDaPaginaDeCadastro {
 export function PaginaDeCadastro({
   cliente,
 }: PropriedadesDaPaginaDeCadastro) {
+  const { textos } = useIdioma();
   const [nomeDeUsuario, setNomeDeUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmacaoDaSenha, setConfirmacaoDaSenha] = useState("");
@@ -152,8 +154,8 @@ export function PaginaDeCadastro({
     setSubmetendo(false);
   }
 
-  const avisoDoNome = avisoDoNomeDeUsuario(nomeDeUsuario);
-  const avisoDaSenha = avisoDaSenhaDigitada(senha);
+  const avisoDoNome = avisoDoNomeDeUsuario(nomeDeUsuario, textos);
+  const avisoDaSenha = avisoDaSenhaDigitada(senha, textos);
 
   // FR-148: enquanto houver conteúdo digitado e não concluído, sair da tela
   // passa pela confirmação; FR-154: com o envio em andamento, a saída é apenas
@@ -166,9 +168,9 @@ export function PaginaDeCadastro({
     : usuarioCadastrado === null && formularioPreenchido
       ? {
           tipo: "descarte",
-          titulo: "Descartar o Cadastro?",
-          descricao: "Os dados preenchidos serão perdidos.",
-          rotuloDeConfirmacao: "Descartar",
+          titulo: textos.acesso.descartarCadastro,
+          descricao: textos.acesso.dadosPreenchidosPerdidos,
+          rotuloDeConfirmacao: textos.acesso.descartar,
         }
       : null;
 
@@ -176,7 +178,7 @@ export function PaginaDeCadastro({
 
   return (
     <section className="acesso">
-      <h1>Criar conta</h1>
+      <h1>{textos.acesso.criar_conta_rotulo}</h1>
 
       {usuarioCadastrado !== null && (
         // FR-082 e FR-083: a conclusão do Cadastro é anunciada por região
@@ -190,17 +192,16 @@ export function PaginaDeCadastro({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          aria-label="Cadastro concluído"
+          aria-label={textos.acesso.aria_cadastro_concluido}
         >
-          Cadastro concluído. O Usuário {usuarioCadastrado.nomeDeUsuario} foi
-          criado.
+          {textos.acesso.cadastro_concluido(usuarioCadastrado.nomeDeUsuario)}
         </p>
       )}
 
       <form className="formulario cartao" onSubmit={cadastrar}>
         <div className="campo">
           <label className="rotulo" htmlFor="campo-nome-de-usuario">
-            Nome de usuário
+            {textos.acesso.nomeDeUsuario}
           </label>
           <input
             id="campo-nome-de-usuario"
@@ -214,24 +215,27 @@ export function PaginaDeCadastro({
             }
           />
           <p id="regras-do-nome-de-usuario" className="ajuda">
-            De {LIMITE_MINIMO_DE_NOME_DE_USUARIO} a{" "}
-            {LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres: letras de A a Z sem
-            acento, dígitos, ponto, sublinhado e hífen.
+            {textos.acesso.regras_nome(
+              LIMITE_MINIMO_DE_NOME_DE_USUARIO,
+              LIMITE_MAXIMO_DE_NOME_DE_USUARIO
+            )}
           </p>
           <p id="contador-do-nome-de-usuario" className="contador">
-            {nomeDeUsuario.length} / {LIMITE_MAXIMO_DE_NOME_DE_USUARIO}{" "}
-            caracteres
+            {textos.acesso.contador(
+              nomeDeUsuario.length,
+              LIMITE_MAXIMO_DE_NOME_DE_USUARIO
+            )}
           </p>
           {avisoDoNome !== null && (
             <p id="aviso-do-nome-de-usuario" className="ajuda">
-              {avisoDoNome}
+              <TextoDoProduto texto={avisoDoNome} />
             </p>
           )}
         </div>
 
         <CampoDeSenha
           id="campo-senha"
-          rotulo="Senha"
+          rotulo={textos.acesso.senha}
           valor={senha}
           aoMudar={setSenha}
           autoComplete="new-password"
@@ -243,22 +247,24 @@ export function PaginaDeCadastro({
           referencia={campoDeSenha}
         >
           <p id="regras-da-senha" className="ajuda">
-            De {LIMITE_MINIMO_DE_SENHA} a {LIMITE_MAXIMO_DE_SENHA} caracteres:
-            qualquer caractere, inclusive espaços.
+            {textos.acesso.regras_senha(
+              LIMITE_MINIMO_DE_SENHA,
+              LIMITE_MAXIMO_DE_SENHA
+            )}
           </p>
           <p id="contador-da-senha" className="contador">
-            {senha.length} / {LIMITE_MAXIMO_DE_SENHA} caracteres
+            {textos.acesso.contador(senha.length, LIMITE_MAXIMO_DE_SENHA)}
           </p>
           {avisoDaSenha !== null && (
             <p id="aviso-da-senha" className="ajuda">
-              {avisoDaSenha}
+              <TextoDoProduto texto={avisoDaSenha} />
             </p>
           )}
         </CampoDeSenha>
 
         <CampoDeSenha
           id="campo-confirmacao-da-senha"
-          rotulo="Confirmação da Senha"
+          rotulo={textos.acesso.confirmacaoDaSenha}
           valor={confirmacaoDaSenha}
           aoMudar={setConfirmacaoDaSenha}
           autoComplete="new-password"
@@ -273,9 +279,9 @@ export function PaginaDeCadastro({
           <p
             className="aviso aviso--erro"
             role="alert"
-            aria-label="Falha no Cadastro"
+            aria-label={textos.acesso.aria_falha_no_cadastro}
           >
-            {falha}
+            <TextoDoProduto texto={falha} />
           </p>
         )}
 
@@ -284,20 +290,20 @@ export function PaginaDeCadastro({
           type="submit"
           disabled={submetendo}
         >
-          {submetendo ? "Criando conta…" : "Criar conta"}
+          {submetendo ? textos.acesso.criandoConta : textos.acesso.botaoCriarConta}
         </button>
       </form>
 
       {usuarioCadastrado === null ? (
         // FR-097: a volta a "Entrar", o caminho de quem já tem Usuário.
         <p className="voltar">
-          Já tem uma conta? <a href="#/entrar">Entrar</a>
+          {textos.acesso.ja_tem_uma_conta} <a href="#/entrar">{textos.acesso.link_entrar}</a>
         </p>
       ) : (
         // FR-143: concluído o Cadastro, o próximo passo é Entrar — sem entrada
         // automática, e sem deixar duas ações com o nome "Entrar".
         <p className="voltar">
-          <a href="#/entrar">Entrar</a>
+          <a href="#/entrar">{textos.acesso.link_entrar}</a>
         </p>
       )}
     </section>
@@ -311,15 +317,11 @@ export function PaginaDeCadastro({
  * explícito sobre o que foi digitado — sem recusar nada: a recusa é sempre do
  * `ClienteDoAcervo`, e esta função não a antecipa nem a reproduz.
  */
-function avisoDoNomeDeUsuario(nomeDeUsuario: string): string | null {
+function avisoDoNomeDeUsuario(nomeDeUsuario: string, textos: Catalogo): string | null {
   const comprimento = nomeDeUsuario.length;
 
   if (comprimento > 0 && comprimento < LIMITE_MINIMO_DE_NOME_DE_USUARIO) {
-    return (
-      `Atenção: o nome de usuário deve ter pelo menos ` +
-      `${LIMITE_MINIMO_DE_NOME_DE_USUARIO} caracteres; o informado tem ` +
-      `${comprimento}.`
-    );
+    return textos.acesso.aviso_nome_minimo(LIMITE_MINIMO_DE_NOME_DE_USUARIO, comprimento);
   }
 
   const restantes = LIMITE_MAXIMO_DE_NOME_DE_USUARIO - comprimento;
@@ -329,14 +331,14 @@ function avisoDoNomeDeUsuario(nomeDeUsuario: string): string | null {
   }
 
   if (restantes < 0) {
-    return `Atenção: o nome de usuário excede o limite de ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres.`;
+    return textos.acesso.aviso_nome_maximo(LIMITE_MAXIMO_DE_NOME_DE_USUARIO);
   }
 
   if (restantes === 0) {
-    return `Atenção: o nome de usuário atingiu o limite de ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres.`;
+    return textos.acesso.aviso_nome_limite_atingido(LIMITE_MAXIMO_DE_NOME_DE_USUARIO);
   }
 
-  return `Atenção: faltam ${restantes} caracteres para o limite de ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO}.`;
+  return textos.acesso.aviso_nome_restante(restantes, LIMITE_MAXIMO_DE_NOME_DE_USUARIO);
 }
 
 /**
@@ -345,14 +347,11 @@ function avisoDoNomeDeUsuario(nomeDeUsuario: string): string | null {
  * conforme ele se aproxima — os dois limites que a Senha tem (FR-075). Nenhuma
  * regra de composição é comunicada, porque nenhuma existe (FR-085).
  */
-function avisoDaSenhaDigitada(senha: string): string | null {
+function avisoDaSenhaDigitada(senha: string, textos: Catalogo): string | null {
   const comprimento = senha.length;
 
   if (comprimento > 0 && comprimento < LIMITE_MINIMO_DE_SENHA) {
-    return (
-      `Atenção: a Senha deve ter pelo menos ${LIMITE_MINIMO_DE_SENHA} ` +
-      `caracteres; a informada tem ${comprimento}.`
-    );
+    return textos.acesso.aviso_senha_minimo(LIMITE_MINIMO_DE_SENHA, comprimento);
   }
 
   const restantes = LIMITE_MAXIMO_DE_SENHA - comprimento;
@@ -362,12 +361,12 @@ function avisoDaSenhaDigitada(senha: string): string | null {
   }
 
   if (restantes < 0) {
-    return `Atenção: a Senha excede o limite de ${LIMITE_MAXIMO_DE_SENHA} caracteres.`;
+    return textos.acesso.aviso_senha_maximo(LIMITE_MAXIMO_DE_SENHA);
   }
 
   if (restantes === 0) {
-    return `Atenção: a Senha atingiu o limite de ${LIMITE_MAXIMO_DE_SENHA} caracteres.`;
+    return textos.acesso.aviso_senha_limite_atingido(LIMITE_MAXIMO_DE_SENHA);
   }
 
-  return `Atenção: faltam ${restantes} caracteres para o limite da Senha de ${LIMITE_MAXIMO_DE_SENHA}.`;
+  return textos.acesso.aviso_senha_restante(restantes, LIMITE_MAXIMO_DE_SENHA);
 }

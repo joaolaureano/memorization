@@ -1,7 +1,9 @@
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Baralho, ClienteDoAcervo } from "../acervo-cliente/cliente";
 import { LIMITE_DE_CARACTERES_DE_BARALHO } from "../acervo-cliente/validacao";
 import { CampoDeTags } from "./CampoDeTags";
+import { useIdioma } from "../idioma";
 
 type Props = {
   cliente: ClienteDoAcervo;
@@ -31,7 +33,8 @@ export function SalvarSelecaoComoBaralho({
   aoCancelar,
   nomeInicial,
 }: Props) {
-  const [nome, setNome] = useState(nomeInicial ?? "Baralho temporário");
+  const { textos } = useIdioma();
+  const [nome, setNome] = useState(nomeInicial ?? textos.selecao.baralhoTemporario);
   const [tags, setTags] = useState<string[]>([]);
   const [restantes, setRestantes] = useState<string[]>([...cartaoIds]);
   const [salvando, setSalvando] = useState(false);
@@ -93,16 +96,16 @@ export function SalvarSelecaoComoBaralho({
     <div className="pilha">
       <header className="cabecalho-da-pagina">
         <div>
-          <h1 tabIndex={-1}>Salvar como baralho</h1>
+          <h1 tabIndex={-1}>{textos.selecao.salvarComoBaralhoTitulo}</h1>
           <p className="texto-secundario">
-            Guarde esta seleção para revisar novamente.
+            {textos.selecao.guardeSelecao}
           </p>
         </div>
       </header>
       <form className="cartao formulario" noValidate onSubmit={aoEnviar}>
         <div className="campo">
           <label className="rotulo" htmlFor="nome-do-baralho-salvo">
-            Nome do baralho
+            {textos.selecao.nomeDoBaralho}
           </label>
           <input
             id="nome-do-baralho-salvo"
@@ -117,32 +120,31 @@ export function SalvarSelecaoComoBaralho({
             }
           />
           <p id="contador-do-baralho-salvo" className="contador">
-            {nome.length} / {LIMITE_DE_CARACTERES_DE_BARALHO} caracteres
+            {textos.selecao.contadorDeCaracteres(nome.length, LIMITE_DE_CARACTERES_DE_BARALHO)}
           </p>
           {erroDeNome !== null && (
             <p id="erro-do-baralho-salvo" className="erro" role="alert">
-              {erroDeNome}
+              <TextoDoProduto texto={erroDeNome} />
             </p>
           )}
         </div>
         <CampoDeTags tags={tags} aoAlterar={setTags} />
-        <p>{textoDaContagem(restantes.length)}</p>
+        <p>{textoDaContagem(restantes.length, textos)}</p>
         {indisponiveis.length > 0 && (
           <div className="aviso aviso--erro" role="alert">
-            <p>{textoDeIndisponiveis(indisponiveis.length)}</p>
+            <p>{textoDeIndisponiveis(indisponiveis.length, textos)}</p>
             <button
               type="button"
               className="botao botao--secundario"
               onClick={retirarIndisponiveis}
             >
-              Retirar indisponíveis
+              {textos.selecao.retirarIndisponiveis}
             </button>
           </div>
         )}
         {falha && (
           <p className="erro" role="alert">
-            Não foi possível salvar. Seu nome e a seleção foram preservados.
-            Tente novamente.
+            {textos.selecao.naoFoiPossivelSalvar}
           </p>
         )}
         <div className="acoes">
@@ -153,14 +155,14 @@ export function SalvarSelecaoComoBaralho({
               salvando || restantes.length === 0 || indisponiveis.length > 0
             }
           >
-            {salvando ? "Salvando…" : "Salvar"}
+            {salvando ? textos.selecao.salvando : textos.comum.salvar}
           </button>
           <button
             type="button"
             className="botao botao--secundario"
             onClick={aoCancelar}
           >
-            Cancelar
+            {textos.comum.cancelar}
           </button>
         </div>
       </form>
@@ -169,29 +171,23 @@ export function SalvarSelecaoComoBaralho({
 }
 
 /** FR-372: descreve quantas cópias serão criadas ao salvar a seleção. */
-function textoDaContagem(quantidade: number): string {
+function textoDaContagem(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
   if (quantidade === 0) {
-    return "Não há Cartões disponíveis para salvar.";
+    return textos.selecao.naoHaCartoesParaSalvar;
   }
-  if (quantidade === 1) {
-    return "Será criada 1 cópia de Cartão. Os baralhos de origem serão preservados.";
-  }
-  return (
-    `Serão criadas ${quantidade} cópias de Cartões. ` +
-    "Os baralhos de origem serão preservados."
-  );
+  return textos.selecao.seraCopiado(quantidade);
 }
 
 /** FR-374: avisa sobre Cartões que saíram da seleção e exige revisão. */
-function textoDeIndisponiveis(quantidade: number): string {
+function textoDeIndisponiveis(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
   if (quantidade === 1) {
     return (
-      "1 Cartão não está mais disponível. " +
-      "Retire-o e confira a nova contagem antes de salvar."
+      textos.selecao.cartaoIndisponivel(1) +
+      " Retire-o e confira a nova contagem antes de salvar."
     );
   }
   return (
-    `${quantidade} Cartões não estão mais disponíveis. ` +
-    "Retire-os e confira a nova contagem antes de salvar."
+    textos.selecao.cartaoIndisponivel(quantidade) +
+    " Retire-os e confira a nova contagem antes de salvar."
   );
 }

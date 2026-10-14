@@ -34,7 +34,7 @@ import {
 const RECUSA = {
   ok: false,
   erro: "credencial_invalida",
-  mensagem: "Nome de usuário ou Senha incorretos.",
+  mensagem: "Username or password is incorrect.",
 };
 
 /** Quantas vezes cada recusa é medida no cenário de duração. */
@@ -248,7 +248,7 @@ describe("autenticar — a falha do armazenamento não é Senha errada", () => {
     expect(recusa).toEqual({
       ok: false,
       erro: "indisponivel",
-      mensagem: "O armazenamento não está disponível. Tente novamente.",
+      mensagem: "Storage is unavailable. Try again.",
     });
 
     /**

@@ -225,7 +225,7 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
 
     expect(registro.origem).toBe("revisao");
     expect(registro.baralhoId).toBe("");
-    expect(registro.nomeDoBaralho).toBe("Revisão do dia");
+    expect(registro.nomeDoBaralho).toBe("");
 
     expect(await acervo.obterRegistroDeSessao(registro.id)).toEqual({
       ok: true,
@@ -247,7 +247,7 @@ describe("registrarSessao — a Avaliação vira Agendamento", () => {
 
     expect(registro.origem).toBe("temporario");
     expect(registro.baralhoId).toBe("");
-    expect(registro.nomeDoBaralho).toBe("Baralho temporário");
+    expect(registro.nomeDoBaralho).toBe("");
 
     expect(await acervo.obterRegistroDeSessao(registro.id)).toEqual({
       ok: true,

@@ -1,3 +1,4 @@
+import { useIdioma } from "../../idioma";
 import { useState } from "react";
 
 import { textoAlternativoDa, tipoDo } from "../../acervo-cliente/tipos-de-cartao";
@@ -40,12 +41,13 @@ function ImagemDaFace({
   item: ItemDeEstudo;
   renovar?: (cartaoId: string) => Promise<string | null>;
 }) {
+  const { textos } = useIdioma();
   const [url, setUrl] = useState(item.imagem?.url ?? null);
 
   return (
     <ImagemDoCartao
       url={url}
-      textoAlternativo={textoAlternativoDa(item)}
+      textoAlternativo={textoAlternativoDa(item, textos.cartao.imagemSemDescricao)}
       descricao={item.textoAlternativo}
       variante="face"
       aoFalhar={

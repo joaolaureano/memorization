@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import {
   useCallback,
   useEffect,
@@ -6,6 +7,7 @@ import {
   useState,
 } from "react";
 
+import { useIdioma } from "../idioma";
 import type {
   BaralhoComCartoes,
   Cartao,
@@ -21,7 +23,6 @@ import {
 } from "../acervo-cliente/busca-no-acervo";
 import {
   ORDEM_DOS_TIPOS,
-  TIPOS_DE_CARTAO,
 } from "../acervo-cliente/tipos-de-cartao";
 import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { consumirAvisoDeCartao } from "./aviso-de-cartao";
@@ -85,13 +86,12 @@ interface FocoAposExclusao {
   proximoCartaoId: string | null;
 }
 
-/** Motivo anunciado enquanto uma operação do Baralho está em andamento (FR-154). */
-const MOTIVO_DE_PENDENCIA = "Aguarde: a operação está em andamento.";
 
 export function PaginaDoBaralho({
   cliente,
   id,
 }: PropriedadesDaPaginaDoBaralho) {
+  const { textos } = useIdioma();
   const [baralho, setBaralho] = useState<BaralhoComCartoes | null>(null);
   const [cartoesListados, setCartoesListados] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -139,7 +139,7 @@ export function PaginaDoBaralho({
   // com o motivo anunciado, e não com um diálogo.
   useProtecaoDeSaida(
     excluindoCartao !== null || excluindoBaralho
-      ? { tipo: "pendencia", motivo: MOTIVO_DE_PENDENCIA }
+      ? { tipo: "pendencia", motivo: textos.baralhos.operacaoEmAndamento }
       : null,
   );
 
@@ -313,7 +313,7 @@ export function PaginaDoBaralho({
 
     setBaralho(releitura.baralho);
     setAnuncio(
-      `Cartão ${cartaoParaExcluir.frente} e seu Agendamento foram excluídos. O Histórico permanece.`,
+      textos.baralhos.cartaoExcluidoAnuncio(cartaoParaExcluir.frente),
     );
     setSequenciaDeAnuncio((atual) => atual + 1);
     setFocoAposExclusaoDeCartao({
@@ -432,12 +432,12 @@ export function PaginaDoBaralho({
         <div>
           <h1 ref={tituloDaPagina} tabIndex={-1}>
             {baralhoNaoEncontrado !== null
-              ? "Baralho não encontrado"
+              ? textos.baralhos.deckNotFound
               : (baralho?.nome ?? "Baralho")}
           </h1>
           {baralho !== null && (
             <p className="texto-secundario">
-              {descricaoDaContagemDeCartoes(quantidadeDeCartoes)}
+              {textos.baralhos.contagemCabecalho(quantidadeDeCartoes)}
             </p>
           )}
           {baralho !== null && <EtiquetasDeTags tags={baralho.tags} />}
@@ -458,64 +458,64 @@ export function PaginaDoBaralho({
                 disabled
                 aria-describedby="motivo-para-nao-revisar"
               >
-                Revisar este Baralho
+                {textos.baralhos.btnRevisarEsteBaralho}
               </button>
             ) : (
               <a
                 className="botao botao--primario"
                 href={`#/baralhos/${id}/estudo`}
               >
-                Revisar este Baralho
+                {textos.baralhos.btnRevisarEsteBaralho}
               </a>
             )}
             <a
               className="botao botao--primario"
               href={hashDaRota({ nome: "novo-cartao", baralhoId: id })}
             >
-              Criar Cartão
+              {textos.baralhos.btnCriarCartao}
             </a>
             <a
               className="botao botao--secundario"
               href={`#/baralhos/${id}/editar`}
             >
-              Renomear
+              {textos.baralhos.btnRenomear}
             </a>
             <button
               ref={botaoDeExcluirBaralho}
               type="button"
               className="botao botao--perigo"
-              aria-label="Excluir Baralho"
+              aria-label={textos.baralhos.btnExcluirBaralho}
               disabled={excluindoCartao !== null || excluindoBaralho}
               onClick={abrirExclusaoDoBaralho}
             >
-              Excluir Baralho
+              {textos.baralhos.btnExcluirBaralho}
             </button>
           </div>
         )}
 
         {baralho !== null && quantidadeDeCartoes === 0 && (
           <p id="motivo-para-nao-revisar" className="ajuda">
-            Crie Cartões neste Baralho para poder revisar.
+            {textos.baralhos.ajudaCriarCartoes}
           </p>
         )}
       </div>
 
       {baralho !== null && quantidadeDeCartoes > 0 && (
         <>
-          <section className="filtros" aria-label="Busca e filtros dos Cartões">
+          <section className="filtros" aria-label={textos.baralhos.buscaEFiltros}>
             <div className="campo">
               <label
                 className="rotulo"
                 htmlFor="busca-de-cartoes-do-baralho"
               >
-                Buscar Cartões
+                {textos.baralhos.buscarCartoes}
               </label>
               <input
                 id="busca-de-cartoes-do-baralho"
                 ref={campoDeBusca}
                 type="search"
                 autoComplete="off"
-                placeholder="Digite o nome ou conteúdo do Cartão"
+                placeholder={textos.baralhos.buscarCartoesPlaceholder}
                 value={consulta}
                 onChange={(evento) => setConsulta(evento.target.value)}
               />
@@ -530,7 +530,7 @@ export function PaginaDoBaralho({
                 className="rotulo"
                 htmlFor="filtro-de-situacao-dos-cartoes"
               >
-                Situação da revisão
+                {textos.baralhos.situacaoLabel}
               </label>
               <select
                 id="filtro-de-situacao-dos-cartoes"
@@ -541,14 +541,14 @@ export function PaginaDoBaralho({
                   )
                 }
               >
-                <option value="todos">Todos</option>
-                <option value="pendente">Pendente</option>
-                <option value="revisado">Revisado</option>
+                <option value="todos">{textos.baralhos.situacaoTodos}</option>
+                <option value="pendente">{textos.baralhos.situacaoPendente}</option>
+                <option value="revisado">{textos.baralhos.situacaoRevisado}</option>
               </select>
             </div>
             <div className="campo campo--filtro-de-tipo">
               <label className="rotulo" htmlFor="filtro-de-tipo-de-cartao">
-                Tipo de cartão
+                {textos.baralhos.tipoCartaoLabel}
               </label>
               <select
                 id="filtro-de-tipo-de-cartao"
@@ -560,7 +560,7 @@ export function PaginaDoBaralho({
                 <option value="todos">Todos</option>
                 {ORDEM_DOS_TIPOS.map((tipo) => (
                   <option key={tipo} value={tipo}>
-                    {TIPOS_DE_CARTAO[tipo].rotulo}
+                    {textos.cartao.nomeDoTipo[tipo]}
                   </option>
                 ))}
               </select>
@@ -568,26 +568,24 @@ export function PaginaDoBaralho({
           </section>
           <div className="resultado-cabecalho">
             <p role="status" aria-live="polite" aria-atomic="true">
-              {cartoesFiltrados.length === 1
-                ? "1 Cartão encontrado."
-                : `${cartoesFiltrados.length} Cartões encontrados.`}
+              {textos.baralhos.cartaoEncontrado(cartoesFiltrados.length)}
             </p>
             <button
               type="button"
               className="botao botao--secundario"
               onClick={limparFiltros}
             >
-              Limpar filtros
+              {textos.baralhos.btnLimparFiltros}
             </button>
           </div>
         </>
       )}
 
       {carregando ? (
-        <EstadoDaCarga estado="carregando" mensagem="Carregando Baralho…" />
+        <EstadoDaCarga estado="carregando" mensagem={textos.baralhos.carregandoBaralho} />
       ) : baralhoNaoEncontrado !== null ? (
-        <p className="erro" role="alert" aria-label="Baralho não encontrado">
-          {baralhoNaoEncontrado}
+        <p className="erro" role="alert" aria-label={textos.baralhos.baralhoNaoEncontradoRotulo}>
+          <TextoDoProduto texto={baralhoNaoEncontrado} />
         </p>
       ) : falhaDeCarregamento !== null ? (
         <EstadoDaCarga
@@ -601,9 +599,9 @@ export function PaginaDoBaralho({
             <p
               className="erro"
               role="alert"
-              aria-label="Falha na exclusão de Cartão"
+              aria-label={textos.baralhos.falhaNaExclusaoDeCartao}
             >
-              {falhaDeExclusaoDeCartao}
+              <TextoDoProduto texto={falhaDeExclusaoDeCartao} />
             </p>
           )}
 
@@ -619,38 +617,37 @@ export function PaginaDoBaralho({
             </p>
           )}
 
-          <section aria-label="Cartões do Baralho">
+          <section aria-label={textos.baralhos.cartoesDoBaralho}>
             {baralho.cartoes.length === 0 ? (
               // FR-153, FR-392: o Baralho vazio tem a sua própria apresentação,
               // e a ação que o destrava é criar Cartões neste Baralho.
               <div
                 className="estado-vazio"
                 role="status"
-                aria-label="Lista de Cartões vazia"
+                aria-label={textos.baralhos.listaVazia}
                 aria-live="polite"
                 aria-atomic="true"
               >
-                <p>Este Baralho ainda não tem Cartões.</p>
+                <p>{textos.baralhos.vazioSemCartoes}</p>
                 <a
                   className="botao botao--primario"
                   href={hashDaRota({ nome: "novo-cartao", baralhoId: id })}
                 >
-                  Criar Cartão
+                  {textos.baralhos.btnCriarCartao}
                 </a>
               </div>
             ) : cartoesFiltrados.length === 0 ? (
               <div className="estado-vazio" role="status">
-                <h2>Nenhum Cartão encontrado</h2>
+                <h2>{textos.baralhos.naoEncontradoCartoes}</h2>
                 <p>
-                  Altere a busca ou limpe os filtros para ver os Cartões deste
-                  Baralho.
+                  {textos.baralhos.naoEncontradoCartoesDescricao}
                 </p>
                 <button
                   type="button"
                   className="botao botao--secundario"
                   onClick={limparFiltros}
                 >
-                  Limpar filtros
+                  {textos.baralhos.btnLimparFiltros}
                 </button>
               </div>
             ) : (
@@ -671,8 +668,8 @@ export function PaginaDoBaralho({
                       }`}
                     >
                       {cartao.situacaoDaRevisao === "em-dia"
-                        ? "Revisado"
-                        : "Pendente"}
+                        ? textos.baralhos.cartaoRevisado
+                        : textos.baralhos.cartaoPendente}
                     </span>
                     <div className="linha-da-lista__acoes">
                       <a
@@ -683,14 +680,14 @@ export function PaginaDoBaralho({
                           id: cartao.id,
                         })}
                       >
-                        Editar
+                        {textos.baralhos.btnEditar}
                       </a>
                       <button
                         ref={registrarBotaoDeExcluir(`excluir:${cartao.id}`)}
                         className="botao botao--perigo"
                         type="button"
                         disabled={excluindoCartao !== null}
-                        aria-label={`Excluir ${rotuloDoCartao(cartao)}`}
+                        aria-label={`${textos.baralhos.btnExcluirCartao} ${rotuloDoCartao(cartao, textos)}`}
                         onClick={(e) =>
                           void abrirExclusaoDeCartao(
                             cartao,
@@ -698,7 +695,7 @@ export function PaginaDoBaralho({
                           )
                         }
                       >
-                        Excluir
+                        {textos.baralhos.btnExcluirCartao}
                       </button>
                     </div>
                   </li>
@@ -711,9 +708,9 @@ export function PaginaDoBaralho({
             <p
               className="erro"
               role="alert"
-              aria-label="Falha na exclusão do Baralho"
+              aria-label={textos.baralhos.falhaNaExclusaoDoBaralho}
             >
-              {falhaDeExclusaoDoBaralho}
+              <TextoDoProduto texto={falhaDeExclusaoDoBaralho} />
             </p>
           )}
         </>
@@ -723,12 +720,12 @@ export function PaginaDoBaralho({
         <DialogoDeConfirmacao
           aberto
           titulo={`Excluir "${cartaoPendingExclusao.frente}"?`}
-          rotuloDeConfirmacao="Excluir Cartão"
+          rotuloDeConfirmacao={textos.baralhos.excluirCartaoConfirm}
           confirmacaoDesabilitada={excluindoCartao !== null}
           aoConfirmar={() => void confirmarExclusaoDeCartao()}
           aoCancelar={cancelarExclusaoDeCartao}
         >
-          <p>{descricaoDeExclusaoDeCartao()}</p>
+          <p>{textos.baralhos.descricaoCartaoExcluido}</p>
         </DialogoDeConfirmacao>
       )}
 
@@ -736,57 +733,15 @@ export function PaginaDoBaralho({
         <DialogoDeConfirmacao
           aberto
           titulo={`Excluir "${baralho.nome}"?`}
-          rotuloDeConfirmacao="Excluir Baralho"
+          rotuloDeConfirmacao={textos.baralhos.excluirBaralhoConfirm}
           confirmacaoDesabilitada={excluindoBaralho}
           aoConfirmar={() => void confirmarExclusaoDoBaralho()}
           aoCancelar={cancelarExclusaoDoBaralho}
         >
-          <p>{descricaoDeExclusaoDoBaralho(baralho)}</p>
+          <p>{textos.baralhos.descricaoBaralhoExcluido(baralho.cartoes.length, baralho.quantidadeDeAgendamentos)}</p>
         </DialogoDeConfirmacao>
       )}
     </div>
   );
 }
 
-/**
- * Informa quantos Cartões o Baralho tem (FR-145). O texto do cabeçalho sai
- * daqui, e é a única apresentação da contagem na página.
- */
-function descricaoDaContagemDeCartoes(quantidade: number): string {
-  if (quantidade === 0) {
-    return "Nenhum Cartão neste Baralho.";
-  }
-
-  if (quantidade === 1) {
-    return "1 Cartão neste Baralho.";
-  }
-
-  return `${quantidade} Cartões neste Baralho.`;
-}
-
-/**
- * Declara a consequência real da exclusão de um Cartão (FR-401, FR-402):
- * que o Cartão e seu Agendamento serão removidos e que o Histórico permanece.
- */
-function descricaoDeExclusaoDeCartao(): string {
-  return "O Cartão e seu Agendamento serão removidos. Registros históricos já concluídos permanecerão.";
-}
-
-/**
- * Declara a consequência real da exclusão de um Baralho (FR-016, FR-017, FR-402):
- * quantos Cartões e Agendamentos serão removidos e que o Histórico permanece.
- */
-function descricaoDeExclusaoDoBaralho(baralho: BaralhoComCartoes): string {
-  const quantidadeDeCartoes = baralho.cartoes.length;
-  const quantidadeDeAgendamentos = baralho.quantidadeDeAgendamentos;
-
-  let descricao = `Serão removidos o Baralho, ${quantidadeDeCartoes} ${quantidadeDeCartoes === 1 ? "Cartão" : "Cartões"}`;
-
-  if (quantidadeDeAgendamentos > 0) {
-    descricao += ` e ${quantidadeDeAgendamentos} ${quantidadeDeAgendamentos === 1 ? "Agendamento" : "Agendamentos"}`;
-  }
-
-  descricao += ". Registros históricos já concluídos permanecerão.";
-
-  return descricao;
-}

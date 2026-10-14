@@ -1,3 +1,5 @@
+import { textoDaRecusaPt } from "../idioma/recusas";
+import { MENSAGENS_COM_VALOR, MENSAGENS_PT } from "../idioma/mensagens";
 import type { Cartao, TipoDeCartao } from "./cliente";
 import {
   LIMITE_DE_CARACTERES_DE_CARTAO,
@@ -30,9 +32,8 @@ export const FORMATOS_DE_IMAGEM = [
 /** As extensões aceitas, conferidas quando o navegador não informa o tipo. */
 const EXTENSOES_DE_IMAGEM = /\.(jpe?g|png|webp|gif)$/i;
 
-export const MENSAGEM_DE_IMAGEM_GRANDE = "A imagem deve ter no máximo 5 MB.";
-export const MENSAGEM_DE_FORMATO_DE_IMAGEM =
-  "Escolha uma imagem JPEG, PNG, WebP ou GIF.";
+export const MENSAGEM_DE_IMAGEM_GRANDE = MENSAGENS_PT.imagemGrande;
+export const MENSAGEM_DE_FORMATO_DE_IMAGEM = MENSAGENS_PT.formatoDeImagem;
 
 /** O que o formulário valida antes de enviar (FR-408, FR-409, FR-412). */
 export interface DadosDoFormulario {
@@ -44,21 +45,17 @@ export interface DadosDoFormulario {
 }
 
 export interface RegrasDoTipo {
-  /** Rótulo do tipo, mostrado no seletor e no Baralho (FR-415). */
-  rotulo: string;
   validar(dados: DadosDoFormulario): FalhaDeRegraDeCartao | null;
   /** Os textos em que a busca do Baralho procura (FR-419). */
   textosPesquisaveis(cartao: Pick<Cartao, "frente" | "verso">): string[];
 }
 
 const FRENTE_VERSO: RegrasDoTipo = {
-  rotulo: "Frente-Verso",
   validar: (dados) => validarFrente(dados.frente) ?? validarVerso(dados.verso),
   textosPesquisaveis: (cartao) => [cartao.frente, cartao.verso],
 };
 
 const IMAGEM: RegrasDoTipo = {
-  rotulo: "Imagem",
   validar(dados) {
     if (dados.frente.length > LIMITE_DE_CARACTERES_DE_CARTAO) {
       return validarFrente(dados.frente);
@@ -74,14 +71,13 @@ const IMAGEM: RegrasDoTipo = {
       return {
         erro: "descricao_muito_longa",
         mensagem:
-          `A descrição da imagem deve ter no máximo ${LIMITE_DA_DESCRICAO_ALTERNATIVA} caracteres; ` +
-          `a informada tem ${(dados.textoAlternativo ?? "").length}.`,
+          MENSAGENS_COM_VALOR.descricaoLonga.pt(LIMITE_DA_DESCRICAO_ALTERNATIVA, (dados.textoAlternativo ?? "").length),
       };
     }
 
     return dados.temImagem
       ? null
-      : { erro: "imagem_ausente", mensagem: "Escolha uma imagem." };
+      : { erro: "imagem_ausente", mensagem: textoDaRecusaPt({ erro: "imagem_ausente" }, "cartoes") };
   },
   // O Texto da frente e o Verso; a Imagem não tem texto a buscar.
   textosPesquisaveis: (cartao) => [cartao.frente, cartao.verso],
@@ -133,11 +129,14 @@ export function conferirArquivoDeImagem(
  * O texto alternativo da Imagem exibida (FR-426): a Descrição, senão o Texto
  * da frente, senão "Imagem do Cartão".
  */
-export function textoAlternativoDa(cartao: Pick<Cartao, "frente" | "textoAlternativo">): string {
+export function textoAlternativoDa(
+  cartao: Pick<Cartao, "frente" | "textoAlternativo">,
+  semDescricao: string,
+): string {
   const descricao = cartao.textoAlternativo?.trim();
   const frente = cartao.frente.trim();
 
-  return descricao || frente || "Imagem do Cartão";
+  return descricao || frente || semDescricao;
 }
 
 /** Os campos do tipo no corpo de criação e edição. */

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useIdioma, type Catalogo } from "../idioma";
 import type {
   BaralhoListado,
   CartaoListado,
@@ -9,7 +10,6 @@ import {
   classificarBaralhos,
   filtrarBaralhos,
   filtrarBaralhosPorSituacao,
-  rotuloDaSituacaoDoBaralho,
   filtrarPorTags,
   type FiltroDeSituacaoDoBaralho,
   type SituacaoDoBaralho,
@@ -75,6 +75,7 @@ interface PropriedadesDaPaginaDeBaralhos {
 export function PaginaDeBaralhos({
   cliente,
 }: PropriedadesDaPaginaDeBaralhos) {
+  const { textos } = useIdioma();
   const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
   const [cartoes, setCartoes] = useState<CartaoListado[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -162,35 +163,35 @@ export function PaginaDeBaralhos({
     <div className="pagina pagina--baralhos">
       <header className="cabecalho-da-pagina">
         <div>
-          <h1>Baralhos</h1>
+          <h1>{textos.baralhos.titulo}</h1>
           <p className="texto-secundario">
-            Escolha o que você quer memorizar hoje.
+            {textos.baralhos.descricao}
           </p>
         </div>
         <div className="acoes acoes--criacao">
-          <a className="botao botao--secundario" href="#/baralhos/importar">Importar</a>
+          <a className="botao botao--secundario" href="#/baralhos/importar">{textos.baralhos.btnImportar}</a>
           <a className="botao botao--primario" href="#/baralhos/novo">
-            Criar baralho
+            {textos.baralhos.btnCriarBaralho}
           </a>
           <a
             className="botao botao--secundario"
             href="#/baralhos/temporario"
           >
-            Criar baralho temporário
+            {textos.baralhos.btnCriarBaralhoTemporario}
           </a>
         </div>
       </header>
 
-      <section className="filtros" aria-label="Busca e filtros">
+      <section className="filtros" aria-label={textos.baralhos.buscaEFiltrosDaLista}>
         <div className="campo">
           <label className="rotulo" htmlFor="busca-de-baralhos">
-            Buscar baralhos
+            {textos.baralhos.buscarLabel}
           </label>
           <input
             id="busca-de-baralhos"
             type="search"
             autoComplete="off"
-            placeholder="Digite o nome do baralho"
+            placeholder={textos.baralhos.buscarPlaceholder}
             value={consulta}
             onChange={(evento) => setConsulta(evento.target.value)}
             ref={campoDeBusca}
@@ -199,7 +200,7 @@ export function PaginaDeBaralhos({
         <OpcoesDeTags opcoes={tagsDisponiveis} selecionadas={tagsSelecionadas} aoAlterar={setTagsSelecionadas} />
         <div className="campo">
           <label className="rotulo" htmlFor="filtro-de-situacao">
-            Situação da revisão
+            {textos.baralhos.situacaoLabel}
           </label>
           <select
             id="filtro-de-situacao"
@@ -210,9 +211,9 @@ export function PaginaDeBaralhos({
               )
             }
           >
-            <option value="todos">Todos</option>
-            <option value="pendente">Pendente</option>
-            <option value="revisado">Revisado</option>
+            <option value="todos">{textos.baralhos.situacaoTodos}</option>
+            <option value="pendente">{textos.baralhos.situacaoPendente}</option>
+            <option value="revisado">{textos.baralhos.situacaoRevisado}</option>
           </select>
         </div>
       </section>
@@ -220,7 +221,7 @@ export function PaginaDeBaralhos({
       <div className="resultado-cabecalho">
         <p role="status" aria-live="polite" aria-atomic="true">
           {listaCarregada
-            ? contagemDeResultados(baralhosFiltrados.length)
+            ? textos.baralhos.contagem(baralhosFiltrados.length)
             : null}
         </p>
         <button
@@ -228,12 +229,12 @@ export function PaginaDeBaralhos({
           className="botao botao--secundario"
           onClick={limparFiltros}
         >
-          Limpar filtros
+          {textos.baralhos.btnLimparFiltros}
         </button>
       </div>
 
       {carregando ? (
-        <EstadoDaCarga estado="carregando" mensagem="Carregando Baralhos…" />
+        <EstadoDaCarga estado="carregando" mensagem={textos.baralhos.carregando} />
       ) : falhaDeListagem !== null ? (
         <EstadoDaCarga
           estado="falha"
@@ -243,23 +244,23 @@ export function PaginaDeBaralhos({
       ) : baralhos.length === 0 ? (
         <EstadoDaCarga
           estado="vazio"
-          mensagem="Ainda não há Baralhos. Crie o primeiro para começar a revisar."
+          mensagem={textos.baralhos.vazio}
           acao={
             <a className="botao botao--primario" href="#/baralhos/novo">
-              Criar baralho
+              {textos.baralhos.btnCriarBaralho}
             </a>
           }
         />
       ) : baralhosFiltrados.length === 0 ? (
         <div className="estado-vazio">
-          <h2>Nenhum resultado encontrado</h2>
-          <p>Altere a busca ou limpe os filtros para ver o acervo.</p>
+          <h2>{textos.baralhos.naoEncontrado}</h2>
+          <p>{textos.baralhos.naoEncontradoDescricao}</p>
           <button
             type="button"
             className="botao botao--secundario"
             onClick={limparFiltros}
           >
-            Limpar filtros
+            {textos.baralhos.btnLimparFiltros}
           </button>
         </div>
       ) : (
@@ -269,17 +270,13 @@ export function PaginaDeBaralhos({
               key={baralho.id}
               baralho={baralho}
               situacao={situacoesDosBaralhos.get(baralho.id) ?? "sem-cartoes"}
+              textos={textos}
             />
           ))}
         </ul>
       )}
     </div>
   );
-}
-
-/** A contagem de resultados, com o plural da língua (FR-355). */
-function contagemDeResultados(quantidade: number): string {
-  return `${quantidade} ${quantidade === 1 ? "resultado" : "resultados"}`;
 }
 
 /**
@@ -298,9 +295,11 @@ function contagemDeResultados(quantidade: number): string {
 function ItemDeBaralho({
   baralho,
   situacao,
+  textos,
 }: {
   baralho: BaralhoListado;
   situacao: SituacaoDoBaralho;
+  textos: Catalogo;
 }) {
   const motivoSemCartoesId = `motivo-sem-cartoes-${baralho.id}`;
   const temCartoes = baralho.quantidadeDeCartoes > 0;
@@ -311,20 +310,20 @@ function ItemDeBaralho({
         <p className="linha-da-lista__titulo">{baralho.nome}</p>
                   <EtiquetasDeTags tags={baralho.tags} />
         <p className="linha-da-lista__detalhe">
-          {contagemDeCartoes(baralho.quantidadeDeCartoes)}
+          {textos.selecao.cartao(baralho.quantidadeDeCartoes)}
         </p>
       </div>
       <div className="linha-da-lista__acoes">
         <span className={`etiqueta etiqueta--${situacao}`}>
-          {rotuloDaSituacaoDoBaralho(situacao)}
+          {textos.baralhos.rotuloDaSituacao[situacao]}
         </span>
         {temCartoes ? (
           <a
             className="botao botao--secundario"
             href={hashDaRota({ nome: "estudo", id: baralho.id })}
-            aria-label={`Revisar ${baralho.nome}`}
+            aria-label={`${textos.baralhos.btnRevisar} ${baralho.nome}`}
           >
-            Revisar
+            {textos.baralhos.btnRevisar}
           </a>
         ) : (
           <button
@@ -332,29 +331,26 @@ function ItemDeBaralho({
             className="botao botao--secundario"
             disabled
             aria-describedby={motivoSemCartoesId}
-            aria-label={`Revisar ${baralho.nome}`}
+            aria-label={`${textos.baralhos.btnRevisar} ${baralho.nome}`}
           >
-            Revisar
+            {textos.baralhos.btnRevisar}
           </button>
         )}
         <a
           className="botao botao--secundario"
           href={hashDaRota({ nome: "baralho", id: baralho.id })}
-          aria-label={`Editar ${baralho.nome}`}
+          aria-label={`${textos.baralhos.btnEditar} ${baralho.nome}`}
         >
-          Editar
+          {textos.baralhos.btnEditar}
         </a>
       </div>
       {temCartoes ? null : (
         <span id={motivoSemCartoesId} className="visualmente-oculto">
-          Sem Cartões para revisar.
+          {textos.baralhos.semCartoes}
         </span>
       )}
     </li>
   );
 }
 
-/** Contagem de Cartões do Baralho, com o plural da língua (FR-340). */
-function contagemDeCartoes(quantidade: number): string {
-  return `${quantidade} ${quantidade === 1 ? "Cartão" : "Cartões"}`;
-}
+

@@ -1,3 +1,4 @@
+import { MENSAGENS_PT } from "../idioma/mensagens";
 import type {
   CodigoDeErroDeBaralho,
   CodigoDeErroDeCadastro,
@@ -128,16 +129,14 @@ export const INDISPONIVEL = "indisponivel" as const;
  * (FR-046). A interface exibe `mensagem` e nunca inventa texto próprio para
  * uma falha.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE =
-  "Não foi possível acessar os Cartões. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE = MENSAGENS_PT.indisponibilidadeDeCartoes;
 
 /**
  * Mensagem em português destinada ao usuário quando o transporte até as rotas
  * de Baralho falha (FR-046). Mantida separada da mensagem de Cartão para que
  * cada operação anuncie a entidade que falhou.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS =
-  "Não foi possível acessar os Baralhos. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS = MENSAGENS_PT.indisponibilidadeDeBaralhos;
 
 
 /**
@@ -145,8 +144,7 @@ export const MENSAGEM_DE_INDISPONIBILIDADE_DE_BARALHOS =
  * de Usuário falha (FR-046). Mantida separada das demais para que cada
  * operação anuncie a entidade que falhou.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS =
-  "Não foi possível acessar os Usuários. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS = MENSAGENS_PT.indisponibilidadeDeUsuarios;
 
 /**
  * A Credencial desta feature (FR-089): Nome de usuário e Senha, e nada além.
@@ -177,16 +175,14 @@ export const NAO_AUTENTICADO = "nao_autenticado" as const;
  * Idêntica à do contrato da API (contracts/api-entrar.md), e por isso os dois
  * Adapters da Seam devolvem o mesmo texto.
  */
-export const MENSAGEM_DE_CREDENCIAL_INVALIDA =
-  "Nome de usuário ou Senha incorretos.";
+export const MENSAGEM_DE_CREDENCIAL_INVALIDA = MENSAGENS_PT.credencialInvalida;
 
 /**
  * Mensagem em português destinada ao usuário quando uma operação do acervo é
  * recusada por Credencial (FR-046, FR-091). É a explicação que a tela "Entrar"
  * apresenta depois de descartar a Credencial.
  */
-export const MENSAGEM_DE_NAO_AUTENTICADO =
-  "A Credencial não é mais válida. Informe o Nome de usuário e a Senha para Entrar novamente.";
+export const MENSAGEM_DE_NAO_AUTENTICADO = MENSAGENS_PT.naoAutenticado;
 
 /**
  * Mensagem em português destinada ao usuário quando o transporte até as rotas
@@ -194,52 +190,46 @@ export const MENSAGEM_DE_NAO_AUTENTICADO =
  * Cartão, Baralho, Vínculo e Usuário para que cada operação anuncie a entidade
  * que falhou.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO =
-  "Não foi possível acessar o seu histórico agora. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_HISTORICO = MENSAGENS_PT.indisponibilidadeDeHistorico;
 
 /**
  * Mensagem da recusa `dados_invalidos` ao registrar uma Sessão (FR-161): o
  * corpo enviado não respeita as invariantes do contrato.
  */
-export const MENSAGEM_DE_DADOS_INVALIDOS =
-  "Os dados da Sessão não são válidos.";
+export const MENSAGEM_DE_DADOS_INVALIDOS = MENSAGENS_PT.dadosInvalidosDaSessao;
 
 /**
  * Mensagem da recusa `conflito` ao registrar uma Sessão (FR-163): o `id`
  * enviado já pertence ao histórico de **outro** Usuário. Nunca se sobrescreve
  * o Registro alheio.
  */
-export const MENSAGEM_DE_CONFLITO_DE_SESSAO =
-  "O identificador da Sessão já está em uso.";
+export const MENSAGEM_DE_CONFLITO_DE_SESSAO = MENSAGENS_PT.conflitoDeSessao;
 
 /**
  * Mensagem da recusa `nao_encontrado` ao abrir um Registro (FR-166): ele não
  * existe no histórico deste Usuário.
  */
-export const MENSAGEM_DE_SESSAO_NAO_ENCONTRADA = "Sessão não encontrada.";
+export const MENSAGEM_DE_SESSAO_NAO_ENCONTRADA = MENSAGENS_PT.sessaoNaoEncontrada;
 
 /**
  * Mensagem em português destinada ao usuário quando o transporte até as rotas
  * de repetição espaçada falha (FR-046, FR-221). Mantida separada das demais
  * para que cada operação anuncie a entidade que falhou.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO =
-  "Não foi possível acessar a revisão agora. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_REVISAO = MENSAGENS_PT.indisponibilidadeDeRevisao;
 
 /**
  * Mensagem em português destinada ao usuário quando o transporte até as rotas
  * de Preferências falha (FR-046). Mantida separada das demais para que cada
  * operação anuncie a entidade que falhou.
  */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS =
-  "Não foi possível acessar as Preferências. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DE_PREFERENCIAS = MENSAGENS_PT.indisponibilidadeDePreferencias;
 
 /**
  * Mensagem da recusa `dados_invalidos` ao salvar as Preferências (FR-212): o
  * algoritmo informado não respeita o contrato.
  */
-export const MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS =
-  "As Preferências informadas não são válidas.";
+export const MENSAGEM_DE_DADOS_INVALIDOS_DE_PREFERENCIAS = MENSAGENS_PT.dadosInvalidosDePreferencias;
 
 /**
  * Resultado de `entrar`. Sucesso traz exatamente o Usuário que Entrou — `id` e
@@ -899,8 +889,7 @@ export type ResultadoDeIniciarCompromisso =
  * Mensagem em português para quando as rotas da Agenda não estão disponíveis
  * (FR-248, FR-250).
  */
-export const MENSAGEM_DE_AGENDA_INDISPONIVEL =
-  "A Agenda não está disponível agora. Tente novamente.";
+export const MENSAGEM_DE_AGENDA_INDISPONIVEL = MENSAGENS_PT.agendaIndisponivel;
 
 /**
  * Contagens do que pertence ao Usuário, como `GET /conta` as informa (FR-272,
@@ -975,12 +964,10 @@ export interface RecusaDeConta {
 export type ResultadoDeAcaoDeConta = { ok: true } | RecusaDeConta;
 
 /** Mensagem quando o transporte até as rotas de conta falha (FR-046). */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA =
-  "Não foi possível acessar a sua conta agora. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DA_CONTA = MENSAGENS_PT.indisponibilidadeDaConta;
 
 /** A mensagem única da Senha atual incorreta (FR-279), igual à da API. */
-export const MENSAGEM_DE_SENHA_ATUAL_INCORRETA =
-  "A Senha atual está incorreta.";
+export const MENSAGEM_DE_SENHA_ATUAL_INCORRETA = MENSAGENS_PT.senhaAtualIncorreta;
 
 /**
  * O que `entrar` recebe (018): a Credencial e a escolha de **continuar
@@ -999,11 +986,10 @@ export interface DadosDeEntrada extends Credencial {
  * A mensagem de Acesso expirado (FR-294): exibida tal qual na tela «Entrar»,
  * igual à que a API devolve em `401 acesso_expirado`.
  */
-export const MENSAGEM_DE_ACESSO_EXPIRADO = "Seu acesso expirou. Entre novamente.";
+export const MENSAGEM_DE_ACESSO_EXPIRADO = MENSAGENS_PT.acessoExpirado;
 
 /** Mensagem quando o transporte até as rotas do Acesso falha (FR-046, FR-301). */
-export const MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO =
-  "Não foi possível verificar o seu acesso agora. Tente novamente.";
+export const MENSAGEM_DE_INDISPONIBILIDADE_DO_ACESSO = MENSAGENS_PT.indisponibilidadeDoAcesso;
 
 /**
  * Resultado de `obterAcesso` (018, FR-290): o Nome de usuário de quem tem

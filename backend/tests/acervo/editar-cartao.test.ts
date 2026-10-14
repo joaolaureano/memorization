@@ -182,7 +182,7 @@ describe("editarCartao — edição pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
 
     expect(await acervo.listarCartoes()).toEqual([
@@ -201,7 +201,7 @@ describe("editarCartao — edição pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
   });
 
@@ -217,7 +217,9 @@ describe("editarCartao — edição pela Interface", () => {
       ok: false,
       erro: "frente_muito_longa",
       mensagem:
-        "A frente do cartão deve ter no máximo 1000 caracteres; a informada tem 1001.",
+        "Card front is too long. Maximum 1000 characters; provided has 1001.",
+    
+      limite: 1000,
     });
 
     expect(await acervo.listarCartoes()).toEqual([
@@ -237,7 +239,9 @@ describe("editarCartao — edição pela Interface", () => {
       ok: false,
       erro: "verso_muito_longo",
       mensagem:
-        "O verso do cartão deve ter no máximo 1000 caracteres; o informado tem 1001.",
+        "Card back is too long. Maximum 1000 characters; provided has 1001.",
+    
+      limite: 1000,
     });
 
     expect(await acervo.listarCartoes()).toEqual([
@@ -254,7 +258,7 @@ describe("editarCartao — edição pela Interface", () => {
     ).toEqual({
       ok: false,
       erro: "nao_encontrado",
-      mensagem: "Cartão não encontrado.",
+      mensagem: "Not found.",
     });
   });
 });

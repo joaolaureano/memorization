@@ -94,10 +94,10 @@ export function versaoCorrenteConhecida(): number {
  * Diz se a versão encontrada na base é aceitável no início (FR-397).
  *
  * Aceita a versão corrente — aquela em que todas as migrações foram aplicadas.
- * Também aceita a versão imediatamente anterior **se** a última migração tiver
- * `precondicao`, porque nesse caso é um estado **legítimo e transitório**: a
- * migração não pôde rodar, e a base fica na versão anterior até que a
- * precondição seja atendida (FR-121, SC-048).
+ * Também aceita versões anteriores **se** todas as migrações pendentes tiverem
+ * `precondicao`, porque nesse caso é um estado **legítimo e transitório**: essas
+ * migrações não puderam rodar, e a base fica na versão anterior até que suas
+ * precondições sejam atendidas (FR-121, SC-048, 027 FR-020).
  *
  * Qualquer outra versão é recusada: a base está atrasada demais e precisa rodar
  * o comando de migração para avançar.
@@ -110,13 +110,12 @@ export function versaoAceitaNoInicio(encontrada: number): boolean {
     return true;
   }
 
-  // Se a última migração tiver precondição, a versão anterior também é aceita.
-  const ultimaMigracao = MIGRACOES[MIGRACOES.length - 1];
-  if (
-    ultimaMigracao &&
-    ultimaMigracao.precondicao !== undefined &&
-    encontrada === ultimaMigracao.versao - 1
-  ) {
+  // Se todas as migrações pendentes tiverem precondição, é um estado transitório legítimo.
+  const todasAsPendentesTemPrecondicao = MIGRACOES.every(
+    (m) => m.versao <= encontrada || m.precondicao !== undefined,
+  );
+
+  if (todasAsPendentesTemPrecondicao && encontrada < corrente) {
     return true;
   }
 

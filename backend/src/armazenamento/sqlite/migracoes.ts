@@ -645,4 +645,18 @@ export const MIGRACOES: readonly Migracao[] = [
     sql: ESQUEMA_FINALIZAR_TRANSICAO,
     precondicao: PODE_REMOVER_VINCULO,
   },
+  /**
+   * A 19 troca por vazio o rótulo padrão gravado como nome: sempre na Revisão
+   * do dia e, no temporário, só quando o nome é "Baralho temporário" — o nome
+   * digitado pela pessoa é preservado (FR-006, FR-020, FR-021). Mesma precondição da 18: a 19 só roda depois da transição de
+   * Pertencimento; enquanto ela estiver pendente, as duas ficam para a próxima
+   * aplicação (027, FR-020).
+   */
+  {
+    versao: 19,
+    sql: `UPDATE registro_de_sessao SET nome_do_baralho = ''
+          WHERE origem = 'revisao'
+             OR (origem = 'temporario' AND nome_do_baralho = 'Baralho temporário');`,
+    precondicao: PODE_REMOVER_VINCULO,
+  },
 ];

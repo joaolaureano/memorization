@@ -3,6 +3,7 @@ import type {
   KeyboardEvent as KeyboardEventDeReact,
   MouseEvent as MouseEventDeReact,
 } from "react";
+import { rotuloDoNivel, TextoDoProduto, useIdioma, type Catalogo } from "../idioma";
 
 import type {
   Avaliacao,
@@ -166,6 +167,7 @@ export function PaginaDeEstudo({
   selecaoTemporaria,
   nomeDoBaralhoTemporario,
 }: PropriedadesDaPaginaDeEstudo) {
+  const { textos, formatarNumero } = useIdioma();
   const [aleatoriedadePadrao] = useState(() => new AleatoriedadeReal());
   const aleatoriedadeDaSessao = aleatoriedade ?? aleatoriedadePadrao;
 
@@ -308,7 +310,7 @@ export function PaginaDeEstudo({
 
       setBaralho({
         id: "",
-        nome: "baralho temporário",
+        nome: "",
         elegivel: true,
         cartoes: [...selecaoTemporaria],
         quantidadeDeAgendamentos: 0,
@@ -321,11 +323,7 @@ export function PaginaDeEstudo({
         setEstado(estadoInicial);
         carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
         alvoDeFoco.current = "frente";
-        anunciar(
-          `Sessão iniciada com ${estadoInicial.total} ${
-            estadoInicial.total === 1 ? "Item" : "Itens"
-          }.`,
-        );
+        anunciar(textos.sessao.sessaoIniciada(estadoInicial.total));
       } else {
         setFalhaDeCarregamento(iniciada.mensagem);
       }
@@ -356,11 +354,7 @@ export function PaginaDeEstudo({
         setEstado(estadoInicial);
         carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
         alvoDeFoco.current = "frente";
-        anunciar(
-          `Sessão iniciada com ${estadoInicial.total} ${
-            estadoInicial.total === 1 ? "Item" : "Itens"
-          }.`,
-        );
+        anunciar(textos.sessao.sessaoIniciada(estadoInicial.total));
       } else {
         setFalhaDeCarregamento(iniciada.mensagem);
       }
@@ -516,17 +510,16 @@ export function PaginaDeEstudo({
   const protecaoDeSaida: Protecao | null = emAndamento
     ? {
         tipo: "descarte",
-        titulo: "Interromper a Sessão?",
-        descricao:
-          "O progresso desta Sessão será descartado e não haverá Resumo.",
-        rotuloDeConfirmacao: "Interromper",
+        titulo: textos.sessao.interromperSessaoTitulo,
+        descricao: textos.sessao.interromperSessaoDescricao,
+        rotuloDeConfirmacao: textos.sessao.interromper,
       }
     : aguardandoRegistro
       ? {
           tipo: "descarte",
-          titulo: "Sair sem registrar a Sessão?",
-          descricao: "Esta Sessão não ficará no seu histórico.",
-          rotuloDeConfirmacao: "Sair sem registrar",
+          titulo: textos.sessao.sairSemRegistrarTitulo,
+          descricao: textos.sessao.sairSemRegistrarDescricao,
+          rotuloDeConfirmacao: textos.sessao.sairSemRegistrar,
         }
       : null;
 
@@ -598,7 +591,7 @@ export function PaginaDeEstudo({
     idDoRegistroDeSessao.current = null;
 
     if (cartoesDaSessao.length > LIMITE_DA_SELECAO) {
-      setFalhaDeInicio(motivoDoLimiteExcedido(cartoesDaSessao.length));
+      setFalhaDeInicio(motivoDoLimiteExcedido(cartoesDaSessao.length, textos, formatarNumero));
       return;
     }
 
@@ -621,11 +614,7 @@ export function PaginaDeEstudo({
     setEstado(estadoInicial);
     carregarPrevias(estadoInicial.itens.map((item) => item.cartaoId));
     alvoDeFoco.current = "frente";
-    anunciar(
-      `Sessão iniciada com ${estadoInicial.total} ${
-        estadoInicial.total === 1 ? "Item" : "Itens"
-      }.`,
-    );
+    anunciar(textos.sessao.sessaoIniciada(estadoInicial.total));
   }
 
   /**
@@ -683,6 +672,39 @@ export function PaginaDeEstudo({
     recarregar();
   }
 
+  /**
+   * As duas ações da modal com as contagens e os motivos (FR-383, FR-386).
+   *
+   * «Só pendentes» conta os Cartões novos ou vencidos — nunca mais que o
+   * conjunto —; «Todos os cartões» conta o conjunto carregado inteiro. Uma ação
+   * acima do limite de registro fica desabilitada com o motivo e a orientação,
+   * sem truncar e sem desabilitar a outra; um conjunto pendente vazio também
+   * não inicia Sessão vazia.
+   */
+  function opcoesDaEscolhaDaRevisao(
+    vinculados: readonly CartaoListado[],
+  ): OpcaoDaEscolhaDaRevisao[] {
+    const pendentes = cartoesPendentes(vinculados, new Date());
+
+    return [
+      {
+        chave: "pendentes",
+        rotulo: textos.sessao.soPendentes,
+        contagem: contagemDeCartoesPendentes(pendentes.length, textos),
+        motivoDesabilitado:
+          pendentes.length === 0
+            ? textos.sessao.naoHaCartoesPendentes
+            : motivoDeLimite(pendentes.length, textos, formatarNumero),
+      },
+      {
+        chave: "todos",
+        rotulo: textos.sessao.todosOsCartoes,
+        contagem: contagemDeCartoesNoBaralho(vinculados.length, textos),
+        motivoDesabilitado: motivoDeLimite(vinculados.length, textos, formatarNumero),
+      },
+    ];
+  }
+
   function revelar(): void {
     if (sessao === null) {
       return;
@@ -696,7 +718,7 @@ export function PaginaDeEstudo({
 
     alvoDeFoco.current = "verso";
     setEstado(sessao.estadoAtual());
-    anunciar("Verso revelado.");
+    anunciar(textos.sessao.revelarVerse);
   }
 
   /**
@@ -730,7 +752,7 @@ export function PaginaDeEstudo({
     }
 
     alvoDeFoco.current = "frente";
-    anunciar(`Avaliação registrada: ${rotuloDaAvaliacao(opcoes, avaliacao)}.`);
+    anunciar(textos.sessao.avaliacaoRegistrada(rotuloDoNivel(avaliacao, rotuloDaAvaliacao(opcoes, avaliacao), textos)));
   }
 
   /**
@@ -775,7 +797,7 @@ export function PaginaDeEstudo({
         baralhoId: selecaoTemporaria !== undefined ? "" : id,
         nomeDoBaralho:
           selecaoTemporaria !== undefined
-            ? nomeDoBaralhoTemporario || "Baralho temporário"
+            ? nomeDoBaralhoTemporario ?? ""
             : baralho.nome,
         ...(inicioDaAgenda !== undefined
           ? { inicioAgendaId: inicioDaAgenda.id }
@@ -804,11 +826,11 @@ export function PaginaDeEstudo({
       <div className="pilha">
         <p className="voltar">
           <a href={`#/baralhos/${id}`}>
-            <span aria-hidden="true">←</span> Voltar para o Baralho
+            <span aria-hidden="true">← </span>{inicioDaAgenda === undefined ? textos.sessao.voltarParaBaralho : textos.sessao.voltarParaInicio}
           </a>
         </p>
-        <h1>{inicioDaAgenda === undefined ? "Revisar" : "Estudar"} Baralho</h1>
-        <p className="carregando">Carregando Baralho…</p>
+        <h1>{inicioDaAgenda === undefined ? textos.sessao.revisar : textos.sessao.estudar} {textos.sessao.baralhoNoTitulo}</h1>
+        <p className="carregando">{textos.sessao.carregandoBaralho}</p>
       </div>
     );
   }
@@ -818,12 +840,12 @@ export function PaginaDeEstudo({
       <div className="pilha">
         <p className="voltar">
           <a href={`#/baralhos/${id}`}>
-            <span aria-hidden="true">←</span> Voltar para o Baralho
+            <span aria-hidden="true">←</span> {textos.sessao.voltarParaBaralho}
           </a>
         </p>
-        <h1>Baralho não encontrado</h1>
-        <p className="erro" role="alert" aria-label="Baralho não encontrado">
-          {baralhoNaoEncontrado}
+        <h1>{textos.sessao.baralhoNaoEncontrado}</h1>
+        <p className="erro" role="alert" aria-label={textos.sessao.baralhoNaoEncontrado}>
+          <TextoDoProduto texto={baralhoNaoEncontrado} />
         </p>
       </div>
     );
@@ -834,16 +856,16 @@ export function PaginaDeEstudo({
       <div className="pilha">
         <p className="voltar">
           <a href={`#/baralhos/${id}`}>
-            <span aria-hidden="true">←</span> Voltar para o Baralho
+            <span aria-hidden="true">← </span>{inicioDaAgenda === undefined ? textos.sessao.voltarParaBaralho : textos.sessao.voltarParaInicio}
           </a>
         </p>
-        <h1>{inicioDaAgenda === undefined ? "Revisar" : "Estudar"} Baralho</h1>
+        <h1>{inicioDaAgenda === undefined ? textos.sessao.revisar : textos.sessao.estudar} {textos.sessao.baralhoNoTitulo}</h1>
         <p
           className="erro"
           role="alert"
-          aria-label="Falha ao carregar o Baralho"
+          aria-label={textos.sessao.falhaAoCarregarBaralho}
         >
-          {falhaDeCarregamento}
+          <TextoDoProduto texto={falhaDeCarregamento} />
         </p>
         {inicioDaAgenda === undefined &&
           selecaoTemporaria === undefined && (
@@ -853,7 +875,7 @@ export function PaginaDeEstudo({
                 className="botao botao--primario"
                 onClick={recarregar}
               >
-                Tentar novamente
+                {textos.comum.tentarNovamente}
               </button>
             </div>
           )}
@@ -868,17 +890,25 @@ export function PaginaDeEstudo({
   const linkDeVoltar = (
     <p className="voltar">
       <a href={`#/baralhos/${id}`}>
-        <span aria-hidden="true">←</span> Voltar para o Baralho
+        <span aria-hidden="true">←</span> {textos.sessao.voltarParaBaralho}
       </a>
     </p>
   );
   const ehDaAgenda = inicioDaAgenda !== undefined;
   const ehTemporario = selecaoTemporaria !== undefined;
+  // No título da Sessão, o temporário aparece como "baralho temporário"; o
+  // nome digitado só aparece na preparação, como antes da 027.
+  const nomeNoTitulo = ehTemporario
+    ? textos.sessao.baralhoTemporarioNoTitulo
+    : baralho.nome;
+  const nomeNaPreparacao = ehTemporario
+    ? nomeDoBaralhoTemporario || textos.sessao.baralhoTemporario
+    : nomeNoTitulo;
   const avisoDaAgenda =
     inicioDaAgenda !== undefined &&
     inicioDaAgenda.quantidadeSolicitada !== null &&
     inicioDaAgenda.cartoes.length < inicioDaAgenda.quantidadeSolicitada
-      ? `A Rotina pede ${inicioDaAgenda.quantidadeSolicitada} Cartões, mas este Baralho tem ${inicioDaAgenda.cartoes.length}. A Sessão terá ${inicioDaAgenda.cartoes.length} ${inicioDaAgenda.cartoes.length === 1 ? "Item" : "Itens"}.`
+      ? textos.sessao.rotinaPedeMais(inicioDaAgenda.quantidadeSolicitada, inicioDaAgenda.cartoes.length)
       : null;
 
   if (!baralho.elegivel || situacaoDoConjunto === "sem-cartoes") {
@@ -890,7 +920,7 @@ export function PaginaDeEstudo({
         <header className="cabecalho-da-pagina">
           <div>
             <h1>
-              {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+              {ehDaAgenda ? textos.sessao.estudar : textos.sessao.revisar} {nomeNoTitulo}
             </h1>
           </div>
         </header>
@@ -911,13 +941,11 @@ export function PaginaDeEstudo({
         <header className="cabecalho-da-pagina">
           <div>
             <h1>
-              {ehDaAgenda ? "Estudar" : "Revisar"}{" "}
-              {ehTemporario && nomeDoBaralhoTemporario
-                ? nomeDoBaralhoTemporario
-                : baralho.nome}
+              {ehDaAgenda ? textos.sessao.estudar : textos.sessao.revisar}{" "}
+              {nomeNaPreparacao}
             </h1>
             {ehTemporario && (
-              <p className="texto-secundario">{nomeDoBaralhoTemporario || "Baralho temporário"}</p>
+              <p className="texto-secundario">{nomeDoBaralhoTemporario || textos.sessao.baralhoTemporario}</p>
             )}
           </div>
         </header>
@@ -926,9 +954,9 @@ export function PaginaDeEstudo({
           <p
             className="erro"
             role="alert"
-            aria-label="Falha ao iniciar a Sessão"
+            aria-label={textos.sessao.falhaAoIniciarSessao}
           >
-            {falhaDeInicio}
+            <TextoDoProduto texto={falhaDeInicio} />
           </p>
         )}
 
@@ -937,6 +965,7 @@ export function PaginaDeEstudo({
           opcoes={opcoesDaEscolhaDaRevisao(cartoesVinculados ?? [])}
           aoEscolher={escolherConjuntoDaRevisao}
           aoCancelar={cancelarEscolha}
+          textos={textos}
         />
       </div>
     );
@@ -949,7 +978,7 @@ export function PaginaDeEstudo({
         <SalvarSelecaoComoBaralho
           cliente={cliente}
           cartaoIds={selecaoTemporaria.map((cartao) => cartao.id)}
-          nomeInicial={nomeDoBaralhoTemporario || "Baralho temporário"}
+          nomeInicial={nomeDoBaralhoTemporario || textos.sessao.baralhoTemporario}
           aoSalvar={(baralho) => {
             focoAoVoltarAoResumo.current = "abrir";
             setBaralhoSalvo(baralho);
@@ -968,11 +997,11 @@ export function PaginaDeEstudo({
         <header className="cabecalho-da-pagina resumo__cabecalho">
           <div>
             <h1 ref={resumoRef} tabIndex={-1}>
-              Sessão concluída
+              {textos.sessao.sessaoConcluida}
             </h1>
             {ehTemporario && (
               <p className="texto-secundario">
-                {nomeDoBaralhoTemporario || "Baralho temporário"}
+                {nomeDoBaralhoTemporario || textos.sessao.baralhoTemporario}
               </p>
             )}
           </div>
@@ -981,16 +1010,17 @@ export function PaginaDeEstudo({
         <ResumoDaSessao
           itens={itensDoResumo(estado)}
           opcoes={opcoes}
-          origem="baralho"
+          origem={ehTemporario ? "temporario" : ehDaAgenda ? "revisao" : "baralho"}
+          nomeDoBaralho={ehTemporario ? nomeDoBaralhoTemporario ?? "" : baralho.nome}
         >
           {situacaoDoRegistro.estado === "registrando" && (
             <p
               role="status"
               aria-live="polite"
-              aria-label="Situação do registro da Sessão"
+              aria-label={textos.sessao.situacaoDoRegistro}
               className="texto-secundario"
             >
-              Registrando a Sessão…
+              {textos.sessao.registrandoSessao}
             </p>
           )}
 
@@ -998,11 +1028,11 @@ export function PaginaDeEstudo({
             <p
               role="status"
               aria-live="polite"
-              aria-label="Situação do registro da Sessão"
+              aria-label={textos.sessao.situacaoDoRegistro}
               className="visualmente-oculto"
             >
-              Sessão registrada no histórico.
-              {ehDaAgenda ? " O estudo programado de hoje foi concluído." : ""}
+              {textos.sessao.registradaNoHistorico}
+              {ehDaAgenda ? ` ${textos.sessao.estudoProgramadoConcluido}` : ""}
             </p>
           )}
 
@@ -1010,15 +1040,15 @@ export function PaginaDeEstudo({
             <div
               className="aviso aviso--erro"
               role="alert"
-              aria-label="Falha ao registrar a Sessão"
+              aria-label={textos.sessao.falhaAoRegistrarSessao}
             >
-              <p>{situacaoDoRegistro.mensagem}</p>
+              <p><TextoDoProduto texto={situacaoDoRegistro.mensagem} /></p>
               <button
                 className="botao botao--secundario"
                 type="button"
                 onClick={registrarNovamente}
               >
-                Tentar registrar novamente
+                {textos.sessao.tentarRegistrarNovamente}
               </button>
             </div>
           )}
@@ -1027,13 +1057,13 @@ export function PaginaDeEstudo({
             <div className="acoes resumo__acoes">
               {baralhoSalvo !== null ? (
                 <>
-                  <p className="aviso aviso--sucesso">Baralho salvo.</p>
+                  <p className="aviso aviso--sucesso">{textos.sessao.baralhoSalvo}</p>
                   <a
                     ref={linkDoBaralhoSalvoRef}
                     className="botao botao--primario"
                     href={`#/baralhos/${encodeURIComponent(baralhoSalvo.id)}`}
                   >
-                    Abrir baralho
+                    {textos.sessao.abrirBaralho}
                   </a>
                 </>
               ) : (
@@ -1049,7 +1079,7 @@ export function PaginaDeEstudo({
                       : undefined
                   }
                 >
-                  Salvar como baralho
+                  {textos.sessao.salvarComoBaralho}
                 </button>
               )}
               <a
@@ -1060,11 +1090,11 @@ export function PaginaDeEstudo({
                   protegerAcao(sairDaPagina);
                 }}
               >
-                Voltar para Baralhos
+                {textos.sessao.voltarParaBaralhos}
               </a>
               {situacaoDoRegistro.estado !== "registrada" && (
                 <p id="motivo-de-salvar-como-baralho" className="ajuda">
-                  Registre a Sessão para salvar o baralho.
+                  {textos.sessao.registreParaSalvar}
                 </p>
               )}
             </div>
@@ -1076,7 +1106,7 @@ export function PaginaDeEstudo({
                 type="button"
                 onClick={revisarNovamente}
               >
-                Revisar novamente
+                {textos.sessao.revisarNovamente}
               </button>
             )}
             <a
@@ -1094,7 +1124,7 @@ export function PaginaDeEstudo({
                 protegerAcao(sairDaPagina);
               }}
             >
-              {ehDaAgenda ? "Voltar para Início" : "Voltar para o Baralho"}
+              {ehDaAgenda ? textos.sessao.voltarParaInicio : textos.sessao.voltarParaBaralho}
             </a>
           </div>
           )}
@@ -1118,7 +1148,7 @@ export function PaginaDeEstudo({
       <header className="cabecalho-da-pagina">
         <div>
           <h1>
-            {ehDaAgenda ? "Estudar" : "Revisar"} {baralho.nome}
+            {ehDaAgenda ? textos.sessao.estudar : textos.sessao.revisar} {nomeNoTitulo}
           </h1>
         </div>
       </header>
@@ -1127,7 +1157,7 @@ export function PaginaDeEstudo({
         <p className="aviso">{estado.avisoDeLimite}</p>
       )}
 
-      {avisoDaAgenda !== null && <p className="aviso">{avisoDaAgenda}</p>}
+      {avisoDaAgenda !== null && <p className="aviso"><TextoDoProduto texto={avisoDaAgenda} /></p>}
 
       {anuncio !== null && (
         <p
@@ -1136,7 +1166,7 @@ export function PaginaDeEstudo({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          aria-label="Mudança de estado da Sessão"
+          aria-label={textos.sessao.mudancaDeEstado}
         >
           {anuncio}
         </p>
@@ -1159,7 +1189,7 @@ export function PaginaDeEstudo({
                 type="button"
                 onClick={revelar}
               >
-                Revelar verso
+                {textos.sessao.revelarVerso}
               </button>
             </div>
           </>
@@ -1171,12 +1201,14 @@ export function PaginaDeEstudo({
             </h2>
             <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
-              {opcoes.map(({ chave, rotulo }, indice) => {
+              {opcoes.map(({ chave, rotulo: rotuloDoServidor }, indice) => {
+                const rotulo = rotuloDoNivel(chave, rotuloDoServidor, textos);
                 const atalho = (indice + 1).toString();
                 const previa = previaDaAvaliacao(
                   previas,
                   estado.itemAtual.cartaoId,
                   chave,
+                  textos,
                 );
 
                 return (
@@ -1184,7 +1216,7 @@ export function PaginaDeEstudo({
                     key={chave}
                     className="botao botao--secundario"
                     type="button"
-                    aria-label={nomeAcessivelDaAvaliacao(rotulo, previa)}
+                    aria-label={nomeAcessivelDaAvaliacao(rotulo, previa, textos)}
                     aria-keyshortcuts={atalho}
                     onClick={() => registrarAvaliacao(chave)}
                   >
@@ -1272,6 +1304,7 @@ function previaDaAvaliacao(
   previas: Record<string, Previa>,
   cartaoId: string,
   avaliacao: Avaliacao,
+  textos: Catalogo,
 ): string | null {
   const iso = previas[cartaoId]?.[avaliacao];
 
@@ -1279,7 +1312,7 @@ function previaDaAvaliacao(
     return null;
   }
 
-  return rotuloDaPrevia(new Date(), iso);
+  return rotuloDaPrevia(new Date(), iso, textos);
 }
 
 /** Um campo de texto com foco engole os atalhos 1 a 4 (FR-218). */
@@ -1337,69 +1370,40 @@ interface OpcaoDaEscolhaDaRevisao {
   motivoDesabilitado: string | null;
 }
 
-/**
- * As duas ações da modal com as contagens e os motivos (FR-383, FR-386).
- *
- * «Só pendentes» conta os Cartões novos ou vencidos — nunca mais que o
- * conjunto —; «Todos os cartões» conta o conjunto carregado inteiro. Uma ação
- * acima do limite de registro fica desabilitada com o motivo e a orientação,
- * sem truncar e sem desabilitar a outra; um conjunto pendente vazio também
- * não inicia Sessão vazia.
- */
-function opcoesDaEscolhaDaRevisao(
-  vinculados: readonly CartaoListado[],
-): OpcaoDaEscolhaDaRevisao[] {
-  const pendentes = cartoesPendentes(vinculados, new Date());
-
-  return [
-    {
-      chave: "pendentes",
-      rotulo: "Só pendentes",
-      contagem: contagemDeCartoesPendentes(pendentes.length),
-      motivoDesabilitado:
-        pendentes.length === 0
-          ? "Não há Cartões pendentes neste Baralho."
-          : motivoDeLimite(pendentes.length),
-    },
-    {
-      chave: "todos",
-      rotulo: "Todos os cartões",
-      contagem: contagemDeCartoesNoBaralho(vinculados.length),
-      motivoDesabilitado: motivoDeLimite(vinculados.length),
-    },
-  ];
-}
 
 /** A mensagem da recusa por limite, com o motivo e a orientação (FR-386). */
-function motivoDoLimiteExcedido(quantidade: number): string {
+function motivoDoLimiteExcedido(
+  quantidade: number,
+  textos: ReturnType<typeof useIdioma>["textos"],
+  formatarNumero: (n: number) => string,
+): string {
   return (
-    `O conjunto tem ${quantidade} Cartões e excede o limite de ` +
-    `${LIMITE_DA_SELECAO.toLocaleString("pt-BR")} por Sessão. ` +
-    "Use um Baralho menor ou a seleção temporária."
+    `${textos.selecao.excedeLimite(formatarNumero(quantidade), formatarNumero(LIMITE_DA_SELECAO))} ` +
+    textos.sessao.useMenorOuTemporaria
   );
 }
 
 /** O motivo da recusa por limite; `null` quando o conjunto cabe (FR-386). */
-function motivoDeLimite(quantidade: number): string | null {
+function motivoDeLimite(
+  quantidade: number,
+  textos: ReturnType<typeof useIdioma>["textos"],
+  formatarNumero: (n: number) => string,
+): string | null {
   if (quantidade <= LIMITE_DA_SELECAO) {
     return null;
   }
 
-  return motivoDoLimiteExcedido(quantidade);
+  return motivoDoLimiteExcedido(quantidade, textos, formatarNumero);
 }
 
 /** «1 Cartão pendente» ou «N Cartões pendentes» (FR-383). */
-function contagemDeCartoesPendentes(quantidade: number): string {
-  return quantidade === 1
-    ? "1 Cartão pendente"
-    : `${quantidade} Cartões pendentes`;
+function contagemDeCartoesPendentes(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return textos.sessao.contagemPendentes(quantidade);
 }
 
 /** «1 Cartão no Baralho» ou «N Cartões no Baralho» (FR-383). */
-function contagemDeCartoesNoBaralho(quantidade: number): string {
-  return quantidade === 1
-    ? "1 Cartão no Baralho"
-    : `${quantidade} Cartões no Baralho`;
+function contagemDeCartoesNoBaralho(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
+  return textos.sessao.contagemNoBaralho(quantidade);
 }
 
 /**
@@ -1423,11 +1427,13 @@ function DialogoDaEscolhaDaRevisao({
   opcoes,
   aoEscolher,
   aoCancelar,
+  textos,
 }: {
   aberto: boolean;
   opcoes: readonly OpcaoDaEscolhaDaRevisao[];
   aoEscolher: (chave: ChaveDaRevisao) => void;
   aoCancelar: () => void;
+  textos: ReturnType<typeof useIdioma>["textos"];
 }) {
   const id = useId();
   const tituloId = `${id}-titulo`;
@@ -1477,10 +1483,10 @@ function DialogoDaEscolhaDaRevisao({
       onClick={aoClicarNoFundo}
     >
       <h2 id={tituloId} className="titulo-do-dialogo">
-        Revisar baralho
+        {textos.sessao.revisorBaralho}
       </h2>
       <p className="descricao-do-dialogo">
-        Escolha o conjunto que você quer revisar agora.
+        {textos.sessao.escolhaOConjunto}
       </p>
       <ul className="opcoes-da-revisao">
         {opcoes.map((opcao) => {
@@ -1510,7 +1516,7 @@ function DialogoDaEscolhaDaRevisao({
       </ul>
       <div className="acoes-do-dialogo">
         <button ref={botaoDeCancelamento} type="button" onClick={aoCancelar}>
-          Cancelar
+          {textos.comum.cancelar}
         </button>
       </div>
     </dialog>

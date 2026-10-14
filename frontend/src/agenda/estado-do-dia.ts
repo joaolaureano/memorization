@@ -62,66 +62,6 @@ export function resumirDia(
   };
 }
 
-/** "1 de 3 estudos concluídos; 2 não realizados" — o texto da contagem. */
-export function textoDaContagem(resumo: ResumoDoDia): string {
-  if (resumo.total === 0) {
-    return "Nenhum estudo agendado";
-  }
-
-  const base = `${resumo.concluidos} de ${resumo.total} ${
-    resumo.total === 1 ? "estudo concluído" : "estudos concluídos"
-  }`;
-
-  return resumo.estado === "nao_realizado"
-    ? `${base}; ${resumo.naoRealizados} ${
-        resumo.naoRealizados === 1 ? "não realizado" : "não realizados"
-      }`
-    : base;
-}
-
-/** O rótulo do estado do dia, em texto — nunca só cor (FR-252). */
-export function rotuloDoEstadoDoDia(estado: EstadoDoDia): string {
-  switch (estado) {
-    case "sem_estudos":
-      return "Sem estudos";
-    case "concluido":
-      return "Concluído";
-    case "nao_realizado":
-      return "Não realizado";
-    case "programado":
-      return "Programado";
-    case "pendente":
-      return "Pendente";
-    case "parcial":
-      return "Parcial";
-  }
-}
-
-/** O rótulo da situação de um Compromisso (FR-229). */
-export function rotuloDoCompromisso(estado: CompromissoDeEstudo["estado"]): string {
-  switch (estado) {
-    case "pendente":
-      return "Pendente";
-    case "programado":
-      return "Programado";
-    case "nao_realizado":
-      return "Não realizado";
-    case "concluido":
-      return "Concluído";
-    case "cancelado":
-      return "Cancelado";
-  }
-}
-
-/** "20 Cartões" ou "Todos os Cartões" (FR-224). */
-export function descreverQuantidade(quantidade: number | null): string {
-  if (quantidade === null) {
-    return "Todos os Cartões";
-  }
-
-  return quantidade === 1 ? "1 Cartão" : `${quantidade} Cartões`;
-}
-
 /**
  * O primeiro Compromisso pendente e elegível de hoje, na ordem de criação das
  * Rotinas (FR-227, FR-230): pendente e com Baralho disponível.

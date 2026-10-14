@@ -142,7 +142,7 @@ describe("DELETE /cartoes/{id} — exclusão conforme o contrato", () => {
     expect(resposta.statusCode).toBe(404);
     expect(resposta.json()).toEqual({
       erro: "nao_encontrado",
-      mensagem: "Cartão não encontrado.",
+      mensagem: "Not found.",
     });
   });
 });

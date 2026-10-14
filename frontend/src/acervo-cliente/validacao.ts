@@ -1,3 +1,5 @@
+import { MENSAGENS_COM_VALOR } from "../idioma/mensagens";
+import { textoDaRecusaPt } from "../idioma/recusas";
 /**
  * Regras de conteúdo de Cartão, de Baralho e de Cadastro para o Adapter em
  * memória (T008, T106; T607 de specs/007-criar-usuario/tasks.md).
@@ -67,7 +69,7 @@ export function validarFrente(frente: string): FalhaDeRegraDeCartao | null {
   if (frente.trim().length === 0) {
     return {
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: textoDaRecusaPt({ erro: "frente_vazia" }, "cartoes"),
     };
   }
 
@@ -75,8 +77,7 @@ export function validarFrente(frente: string): FalhaDeRegraDeCartao | null {
     return {
       erro: "frente_muito_longa",
       mensagem:
-        `A frente do cartão deve ter no máximo ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres; ` +
-        `a informada tem ${frente.length}.`,
+        MENSAGENS_COM_VALOR.frenteLonga.pt(LIMITE_DE_CARACTERES_DE_CARTAO, frente.length),
     };
   }
 
@@ -90,7 +91,7 @@ export function validarVerso(verso: string): FalhaDeRegraDeCartao | null {
   if (verso.trim().length === 0) {
     return {
       erro: "verso_vazio",
-      mensagem: "O verso do cartão não pode ficar vazio.",
+      mensagem: textoDaRecusaPt({ erro: "verso_vazio" }, "cartoes"),
     };
   }
 
@@ -98,8 +99,7 @@ export function validarVerso(verso: string): FalhaDeRegraDeCartao | null {
     return {
       erro: "verso_muito_longo",
       mensagem:
-        `O verso do cartão deve ter no máximo ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres; ` +
-        `o informado tem ${verso.length}.`,
+        MENSAGENS_COM_VALOR.versoLongo.pt(LIMITE_DE_CARACTERES_DE_CARTAO, verso.length),
     };
   }
 
@@ -205,7 +205,7 @@ export function validarNomeDeBaralho(
   if (nome.trim().length === 0) {
     return {
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: textoDaRecusaPt({ erro: "nome_vazio" }, "baralhos"),
     };
   }
 
@@ -213,8 +213,7 @@ export function validarNomeDeBaralho(
     return {
       erro: "nome_muito_longo",
       mensagem:
-        `O nome do baralho deve ter no máximo ${LIMITE_DE_CARACTERES_DE_BARALHO} caracteres; ` +
-        `o informado tem ${nome.length}.`,
+        MENSAGENS_COM_VALOR.nomeDeBaralhoLongo.pt(LIMITE_DE_CARACTERES_DE_BARALHO, nome.length),
     };
   }
 
@@ -292,8 +291,7 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        `O nome de usuário deve ter pelo menos ${LIMITE_MINIMO_DE_NOME_DE_USUARIO} caracteres; ` +
-        `o informado tem ${nomeDeUsuario.length}.`,
+        MENSAGENS_COM_VALOR.nomeDeUsuarioCurto.pt(LIMITE_MINIMO_DE_NOME_DE_USUARIO, nomeDeUsuario.length),
     };
   }
 
@@ -301,8 +299,7 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        `O nome de usuário deve ter no máximo ${LIMITE_MAXIMO_DE_NOME_DE_USUARIO} caracteres; ` +
-        `o informado tem ${nomeDeUsuario.length}.`,
+        MENSAGENS_COM_VALOR.nomeDeUsuarioLongo.pt(LIMITE_MAXIMO_DE_NOME_DE_USUARIO, nomeDeUsuario.length),
     };
   }
 
@@ -310,8 +307,7 @@ export function validarNomeDeUsuario(
     return {
       erro: "nome_de_usuario_invalido",
       mensagem:
-        "O nome de usuário aceita apenas letras de A a Z, sem acento, " +
-        "dígitos, ponto, sublinhado e hífen.",
+        textoDaRecusaPt({ erro: "nome_de_usuario_invalido" }, "conta"),
     };
   }
 
@@ -349,5 +345,5 @@ export function validarSenha(senha: string): FalhaDeRegraDeCadastro | null {
  */
 export const NOME_DE_USUARIO_EXISTENTE = {
   erro: "nome_de_usuario_existente",
-  mensagem: "Este nome de usuário já existe. Escolha outro.",
+  mensagem: textoDaRecusaPt({ erro: "nome_de_usuario_existente" }, "conta"),
 } as const;

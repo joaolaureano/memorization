@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Moldura } from "../src/ui/Moldura";
 import type { Rota } from "../src/ui/navegacao";
+import { renderizarComIdioma } from "./apoio-de-prova";
 
 /**
  * Moldura (FR-139, FR-168, FR-212, FR-025).
@@ -50,7 +51,9 @@ const CASOS: ReadonlyArray<{
 
 describe("Moldura — marca e destinos", () => {
   it("aponta a marca e os destinos para as rotas do acervo", () => {
-    render(<Moldura rota={{ nome: "baralhos" }} aoSair={() => {}} />);
+    render(
+      renderizarComIdioma(<Moldura rota={{ nome: "baralhos" }} aoSair={() => {}} />)
+    );
 
     expect(
       screen.getByRole("link", { name: "memorization" }),
@@ -88,7 +91,9 @@ describe("Moldura — marca e destinos", () => {
 
 describe("Moldura — destino corrente", () => {
   it.each(CASOS)("marca o destino de $descricao", ({ rota, ativo }) => {
-    render(<Moldura rota={rota} aoSair={() => {}} />);
+    render(
+      renderizarComIdioma(<Moldura rota={rota} aoSair={() => {}} />)
+    );
 
     for (const nome of [
       "Início",
@@ -110,7 +115,9 @@ describe("Moldura — destino corrente", () => {
 describe("Moldura — Sair", () => {
   it("aciona aoSair e fica fora da navegação", () => {
     const aoSair = vi.fn();
-    render(<Moldura rota={{ nome: "baralhos" }} aoSair={aoSair} />);
+    render(
+      renderizarComIdioma(<Moldura rota={{ nome: "baralhos" }} aoSair={aoSair} />)
+    );
 
     const sair = screen.getByRole("button", { name: "Sair" });
     expect(sair).toHaveClass("botao-de-saida");

@@ -28,7 +28,7 @@ const CAMINHO = join(DIRETORIO_TEMPORARIO, "memorizacao.sqlite");
 const INDISPONIVEL = {
   ok: false,
   erro: "indisponivel",
-  mensagem: "O armazenamento não está disponível. Tente novamente.",
+  mensagem: "Storage is unavailable. Try again.",
 };
 
 let acervo: Acervo;
@@ -66,19 +66,19 @@ describe("armazenamento indisponível — recusa reportada, sem operação concl
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
     expect(await acervo.criarBaralho({ nome: "  " })).toEqual({
       ok: false,
       erro: "nome_vazio",
-      mensagem: "O nome do baralho não pode ficar vazio.",
+      mensagem: "Deck name cannot be empty.",
     });
     expect(
       await acervo.editarCartao("c1", { frente: "", verso: "Caminhar" }),
     ).toEqual({
       ok: false,
       erro: "frente_vazia",
-      mensagem: "A frente do cartão não pode ficar vazia.",
+      mensagem: "Card front cannot be empty.",
     });
   });
 

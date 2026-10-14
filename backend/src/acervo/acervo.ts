@@ -13,6 +13,7 @@ import type {
   RegistroDeSessao,
   RegistroResumido,
 } from "../armazenamento/porta.ts";
+import { recusa } from "../http/recusas.ts";
 import {
   ALGORITMOS,
   algoritmoPorId,
@@ -172,6 +173,7 @@ export type ResultadoDeCriacaoDeCartao =
       ok: false;
       erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
       mensagem: string;
+      limite?: number;
     }
   | RecusaDaImagem;
 
@@ -753,34 +755,22 @@ export interface Acervo {
 
 /**
  * Recusas de domínio de Vínculo. São resultados previstos da Interface, não
- * exceções: o caller recebe o código estável e a mensagem em português
- * (FR-046) sem capturar erro do driver.
+ * exceções: o caller recebe o código estável e a mensagem técnica em inglês
+ * (FR-046, FR-018) sem capturar erro do driver.
  */
-const CARTAO_NAO_ENCONTRADO = {
-  erro: "nao_encontrado",
-  mensagem: "Cartão não encontrado.",
-} as const;
+const CARTAO_NAO_ENCONTRADO = recusa("nao_encontrado");
 
-const BARALHO_NAO_ENCONTRADO = {
-  erro: "nao_encontrado",
-  mensagem: "Baralho não encontrado.",
-} as const;
+const BARALHO_NAO_ENCONTRADO = recusa("nao_encontrado");
 
-const FRENTE_DUPLICADA = {
-  erro: "frente_duplicada",
-  mensagem: "Já existe um cartão com esta frente neste baralho.",
-} as const;
+const FRENTE_DUPLICADA = recusa("frente_duplicada");
 
-const TIPO_IMUTAVEL = {
-  erro: "tipo_imutavel",
-  mensagem: "O tipo do cartão não pode ser alterado depois da criação.",
-} as const;
+const TIPO_IMUTAVEL = recusa("tipo_imutavel");
 
-/** As mensagens da recusa da Imagem, por motivo (FR-410, FR-411). */
+/** As mensagens técnicas da recusa da Imagem, por motivo (FR-410, FR-411). */
 const MENSAGEM_DA_RECUSA_DA_IMAGEM: Readonly<Record<MotivoDeRecusaDaImagem, string>> = {
-  formato: "O arquivo não é uma imagem JPEG, PNG, WebP ou GIF.",
-  tamanho: "A imagem deve ter no máximo 5 MB.",
-  nao_encontrada: "A imagem enviada não foi encontrada. Escolha a imagem de novo.",
+  formato: "File is not a JPEG, PNG, WebP, or GIF image.",
+  tamanho: "Image must be at most 5 MB.",
+  nao_encontrada: "Uploaded image was not found. Choose the image again.",
 };
 
 /** Quantas chaves a fila de remoção trata por vez. */
@@ -817,15 +807,12 @@ export async function processarFilaDeImagens(
 /**
  * Recusa por indisponibilidade do armazenamento.
  *
- * A Porta reporta a falha como `indisponivel`, sem texto algum; a frase que o
- * usuário lê é do Module, que é o dono da regra de domínio. A operação **não**
+ * A Porta reporta a falha como `indisponivel`, sem texto algum; a mensagem técnica é do Module,
+ * que é o dono da regra de domínio. A operação **não**
  * passou por concluída, e o conteúdo informado continua disponível para nova
  * tentativa (FR-044, FR-045, FR-107).
  */
-const ARMAZENAMENTO_INDISPONIVEL = {
-  erro: "indisponivel",
-  mensagem: "O armazenamento não está disponível. Tente novamente.",
-} as const;
+const ARMAZENAMENTO_INDISPONIVEL = recusa("indisponivel");
 
 /**
  * Recusas das operações de Histórico. São resultados previstos da Interface —
@@ -846,11 +833,31 @@ const HISTORICO_INDISPONIVEL = { erro: "indisponivel" } as const;
 /** Limite de Itens de um Registro de sessão (contrato da `013`, FR-161). */
 const LIMITE_DE_ITENS_REGISTRADOS = 1000;
 
-/** Rótulo do Baralho derivado na Sessão de Revisão do dia (D5, FR-196). */
-const NOME_DA_REVISAO_DO_DIA = "Revisão do dia";
+/**
+ * Rótulo padrão que versões anteriores gravavam como nome (027, FR-020,
+ * FR-021). Enquanto a migração 19 está pendente, ele ainda pode estar na
+ * base; a leitura o devolve como falta de nome. Removível quando todas as
+ * bases estiverem na 19.
+ */
+const ROTULO_LEGADO_DO_TEMPORARIO = "Baralho temporário";
 
-/** Rótulo do Baralho derivado na Sessão de estudo temporário (FR-369). */
-const NOME_DO_BARALHO_TEMPORARIO = "Baralho temporário";
+/**
+ * Devolve `nomeDoBaralho` como `""` quando ele é só o rótulo padrão da
+ * origem: sempre na Revisão do dia, e no temporário apenas se o nome for o
+ * rótulo legado. Um nome digitado pela pessoa nunca é apagado (FR-006).
+ */
+function normalizarRegistro<T extends { origem: string; nomeDoBaralho: string }>(
+  registro: T,
+): T {
+  if (
+    registro.origem === "revisao" ||
+    (registro.origem === "temporario" &&
+      registro.nomeDoBaralho === ROTULO_LEGADO_DO_TEMPORARIO)
+  ) {
+    return { ...registro, nomeDoBaralho: "" };
+  }
+  return registro;
+}
 
 /** Quantidade máxima de identificadores numa consulta de prévias (FR-221). */
 const LIMITE_DE_CARTOES_PARA_PREVIA = 200;
@@ -975,13 +982,12 @@ function interpretarItem(
  * `acertos`, `erros`, o `resultado` de cada Item e a `posicao`, e datando a
  * conclusão com `agora` (FR-161, FR-163, FR-194).
  *
- * A `origem` decide o Baralho: em `"revisao"`, `baralhoId` e `nomeDoBaralho`
- * são **derivados** para `""` e `"Revisão do dia"`, ignorando o que o cliente
- * mandar (D5, FR-196); em `"temporario"`, do mesmo modo, para `""` e `"Baralho
- * temporário"` (FR-369); em `"baralho"`, valem as regras da `013` — Baralho
- * identificado e nome dentro dos limites vigentes. O Baralho **não** precisa
- * existir: o registro guarda o nome como era, e o Baralho pode ter sido
- * excluído antes mesmo de a Sessão ser registrada (FR-165, FR-178).
+ * A `origem` decide o Baralho: em `"revisao"` e `"temporario"`, `baralhoId` e
+ * `nomeDoBaralho` são **derivados** para `""`, ignorando o que o cliente mandar
+ * (D5, FR-196, FR-369, FR-020, FR-021); em `"baralho"`, valem as regras da
+ * `013` — Baralho identificado e nome dentro dos limites vigentes. O Baralho
+ * **não** precisa existir: o registro guarda o nome como era, e o Baralho pode
+ * ter sido excluído antes mesmo de a Sessão ser registrada (FR-165, FR-178).
  *
  * Devolve `null` — recusa `dados_invalidos` — quando qualquer invariante do
  * contrato falha.
@@ -1008,20 +1014,21 @@ function interpretarRegistro(
   let nomeDoBaralhoDoRegistro: string;
 
   if (origem === "revisao") {
+    // A Revisão do dia não tem nome: o rótulo vem da interface (FR-021).
     baralhoDoRegistro = "";
-    nomeDoBaralhoDoRegistro = NOME_DA_REVISAO_DO_DIA;
+    nomeDoBaralhoDoRegistro = "";
   } else if (origem === "temporario") {
+    // O nome digitado é Conteúdo do Usuário e é guardado (FR-363); sem nome,
+    // guarda-se a falta de nome, e a interface mostra o rótulo (FR-020).
     baralhoDoRegistro = "";
-    // Se nomeDoBaralho não for string ou vazio após trim, usar o padrão
     if (
       typeof nomeDoBaralho !== "string" ||
       nomeDoBaralho.trim().length === 0
     ) {
-      nomeDoBaralhoDoRegistro = NOME_DO_BARALHO_TEMPORARIO;
+      nomeDoBaralhoDoRegistro = "";
     } else {
-      // Validar o nome como seria para Baralho normal
       if (validarNomeDeBaralho(nomeDoBaralho) !== null) {
-        return null; // dados_invalidos
+        return null;
       }
       nomeDoBaralhoDoRegistro = nomeDoBaralho.trim();
     }
@@ -1589,7 +1596,8 @@ export function criarAcervo(
         return {
           ok: false,
           erro: "frente_muito_longa",
-          mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
+          mensagem: `Card front would exceed ${LIMITE_DE_CARACTERES_DE_CARTAO} characters after numbering.`,
+          limite: LIMITE_DE_CARACTERES_DE_CARTAO,
         };
       }
 
@@ -1658,7 +1666,8 @@ export function criarAcervo(
             return recusarComImagem({
               ok: false,
               erro: "frente_muito_longa",
-              mensagem: `A frente do cartão, após numeração, excederia ${LIMITE_DE_CARACTERES_DE_CARTAO} caracteres.`,
+              mensagem: `Card front would exceed ${LIMITE_DE_CARACTERES_DE_CARTAO} characters after numbering.`,
+              limite: LIMITE_DE_CARACTERES_DE_CARTAO,
             } as const);
           }
 
@@ -1698,23 +1707,23 @@ export function criarAcervo(
     },
 
     async importarBaralhos(grupos) {
-      if (!Array.isArray(grupos) || grupos.length < 1 || grupos.length > 100) return { ok: false, erro: "dados_invalidos", mensagem: "A importação não contém baralhos válidos." };
+      if (!Array.isArray(grupos) || grupos.length < 1 || grupos.length > 100) return { ok: false, erro: "dados_invalidos", mensagem: "Import does not contain valid decks." };
       const preparados = [];
       for (const grupo of grupos) {
-        if (!grupo || validarNomeDeBaralho(grupo.nome) !== null || !Array.isArray(grupo.cartoes) || grupo.cartoes.length > 1000) return { ok: false, erro: "dados_invalidos", mensagem: "Revise os nomes e cartões importados." };
+        if (!grupo || validarNomeDeBaralho(grupo.nome) !== null || !Array.isArray(grupo.cartoes) || grupo.cartoes.length > 1000) return { ok: false, erro: "dados_invalidos", mensagem: "Review deck names and cards imported." };
         const usados = new Set<string>();
         const copias: Cartao[] = [];
         for (const entrada of grupo.cartoes) {
-          if (!entrada || typeof entrada.frente !== "string" || typeof entrada.verso !== "string" || validarFrente(entrada.frente) !== null || validarVerso(entrada.verso) !== null) return { ok: false, erro: "dados_invalidos", mensagem: "Revise as frentes e os versos dos cartões." };
+          if (!entrada || typeof entrada.frente !== "string" || typeof entrada.verso !== "string" || validarFrente(entrada.frente) !== null || validarVerso(entrada.verso) !== null) return { ok: false, erro: "dados_invalidos", mensagem: "Review card fronts and backs." };
           const chave = normalizarFrente(entrada.frente);
-          if (usados.has(chave)) return { ok: false, erro: "frente_duplicada", mensagem: "Há cartões com frentes repetidas na prévia." };
+          if (usados.has(chave)) return { ok: false, erro: "frente_duplicada", mensagem: "Preview has cards with duplicate fronts." };
           usados.add(chave);
           copias.push({ id: randomUUID(), frente: entrada.frente.trim(), verso: entrada.verso.trim(), tags: normalizarTags(entrada.tags) });
         }
         preparados.push({ baralho: { id: randomUUID(), nome: grupo.nome.trim() }, copias });
       }
       const gravado = await armazenamento.inserirBaralhosComCopias(usuarioId, preparados);
-      return gravado.ok ? { ok: true } : { ok: false, erro: "indisponivel", mensagem: "Não foi possível concluir a importação." };
+      return gravado.ok ? { ok: true } : { ok: false, erro: "indisponivel", mensagem: "Could not complete import." };
     },
 
     async salvarSelecaoComoBaralho(dados) {
@@ -2131,8 +2140,7 @@ export function criarAcervo(
       if (typeof dados !== "object" || dados === null) {
         return {
           ok: false,
-          erro: "escolhas_invalidas",
-          mensagem: "Dados inválidos.",
+          ...recusa("escolhas_invalidas"),
         };
       }
 
@@ -2141,8 +2149,7 @@ export function criarAcervo(
       if (!Array.isArray(escolhas)) {
         return {
           ok: false,
-          erro: "escolhas_invalidas",
-          mensagem: "Escolhas deve ser uma lista.",
+          ...recusa("escolhas_invalidas"),
         };
       }
 
@@ -2181,7 +2188,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: "Cartão e baralho devem ser strings.",
+            mensagem: "Card and deck must be strings.",
           };
         }
 
@@ -2189,7 +2196,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: "Cartão repetido nas escolhas.",
+            mensagem: "Card is duplicated in choices.",
           };
         }
 
@@ -2214,7 +2221,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Cartão ${cartaoId} não está pendente.`,
+            mensagem: `Card ${cartaoId} is not pending.`,
           };
         }
       }
@@ -2244,7 +2251,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Nenhuma escolha para cartão ${pendente.cartao.id}.`,
+            mensagem: `No choice for card ${pendente.cartao.id}.`,
           };
         }
 
@@ -2253,7 +2260,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Baralho ${baralhoEscolhido} não existe.`,
+            mensagem: `Deck ${baralhoEscolhido} does not exist.`,
           };
         }
 
@@ -2266,7 +2273,7 @@ export function criarAcervo(
           return {
             ok: false,
             erro: "escolhas_invalidas",
-            mensagem: `Baralho ${baralhoEscolhido} não é um dos baralhos legados do cartão.`,
+            mensagem: "Selected deck is not a legacy deck for this card.",
           };
         }
 
@@ -2446,8 +2453,8 @@ export function criarAcervo(
         estatisticas: {
           cartoes: cartoes.length,
           baralhos: baralhos.length,
-          registrosDaJanela,
-          recentes,
+          registrosDaJanela: registrosDaJanela.map(normalizarRegistro),
+          recentes: recentes.map(normalizarRegistro),
         },
       };
     },
@@ -2475,7 +2482,7 @@ export function criarAcervo(
       ) {
         return {
           ok: true,
-          registro: encontrado.valor,
+          registro: normalizarRegistro(encontrado.valor),
           baralhoExiste: false,
         };
       }

@@ -14,30 +14,6 @@ import { diaDaSemana } from "./datas.ts";
  * leitura da semana custa só a semana pedida (SC-102).
  */
 
-/** Nomes dos dias da semana, na numeração da Rotina (1 = segunda). */
-export const NOMES_DOS_DIAS = [
-  "segunda",
-  "terça",
-  "quarta",
-  "quinta",
-  "sexta",
-  "sábado",
-  "domingo",
-] as const;
-
-/** Lista legível de dias: "segunda e quinta", "segunda, quarta e sexta". */
-export function descreverDias(dias: readonly number[]): string {
-  const nomes = [...dias]
-    .sort((a, b) => a - b)
-    .map((dia) => NOMES_DOS_DIAS[dia - 1]);
-
-  if (nomes.length <= 1) {
-    return nomes.join("");
-  }
-
-  return `${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
-}
-
 /**
  * A versão da configuração vigente em `data` (FR-238): a última, na ordem de
  * alteração, cujo início é anterior ou igual à data. `undefined` antes da

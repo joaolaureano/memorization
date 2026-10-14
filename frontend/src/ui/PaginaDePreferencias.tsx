@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
@@ -6,6 +7,7 @@ import type {
   Credencial,
   Preferencias,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 import { SecaoMinhaConta } from "./SecaoMinhaConta";
 import {
   useDescartarProtecao,
@@ -39,9 +41,6 @@ import type { Protecao } from "./protecao-de-saida";
  * tentativa sem impedir o restante da interface (FR-153, FR-156).
  */
 
-/** Confirmação de sucesso anunciada na região viva (FR-153, FR-212, FR-335). */
-const MENSAGEM_DE_SUCESSO = "Configuração salva.";
-
 interface PropriedadesDePreferencias {
   cliente: ClienteDoAcervo;
   /**
@@ -61,6 +60,7 @@ export function PaginaDePreferencias({
   aoExcluirConta,
   aoIrParaEntrar,
 }: PropriedadesDePreferencias) {
+  const { textos } = useIdioma();
   const [preferencias, setPreferencias] = useState<Preferencias | null>(null);
   const [algoritmo, setAlgoritmo] = useState("");
   const [algoritmoInicial, setAlgoritmoInicial] = useState("");
@@ -115,15 +115,14 @@ export function PaginaDePreferencias({
   const protecao: Protecao | null = salvando
     ? {
         tipo: "pendencia",
-        motivo: "Aguarde: a Configuração está sendo salva.",
+        motivo: textos.conta.salvandoConfiguracao,
       }
     : sujo
       ? {
           tipo: "descarte",
-          titulo: "Descartar as alterações?",
-          descricao:
-            "As alterações não salvas da Configuração serão perdidas.",
-          rotuloDeConfirmacao: "Descartar",
+          titulo: textos.conta.descartarAlteracoesConfig,
+          descricao: textos.conta.alteracoesConfigPerdidas,
+          rotuloDeConfirmacao: textos.conta.descartar,
         }
       : null;
 
@@ -147,7 +146,7 @@ export function PaginaDePreferencias({
       setPreferencias(resultado.preferencias);
       setAlgoritmo(resultado.preferencias.algoritmo);
       setAlgoritmoInicial(resultado.preferencias.algoritmo);
-      setSucesso(MENSAGEM_DE_SUCESSO);
+      setSucesso(textos.conta.configSalva);
       setSalvando(false);
       return;
     }
@@ -164,18 +163,18 @@ export function PaginaDePreferencias({
 
   return (
     <div className="pagina perfil">
-      <h1>Perfil</h1>
+      <h1>{textos.conta.perfil}</h1>
 
         {carregando ? (
-          <p className="carregando">Carregando Perfil…</p>
+          <p className="carregando">{textos.conta.carregandoPerfil}</p>
         ) : falhaDeCarregamento !== null ? (
           <section className="cartao">
             <p
               className="erro"
               role="alert"
-              aria-label="Falha ao carregar a Configuração"
+              aria-label={textos.conta.falhaAoCarregarConfiguracao}
             >
-              {falhaDeCarregamento}
+              <TextoDoProduto texto={falhaDeCarregamento} />
             </p>
             <div className="acoes">
               <button
@@ -183,13 +182,13 @@ export function PaginaDePreferencias({
                 type="button"
                 onClick={() => setNumeroDaTentativa((atual) => atual + 1)}
               >
-                Tentar novamente
+                {textos.comum.tentarNovamente}
               </button>
             </div>
           </section>
         ) : preferencias !== null ? (
           <section className="cartao" aria-labelledby="titulo-configuracao">
-            <h2 id="titulo-configuracao">Configuração</h2>
+            <h2 id="titulo-configuracao">{textos.conta.configuracao}</h2>
             <form
               className="formulario"
               noValidate
@@ -197,7 +196,7 @@ export function PaginaDePreferencias({
             >
               <div className="campo">
                 <label className="rotulo" htmlFor="campo-algoritmo">
-                  Algoritmo de repetição espaçada
+                  {textos.conta.algoritmoDeRepeticao}
                 </label>
                 <select
                   id="campo-algoritmo"
@@ -220,9 +219,9 @@ export function PaginaDePreferencias({
                 <p
                   className="erro"
                   role="alert"
-                  aria-label="Falha ao salvar a Configuração"
+                  aria-label={textos.conta.falhaAoSalvarConfiguracao}
                 >
-                  {falha}
+                  <TextoDoProduto texto={falha} />
                 </p>
               )}
 
@@ -238,7 +237,7 @@ export function PaginaDePreferencias({
                   type="submit"
                   disabled={salvando}
                 >
-                  {salvando ? "Salvando…" : "Salvar"}
+                  {salvando ? textos.conta.salvandoConfiguracao : textos.conta.salvarConfig}
                 </button>
               </div>
             </form>

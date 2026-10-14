@@ -7,6 +7,7 @@ import type {
   UsuarioCadastrado,
 } from "../identidade/identidade.ts";
 import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
+import { recusa } from "./recusas.ts";
 
 /**
  * O ponto único onde a Credencial é verificada — o hook `onRequest` (FR-090).
@@ -198,10 +199,7 @@ export function exigirCredencial(
           }
 
           if (usuario.erro === "indisponivel") {
-            return resposta.status(INDISPONIVEL).send({
-              erro: "indisponivel",
-              mensagem: "O armazenamento não está disponível. Tente novamente.",
-            });
+            return resposta.status(INDISPONIVEL).send(recusa("indisponivel"));
           }
         } else if (autorizado.erro === "acesso_expirado") {
           return resposta
@@ -211,10 +209,7 @@ export function exigirCredencial(
         } else if (autorizado.erro === "indisponivel") {
           // FR-301: a falha do armazenamento não é Acesso expirado, e o cookie
           // fica como está.
-          return resposta.status(INDISPONIVEL).send({
-            erro: "indisponivel",
-            mensagem: "O armazenamento não está disponível. Tente novamente.",
-          });
+          return resposta.status(INDISPONIVEL).send(recusa("indisponivel"));
         }
 
         // Acesso desconhecido: segue para a Credencial Basic, que decide.

@@ -1,3 +1,4 @@
+import { TextoDoProduto } from "../idioma";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type {
@@ -6,6 +7,7 @@ import type {
   ClienteDoAcervo,
   EscolhaDeTransicao,
 } from "../acervo-cliente/cliente";
+import { useIdioma } from "../idioma";
 
 interface Propriedades {
   cliente: ClienteDoAcervo;
@@ -21,6 +23,7 @@ export function PaginaDaTransicaoDeCartoes({
   baralhos,
   aoConcluir,
 }: Propriedades) {
+  const { textos } = useIdioma();
   const [destinos, setDestinos] = useState<Record<string, string>>({});
   const [falha, setFalha] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -52,7 +55,7 @@ export function PaginaDaTransicaoDeCartoes({
       baralhoId: destinos[cartao.id] ?? "",
     }));
     if (escolhas.some((escolha) => escolha.baralhoId === "")) {
-      setFalha("Escolha um Baralho para cada Cartão.");
+      setFalha(textos.selecao.escolhaUmBaralho);
       botao.current?.focus();
       return;
     }
@@ -70,16 +73,16 @@ export function PaginaDaTransicaoDeCartoes({
 
   return (
     <section className="pagina">
-      <h1 tabIndex={-1}>Organizar Cartões existentes</h1>
-      <p>Escolha onde cada Cartão deve ficar. As escolhas serão salvas juntas.</p>
+      <h1 tabIndex={-1}>{textos.selecao.organizarTitulo}</h1>
+      <p>{textos.selecao.organizarDescricao}</p>
       {baralhosDisponiveis.length === 0 ? (
         <div>
-          <p role="status">Você precisa de um Baralho para organizar seus Cartões. Crie um Baralho para continuar.</p>
-          <label htmlFor="nome-do-novo-baralho">Nome do Baralho</label>
+          <p role="status">{textos.selecao.precisaDeUmBaralho}</p>
+          <label htmlFor="nome-do-novo-baralho">{textos.selecao.nomeDoNovoBaralho}</label>
           <input id="nome-do-novo-baralho" value={nomeNovoBaralho}
             onChange={(evento) => setNomeNovoBaralho(evento.target.value)} />
-          <button type="button" onClick={() => void criarBaralho()}>Criar Baralho</button>
-          {falha !== null && <p role="alert">{falha}</p>}
+          <button type="button" onClick={() => void criarBaralho()}>{textos.selecao.criarBaralho}</button>
+          {falha !== null && <p role="alert"><TextoDoProduto texto={falha} /></p>}
         </div>
       ) : (
         <form onSubmit={(evento) => void concluir(evento)}>
@@ -94,8 +97,8 @@ export function PaginaDaTransicaoDeCartoes({
                 <p>{cartao.verso}</p>
                 <p>
                   {compartilhado
-                    ? "Escolha onde manter o original. Os outros Baralhos receberão cópias."
-                    : "Escolha um Baralho para este Cartão."}
+                    ? textos.selecao.escolhaOndeManterOriginal
+                    : textos.selecao.escolhaBaralhoCartao}
                 </p>
                 <select
                   id={`destino-${cartao.id}`}
@@ -108,7 +111,7 @@ export function PaginaDaTransicaoDeCartoes({
                   }
                   required
                 >
-                  <option value="">Selecione um Baralho</option>
+                  <option value="">{textos.selecao.selecioneUmBaralho}</option>
                   {opcoes.map((baralho) => (
                     <option key={baralho.id} value={baralho.id}>
                       {baralho.nome}
@@ -118,9 +121,9 @@ export function PaginaDaTransicaoDeCartoes({
               </div>
             );
           })}
-          {falha !== null && <p role="alert" className="aviso aviso--erro">{falha}</p>}
+          {falha !== null && <p role="alert" className="aviso aviso--erro"><TextoDoProduto texto={falha} /></p>}
           <button ref={botao} className="botao botao--primario" disabled={salvando}>
-            {salvando ? "Salvando…" : "Concluir organização"}
+            {salvando ? textos.selecao.salvando : textos.selecao.concluirOrganizacao}
           </button>
         </form>
       )}

@@ -55,7 +55,7 @@ import {
 const LINHA_DE_INICIO = "Armazenamento: PostgreSQL (nuvem)";
 
 /** Prefixo das recusas de configuração desta entrada. */
-const PREFIXO_DA_RECUSA = "Nuvem recusada";
+const PREFIXO_DA_RECUSA = "Cloud startup rejected";
 
 /**
  * Falha de acesso ao armazenamento da nuvem. A frase é do processo, em
@@ -63,8 +63,8 @@ const PREFIXO_DA_RECUSA = "Nuvem recusada";
  * como se o armazenamento existisse (FR-044, FR-045, FR-118).
  */
 const FALHA_NO_ACESSO =
-  "Falha no armazenamento da nuvem: não foi possível acessar a base. " +
-  "A aplicação não foi iniciada.";
+  "Cloud storage failure: database access failed. " +
+  "Application failed to initialize.";
 
 /**
  * A recusa por esquema atrasado nomeia as duas versões e manda executar o
@@ -75,9 +75,9 @@ function inicioRecusado(
   versaoCorrente: number,
 ): string {
   return (
-    "Início recusado: o esquema da base está na versão " +
-    `${versaoEncontrada} e a versão corrente é ${versaoCorrente}. ` +
-    "Execute o comando de migração da nuvem antes de iniciar."
+    "Startup rejected: database schema is at version " +
+    `${versaoEncontrada} but current version is ${versaoCorrente}. ` +
+    "Run the cloud migration command before starting."
   );
 }
 
@@ -152,8 +152,8 @@ function reportarFalha(mensagem: string): false {
  * corrente, de modo que a conferência continua valendo quando a `007` e a `008`
  * acrescentarem as migrações delas (FR-121, SC-048).
  *
- * Versões aceitas: a versão corrente, e a versão anterior **se** a última
- * migração tiver `precondicao` (um estado legítimo e transitório).
+ * Versões aceitas: a versão corrente, e versões anteriores **se** todas as
+ * migrações pendentes tiverem `precondicao` (um estado legítimo e transitório).
  */
 async function esquemaNaVersaoCorrente(
   configuracao: ConfiguracaoDaConexao,

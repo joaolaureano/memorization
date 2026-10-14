@@ -1,3 +1,4 @@
+import { TextoDoProduto, useIdioma } from "../idioma";
 import type { ReactNode } from "react";
 
 /**
@@ -19,10 +20,12 @@ export function EstadoDaCarga(
     | { estado: "falha"; mensagem: string; aoTentarNovamente: () => void }
     | { estado: "vazio"; mensagem: string; acao?: ReactNode },
 ) {
+  const { textos } = useIdioma();
+
   if (props.estado === "carregando") {
     return (
       <p role="status" className="carregando">
-        {props.mensagem}
+        <TextoDoProduto texto={props.mensagem} />
       </p>
     );
   }
@@ -30,13 +33,13 @@ export function EstadoDaCarga(
   if (props.estado === "falha") {
     return (
       <div role="alert" className="aviso aviso--erro">
-        <p>{props.mensagem}</p>
+        <p><TextoDoProduto texto={props.mensagem} /></p>
         <button
           type="button"
           className="botao botao--secundario"
           onClick={props.aoTentarNovamente}
         >
-          Tentar novamente
+          {textos.comum.tentarNovamente}
         </button>
       </div>
     );
@@ -44,7 +47,7 @@ export function EstadoDaCarga(
 
   return (
     <div className="estado-vazio">
-      <p>{props.mensagem}</p>
+      <p><TextoDoProduto texto={props.mensagem} /></p>
       {props.acao}
     </div>
   );

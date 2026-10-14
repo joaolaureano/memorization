@@ -161,7 +161,7 @@ export function portaConfigurada(env: NodeJS.ProcessEnv = process.env): number {
     numero > 65535
   ) {
     throw new PortaInvalidaError(
-      `PORTA inválida: ${JSON.stringify(bruto)}. Informe um número inteiro entre 1 e 65535.`,
+      `Invalid PORT: ${JSON.stringify(bruto)}. Provide an integer between 1 and 65535.`,
     );
   }
 
@@ -422,9 +422,9 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 
   if (endereco === null || typeof endereco === "string") {
     throw new EscutaInseguraError(
-      "Não foi possível determinar o endereço efetivamente vinculado pelo servidor. " +
-        `A aplicação deve escutar exclusivamente no loopback (${HOST_LOCAL}). ` +
-        "A inicialização foi abortada.",
+      "Could not determine the effective address bound by the server. " +
+        `Application must listen exclusively on loopback (${HOST_LOCAL}). ` +
+        "Startup was aborted.",
     );
   }
 
@@ -432,8 +432,8 @@ export function assegurarEscutaLocal(servidor: FastifyInstance): void {
 
   if (info.address !== HOST_LOCAL) {
     throw new EscutaInseguraError(
-      `O servidor está escutando em ${info.address}, fora do loopback (${HOST_LOCAL}). ` +
-        "Isso expõe o serviço à rede. A inicialização foi abortada.",
+      `Server is listening on ${info.address}, outside loopback (${HOST_LOCAL}). ` +
+        "This exposes the service to the network. Startup was aborted.",
     );
   }
 }

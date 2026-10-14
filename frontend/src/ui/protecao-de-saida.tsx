@@ -96,7 +96,7 @@ const ContextoDaProtecaoDeSaida =
   createContext<ContextoDaProtecaoDeSaida | null>(null);
 
 const MENSAGEM_FORA_DO_PROVEDOR =
-  "Os hooks de proteção de saída só podem ser usados sob ProvedorDeProtecaoDeSaida.";
+  "Exit-protection hooks can only be used inside ProvedorDeProtecaoDeSaida.";
 
 /**
  * Provedor da rota exibida e da proteção de saída. Envolve a aplicação e
