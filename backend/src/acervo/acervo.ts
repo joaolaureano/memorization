@@ -35,8 +35,8 @@ export interface PedidoDeGeracaoDeExportacao extends PedidoDeExportacao {
   readonly idioma: IdiomaDaExportacao;
 }
 export interface PreviaDaExportacao {
-  readonly formato: "apkg";
-  readonly extensao: "apkg";
+  readonly formato: IdDoFormato;
+  readonly extensao: string;
   readonly baralhos: number;
   readonly cartoes: number;
   readonly cartoesComImagem: number;
@@ -74,7 +74,7 @@ import { criarAgenda } from "../agenda/agenda.ts";
 import { ehFusoValido } from "../agenda/datas.ts";
 import type { ConteudoExportado } from "../exportacao/apkg/pacote.ts";
 import { exportar } from "../exportacao/exportar.ts";
-import { ehFormatoDeExportacao } from "../exportacao/formatos.ts";
+import { ehFormatoDeExportacao, FORMATOS_DE_EXPORTACAO, type IdDoFormato } from "../exportacao/formatos.ts";
 import type {
   ArmazemDeMidia,
   MotivoDeRecusaDaMidia,
@@ -1395,7 +1395,8 @@ export function criarAcervo(
     };
   }
 
-  async function medirEValidarExportacao(snapshot: ConteudoArmazenado): Promise<ResultadoDePreviaDaExportacao> {
+  async function medirEValidarExportacao(snapshot: ConteudoArmazenado, formato: IdDoFormato): Promise<ResultadoDePreviaDaExportacao> {
+    const registro = FORMATOS_DE_EXPORTACAO.get(formato)!;
     const cartoes = snapshot.baralhos.flatMap((b) => b.cartoes);
     if (!cartoes.length) return { ok: false, erro: "exportacao_vazia" };
     if (cartoes.length > LIMITE_DE_CARTOES_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "cartoes", limite: LIMITE_DE_CARTOES_DA_EXPORTACAO };
@@ -1405,7 +1406,7 @@ export function criarAcervo(
       const bytesMidia = chaves.length ? await imagens!.medir(chaves) : 0;
       if (bytesMidia > LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "midia", limite: LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO };
       return { ok: true, previa: {
-        formato: "apkg", extensao: "apkg", baralhos: snapshot.baralhos.length, cartoes: cartoes.length,
+        formato: registro.id, extensao: registro.extensao, baralhos: snapshot.baralhos.length, cartoes: cartoes.length,
         cartoesComImagem: cartoes.filter((c) => c.tipo === "imagem").length,
         cartoesComAudio: cartoes.filter((c) => c.tipo === "audio").length,
         bytesEstimados: bytesMidia + cartoes.length * BYTES_ESTIMADOS_POR_CARTAO,
@@ -1757,9 +1758,10 @@ export function criarAcervo(
 
   return {
     async previaDaExportacao(pedido) {
+      if (!ehFormatoDeExportacao(pedido.formato)) return { ok: false, erro: "dados_invalidos" };
       const lido = await lerSnapshotExportacao(pedido);
       if (!lido.ok) return lido;
-      return medirEValidarExportacao(lido.snapshot);
+      return medirEValidarExportacao(lido.snapshot, pedido.formato);
     },
 
     async exportar(pedido) {
@@ -1768,7 +1770,7 @@ export function criarAcervo(
       }
       const lido = await lerSnapshotExportacao(pedido);
       if (!lido.ok) return lido;
-      const previa = await medirEValidarExportacao(lido.snapshot);
+      const previa = await medirEValidarExportacao(lido.snapshot, pedido.formato);
       if (!previa.ok) return previa;
       const conteudo = conteudoExportavel(lido.snapshot);
       const chaves = [...new Set(conteudo.baralhos.flatMap((b) => b.cartoes.map((c) => c.midiaChave).filter((x): x is string => Boolean(x))))];

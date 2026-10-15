@@ -9,6 +9,7 @@ import { criarAcervo, processarFilaDeMidia } from "../../src/acervo/acervo.ts";
 import { abrirArmazenamentoSqlite, type ArmazenamentoSqliteAberto } from "../../src/armazenamento/sqlite/armazenamento.ts";
 import type { ArmazenamentoDoAcervo, ConteudoArmazenado } from "../../src/armazenamento/porta.ts";
 import { exportar as exportarPacote } from "../../src/exportacao/exportar.ts";
+import { FORMATOS_DE_EXPORTACAO } from "../../src/exportacao/formatos.ts";
 import { lerPacoteAnki } from "../../src/importacao/anki.ts";
 import { criarArmazemEmDisco } from "../../src/midia/armazem-em-disco.ts";
 import type { ArmazemDeMidia } from "../../src/midia/armazem.ts";
@@ -152,6 +153,15 @@ describe("exportação pelo Acervo", () => {
     const resultado = await acervo.exportar({ formato: "csv", baralhos: [baralhoId], idioma: "pt", fuso: "UTC" });
     expect(resultado).toEqual({ ok: false, erro: "dados_invalidos" });
     expect(resultado).not.toHaveProperty("url");
+  });
+
+  it("a prévia leva formato e extensão do registro FORMATOS_DE_EXPORTACAO (FR-462)", async () => {
+    await acervo.criarCartao(baralhoId, { frente: "hello", verso: "olá" });
+    const registro = FORMATOS_DE_EXPORTACAO.get("apkg")!;
+
+    await expect(acervo.previaDaExportacao({ formato: "apkg", baralhos: [baralhoId] })).resolves.toMatchObject({
+      ok: true, previa: { formato: registro.id, extensao: registro.extensao },
+    });
   });
 
   it("recusa mais de 10.000 cartões sem ler nem medir a mídia", async () => {
