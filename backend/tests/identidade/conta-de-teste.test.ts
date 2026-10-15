@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ACERVO_DE_DEMONSTRACAO } from "../../src/demonstracao/acervo.ts";
 import { criarAcessos } from "../../src/acesso/acesso.ts";
@@ -53,6 +53,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await aberto.encerrar();
   rmSync(pastaDeMidia, { recursive: true, force: true });
 });
@@ -148,20 +149,14 @@ describe("criarContaDeTeste (FR-488, FR-491)", () => {
   });
 
   it("recusa criação quando há 300 Contas de teste ativas", async () => {
-    for (let i = 0; i < 300; i += 1) {
-      const criada = await identidade.criarContaDeTeste({
-        ...dadosValidos,
-        origem: `origem-${i}`,
-      });
-      if (!criada.ok) throw new Error(`falha ao preparar conta ativa ${i}: ${criada.erro}`);
-      const acesso = await criarAcessos(aberto.acessos).emitir(criada.usuario.id);
-      if (!acesso.ok) throw new Error(`falha ao preparar acesso ativo ${i}`);
-    }
+    vi.spyOn(aberto.armazenamento, "contarContasDeTesteAtivas").mockResolvedValue(300);
+    const gravarConta = vi.spyOn(aberto.armazenamento, "criarContaDeTeste");
 
     expect(await identidade.criarContaDeTeste({ ...dadosValidos, origem: "origem-final" })).toEqual({
       ok: false,
       erro: "contas_esgotadas",
     });
+    expect(gravarConta).not.toHaveBeenCalled();
   });
 
   it("limpa contas sem Acesso válido após a folga e preserva usuários reais", async () => {
