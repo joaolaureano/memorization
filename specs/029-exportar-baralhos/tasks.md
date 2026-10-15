@@ -24,7 +24,7 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
 
 **Purpose**: Infrastructure and prototype, with no product behavior.
 
-- [ ] T001 [P] Add an S3 lifecycle rule to `backend/terraform/s3-imagens.tf` that expires the prefix `exportacoes/` after 1 day, next to the existing `pendentes/` rule. Update the header comment to say the bucket also holds ephemeral export files (research R10). Do not change IAM: the Lambda role already has `s3:GetObject`/`s3:PutObject` on `/*`. Gate: `tofu -chdir=backend/terraform validate`.
+- [X] T001 [P] Add an S3 lifecycle rule to `backend/terraform/s3-imagens.tf` that expires the prefix `exportacoes/` after 1 day, next to the existing `pendentes/` rule. Update the header comment to say the bucket also holds ephemeral export files (research R10). Do not change IAM: the Lambda role already has `s3:GetObject`/`s3:PutObject` on `/*`. Gate: `tofu -chdir=backend/terraform validate`.
 - [x] T002 [P] Build the standalone prototype `design/exportar-baralhos/` (`index.html`, `app.js`, `style.css`, `README.md`, `verificar.mjs`), reusing `../../frontend/src/estilos.css` and following `contracts/ui.md`. It shows:
   - the page in its two entries (one Deck, list with "Todos os Baralhos");
   - the format fieldset with the only option "Pacote Anki (.apkg)" preselected and the Anki help text;
@@ -267,6 +267,7 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
 ## Notes
 
 - T001: a regra de lifecycle está implementada, mas `tofu validate` não concluiu porque o provider AWS v6.65.0 para Darwin arm64 falhou durante o handshake do plugin; nenhuma aplicação foi feita.
+- T001 (2026-10-15): `tofu validate` passou na nova tentativa, porque a falha do provider não se repetiu. Antes do `plan`/`apply` é preciso construir o pacote (`npm run build -- --banco=lambda` em `backend/`). O `apply` mudou só a regra de lifecycle `exportacoes-expiram` (1 dia) e removeu a duplicata de `s3:PutObject` na política da Lambda. Na AWS, o bucket tem `pendentes/` e `exportacoes/` com expiração de 1 dia, e o handler da Lambda continua `lambda.handler`.
 - T038: gate completa executada em 2026-10-15 com sucesso: gitleaks, backend (1.202 testes), PostgreSQL (286), frontend (1.058) e E2E (111). Os cenários cobertos pelo fluxo local foram exercitados na suíte.
 - T039 e T040: pendentes por exigirem aplicativos Anki instalados e deploy, respectivamente.
 
