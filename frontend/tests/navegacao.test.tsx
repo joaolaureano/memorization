@@ -228,6 +228,47 @@ describe("interpretarRota e hashDaRota para as rotas do contrato", () => {
     });
   });
 
+  it("reconhece a exportação de Baralhos, sem confundi-la com o detalhe de um Baralho (FR-479)", () => {
+    expect(interpretarRota("#/baralhos/exportar", true)).toEqual({
+      nome: "exportar-baralhos",
+    });
+    expect(interpretarRota("#/baralhos/exportar", true).nome).not.toBe("baralho");
+    expect(interpretarRota("#/baralhos/exportar", false)).toEqual({
+      nome: "entrar",
+    });
+  });
+
+  it("leva o Baralho escolhido e a exportação de todos pela consulta da exportação", () => {
+    expect(interpretarRota("#/baralhos/exportar?baralho=b1", true)).toEqual({
+      nome: "exportar-baralhos",
+      baralhoId: "b1",
+    });
+    expect(interpretarRota("#/baralhos/exportar?todos=1", true)).toEqual({
+      nome: "exportar-baralhos",
+      todos: true,
+    });
+  });
+
+  it("faz ida e volta da exportação de Baralhos em hashDaRota (FR-479)", () => {
+    expect(hashDaRota({ nome: "exportar-baralhos" })).toBe("#/baralhos/exportar");
+    expect(hashDaRota({ nome: "exportar-baralhos", baralhoId: "b 1" })).toBe(
+      "#/baralhos/exportar?baralho=b%201",
+    );
+    expect(hashDaRota({ nome: "exportar-baralhos", todos: true })).toBe(
+      "#/baralhos/exportar?todos=1",
+    );
+
+    const rotas = [
+      { nome: "exportar-baralhos" },
+      { nome: "exportar-baralhos", baralhoId: "b 1" },
+      { nome: "exportar-baralhos", todos: true },
+    ] as const;
+
+    for (const rota of rotas) {
+      expect(interpretarRota(hashDaRota(rota), true)).toEqual(rota);
+    }
+  });
+
   it("`novo` é palavra reservada: nunca é tratado como o id de um Baralho", () => {
     const rota = interpretarRota("#/baralhos/novo", true);
 

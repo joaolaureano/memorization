@@ -305,7 +305,6 @@ export function hashDaRota(rota: Rota): string {
       return "#/baralhos";
 
     case "importar-baralho":
-    case "exportar-baralhos":
       return "#/baralhos/importar";
 
     case "exportar-baralhos":
