@@ -198,7 +198,7 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
 - [x] T037 [P] Update `README.md` and `README.pt-BR.md`: a table row "Export" (Exportar) linking to spec 029, with the format, the limits (10,000 Cards, 100 MiB of media) and the Anki "import learning progress" tip; and the deploy note: run `tofu apply` (with `-var lambda_package` and `-var lambda_handler`) for the `exportacoes/` lifecycle rule.
 - [x] T038 Run the full gate `npm run verificar:ci` at the root (gitleaks, backend + PostgreSQL, frontend + build, e2e). Then run quickstart scenarios 1–7 and 13–15 locally.
 - [ ] T039 Manual validation in real apps (quickstart 8–12): Anki desktop, AnkiDroid and AnkiMobile (FR-463). Record in the Notes below the stable version of each app on the validation date and whether "Import learning progress" comes checked by default (research R8, `premissa a validar`). Any failure becomes a new failing test in T012/T030 before the fix.
-- [ ] T040 After deploy, run quickstart scenario 16 (SC-186, and SC-191: the limit in under 25 s). If the limit does not fit, lower `LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO` with a research entry, never raise the timeout.
+- [X] T040 After deploy, run quickstart scenario 16 (SC-186, and SC-191: the limit in under 25 s). If the limit does not fit, lower `LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO` with a research entry, never raise the timeout.
 
 ---
 
@@ -269,7 +269,8 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
 - T001: a regra de lifecycle está implementada, mas `tofu validate` não concluiu porque o provider AWS v6.65.0 para Darwin arm64 falhou durante o handshake do plugin; nenhuma aplicação foi feita.
 - T001 (2026-10-15): `tofu validate` passou na nova tentativa, porque a falha do provider não se repetiu. Antes do `plan`/`apply` é preciso construir o pacote (`npm run build -- --banco=lambda` em `backend/`). O `apply` mudou só a regra de lifecycle `exportacoes-expiram` (1 dia) e removeu a duplicata de `s3:PutObject` na política da Lambda. Na AWS, o bucket tem `pendentes/` e `exportacoes/` com expiração de 1 dia, e o handler da Lambda continua `lambda.handler`.
 - T038: gate completa executada em 2026-10-15 com sucesso: gitleaks, backend (1.202 testes), PostgreSQL (286), frontend (1.058) e E2E (111). Os cenários cobertos pelo fluxo local foram exercitados na suíte.
-- T039 e T040: pendentes por exigirem aplicativos Anki instalados e deploy, respectivamente.
+- T039: pendente; exige os aplicativos Anki do Product Owner.
+- T040 (2026-10-15, produção, commit `5d07eaa`, conta descartável criada e excluída via API): SC-186, 1.000 Cartões sem mídia, do pedido ao início do download em 3,08 s (≤ 10 s). SC-191, 11 Baralhos com 10.000 Cartões e 26 Imagens (97,8 MiB estimados, arquivo de 95,6 MiB), em 7,20 s (≤ 25 s). A premissa de R5 fica validada e o limite de mídia se mantém. Depois da exclusão da conta, o arquivo de `exportacoes/` e as 26 Imagens não estavam mais no bucket.
 
 - A worker that finds an architectural ambiguity stops and reports it. It does not decide.
 - The first `/speckit-analyze` decisions (research R14) are already reflected: full SC-184 equivalence, empty Decks included, text-only Front in US1, and export removal on account deletion (T041, T042). T041 and T042 were added after the analyze and keep their IDs to avoid renumbering.
