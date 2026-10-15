@@ -131,3 +131,7 @@ não equivale a uma confirmação individual de cada uma.
 ## Convergence de 2026-10-05
 
 Ajustes de UX implementados: confirmação contextual ao salvar a edição de Rotina (no lugar do parágrafo genérico), combo-box Baralho centralizado e tom âmbar nas Rotinas pausadas. Provas em frontend/tests/agenda.test.tsx (33) e e2e/agendamento-de-estudo.spec.ts; `npm run verificar:ci` aprovado.
+
+## Confirmação individual das premissas (2026-10-15)
+
+O Product Owner confirmou uma a uma as premissas A-01 a A-07, que antes estavam aprovadas só em bloco (ver "Aprovação das premissas" acima). O comportamento implementado não muda. A-06 teve a redação atualizada: o bloco «Revisão do dia», citado no texto original, saiu de Início nas specs `019`/`020`, e a Agenda continua em Início com o gerenciamento pelo próprio bloco.

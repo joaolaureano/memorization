@@ -346,13 +346,13 @@ fuso; o total real é preservado e a precedência da tabela continua válida.
 
 ## Assumptions
 
-- **A-01 — premissa a validar**: a conclusão exige iniciar a Sessão pelo Compromisso. O plano usa o padrão proposto, sem contagem automática de estudo livre; a escolha permanece uma premissa de produto a validar. Orienta FR-233–FR-236.
-- **A-02 — premissa a validar**: o fuso do navegador define hoje, como em `013`/`015`; datas já associadas permanecem estáveis. A primeira versão não oferece fuso próprio da Agenda. Orienta FR-246/FR-247.
-- **A-03 — premissa a validar**: mudanças valem para hoje ainda não concluído e para o futuro; passado e conclusões permanecem, e Sessões já iniciadas podem concluir seu Compromisso capturado. Orienta FR-238/FR-239/FR-245.
-- **A-04 — premissa a validar**: há recorrência semanal sem horário, limite definido de 1 a 999 Cartões ou Todos os Cartões, e Rotinas sobrepostas são permitidas mediante confirmação. Orienta FR-224–FR-226.
-- **A-05 — premissa a validar**: dias não realizados permanecem no passado, sem recuperação ou acúmulo automático; estudos futuros não são antecipados pela Agenda. Orienta FR-231/FR-247.
-- **A-06 — premissa a validar**: Agenda aparece antes de Revisão do dia em Início e o gerenciamento é acessado pelo próprio bloco, sem novo destino principal. Orienta FR-227/FR-237 e Definição da UI.
-- **A-07 — premissa a validar**: 100 Rotinas e 2 anos de Compromissos são a escala inicial de aceite; não representam um limite de cadastro. Orienta SC-102.
+- **A-01 — confirmada pelo PO em 2026-10-15**: a conclusão exige iniciar a Sessão pelo Compromisso. O plano usa o padrão proposto, sem contagem automática de estudo livre; a escolha permanece uma premissa de produto a validar. Orienta FR-233–FR-236.
+- **A-02 — confirmada pelo PO em 2026-10-15**: o fuso do navegador define hoje, como em `013`/`015`; datas já associadas permanecem estáveis. A primeira versão não oferece fuso próprio da Agenda. Orienta FR-246/FR-247.
+- **A-03 — confirmada pelo PO em 2026-10-15**: mudanças valem para hoje ainda não concluído e para o futuro; passado e conclusões permanecem, e Sessões já iniciadas podem concluir seu Compromisso capturado. Orienta FR-238/FR-239/FR-245.
+- **A-04 — confirmada pelo PO em 2026-10-15**: há recorrência semanal sem horário, limite definido de 1 a 999 Cartões ou Todos os Cartões, e Rotinas sobrepostas são permitidas mediante confirmação. Orienta FR-224–FR-226.
+- **A-05 — confirmada pelo PO em 2026-10-15**: dias não realizados permanecem no passado, sem recuperação ou acúmulo automático; estudos futuros não são antecipados pela Agenda. Orienta FR-231/FR-247.
+- **A-06 — confirmada pelo PO em 2026-10-15**: a Agenda aparece em Início, com os Compromissos de hoje, e o gerenciamento é acessado pelo próprio bloco, sem novo destino principal. A redação original citava o bloco «Revisão do dia», que as specs `019`/`020` removeram de Início. Orienta FR-227/FR-237 e Definição da UI.
+- **A-07 — confirmada pelo PO em 2026-10-15**: 100 Rotinas e 2 anos de Compromissos são a escala inicial de aceite; não representam um limite de cadastro. Orienta SC-102.
 - Dados do protótipo são ilustrativos e não serão incluídos no acervo do Usuário. O glossário novo registra a linguagem desta proposta, não a existência de implementação.
 - **Registro histórico**: a instrução inicial limitava o trabalho à criação do
   plano. Ela foi superada pela autorização de implementação de 2026-10-03,
