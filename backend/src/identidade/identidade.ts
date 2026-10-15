@@ -334,6 +334,21 @@ const JANELA_DE_CRIACAO_MS = 60 * 60 * 1000;
 const LIMITE_POR_ORIGEM = 10;
 const LIMITE_GLOBAL_DE_CONTAS = 300;
 
+function registrarFalhaDaContaDeTeste(etapa: string, erro?: unknown): void {
+  const falha = erro as {
+    name?: string;
+    code?: string;
+    $metadata?: { httpStatusCode?: number; requestId?: string };
+  } | undefined;
+  console.error("Falha ao criar conta de teste", {
+    etapa,
+    nome: falha?.name,
+    codigo: falha?.code,
+    status: falha?.$metadata?.httpStatusCode,
+    requestId: falha?.$metadata?.requestId,
+  });
+}
+
 /**
  * Compara duas chaves derivadas em tempo constante (FR-088). O comprimento é
  * conferido antes porque `timingSafeEqual` recusa comprimentos diferentes; as
@@ -559,21 +574,27 @@ export function criarIdentidade(
 
       const agora = dados.agora ?? new Date();
       const desde = new Date(agora.getTime() - JANELA_DE_CRIACAO_MS).toISOString();
+      let etapa = "limite-por-origem";
       try {
         if ((await opcoes.contasDeTeste.contarCriacoes?.(dados.origem, desde) ?? 0) >= LIMITE_POR_ORIGEM) {
           return { ok: false, erro: "esgotadas_na_origem" };
         }
+        etapa = "limite-global";
         if ((await opcoes.contasDeTeste.contarContasDeTesteAtivas?.(agora.toISOString()) ?? 0) >= LIMITE_GLOBAL_DE_CONTAS) {
           return { ok: false, erro: "contas_esgotadas" };
         }
+        etapa = "limpeza";
         await this.limparContasDeTesteEncerradas(agora, 20);
-      } catch {
+      } catch (erro) {
+        registrarFalhaDaContaDeTeste(etapa, erro);
         return { ok: false, erro: "indisponivel" };
       }
 
+      etapa = "midia-de-demonstracao";
       try {
         await garantirMidiaDeDemonstracao(opcoes.midia);
 
+        etapa = "montar-conta";
         const conta = await montarContaDeTeste({
           agora,
           fuso: dados.fuso,
@@ -585,12 +606,15 @@ export function criarIdentidade(
             ),
         });
 
+        etapa = "persistir-conta";
         const gravada = await opcoes.contasDeTeste.criarContaDeTeste(conta);
 
         if (!gravada.ok) {
+          registrarFalhaDaContaDeTeste(etapa, gravada.erro);
           return { ok: false, erro: "indisponivel" };
         }
 
+        etapa = "registrar-limite-por-origem";
         await opcoes.contasDeTeste.registrarCriacaoDeContaDeTeste?.(dados.origem, agora.toISOString());
 
         return {
@@ -600,7 +624,8 @@ export function criarIdentidade(
             nomeDeUsuario: conta.usuario.nomeDeUsuario,
           },
         };
-      } catch {
+      } catch (erro) {
+        registrarFalhaDaContaDeTeste(etapa, erro);
         return { ok: false, erro: "indisponivel" };
       }
     },
