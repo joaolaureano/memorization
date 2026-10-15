@@ -72,7 +72,10 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeMidia {
             const resposta = await s3.send(new HeadObjectCommand({ Bucket, Key }));
             return resposta.ContentLength ?? 0;
           } catch (erro) {
-            if (ehAusente(erro)) return 0;
+            const status = (erro as { $metadata?: { httpStatusCode?: number } })
+              .$metadata?.httpStatusCode;
+            // Sem s3:ListBucket, o S3 responde 403 para demo ausente (026/030).
+            if (ehAusente(erro) || (ehMidiaDeDemonstracao(Key) && status === 403)) return 0;
             throw erro;
           }
         }));
