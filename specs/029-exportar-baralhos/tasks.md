@@ -272,3 +272,50 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
 
 - A worker that finds an architectural ambiguity stops and reports it. It does not decide.
 - The first `/speckit-analyze` decisions (research R14) are already reflected: full SC-184 equivalence, empty Decks included, text-only Front in US1, and export removal on account deletion (T041, T042). T041 and T042 were added after the analyze and keep their IDs to avoid renumbering.
+
+## Phase 7: Convergence
+
+Convergence run 2026-10-15 against commit `d19df05`. Completion claims were not taken as evidence: several tasks marked `[X]` above lack the tests or behavior they describe (gaps listed per task below). Workers (Haiku 5.5) use Edit only, never delete or weaken tests, never commit, and report test counts before and after. Tasks touching the same file run in the order given.
+
+- [X] T043 Add the format registry `FORMATOS_DE_EXPORTACAO` and `ehFormatoDeExportacao` in `backend/src/exportacao/formatos.ts`, and the Interface `exportar(conteudo, formato, contexto)` in `backend/src/exportacao/exportar.ts`, returning `{ bytes, nomeDoArquivo, tipoDeConteudo, cartoesSemMidia }` with `agora` required. Move the `[Imagem]`/`[Áudio]` labels (pt, en, es) from `apkg/campos.ts` to `backend/src/exportacao/textos.ts`. Add the `graves` table, set `factor = 0` for new Cards (research R8), and remove the dead `som()` from `apkg/pacote.ts`. Tests in `backend/tests/exportacao/apkg.test.ts`: the registry, and `type`/`queue`/`due`/`factor` of new Cards, per FR-461, FR-462, SC-190, FR-469, T018 (missing)
+- [X] T044 Add the missing T012 assertions to `backend/tests/exportacao/apkg.test.ts` (after T043): entities in `flds`; `crt + due` in `America/Sao_Paulo` near midnight UTC and with an overdue revision; no username or User id in any table or in `media`; the same note type id across two exports; round trip through `lerPacoteAnki` with full equivalence (multi-line) and no Agendamento; text fallback in `en` and `es`. A failing assertion is fixed in the product, never in the test. Per FR-466, FR-469, FR-470, FR-480, SC-184, T012 (partial)
+- [X] T045 Add T023 and T030 tests to `backend/tests/exportacao/apkg.test.ts` (after T044): three Decks plus an empty Deck in the package; media extensions JPEG, WebP, GIF, MP3, M4A, OGG and WebM from `backend/tests/midia/amostras.ts` and `amostras-de-audio/`. Per FR-465, FR-468, SC-185, T023, T030 (partial)
+- [X] T046 Make the file name for several Decks and for `"todos"` (even with a single Deck) `memorization-AAAA-MM-DD.apkg` in the User's time zone: a variant in `backend/src/exportacao/nome-do-arquivo.ts` with tests in `backend/tests/exportacao/nome-do-arquivo.test.ts`, used in `backend/src/acervo/acervo.ts` (file-name code only) and in `frontend/src/acervo-cliente/cliente-em-memoria.ts`. Update the `Exportacao-…` expectations in `backend/tests/acervo/exportacao.test.ts` and `e2e/exportar-baralhos.spec.ts` to the spec name, and report it as a requirement fix. Per FR-474, research R11, T023, T027 (contradicts)
+- [X] T047 In `backend/src/acervo/acervo.ts` (after T046), replace `formato !== "apkg"` with `ehFormatoDeExportacao`, and let text-only exports work without a media store. Add to `backend/tests/acervo/exportacao.test.ts`: unknown format; more than 10,000 Cards (`motivo: "cartoes"`, `limite: 10000`); more than 104,857,600 bytes (`motivo: "midia"`); Image and Audio counts; missing media → `cartoesSemMidia: 1`; a store whose `ler` throws → `exportacao_indisponivel` with no URL; the FR-473 snapshot; stored bytes equal to `exportar`'s; `"todos"` with no Cards → `exportacao_vazia`; own and foreign ids mixed → `nao_encontrado`. Per FR-462, FR-464, FR-465, FR-473, FR-477, FR-478, FR-480, T014, T024, T031 (partial)
+- [X] T048 Add a test to `backend/tests/acervo/exportacao.test.ts` (after T047) with a mixed collection (text, Image, Audio) where `bytesEstimados` is within ±20% of the stored file, and calibrate the per-Card estimate in `backend/src/acervo/acervo.ts` until it passes. Never widen the tolerance. Per FR-472, research R15 (missing)
+- [X] T049 [P] In `backend/src/armazenamento/postgresql/armazenamento.ts`, order the Decks in `lerAcervoParaExportacao` by creation, as SQLite does. Add to `backend/tests/armazenamento/bateria-da-porta.ts`: the same Deck order in both Adapters, and a failure in `excluirUsuario` rolls back both the queue and the deletion. Per research R7, FR-479, T041 (partial)
+- [X] T050 [P] Add to `backend/tests/http/exportacao.test.ts`: log capture without Deck names, content or `url`; `404`, `422 exportacao_grande_demais` and `503` status and body; `400` with no `formato` and with repeated ids (codes `corpo_invalido`/`dados_invalidos`). Per FR-482, FR-486, T015 (partial)
+- [X] T051 [P] Add to `backend/tests/midia/bateria-do-armazem.ts`: on S3, `ler` throws on any error other than "not found". Run it against the local S3 emulator (`S3_DE_TESTE_ENDERECO`). Per FR-477, research R15, T005 (partial)
+- [X] T052 [P] In `frontend/src/ui/PaginaDeExportacao.tsx`:
+  - `role="status"` for "Gerando arquivo…";
+  - navigation through an injectable function;
+  - a loading announcement instead of "Tentar novamente";
+  - different reasons for "nothing checked" and "no Cards";
+  - correct plurals with `Intl.PluralRules`;
+  - no trailing space in `en.ajuda` (`frontend/src/idioma/{tipos,pt,en,es}.ts`).
+
+  Add tests to `frontend/tests/pagina-de-exportacao.test.tsx`:
+  - generating state with no second submit;
+  - success with "Arquivo pronto", "Baixar de novo" and the navigation call;
+  - focus on a refusal;
+  - Spanish;
+  - list mode (checkboxes, "Todos", summary, `?todos=1`);
+  - media counts, size and the "without media" message.
+
+  Per FR-472, FR-475, FR-476, FR-477, FR-483, FR-485, US2/AC4, T016, T021, T025, T028, T032 (partial)
+- [X] T053 [P] Add to `frontend/tests/navegacao.test.tsx` the routes `#/baralhos/exportar?baralho=` and `?todos=1`. Add to `frontend/tests/secao-minha-conta.test.tsx` the link "Exportar meu acervo antes", and check that deletion stays possible without exporting. Per FR-479, US2/AC3, T017, T026 (missing)
+- [X] T054 In `e2e/exportar-baralhos.spec.ts` (after T046 and T052):
+  - apply the 200% zoom before rendering with `aplicarZoomDeProva`, as in `e2e/cartao-com-audio.spec.ts`;
+  - run a Tab/Enter-only flow from the Deck detail;
+  - "Exportar todos" through the list button and the "Todos os Baralhos" checkbox;
+  - use the spec file name.
+
+  Per FR-483, FR-484, SC-183, T036 (partial)
+- [X] T055 Align the documents with the accepted code, per research R16:
+  - `contracts/apkg.md`: note and card ids are a SHA-256 hash of the Card id, not increasing milliseconds;
+  - `contracts/http.md`: invalid input uses `corpo_invalido`/`dados_invalidos`;
+  - record that T018's split into `apkg/colecao.ts` and `apkg/agendamento.ts` is not required by the spec, and that `backend/terraform/iam/robot-s3-imagens.json` is the deploy user's policy and intentional.
+
+  Per T018, contracts (contradicts, resolved in favor of the code)
+- [X] T056 Fix `hashDaRota` in `frontend/src/ui/navegacao.ts`: `case "exportar-baralhos"` is duplicated inside the `importar-baralho` group, so the export route produces `#/baralhos/importar`. Remove it from that group, and add round-trip tests (route → hash → route) for `?baralho=`, `?todos=1` and the bare export route to `frontend/tests/navegacao.test.tsx`. Per FR-464, FR-479, T022 (contradicts; found while running T053)
+- [X] T057 Add to `backend/tests/midia/armazem-em-disco.test.ts`: with the Disk store's root pointing at a regular file (an `ENOTDIR` error), `ler` throws instead of returning `null`. Per FR-477, research R15 (missing; found while running T051)

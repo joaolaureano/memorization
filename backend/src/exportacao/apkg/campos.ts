@@ -1,3 +1,5 @@
+import { rotuloSemMidia } from "../textos.ts";
+
 /** Escapa texto de cartão para o campo HTML do Anki. */
 export function escaparCampo(texto: string): string {
   return texto
@@ -24,9 +26,5 @@ export function textoSimples(html: string): string {
 
 export function frenteSemMidia(tipo: "imagem" | "audio", frente: string, idioma: "pt" | "en" | "es"): string {
   if (frente.trim()) return escaparCampo(frente);
-  const rótulos = {
-    imagem: { pt: "[Imagem]", en: "[Image]", es: "[Imagen]" },
-    audio: { pt: "[Áudio]", en: "[Audio]", es: "[Audio]" },
-  } as const;
-  return rótulos[tipo][idioma];
+  return rotuloSemMidia(tipo, idioma);
 }

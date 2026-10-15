@@ -72,10 +72,6 @@ function idNumerico(texto: string, salt: number): number {
   return h.readUIntBE(0, 6) + 1;
 }
 
-function som() {
-  return `<img src="{{Front}}">`;
-}
-
 export async function exportar(
   conteudo: ConteudoExportado,
   formato: "apkg",
@@ -98,7 +94,8 @@ export async function exportar(
     db.run(`CREATE TABLE col (id integer primary key, crt integer, mod integer, scm integer, ver integer, dty integer, usn integer, ls integer, conf text, models text, decks text, dconf text, tags text);
       CREATE TABLE notes (id integer primary key, guid text not null, mid integer not null, mod integer not null, usn integer not null, tags text not null, flds text not null, sfld integer not null, csum integer not null, flags integer not null, data text not null);
       CREATE TABLE cards (id integer primary key, nid integer not null, did integer not null, ord integer not null, mod integer not null, usn integer not null, type integer not null, queue integer not null, due integer not null, ivl integer not null, factor integer not null, reps integer not null, lapses integer not null, left integer not null, odue integer not null, odid integer not null, flags integer not null, data text not null);
-      CREATE TABLE revlog (id integer primary key, cid integer not null, usn integer not null, ease integer not null, ivl integer not null, lastIvl integer not null, factor integer not null, time integer not null, type integer not null);`);
+      CREATE TABLE revlog (id integer primary key, cid integer not null, usn integer not null, ease integer not null, ivl integer not null, lastIvl integer not null, factor integer not null, time integer not null, type integer not null);
+      CREATE TABLE graves (usn integer not null, oid integer not null, type integer not null);`);
 
     const decks: Record<string, { id: number; name: string; desc: string; mod: number; usn: number; dyn: number; conf: number }> = {
       "1": { id: 1, name: "Default", desc: "", mod: 0, usn: -1, dyn: 0, conf: 1 },
@@ -150,7 +147,7 @@ export async function exportar(
         insertNote.run([nid, cartao.id, MODELO_ID, Math.floor(agora.getTime() / 1000), tagsAnki(cartao.tags), `${frente}\x1f${escaparCampo(cartao.verso)}`, sfld, csum]);
         const p = cartao.progresso;
         const due = p ? Math.max(0, diaNumero(diaLocal(new Date(p.proximaRevisaoEm), contexto.fuso)) - crtDia) : ci;
-        insertCard.run([cid, nid, did, Math.floor(agora.getTime() / 1000), p ? 2 : 0, p ? 2 : 0, due, p ? Math.max(1, p.intervaloEmDias) : 0, p ? Math.round(p.facilidade * 1000) : 2500, p?.repeticoes ?? 0]);
+        insertCard.run([cid, nid, did, Math.floor(agora.getTime() / 1000), p ? 2 : 0, p ? 2 : 0, due, p ? Math.max(1, p.intervaloEmDias) : 0, p ? Math.round(p.facilidade * 1000) : 0, p?.repeticoes ?? 0]);
       }
     }
     insertNote.free(); insertCard.free();
@@ -161,5 +158,3 @@ export async function exportar(
     db.close();
   }
 }
-
-export { som };

@@ -23,6 +23,7 @@ O pacote é o `.apkg` legado (esquema 11), o mesmo que o `genanki` produz. O for
 ## `notes` (uma por Cartão)
 
 - `guid` = id do Cartão (FR-467).
+- `id` da nota e do cartão: inteiros derivados de um hash SHA-256 do id do Cartão, estáveis entre exportações (research R16).
 - `mid` = o tipo "Memorization".
 - `tags` = ` tag1 tag2 `, com espaços internos de cada Tag trocados por `_`.
 - `flds` = `Front` + `\x1f` + `Back`.

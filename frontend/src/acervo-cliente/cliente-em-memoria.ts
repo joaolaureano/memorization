@@ -554,7 +554,12 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
     const dono = this.dono()!;
     const baralhos = this.base.baralhos.filter((b) => b.usuarioId === dono.id && (pedido.baralhos === "todos" || pedido.baralhos.includes(b.id)));
     const cartoes = this.base.cartoes.filter((c) => c.usuarioId === dono.id && baralhos.some((b) => b.id === c.baralhoId));
-    const nome = `${baralhos.length === 1 ? baralhos[0]!.nome : "Exportacao"}.apkg`.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "-").slice(0, 108);
+    // FR-474: um Baralho escolhido por id → nome do Baralho; vários ou "todos" → memorization-AAAA-MM-DD (data local).
+    const agora = new Date();
+    const data = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+    const nome = pedido.baralhos !== "todos" && baralhos.length === 1
+      ? `${baralhos[0]!.nome.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "-").slice(0, 100).trim() || "exportacao"}.apkg`
+      : `memorization-${data}.apkg`;
     const blob = new Blob([], { type: "application/octet-stream" });
     return { ok: true, url: URL.createObjectURL(blob), nomeDoArquivo: nome,
       expiraEm: new Date(Date.now() + 900_000).toISOString(), baralhos: baralhos.length,

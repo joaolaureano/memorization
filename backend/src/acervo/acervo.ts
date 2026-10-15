@@ -72,8 +72,9 @@ import {
 } from "./invariantes.ts";
 import { criarAgenda } from "../agenda/agenda.ts";
 import { ehFusoValido } from "../agenda/datas.ts";
-import { exportar as gerarPacoteAnki, type ConteudoExportado } from "../exportacao/apkg/pacote.ts";
-import { nomeDoArquivoDeExportacao } from "../exportacao/nome-do-arquivo.ts";
+import type { ConteudoExportado } from "../exportacao/apkg/pacote.ts";
+import { exportar } from "../exportacao/exportar.ts";
+import { ehFormatoDeExportacao } from "../exportacao/formatos.ts";
 import type {
   ArmazemDeMidia,
   MotivoDeRecusaDaMidia,
@@ -1351,7 +1352,7 @@ export function criarAcervo(
   const relogio = opcoes.agora ?? (() => new Date());
 
   async function lerSnapshotExportacao(pedido: PedidoDeExportacao) {
-    if (pedido.formato !== "apkg" || (pedido.baralhos !== "todos" &&
+    if (!ehFormatoDeExportacao(pedido.formato) || (pedido.baralhos !== "todos" &&
       (!Array.isArray(pedido.baralhos) || pedido.baralhos.length === 0 ||
         pedido.baralhos.some((id) => typeof id !== "string" || !id) ||
         new Set(pedido.baralhos).size !== pedido.baralhos.length))) {
@@ -1398,9 +1399,9 @@ export function criarAcervo(
     const cartoes = snapshot.baralhos.flatMap((b) => b.cartoes);
     if (!cartoes.length) return { ok: false, erro: "exportacao_vazia" };
     if (cartoes.length > LIMITE_DE_CARTOES_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "cartoes", limite: LIMITE_DE_CARTOES_DA_EXPORTACAO };
-    if (!imagens) return { ok: false, erro: "exportacao_indisponivel" };
+    const chaves = [...new Set(cartoes.flatMap((c) => [c.imagemChave, c.audioChave].filter((x): x is string => Boolean(x))))];
+    if (chaves.length && !imagens) return { ok: false, erro: "exportacao_indisponivel" };
     try {
-      const chaves = [...new Set(cartoes.flatMap((c) => [c.imagemChave, c.audioChave].filter((x): x is string => Boolean(x))))];
       const bytesMidia = chaves.length ? await imagens!.medir(chaves) : 0;
       if (bytesMidia > LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO) return { ok: false, erro: "exportacao_grande_demais", motivo: "midia", limite: LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO };
       return { ok: true, previa: {
@@ -1762,7 +1763,7 @@ export function criarAcervo(
     },
 
     async exportar(pedido) {
-      if (!ehFusoValido(pedido.fuso) || !["pt", "en", "es"].includes(pedido.idioma)) {
+      if (!ehFusoValido(pedido.fuso) || !["pt", "en", "es"].includes(pedido.idioma) || !ehFormatoDeExportacao(pedido.formato)) {
         return { ok: false, erro: "dados_invalidos" };
       }
       const lido = await lerSnapshotExportacao(pedido);
@@ -1779,21 +1780,18 @@ export function criarAcervo(
           lote.forEach((chave, indice) => bytesPorChave.set(chave, lidos[indice] ?? null));
         }
         const instante = relogio();
-        const pacote = await gerarPacoteAnki(conteudo, "apkg", {
+        const arquivo = await exportar(conteudo, pedido.formato, {
           idioma: pedido.idioma,
           fuso: pedido.fuso,
           agora: instante,
           lerMidia: async (chave) => bytesPorChave.get(chave) ?? null,
+          pedidoDeTodos: pedido.baralhos === "todos",
         });
-        const data = new Intl.DateTimeFormat("en-CA", { timeZone: pedido.fuso, year: "numeric", month: "2-digit", day: "2-digit" }).format(instante);
-        const nome = conteudo.baralhos.length === 1
-          ? nomeDoArquivoDeExportacao(conteudo.baralhos[0]!.nome)
-          : nomeDoArquivoDeExportacao(`Exportacao-${data}`);
-        const endereco = await imagens!.guardarExportacao(usuarioId, pacote.bytes, nome, "application/octet-stream");
-        return { ok: true, url: endereco.url, nomeDoArquivo: nome, expiraEm: endereco.expiraEm,
+        const endereco = await imagens!.guardarExportacao(usuarioId, arquivo.bytes, arquivo.nomeDoArquivo, arquivo.tipoDeConteudo);
+        return { ok: true, url: endereco.url, nomeDoArquivo: arquivo.nomeDoArquivo, expiraEm: endereco.expiraEm,
           baralhos: conteudo.baralhos.length,
           cartoes: conteudo.baralhos.reduce((soma, b) => soma + b.cartoes.length, 0),
-          cartoesSemMidia: pacote.cartoesSemMidia };
+          cartoesSemMidia: arquivo.cartoesSemMidia };
       } catch {
         return { ok: false, erro: "exportacao_indisponivel" };
       }

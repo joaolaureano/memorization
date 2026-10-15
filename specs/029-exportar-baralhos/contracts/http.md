@@ -30,7 +30,7 @@ Nenhuma rota existente muda.
     "cartoesComImagem": 20, "cartoesComAudio": 7,
     "bytesEstimados": 18350000 }
   ```
-- `400 entrada_invalida`: corpo fora da forma acima, inclusive formato desconhecido.
+- `400 corpo_invalido` ou `dados_invalidos` (códigos já usados pelo produto): corpo fora da forma acima, inclusive formato desconhecido e ids repetidos (research R16).
 - `404 nao_encontrado`: algum id não é Baralho do Usuário (inclui Baralhos de outro Usuário, FR-480).
 - `422 exportacao_vazia`: nenhum dos Baralhos escolhidos tem Cartões (FR-465, FR-486). Baralhos vazios entre outros com Cartões entram no pacote.
 - `422 exportacao_grande_demais`, com `motivo: "cartoes" | "midia"` e `limite` (10000 Cartões ou 104857600 bytes de mídia) (FR-478).

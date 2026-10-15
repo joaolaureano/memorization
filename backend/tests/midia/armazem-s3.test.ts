@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { beforeEach, describe, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { criarArmazemS3 } from "../../src/midia/armazem-s3.ts";
 import { bateriaDoArmazem } from "./bateria-do-armazem.ts";
@@ -79,3 +79,24 @@ if (configuracao === undefined) {
     };
   });
 }
+
+/**
+ * T051 — sem emulador: com o endereço inalcançável, `ler` falha em vez de
+ * devolver null (research R15). Roda sempre, com a porta 9 fechada no localhost.
+ */
+describe("Adapter S3 — armazém indisponível (sem emulador)", () => {
+  it("ler rejeita quando o storage não responde, em vez de devolver null", async () => {
+    const armazem = criarArmazemS3({
+      bucket: "indisponivel",
+      cliente: {
+        endpoint: "http://127.0.0.1:9",
+        region: "us-east-1",
+        forcePathStyle: true,
+        maxAttempts: 1,
+        credentials: { accessKeyId: "x", secretAccessKey: "x" },
+      },
+    });
+
+    await expect(armazem.ler("imagens/u/x")).rejects.toThrow();
+  }, 4000);
+});

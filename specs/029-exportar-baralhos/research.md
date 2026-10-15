@@ -190,3 +190,22 @@ O PO pediu a revisão de `checklists/anki-seguranca-e-limites.md`. Dos 37 itens,
 - `ArmazemDeMidia` agora declara `ler`, `medir` e `guardarExportacao`; os adapters S3 e Disco implementam essas operações, e a rota local serve a exportação como anexo.
 - Gates locais ainda pendentes: `tofu validate` falhou ao iniciar o provider AWS instalado; Playwright não conseguiu iniciar Chromium devido à restrição de bootstrap do sandbox. A verificação do protótipo e o CI completo devem ser retomados em ambiente autorizado.
 - Verificações executadas: `backend` typecheck e testes selecionados de SM-2, recusas e adapter Disco passaram.
+
+## R16 — Convergência e registro do commit `d19df05` (2026-10-15)
+
+- **Registro (Princípio II)**: a implementação da 029 entrou no commit `d19df05`, com a mensagem `fix(i18n): close remaining localization gaps`, junto com correções de i18n da 027 e da 028. Ele também substituiu o commit `a8bc7ce` (zoom de 200% aplicado antes da renderização no e2e da 028). O conteúdo do `a8bc7ce` foi preservado: `aplicarZoomDeProva` está em `e2e/cartao-com-audio.spec.ts`. O histórico publicado não é reescrito; este registro corrige a narrativa.
+- **Convergência**: uma auditoria contra a spec achou 24 lacunas, com tasks marcadas `[X]` sem os testes ou o comportamento pedidos. Elas viraram as tarefas T043–T055 (Phase 7).
+- **Decisões a favor do código (T055)**:
+  - **IDs de nota e cartão**: o hash SHA-256 do id do Cartão é mantido. É estável entre exportações e reforça o FR-467, melhor que os "milissegundos crescentes" da T018. Atualizado em `contracts/apkg.md`.
+  - **Arquivos**: a divisão em `apkg/colecao.ts` e `apkg/agendamento.ts` sugerida na T018 não é requisito; `pacote.ts` concentra o esquema (Princípio VII).
+  - **Entrada inválida**: o produto já usa `corpo_invalido` e `dados_invalidos` (400). Atualizado em `contracts/http.md`.
+  - **`backend/terraform/iam/robot-s3-imagens.json`**: é a política do usuário de deploy (`PutLifecycleConfiguration` e as demais ações de configuração do bucket), não da role da Lambda. A frase "Do not change IAM" da T001 se refere à role da Lambda; a política é intencional.
+
+## R17 — Ordem dos Baralhos e atomicidade da exclusão (2026-10-15, T049)
+
+- **Ordem dos Baralhos no pacote**: nenhum requisito (FR-465, R7) fixa a ordem dos Baralhos, e o Anki os ordena por nome na importação. O PostgreSQL não guarda a ordem de criação dos Baralhos (a tabela `baralho` tem só `id`, `nome` e `usuario_id`), e uma migração só para isso seria escopo não pedido (Princípio VII). A prova da Porta exige o **conjunto** de Baralhos e a ordem de criação dos **Cartões** dentro de cada Baralho, que os dois Adapters garantem (`ordem_de_insercao` no PostgreSQL, `rowid` no SQLite). A lacuna 15 da auditoria fica resolvida assim.
+- **Exclusão de conta e fila**: no PostgreSQL, `excluirUsuario` é uma única instrução SQL, que enfileira `exportacoes/{id}` e exclui o Usuário. No SQLite, é uma transação. A atomicidade vem da construção, e não há ponto de injeção de falha sem acrescentar uma Seam só para teste (Princípio IV). O sub-item de prova de rollback da T049 é dispensado por esse motivo.
+
+## R18 — Exportação sem armazém de mídia (2026-10-15, T047)
+
+O arquivo é sempre entregue pelo armazém (`guardarExportacao`, R1 e R10), e o modo local (Disco) e a nuvem (S3) sempre configuram um. Sem armazém, só a **prévia** de um acervo sem mídia funciona; a geração continua respondendo `exportacao_indisponivel`. Um caminho de entrega sem armazém seria escopo sem requisito (Princípio VII). A lacuna 17 da auditoria fica resolvida assim.

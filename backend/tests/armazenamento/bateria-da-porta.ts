@@ -539,6 +539,24 @@ export function bateriaDaPorta(
         expect(await armazenamento().lerAcervoParaExportacao(DONO_UM, ["exp-1"])).toMatchObject({ ok: true, valor: { baralhos: [{ id: "exp-1" }] } });
       });
 
+      it("devolve todos os Baralhos e os Cartões na ordem de criação", async () => {
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("ord-3", "Zeta"));
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("ord-1", "Alfa"));
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("ord-2", "Meio"));
+        await guardarCartao(DONO_UM, cartaoDe("ord-card-b", "Frente B"), "ord-3");
+        await guardarCartao(DONO_UM, cartaoDe("ord-card-a", "Frente A"), "ord-3");
+        await guardarCartao(DONO_UM, cartaoDe("ord-card-c", "Frente C"), "ord-3");
+
+        const todos = await armazenamento().lerAcervoParaExportacao(DONO_UM, "todos");
+        expect(todos.ok).toBe(true);
+        if (!todos.ok) return;
+        expect(todos.valor.baralhos.map((b) => b.id).sort()).toEqual(["ord-1", "ord-2", "ord-3"]);
+        const comCartoes = todos.valor.baralhos.find((b) => b.id === "ord-3");
+        expect(comCartoes?.cartoes.map((c) => c.id)).toEqual([
+          "ord-card-b", "ord-card-a", "ord-card-c",
+        ]);
+      });
+
       it("recusa id inexistente ou de outro dono sem devolver snapshot parcial", async () => {
         await armazenamento().inserirBaralho(DONO_UM, baralhoDe("exp-own"));
         await armazenamento().inserirBaralho(DONO_DOIS, baralhoDe("exp-foreign"));

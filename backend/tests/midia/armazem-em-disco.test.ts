@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -139,5 +139,31 @@ describe("Adapter Disco — leitura por rota local com Range (028, FR-453)", () 
     expect(fora.statusCode).toBe(416);
     expect(fora.headers["content-range"]).toBe(`bytes */${total}`);
     await servidor.close();
+  });
+});
+
+describe("Adapter Disco — raiz inválida (FR-477, research R15)", () => {
+  it("com a raiz num arquivo comum, ler rejeita com ENOTDIR em vez de devolver null", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "armazem-raiz-arquivo-"));
+    const arquivo = join(dir, "raiz-e-arquivo");
+    writeFileSync(arquivo, "x");
+
+    try {
+      const armazem = criarArmazemEmDisco({ pasta: arquivo });
+      await expect(armazem.ler("imagens/u/x")).rejects.toMatchObject({ code: "ENOTDIR" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("com a raiz válida, chave ausente resolve null (contraste)", async () => {
+    const pasta = mkdtempSync(join(tmpdir(), "armazem-raiz-valida-"));
+
+    try {
+      const armazem = criarArmazemEmDisco({ pasta });
+      expect(await armazem.ler("imagens/u/x")).toBeNull();
+    } finally {
+      rmSync(pasta, { recursive: true, force: true });
+    }
   });
 });
