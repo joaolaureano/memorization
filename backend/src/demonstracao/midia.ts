@@ -83,9 +83,27 @@ export function garantirMidiaDeDemonstracao(armazem: ArmazemDeMidia): Promise<vo
 async function gravarQueFalta(armazem: ArmazemDeMidia): Promise<void> {
   const pasta = pastaDaDemonstracao();
   for (const arquivo of ARQUIVOS_DE_DEMONSTRACAO) {
-    const tamanho = await armazem.medir([arquivo.chave]);
-    if (tamanho > 0) continue;
-    const bytes = new Uint8Array(await readFile(new URL(arquivo.caminho, pasta)));
-    await armazem.gravarArquivoFixo(arquivo.chave, bytes, arquivo.tipoDeConteudo);
+    let operacao = "medir";
+    try {
+      const tamanho = await armazem.medir([arquivo.chave]);
+      if (tamanho > 0) continue;
+      operacao = "ler-arquivo-local";
+      const bytes = new Uint8Array(await readFile(new URL(arquivo.caminho, pasta)));
+      operacao = "gravar";
+      await armazem.gravarArquivoFixo(arquivo.chave, bytes, arquivo.tipoDeConteudo);
+    } catch (erro) {
+      const falha = erro as {
+        name?: string;
+        $metadata?: { httpStatusCode?: number; requestId?: string };
+      };
+      console.error("Falha ao preparar mídia de demonstração", {
+        chave: arquivo.chave,
+        operacao,
+        nome: falha.name,
+        status: falha.$metadata?.httpStatusCode,
+        requestId: falha.$metadata?.requestId,
+      });
+      throw erro;
+    }
   }
 }
