@@ -287,3 +287,15 @@ The architect creates every new file **with a one-line comment** before a worker
 ## Notes
 
 - A worker that finds an architectural ambiguity stops and reports it. It does not decide.
+- **Produção, 2026-10-15 (antes da T043)**: "Entrar como Teste" respondia 503. O log mostrava `42P01` (tabela inexistente) na etapa `limite-por-origem`. O Neon estava na **v20**: 3 Cartões sem Pertencimento (transição da `025` pendente) adiavam as migrações 21 e 22 (precondição, research R18). Com autorização do PO:
+  - o Cartão de `karol`, ligado pelo Vínculo legado ao Baralho "Matéria", passou a pertencer a ele (o caso simples que a própria transição resolve);
+  - as contas automáticas `navegador7c7d60` e `validacao166a4a`, sem mídia, foram excluídas;
+  - tudo numa transação com conferências.
+
+  O deploy reexecutado migrou o Neon para a v22. Verificação em produção:
+  - criar a conta: `201` em 2,63 s, com 3 Baralhos (12/10/10) e `contaDeTeste: true`;
+  - créditos: 20;
+  - mídia: os 20 objetos `demonstracao/` gravados no bucket;
+  - Sair: `204`; depois disso, `/conta` responde `401`, e nenhuma Conta de teste fica no banco.
+
+  Ainda pendente para a T043: aplicar `iam/robot-agendamento.json`, rodar `tofu apply` (a regra agendada não existe na AWS) e medir a criação com a Lambda fria.

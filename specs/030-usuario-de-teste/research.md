@@ -233,3 +233,9 @@ A migração 22 leva a precondição `PODE_REMOVER_VINCULO`, como a 18, a 19 e a
 - **Descrição alternativa**: "Bandeira do/da {país}", com a preposição correta para cada país.
 - **Duração**: os trechos têm cerca de 15 s (até 15,07 s). O contrato passa a dizer "até 20 s", coerente com R8.
 - **Preferências**: só o algoritmo SM-2. O tipo `Preferencias` não tem o limite de novos por dia.
+
+## R20 — Migração 22 bloqueada em produção (2026-10-15)
+
+R18 supôs o Neon na v21. Na verdade ele estava na v20, porque 3 Cartões sem Pertencimento mantinham a transição da `025` pendente. Com isso, a 22 não rodou e "Entrar como Teste" falhou com tabela inexistente. A transição foi concluída com autorização do PO (tasks.md, Notes), e o Neon chegou à v22.
+
+**Lição**: uma migração com precondição de transição depende dos dados de produção. Antes de publicar uma feature que exige uma migração nova, o deploy deve confirmar a versão do esquema que de fato foi alcançada. Hoje o passo "Migrar o esquema do Neon" apenas informa a versão e não falha quando ela fica abaixo da esperada.
