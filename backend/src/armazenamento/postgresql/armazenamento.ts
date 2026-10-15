@@ -33,9 +33,10 @@ import type {
   RegistroResumido,
   ResultadoDoItemRegistrado,
   RotinaArmazenada,
-  Usuario,
+  UsuarioLido,
   VersaoDaRotina,
 } from "../porta.ts";
+import { FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS } from "../porta.ts";
 import { normalizarFrente } from "../../acervo/invariantes.ts";
 import { chaveDaFrenteDo as chaveDaFrente } from "../../acervo/tipos-de-cartao.ts";
 import { criarPiscina, type ConfiguracaoDaConexao } from "./conexao.ts";
@@ -530,8 +531,64 @@ INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros)
 VALUES ($1, $2, $3, $4, $5);
 `;
 
+/** Conta de teste: o Usuário marcado com o instante da criação (FR-488). */
+const INSERIR_USUARIO_DE_TESTE = `
+INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros, conta_de_teste_em)
+VALUES ($1, $2, $3, $4, $5, $6::timestamptz);
+`;
+
+/**
+ * Encerradas: marcadas antes do limite da folga e sem Acesso com `expira_em`
+ * após `agora`. As mais antigas primeiro.
+ */
+const LISTAR_CONTAS_DE_TESTE_ENCERRADAS = `
+SELECT usuario.id
+  FROM usuario
+ WHERE usuario.conta_de_teste_em IS NOT NULL
+   AND usuario.conta_de_teste_em < $1::timestamptz
+   AND NOT EXISTS (
+     SELECT 1 FROM acesso_temporario acesso
+      WHERE acesso.usuario_id = usuario.id AND acesso.expira_em > $2::timestamptz
+   )
+ ORDER BY usuario.conta_de_teste_em, usuario.id
+ LIMIT $3;
+`;
+
+const INSERIR_CRIACAO_DE_CONTA_DE_TESTE = `
+INSERT INTO criacao_de_conta_de_teste (origem_hmac, criado_em)
+VALUES ($1, $2::timestamptz);
+`;
+
+const CONTAR_CRIACOES_DA_ORIGEM = `
+SELECT COUNT(*)::int AS total
+  FROM criacao_de_conta_de_teste
+ WHERE origem_hmac = $1 AND criado_em >= $2::timestamptz;
+`;
+
+const CONTAR_CONTAS_DE_TESTE_ATIVAS = `
+SELECT COUNT(DISTINCT usuario.id)::int AS total
+  FROM usuario
+  JOIN acesso_temporario acesso ON acesso.usuario_id = usuario.id
+ WHERE usuario.conta_de_teste_em IS NOT NULL AND acesso.expira_em > $1::timestamptz;
+`;
+
+const ESQUECER_CRIACOES_ANTIGAS = `
+DELETE FROM criacao_de_conta_de_teste WHERE criado_em < $1::timestamptz;
+`;
+
+/**
+ * Incremento condicional numa instrução só: a linha do Usuário fica travada
+ * durante o UPDATE, então duas chamadas concorrentes no limite não passam as
+ * duas. Só conta de teste entra.
+ */
+const INCREMENTAR_ENVIO_DE_TESTE = `
+UPDATE usuario
+   SET envios_de_teste = envios_de_teste + 1
+ WHERE id = $1 AND conta_de_teste_em IS NOT NULL AND envios_de_teste < $2;
+`;
+
 const OBTER_USUARIO_POR_ID = `
-SELECT id, nome_de_usuario, sal, hash, parametros
+SELECT id, nome_de_usuario, sal, hash, parametros, conta_de_teste_em
   FROM usuario
  WHERE id = $1;
 `;
@@ -552,6 +609,7 @@ WITH fila AS (
     UNION ALL
     SELECT 'exportacoes/' || id FROM usuario WHERE id = $1
   ) AS midias
+  WHERE left(chave, 13) <> 'demonstracao/'
   ON CONFLICT (chave) DO NOTHING
 )
 DELETE FROM usuario WHERE id = $1;
@@ -677,7 +735,7 @@ DELETE FROM acesso_temporario WHERE expira_em < $1::timestamptz;
  * leitura e a unicidade falam da mesma coisa (FR-074).
  */
 const OBTER_USUARIO_POR_NOME = `
-SELECT id, nome_de_usuario, sal, hash, parametros
+SELECT id, nome_de_usuario, sal, hash, parametros, conta_de_teste_em
   FROM usuario
  WHERE lower(nome_de_usuario) = lower($1);
 `;
@@ -917,6 +975,7 @@ type LinhaDeUsuario = {
   sal: Buffer;
   hash: Buffer;
   parametros: string;
+  conta_de_teste_em: Instante | null;
 };
 
 /**
@@ -1293,13 +1352,15 @@ function cartaoComDonoDaLinha(linha: LinhaDeCartaoComDono): CartaoComDono {
 }
 
 /** Lê a linha como Usuário: o Nome de usuário e a transformação da Senha. */
-function usuarioDaLinha(linha: LinhaDeUsuario): Usuario {
+function usuarioDaLinha(linha: LinhaDeUsuario): UsuarioLido {
   return {
     id: linha.id,
     nomeDeUsuario: linha.nome_de_usuario,
     sal: linha.sal,
     hash: linha.hash,
     parametros: linha.parametros,
+    contaDeTesteEm:
+      linha.conta_de_teste_em === null ? null : instanteIso(linha.conta_de_teste_em),
   };
 }
 
@@ -2883,6 +2944,129 @@ export async function abrirArmazenamentoPostgresql(
       );
 
       return rows.map(itemAvaliadoDaLinha);
+    },
+
+    async criarContaDeTeste(conta) {
+      /**
+       * Usuário, Baralhos, Registros, Agendamentos, Rotina e Preferências numa
+       * transação só: uma falha em qualquer passo desfaz tudo (FR-488, Edge Case).
+       */
+      return comDesfecho(() =>
+        emTransacaoComDesfecho<Desfecho<void>>(piscina, async (cliente) => {
+          const { usuario } = conta;
+
+          await cliente.query(INSERIR_USUARIO_DE_TESTE, [
+            usuario.id,
+            usuario.nomeDeUsuario,
+            usuario.sal,
+            usuario.hash,
+            usuario.parametros,
+            usuario.contaDeTesteEm,
+          ]);
+
+          for (const { baralho, cartoes } of conta.baralhos) {
+            await cliente.query(INSERIR_BARALHO, [
+              baralho.id,
+              baralho.nome,
+              usuario.id,
+              JSON.stringify(baralho.tags ?? []),
+            ]);
+
+            for (const cartao of cartoes) {
+              await cliente.query(
+                INSERIR_CARTAO_NO_BARALHO,
+                parametrosDeInsercao(cartao, usuario.id),
+              );
+              await cliente.query(INSERIR_PERTENCIMENTO, [
+                cartao.id,
+                baralho.id,
+                chaveDaFrente(cartao),
+              ]);
+            }
+          }
+
+          for (const registro of conta.registros) {
+            const { rowCount } = await cliente.query(
+              INSERIR_REGISTRO_DE_SESSAO,
+              parametrosDoRegistro(usuario.id, registro),
+            );
+
+            /** `ON CONFLICT DO NOTHING`: sem linha, o Registro já existia. */
+            if (rowCount !== 1) {
+              throw new Error("registro_de_conta_de_teste_repetido");
+            }
+
+            await gravarItens(cliente, registro);
+          }
+
+          await gravarAgendamentos(cliente, usuario.id, conta.agendamentos);
+
+          const { rotina } = conta;
+          await cliente.query(INSERIR_ROTINA, [
+            rotina.id,
+            usuario.id,
+            rotina.baralhoId,
+            rotina.estado,
+            rotina.versao,
+            rotina.criadaEm,
+            JSON.stringify(rotina.versoes),
+          ]);
+
+          await cliente.query(SALVAR_PREFERENCIAS, [
+            usuario.id,
+            conta.preferencias.algoritmo,
+          ]);
+
+          return { ok: true, valor: undefined };
+        }),
+      );
+    },
+
+    async listarContasDeTesteEncerradas(agora, limite) {
+      const limiteDaCriacao = new Date(
+        Date.parse(agora) - FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS,
+      ).toISOString();
+      const { rows } = await piscina.query<{ id: string }>(
+        LISTAR_CONTAS_DE_TESTE_ENCERRADAS,
+        [limiteDaCriacao, agora, limite],
+      );
+
+      return rows.map((linha) => linha.id);
+    },
+
+    async registrarCriacaoDeContaDeTeste(origemHmac, agora) {
+      await piscina.query(INSERIR_CRIACAO_DE_CONTA_DE_TESTE, [origemHmac, agora]);
+    },
+
+    async contarCriacoes(origemHmac, desde) {
+      const { rows } = await piscina.query<{ total: number }>(
+        CONTAR_CRIACOES_DA_ORIGEM,
+        [origemHmac, desde],
+      );
+
+      return rows[0]?.total ?? 0;
+    },
+
+    async contarContasDeTesteAtivas(agora) {
+      const { rows } = await piscina.query<{ total: number }>(
+        CONTAR_CONTAS_DE_TESTE_ATIVAS,
+        [agora],
+      );
+
+      return rows[0]?.total ?? 0;
+    },
+
+    async esquecerCriacoesAntigas(antesDe) {
+      await piscina.query(ESQUECER_CRIACOES_ANTIGAS, [antesDe]);
+    },
+
+    async registrarEnvioDeTeste(usuarioId, limite) {
+      const { rowCount } = await piscina.query(INCREMENTAR_ENVIO_DE_TESTE, [
+        usuarioId,
+        limite,
+      ]);
+
+      return rowCount === 1;
     },
   };
 

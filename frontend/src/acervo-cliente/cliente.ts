@@ -942,6 +942,8 @@ export interface ContagensDaConta {
 export interface DadosDaConta {
   nomeDeUsuario: string;
   contagens: ContagensDaConta;
+  /** Verdadeiro para a Conta de teste (030): sem troca de Senha nem exclusão. */
+  contaDeTeste: boolean;
 }
 
 /** Resultado de `obterConta`: as falhas são `indisponivel` e `nao_autenticado`. */
@@ -952,6 +954,33 @@ export type ResultadoDeObterConta =
       erro: typeof INDISPONIVEL | typeof NAO_AUTENTICADO;
       mensagem: string;
     };
+
+/**
+ * Uma recusa do servidor como o cliente a recebe: o código `erro`, a mensagem
+ * técnica em inglês e, quando cabe, `motivo` e `limite`. O texto para a pessoa
+ * sai do catálogo, por `textos.recusa` (027).
+ */
+export interface Recusa {
+  erro: string;
+  mensagem: string;
+  motivo?: string;
+  limite?: number;
+}
+
+/** Resultado de `entrarComoTeste` (030): o Nome de usuário criado, ou a recusa. */
+export type ResultadoDeEntrarComoTeste =
+  | { ok: true; nomeDeUsuario: string }
+  | { ok: false; recusa: Recusa };
+
+/** Um crédito do acervo de demonstração (030, SC-197): uma mídia e sua licença. */
+export interface CreditoDoAcervo {
+  baralho: string;
+  cartao: string;
+  titulo: string;
+  autor: string;
+  licenca: string;
+  fonte: string;
+}
 
 /** O que `trocarSenha` envia (FR-266): a Senha atual, a nova e a Confirmação. */
 export interface DadosDeTrocaDeSenha {
@@ -1341,6 +1370,15 @@ export interface ClienteDoAcervo {
    * anuncia (FR-272).
    */
   obterConta(): Promise<ResultadoDeObterConta>;
+
+  /**
+   * Cria uma Conta de teste e emite o Acesso do navegador (030, FR-487): sem
+   * autenticação, com o fuso e o Idioma da pessoa. Uma recusa vem como `recusa`.
+   */
+  entrarComoTeste(dados: { fuso: string; idioma: "pt" | "en" | "es" }): Promise<ResultadoDeEntrarComoTeste>;
+
+  /** Os créditos das mídias do acervo de demonstração (030, FR-496). */
+  obterCreditos(): Promise<CreditoDoAcervo[]>;
 
   /**
    * Troca a Senha (FR-266..FR-271). Exige a Senha atual; a nova segue o

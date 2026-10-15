@@ -244,6 +244,7 @@ export function criarFuncao(
    * compartilham a **mesma** promise (FR-122, SC-054).
    */
   let pronta: Promise<AdaptadorDoEvento> | undefined;
+  let limparContasAgendadas: (() => Promise<void>) | undefined;
 
   /**
    * Monta a aplicação: os segredos descem prontos — a URL validada pela `010`,
@@ -273,7 +274,10 @@ export function criarFuncao(
       processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredoDasSenhas, {
       aposExcluirConta: limparImagens,
+      midia: imagens,
+      contasDeTeste: aberto.armazenamento,
     });
+    limparContasAgendadas = () => identidade.limparContasDeTesteEncerradas();
     await limparImagens();
 
     /**
@@ -288,12 +292,13 @@ export function criarFuncao(
 
     const servidor = criarServidor(identidade, {
       segredoDeOrigem: segredos.segredoDeOrigem,
+      segredoDasSenhas,
       politicaDeOutraOrigem: false,
       acessos,
     });
 
-    const acervoDe = (usuarioId: string) =>
-      criarAcervo(aberto.armazenamento, usuarioId, { imagens });
+    const acervoDe = (usuarioId: string, contaDeTeste?: boolean) =>
+      criarAcervo(aberto.armazenamento, usuarioId, { imagens, contaDeTeste });
 
     registrarRotasDaAplicacao(
       servidor,
@@ -354,6 +359,14 @@ export function criarFuncao(
         );
 
         return respostaDeInicializacaoFalha();
+      }
+
+      if (
+        typeof evento === "object" && evento !== null &&
+        "acao" in evento && evento.acao === "limpar-contas-de-teste"
+      ) {
+        await limparContasAgendadas?.();
+        return { statusCode: 200, headers: {}, body: "", isBase64Encoded: false };
       }
 
       return await adaptador(evento, contexto);

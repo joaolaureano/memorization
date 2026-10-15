@@ -158,6 +158,7 @@ describe("base nova e vazia", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "criacao_de_conta_de_teste",
         "inicio_de_compromisso",
         "item_de_registro",
         "midia_a_remover",
@@ -289,7 +290,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
       );
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(21);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
       expect(
         await consultar<{ presente: string | null }>(
           "SELECT to_regclass('vinculo')::text AS presente;",
@@ -569,6 +570,7 @@ describe("falha no meio da migração — sem estado parcial", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "criacao_de_conta_de_teste",
         "inicio_de_compromisso",
         "item_de_registro",
         "midia_a_remover",
@@ -624,8 +626,12 @@ describe("migração 4 — tabela usuario", () => {
            FROM pg_indexes WHERE tablename = 'usuario';`,
       );
 
-      /** Dois índices, e só um deles é nosso: a chave primária e o único. */
+      /**
+       * Três índices: a chave primária, o único desta migração e o da migração
+       * 22 (`indice_usuario_conta_de_teste`), que a lista inteira também aplica.
+       */
       expect(indices.map((indice) => indice.nome).sort()).toEqual([
+        "indice_usuario_conta_de_teste",
         "usuario_nome_de_usuario_unico",
         "usuario_pkey",
       ]);
@@ -660,6 +666,8 @@ describe("migração 4 — tabela usuario", () => {
       );
 
       expect(colunas.map((coluna) => coluna.nome)).toEqual([
+        "conta_de_teste_em",
+        "envios_de_teste",
         "hash",
         "id",
         "nome_de_usuario",
@@ -737,6 +745,7 @@ describe("migração 4 — tabela usuario", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "criacao_de_conta_de_teste",
         "inicio_de_compromisso",
         "item_de_registro",
         "midia_a_remover",
@@ -757,6 +766,8 @@ describe("migração 4 — tabela usuario", () => {
       );
 
       expect(colunas.rows.map((linha) => linha.nome)).toEqual([
+        "conta_de_teste_em",
+        "envios_de_teste",
         "hash",
         "id",
         "nome_de_usuario",
@@ -820,6 +831,7 @@ describe("migração 6 — tabelas do Histórico de Sessão", () => {
         "baralho",
         "cartao",
         "compromisso_de_estudo",
+        "criacao_de_conta_de_teste",
         "inicio_de_compromisso",
         "item_de_registro",
         "midia_a_remover",
@@ -1140,6 +1152,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "criacao_de_conta_de_teste",
       "inicio_de_compromisso",
       "item_de_registro",
       "midia_a_remover",
@@ -1207,6 +1220,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "criacao_de_conta_de_teste",
       "inicio_de_compromisso",
       "item_de_registro",
       "midia_a_remover",
@@ -1237,6 +1251,7 @@ describe("o comando de migração da nuvem (T910, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "criacao_de_conta_de_teste",
       "inicio_de_compromisso",
       "item_de_registro",
       "midia_a_remover",

@@ -57,6 +57,8 @@ export const CODIGOS_DE_RECUSA: readonly string[] = [
   "anki_ilegivel", "anki_corrompido", "anki_incompativel", "sobreposicao",
   "audio_ausente", "audio_invalido",
   "exportacao_vazia", "exportacao_grande_demais", "exportacao_indisponivel",
+  "conta_de_teste", "contas_de_teste_esgotadas_na_origem",
+  "contas_de_teste_indisponiveis", "limite_de_midia_da_conta_de_teste",
 ];
 
 /** Os `motivo`s que mudam o texto de uma recusa. */
@@ -201,6 +203,14 @@ export const textoDaRecusaPt: TextoDaRecusa = (recusa, contexto) => {
       return `A exportação excede o limite${recusa.motivo === "cartoes" ? ` de ${limite ?? 10000} Cartões` : ` de ${new Intl.NumberFormat("pt-BR").format(limite ?? 104857600)} bytes de mídia`}. Exporte em partes.`;
     case "exportacao_indisponivel":
       return "Não foi possível gerar o arquivo. Tente novamente.";
+    case "conta_de_teste":
+      return "A Conta de teste não pode ser alterada nem excluída.";
+    case "contas_de_teste_esgotadas_na_origem":
+      return "Você criou muitas Contas de teste na última hora. Tente de novo mais tarde.";
+    case "contas_de_teste_indisponiveis":
+      return "As Contas de teste estão cheias agora. Tente de novo em alguns minutos.";
+    case "limite_de_midia_da_conta_de_teste":
+      return "A Conta de teste atingiu o limite de mídia. Remova uma imagem ou um áudio para continuar.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {
@@ -333,6 +343,14 @@ export const textoDaRecusaEn: TextoDaRecusa = (recusa, contexto) => {
       return `The export exceeds the limit${recusa.motivo === "cartoes" ? ` of ${limite ?? 10000} cards` : ` of ${new Intl.NumberFormat("en-US").format(limite ?? 104857600)} bytes of media`}. Export in parts.`;
     case "exportacao_indisponivel":
       return "The file could not be generated. Try again.";
+    case "conta_de_teste":
+      return "The Test account cannot be changed or deleted.";
+    case "contas_de_teste_esgotadas_na_origem":
+      return "You have created too many Test accounts in the last hour. Try again later.";
+    case "contas_de_teste_indisponiveis":
+      return "Test accounts are full right now. Try again in a few minutes.";
+    case "limite_de_midia_da_conta_de_teste":
+      return "The Test account has reached its media limit. Remove an image or audio to continue.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {
@@ -465,6 +483,14 @@ export const textoDaRecusaEs: TextoDaRecusa = (recusa, contexto) => {
       return `La exportación supera el límite${recusa.motivo === "cartoes" ? ` de ${limite ?? 10000} tarjetas` : ` de ${new Intl.NumberFormat("es-419").format(limite ?? 104857600)} bytes de multimedia`}. Exporta en partes.`;
     case "exportacao_indisponivel":
       return "No se pudo generar el archivo. Inténtalo de nuevo.";
+    case "conta_de_teste":
+      return "La Cuenta de prueba no se puede cambiar ni eliminar.";
+    case "contas_de_teste_esgotadas_na_origem":
+      return "Creaste demasiadas Cuentas de prueba en la última hora. Inténtalo más tarde.";
+    case "contas_de_teste_indisponiveis":
+      return "Las Cuentas de prueba están llenas en este momento. Inténtalo de nuevo en unos minutos.";
+    case "limite_de_midia_da_conta_de_teste":
+      return "La Cuenta de prueba alcanzó el límite de multimedia. Quita una imagen o un audio para continuar.";
     case "dados_invalidos":
     case "corpo_invalido":
       switch (contexto) {

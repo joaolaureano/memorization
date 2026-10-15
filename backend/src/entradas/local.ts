@@ -109,6 +109,8 @@ if (segredo !== null) {
       processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredo, {
       aposExcluirConta: limparImagens,
+      midia: imagens,
+      contasDeTeste: aberto.armazenamento,
     });
     const agora = relogioDeTeste(process.env);
 
@@ -118,12 +120,18 @@ if (segredo !== null) {
     await iniciarServidor(
       process.env,
       identidade,
-      (usuarioId) =>
-        criarAcervo(aberto.armazenamento, usuarioId, { agora, imagens }),
+      (usuarioId, contaDeTeste) =>
+        criarAcervo(aberto.armazenamento, usuarioId, { agora, imagens, contaDeTeste }),
       aberto.acessos,
       lerPacoteAnki,
       imagens,
       (servidor) => registrarRotasDeMidiaLocal(servidor, imagens),
+      segredo,
     );
+    const timerDaLimpeza = setInterval(() => {
+      void identidade.limparContasDeTesteEncerradas().catch(() => undefined);
+    }, 5 * 60 * 1000);
+    timerDaLimpeza.unref();
+    void identidade.limparContasDeTesteEncerradas().catch(() => undefined);
   }
 }

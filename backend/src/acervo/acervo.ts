@@ -24,6 +24,7 @@ export type { MotivoDeRecusaDoAudio };
 
 export const LIMITE_DE_CARTOES_DA_EXPORTACAO = 10_000;
 export const LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO = 104_857_600;
+export const LIMITE_DE_MIDIA_DA_CONTA_DE_TESTE = 20_971_520;
 /** Sobrecarga fixa do pacote exportado, ajustada às medições do FR-472 (research R6). */
 const BYTES_FIXOS_DO_PACOTE = 27_000;
 const BYTES_ESTIMADOS_POR_CARTAO = 330;
@@ -77,6 +78,7 @@ import { ehFusoValido } from "../agenda/datas.ts";
 import type { ConteudoExportado } from "../exportacao/apkg/pacote.ts";
 import { exportar } from "../exportacao/exportar.ts";
 import { ehFormatoDeExportacao, FORMATOS_DE_EXPORTACAO, type IdDoFormato } from "../exportacao/formatos.ts";
+import { ehMidiaDeDemonstracao } from "../midia/armazem.ts";
 import type {
   ArmazemDeMidia,
   MotivoDeRecusaDaMidia,
@@ -234,7 +236,7 @@ export type ResultadoDeCriacaoDeCartao =
   | { ok: true; cartao: CartaoApresentado }
   | {
       ok: false;
-      erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel";
+      erro: CodigoDeErroDeCartao | "nao_encontrado" | "indisponivel" | "limite_de_midia_da_conta_de_teste";
       mensagem: string;
       limite?: number;
     }
@@ -405,7 +407,8 @@ export type ResultadoDeEdicaoDeCartao =
         | CodigoDeErroDeCartao
         | "nao_encontrado"
         | "indisponivel"
-        | "tipo_imutavel";
+        | "tipo_imutavel"
+        | "limite_de_midia_da_conta_de_teste";
       mensagem: string;
     }
   | RecusaDaImagem
@@ -878,11 +881,16 @@ export async function processarFilaDeMidia(
     const chaves = await armazenamento.listarMidiaARemover(
       LOTE_DA_FILA_DE_IMAGENS,
     );
+    // Mídia de demonstração é compartilhada: nunca se remove; sai da fila já
+    // (FR-500), para não bloquear o lote seguinte.
+    const demonstracao = chaves.filter(ehMidiaDeDemonstracao);
+    const remover = chaves.filter((chave) => !ehMidiaDeDemonstracao(chave));
 
-    if (chaves.length > 0) {
-      await armazenamento.esquecerMidiaRemovida(
-        await imagens.remover(chaves),
-      );
+    if (demonstracao.length > 0) {
+      await armazenamento.esquecerMidiaRemovida(demonstracao);
+    }
+    if (remover.length > 0) {
+      await armazenamento.esquecerMidiaRemovida(await imagens.remover(remover));
     }
   } catch {
     // A fila continua guardada; a próxima chamada tenta de novo.
@@ -1346,12 +1354,27 @@ export function criarAcervo(
      * tipo `imagem` é recusado como `indisponivel`.
      */
     imagens?: ArmazemDeMidia;
+    contaDeTeste?: boolean;
   } = {},
 ): Acervo {
   const imagens = opcoes.imagens;
   const algoritmos = opcoes.algoritmos ?? ALGORITMOS;
   /** O instante de agora: toda decisão que depende de «hoje» passa por aqui. */
   const relogio = opcoes.agora ?? (() => new Date());
+
+  async function excedeLimiteDeMidiaDeTeste(chaveNova: string, substituirId?: string): Promise<boolean | null> {
+    if (!opcoes.contaDeTeste || imagens === undefined) return false;
+    try {
+      const cartoes = await armazenamento.listarCartoes(usuarioId);
+      const chaves = cartoes
+        .filter((cartao) => cartao.id !== substituirId)
+        .flatMap((cartao) => [cartao.imagemChave, cartao.audioChave])
+        .filter((chave): chave is string => chave !== undefined && !ehMidiaDeDemonstracao(chave));
+      return await imagens.medir([...chaves, chaveNova]) > LIMITE_DE_MIDIA_DA_CONTA_DE_TESTE;
+    } catch {
+      return null;
+    }
+  }
 
   async function lerSnapshotExportacao(pedido: PedidoDeExportacao) {
     if (!ehFormatoDeExportacao(pedido.formato) || (pedido.baralhos !== "todos" &&
@@ -1886,6 +1909,18 @@ export function criarAcervo(
         return resultado;
       };
 
+      const novaChave = imagemChave ?? audioChave;
+      const excedeLimite = novaChave === undefined ? false : await excedeLimiteDeMidiaDeTeste(novaChave);
+      if (excedeLimite === null) return recusarComMidia({ ok: false as const, ...ARMAZENAMENTO_INDISPONIVEL });
+      if (excedeLimite && novaChave !== undefined) {
+        return recusarComMidia({
+          ok: false as const,
+          erro: "limite_de_midia_da_conta_de_teste" as const,
+          mensagem: "Test account media limit reached.",
+          limite: LIMITE_DE_MIDIA_DA_CONTA_DE_TESTE,
+        });
+      }
+
       let tentativas = 0;
 
       while (tentativas < 3) {
@@ -2300,6 +2335,22 @@ export function criarAcervo(
         }
         audioChave = confirmado.chave;
         audioDuracaoMs = confirmado.duracaoMs;
+      }
+
+      const chaveNova = imagemNova ? imagemChave : audioNovo ? audioChave : undefined;
+      const excedeLimite = chaveNova === undefined ? false : await excedeLimiteDeMidiaDeTeste(chaveNova, id);
+      if (excedeLimite === null) {
+        if (chaveNova !== undefined) await descartarMidia(chaveNova).catch(() => undefined);
+        return { ok: false, ...ARMAZENAMENTO_INDISPONIVEL };
+      }
+      if (excedeLimite && chaveNova !== undefined) {
+        await descartarMidia(chaveNova).catch(() => undefined);
+        return {
+          ok: false,
+          erro: "limite_de_midia_da_conta_de_teste",
+          mensagem: "Test account media limit reached.",
+          limite: LIMITE_DE_MIDIA_DA_CONTA_DE_TESTE,
+        };
       }
 
       const gravado = await armazenamento.atualizarCartao(usuarioId, {

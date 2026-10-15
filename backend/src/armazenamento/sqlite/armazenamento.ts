@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue, StatementSync } from "node:sqlite";
 
 import type {
   Agendamento,
@@ -28,9 +28,10 @@ import type {
   RegistroDeSessao,
   RegistroResumido,
   RotinaArmazenada,
-  Usuario,
+  UsuarioLido,
   VersaoDaRotina,
 } from "../porta.ts";
+import { FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS } from "../porta.ts";
 import { normalizarFrente } from "../../acervo/invariantes.ts";
 import { chaveDaFrenteDo as chaveDaFrente } from "../../acervo/tipos-de-cartao.ts";
 import { abrirBanco } from "./esquema.ts";
@@ -176,6 +177,22 @@ function comDesfechoDeBaralhoComCopias(
  * `id` (FR-163) devolveria um retrato incompleto. O `ROLLBACK` é a mesma
  * defesa da aplicação de migrações em `esquema.ts`.
  */
+/**
+ * Um statement preparado no primeiro uso, e não na abertura. As tabelas e
+ * colunas da migração 22 podem ainda não existir enquanto uma transição anterior
+ * está pendente, e o Adapter precisa continuar abrindo o banco nesse estado.
+ */
+function preparadoSobDemanda(banco: DatabaseSync, sql: string) {
+  let statement: StatementSync | undefined;
+  const obter = (): StatementSync => (statement ??= banco.prepare(sql));
+
+  return {
+    run: (...parametros: SQLInputValue[]) => obter().run(...parametros),
+    get: (...parametros: SQLInputValue[]) => obter().get(...parametros),
+    all: (...parametros: SQLInputValue[]) => obter().all(...parametros),
+  };
+}
+
 function emTransacao<T>(
   banco: DatabaseSync,
   operacao: () => T,
@@ -357,14 +374,21 @@ function cartaoComDonoDaLinha(linha: Record<string, unknown>): CartaoComDono {
   };
 }
 
-/** Lê a linha como Usuário: o Nome de usuário e a transformação da Senha. */
-function usuarioDaLinha(linha: Record<string, unknown>): Usuario {
+/**
+ * Lê a linha como Usuário: o Nome de usuário, a transformação da Senha e a marca
+ * de Conta de teste (nula nas contas reais).
+ */
+function usuarioDaLinha(linha: Record<string, unknown>): UsuarioLido {
   return {
     id: linha.id as string,
     nomeDeUsuario: linha.nome_de_usuario as string,
     sal: linha.sal as Uint8Array,
     hash: linha.hash as Uint8Array,
     parametros: linha.parametros as string,
+    contaDeTesteEm:
+      linha.conta_de_teste_em === null || linha.conta_de_teste_em === undefined
+        ? null
+        : comoInstanteIso(linha.conta_de_teste_em),
   };
 }
 
@@ -674,15 +698,21 @@ export async function abrirArmazenamentoSqlite(
       WHERE cartao.usuario_id = ? AND pertencimento.baralho_id = ?
         AND cartao.audio_chave IS NOT NULL`,
   );
+  /**
+   * A mídia do Acervo de demonstração (`demonstracao/`) é compartilhada por
+   * todas as Contas de teste: excluir uma conta nunca a põe na fila (FR-500).
+   */
   const enfileirarMidiasDoUsuario = banco.prepare(
     `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
      SELECT imagem_chave, ? FROM cartao
-      WHERE usuario_id = ? AND imagem_chave IS NOT NULL`,
+      WHERE usuario_id = ? AND imagem_chave IS NOT NULL
+        AND substr(imagem_chave, 1, 13) <> 'demonstracao/'`,
   );
   const enfileirarAudiosDoUsuario = banco.prepare(
     `INSERT OR IGNORE INTO midia_a_remover (chave, registrada_em)
      SELECT audio_chave, ? FROM cartao
-      WHERE usuario_id = ? AND audio_chave IS NOT NULL`,
+      WHERE usuario_id = ? AND audio_chave IS NOT NULL
+        AND substr(audio_chave, 1, 13) <> 'demonstracao/'`,
   );
   const obterImagemDoCartao = banco.prepare(
     "SELECT imagem_chave FROM cartao WHERE id = ? AND usuario_id = ?",
@@ -942,13 +972,26 @@ export async function abrirArmazenamentoSqlite(
    * (FR-074). Nenhum `lower` em SQL é necessário, e não há índice extra a
    * manter.
    */
+  /**
+   * A coluna `conta_de_teste_em` vem com a migração 22, que pode ainda não estar
+   * aplicada enquanto uma transição anterior está pendente: a leitura a usa só
+   * quando existe, e nesse caso a marca é nula.
+   */
+  const colunaDeContaDeTeste =
+    banco
+      .prepare(
+        "SELECT COUNT(*) AS existe FROM pragma_table_info('usuario') WHERE name = 'conta_de_teste_em'",
+      )
+      .get()?.existe === 1
+      ? "conta_de_teste_em"
+      : "NULL AS conta_de_teste_em";
   const obterUsuarioPorNomeDeUsuario = banco.prepare(
-    `SELECT id, nome_de_usuario, sal, hash, parametros
+    `SELECT id, nome_de_usuario, sal, hash, parametros, ${colunaDeContaDeTeste}
        FROM usuario
       WHERE nome_de_usuario = ?`,
   );
   const obterUsuarioPorId = banco.prepare(
-    `SELECT id, nome_de_usuario, sal, hash, parametros
+    `SELECT id, nome_de_usuario, sal, hash, parametros, ${colunaDeContaDeTeste}
        FROM usuario
       WHERE id = ?`,
   );
@@ -1112,6 +1155,60 @@ export async function abrirArmazenamentoSqlite(
   );
   const removerAcessosExpirados = banco.prepare(
     "DELETE FROM acesso_temporario WHERE expira_em < ?",
+  );
+
+  /** Conta de teste: o Usuário marcado, criado na mesma transação do seu conteúdo. */
+  const inserirUsuarioDeTeste = preparadoSobDemanda(
+    banco,
+    `INSERT INTO usuario (id, nome_de_usuario, sal, hash, parametros, conta_de_teste_em)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  /**
+   * Encerrada: marcada há mais que a folga, sem Acesso com `expira_em` após o
+   * instante. A comparação é de texto ISO-8601 UTC, a mesma forma gravada.
+   */
+  const listarContasDeTesteEncerradas = preparadoSobDemanda(
+    banco,
+    `SELECT usuario.id
+       FROM usuario
+      WHERE usuario.conta_de_teste_em IS NOT NULL
+        AND usuario.conta_de_teste_em < ?
+        AND NOT EXISTS (
+          SELECT 1 FROM acesso_temporario acesso
+           WHERE acesso.usuario_id = usuario.id AND acesso.expira_em > ?
+        )
+      ORDER BY usuario.conta_de_teste_em, usuario.id
+      LIMIT ?`,
+  );
+  const inserirCriacaoDeContaDeTeste = preparadoSobDemanda(
+    banco,
+    `INSERT INTO criacao_de_conta_de_teste (origem_hmac, criado_em) VALUES (?, ?)`,
+  );
+  const contarCriacoesDaOrigem = preparadoSobDemanda(
+    banco,
+    `SELECT COUNT(*) AS total FROM criacao_de_conta_de_teste
+      WHERE origem_hmac = ? AND criado_em >= ?`,
+  );
+  const contarContasDeTesteAtivas = preparadoSobDemanda(
+    banco,
+    `SELECT COUNT(DISTINCT usuario.id) AS total
+       FROM usuario
+       JOIN acesso_temporario acesso ON acesso.usuario_id = usuario.id
+      WHERE usuario.conta_de_teste_em IS NOT NULL AND acesso.expira_em > ?`,
+  );
+  const esquecerCriacoesAntigas = preparadoSobDemanda(
+    banco,
+    "DELETE FROM criacao_de_conta_de_teste WHERE criado_em < ?",
+  );
+  /**
+   * O incremento condicional é uma única instrução: o SQLite serializa as
+   * escritas, e a condição `< ?` garante que o limite nunca é ultrapassado. Só
+   * conta de teste entra, e nunca uma conta real.
+   */
+  const incrementarEnvioDeTeste = preparadoSobDemanda(
+    banco,
+    `UPDATE usuario SET envios_de_teste = envios_de_teste + 1
+      WHERE id = ? AND conta_de_teste_em IS NOT NULL AND envios_de_teste < ?`,
   );
 
   const armazenamento: ArmazenamentoDoAcervo = {
@@ -2307,6 +2404,126 @@ export async function abrirArmazenamentoSqlite(
 
     async listarItensAvaliados(usuarioId) {
       return listarItensAvaliados.all(usuarioId).map(itemAvaliadoDaLinha);
+    },
+
+    async criarContaDeTeste(conta) {
+      /**
+       * Usuário, Baralhos, Registros, Agendamentos, Rotina e Preferências numa
+       * transação só: uma falha em qualquer passo desfaz tudo, e a recusa chega
+       * como `indisponivel`, nunca como conta parcial.
+       */
+      return comDesfecho(() =>
+        emTransacaoComDesfecho<Desfecho<void>>(banco, () => {
+          const { usuario } = conta;
+
+          inserirUsuarioDeTeste.run(
+            usuario.id,
+            usuario.nomeDeUsuario,
+            usuario.sal,
+            usuario.hash,
+            usuario.parametros,
+            usuario.contaDeTesteEm,
+          );
+
+          for (const { baralho, cartoes } of conta.baralhos) {
+            inserirBaralho.run(baralho.id, baralho.nome, usuario.id, JSON.stringify(baralho.tags ?? []));
+
+            for (const cartao of cartoes) {
+              inserirCartaoComDono.run(...colunasDeInsercao(cartao, usuario.id));
+              inserirPertencimento.run(cartao.id, baralho.id, chaveDaFrente(cartao));
+            }
+          }
+
+          for (const registro of conta.registros) {
+            inserirRegistro.run(
+              registro.id,
+              usuario.id,
+              registro.baralhoId,
+              registro.nomeDoBaralho,
+              registro.origem,
+              registro.concluidaEm,
+              registro.estudados,
+              registro.acertos,
+              registro.erros,
+            );
+
+            for (const item of registro.itens) {
+              inserirItemDoRegistro.run(
+                registro.id,
+                item.posicao,
+                item.frente,
+                item.verso,
+                item.resultado,
+                item.cartaoId ?? null,
+                item.avaliacao ?? null,
+                item.avaliacaoRotulo ?? null,
+                item.tipo ?? "frente-verso",
+              );
+            }
+          }
+
+          for (const agendamento of conta.agendamentos) {
+            gravarAgendamento.run(
+              usuario.id,
+              agendamento.cartaoId,
+              agendamento.algoritmo,
+              agendamento.versaoDoAlgoritmo,
+              JSON.stringify(agendamento.estado),
+              agendamento.proximaRevisaoEm,
+              agendamento.ultimaAvaliacao,
+              agendamento.revisadoEm,
+              agendamento.criadoEm,
+              agendamento.cartaoId,
+              usuario.id,
+            );
+          }
+
+          const { rotina } = conta;
+          inserirRotina.run(
+            rotina.id,
+            usuario.id,
+            rotina.baralhoId,
+            rotina.estado,
+            rotina.versao,
+            rotina.criadaEm,
+            JSON.stringify(rotina.versoes),
+          );
+
+          gravarPreferencias.run(usuario.id, conta.preferencias.algoritmo);
+
+          return { ok: true, valor: undefined };
+        }),
+      );
+    },
+
+    async listarContasDeTesteEncerradas(agora, limite) {
+      const limiteDaCriacao = new Date(
+        Date.parse(agora) - FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS,
+      ).toISOString();
+
+      return listarContasDeTesteEncerradas
+        .all(limiteDaCriacao, agora, limite)
+        .map((linha) => linha.id as string);
+    },
+
+    async registrarCriacaoDeContaDeTeste(origemHmac, agora) {
+      inserirCriacaoDeContaDeTeste.run(origemHmac, agora);
+    },
+
+    async contarCriacoes(origemHmac, desde) {
+      return Number(contarCriacoesDaOrigem.get(origemHmac, desde)?.total ?? 0);
+    },
+
+    async contarContasDeTesteAtivas(agora) {
+      return Number(contarContasDeTesteAtivas.get(agora)?.total ?? 0);
+    },
+
+    async esquecerCriacoesAntigas(antesDe) {
+      esquecerCriacoesAntigas.run(antesDe);
+    },
+
+    async registrarEnvioDeTeste(usuarioId, limite) {
+      return Number(incrementarEnvioDeTeste.run(usuarioId, limite).changes) === 1;
     },
   };
 

@@ -1,10 +1,15 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
+import { ehFusoValido } from "../agenda/datas.ts";
 import type {
   ArmazenamentoDeUsuarios,
+  ArmazenamentoDoAcervo,
   ContagensDaConta,
   Usuario,
 } from "../armazenamento/porta.ts";
+import { montarContaDeTeste } from "../demonstracao/conta.ts";
+import { garantirMidiaDeDemonstracao } from "../demonstracao/midia.ts";
+import type { ArmazemDeMidia } from "../midia/armazem.ts";
 import {
   CREDENCIAL_INVALIDA,
   NOME_DE_USUARIO_EXISTENTE,
@@ -70,6 +75,7 @@ export interface DadosDeCadastro {
 export interface UsuarioCadastrado {
   id: string;
   nomeDeUsuario: string;
+  contaDeTeste?: boolean;
 }
 
 /**
@@ -111,6 +117,23 @@ export type ResultadoDeEntrada =
       mensagem: string;
     };
 
+/** O que `criarContaDeTeste` recebe: o fuso e o idioma do visitante e a origem já reduzida a HMAC (R5). */
+export interface DadosDaContaDeTeste {
+  fuso: string;
+  idioma: string;
+  origem: string;
+  /** O instante da criação; ausente, o relógio do processo. */
+  agora?: Date;
+}
+
+/**
+ * Resultado de `criarContaDeTeste`. `dados_invalidos` é o fuso malformado; os
+ * limites de criação (T037) acrescentam códigos de recusa aqui.
+ */
+export type ResultadoDeContaDeTeste =
+  | { ok: true; usuario: UsuarioCadastrado }
+  | { ok: false; erro: "dados_invalidos" | "indisponivel" | "esgotadas_na_origem" | "contas_esgotadas" };
+
 /**
  * Interface profunda do Module `Identidade`: dois verbos, `cadastrar` e
  * `autenticar`. O primeiro esconde a validação das duas regras, a geração do
@@ -130,9 +153,22 @@ export interface Identidade extends GestaoDeConta {
   obterUsuario(
     usuarioId: string,
   ): Promise<
-    | { ok: true; usuario: UsuarioCadastrado }
+    | { ok: true; usuario: UsuarioCadastrado & { contaDeTeste: boolean } }
     | { ok: false; erro: "nao_encontrado" | "indisponivel" }
   >;
+
+  /**
+   * Cria uma Conta de teste (030): um Usuário marcado, com o conteúdo de
+   * demonstração, gravado numa única transação. Fuso inválido é
+   * `dados_invalidos`; qualquer falha da montagem, da mídia ou da gravação é
+   * `indisponivel`, e nada fica guardado.
+   */
+  criarContaDeTeste(
+    dados: DadosDaContaDeTeste,
+  ): Promise<ResultadoDeContaDeTeste>;
+  encerrarContaDeTeste(usuarioId: string): Promise<boolean>;
+  limparContasDeTesteEncerradas(agora?: Date, limite?: number): Promise<void>;
+  reservarEnvioDeMidia(usuarioId: string): Promise<"ok" | "limite" | "indisponivel">;
 
   /**
    * Cadastra um Usuário com Nome de usuário e Senha.
@@ -191,6 +227,7 @@ export type CodigoDeErroDeConta =
   | "dados_invalidos"
   | "mesma_senha"
   | "senha_atual_incorreta"
+  | "conta_de_teste"
   | "indisponivel";
 
 /** Campo do formulário a que a recusa de validação se refere. */
@@ -232,6 +269,11 @@ export const SENHA_ATUAL_INCORRETA = {
 const MESMA_SENHA = {
   erro: "mesma_senha",
   mensagem: "New password is the same as current password.",
+} as const;
+
+const CONTA_DE_TESTE = {
+  erro: "conta_de_teste",
+  mensagem: "Test accounts cannot be changed.",
 } as const;
 
 /**
@@ -285,6 +327,14 @@ const ARMAZENAMENTO_INDISPONIVEL = {
 const TAMANHO_DO_DESCARTAVEL = 32;
 
 /**
+ * Ponto único de conferência dos limites de criação da Conta de teste (T037:
+ * por origem, global e de Acesso). Por ora não há limite: devolve `ok`.
+ */
+const JANELA_DE_CRIACAO_MS = 60 * 60 * 1000;
+const LIMITE_POR_ORIGEM = 10;
+const LIMITE_GLOBAL_DE_CONTAS = 300;
+
+/**
  * Compara duas chaves derivadas em tempo constante (FR-088). O comprimento é
  * conferido antes porque `timingSafeEqual` recusa comprimentos diferentes; as
  * duas chaves vêm da mesma derivação e têm o tamanho gravado nos parâmetros.
@@ -314,6 +364,25 @@ export function criarIdentidade(
      * a fila continua guardada para a próxima vez.
      */
     aposExcluirConta?: () => Promise<void>;
+    /**
+     * O armazém de Mídia usado para gravar as Mídias fixas do Acervo de
+     * demonstração na primeira Conta de teste (030, R13). Sem ele, a criação
+     * de Conta de teste é `indisponivel`.
+     */
+    midia?: ArmazemDeMidia;
+    /**
+     * A Porta que grava a Conta de teste inteira numa transação (030, R2). É a
+     * mesma Porta do Acervo, sobre o mesmo arquivo; sem ela a criação é
+     * `indisponivel`.
+     */
+    contasDeTeste?: Pick<ArmazenamentoDoAcervo, "criarContaDeTeste"> & Partial<Pick<ArmazenamentoDoAcervo,
+      | "contarCriacoes"
+      | "contarContasDeTesteAtivas"
+      | "registrarCriacaoDeContaDeTeste"
+      | "listarContasDeTesteEncerradas"
+      | "esquecerCriacoesAntigas"
+      | "registrarEnvioDeTeste"
+    >>;
   } = {},
 ): Identidade {
   /**
@@ -414,6 +483,10 @@ export function criarIdentidade(
         };
       }
 
+      const usuarioAtual = await armazenamento.obterUsuarioPorId(usuarioId);
+      if (usuarioAtual.ok && usuarioAtual.valor.contaDeTesteEm !== null) {
+        return { ok: false, ...CONTA_DE_TESTE };
+      }
       const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
 
       if (!conferida.ok) {
@@ -433,6 +506,10 @@ export function criarIdentidade(
     },
 
     async excluirConta(usuarioId, dados) {
+      const usuarioAtual = await armazenamento.obterUsuarioPorId(usuarioId);
+      if (usuarioAtual.ok && usuarioAtual.valor.contaDeTesteEm !== null) {
+        return { ok: false, ...CONTA_DE_TESTE };
+      }
       const conferida = await conferirSenhaAtual(usuarioId, dados.senhaAtual);
 
       if (!conferida.ok) {
@@ -463,8 +540,100 @@ export function criarIdentidade(
 
       return {
         ok: true,
-        usuario: { id: lido.valor.id, nomeDeUsuario: lido.valor.nomeDeUsuario },
+        usuario: {
+          id: lido.valor.id,
+          nomeDeUsuario: lido.valor.nomeDeUsuario,
+          contaDeTeste: lido.valor.contaDeTesteEm !== null,
+        },
       };
+    },
+
+    async criarContaDeTeste(dados) {
+      if (!ehFusoValido(dados.fuso)) {
+        return { ok: false, erro: "dados_invalidos" };
+      }
+
+      if (opcoes.midia === undefined || opcoes.contasDeTeste === undefined) {
+        return { ok: false, erro: "indisponivel" };
+      }
+
+      const agora = dados.agora ?? new Date();
+      const desde = new Date(agora.getTime() - JANELA_DE_CRIACAO_MS).toISOString();
+      try {
+        if ((await opcoes.contasDeTeste.contarCriacoes?.(dados.origem, desde) ?? 0) >= LIMITE_POR_ORIGEM) {
+          return { ok: false, erro: "esgotadas_na_origem" };
+        }
+        if ((await opcoes.contasDeTeste.contarContasDeTesteAtivas?.(agora.toISOString()) ?? 0) >= LIMITE_GLOBAL_DE_CONTAS) {
+          return { ok: false, erro: "contas_esgotadas" };
+        }
+        await this.limparContasDeTesteEncerradas(agora, 20);
+      } catch {
+        return { ok: false, erro: "indisponivel" };
+      }
+
+      try {
+        await garantirMidiaDeDemonstracao(opcoes.midia);
+
+        const conta = await montarContaDeTeste({
+          agora,
+          fuso: dados.fuso,
+          gerarId: randomUUID,
+          credencialAleatoria: () =>
+            derivarDaSenha(
+              segredo,
+              randomBytes(TAMANHO_DO_DESCARTAVEL).toString("base64url"),
+            ),
+        });
+
+        const gravada = await opcoes.contasDeTeste.criarContaDeTeste(conta);
+
+        if (!gravada.ok) {
+          return { ok: false, erro: "indisponivel" };
+        }
+
+        await opcoes.contasDeTeste.registrarCriacaoDeContaDeTeste?.(dados.origem, agora.toISOString());
+
+        return {
+          ok: true,
+          usuario: {
+            id: conta.usuario.id,
+            nomeDeUsuario: conta.usuario.nomeDeUsuario,
+          },
+        };
+      } catch {
+        return { ok: false, erro: "indisponivel" };
+      }
+    },
+
+    async encerrarContaDeTeste(usuarioId) {
+      const lido = await armazenamento.obterUsuarioPorId(usuarioId);
+      if (!lido.ok || lido.valor.contaDeTesteEm === null) return false;
+      const excluido = await armazenamento.excluirUsuario(usuarioId);
+      if (excluido.ok) await opcoes.aposExcluirConta?.().catch(() => undefined);
+      return excluido.ok;
+    },
+
+    async limparContasDeTesteEncerradas(agora = new Date(), limite = 20) {
+      if (opcoes.contasDeTeste === undefined) return;
+      const instante = agora.toISOString();
+      const ids = await opcoes.contasDeTeste.listarContasDeTesteEncerradas?.(instante, limite) ?? [];
+      for (const id of ids) {
+        await armazenamento.excluirUsuario(id);
+      }
+      await opcoes.contasDeTeste.esquecerCriacoesAntigas?.(new Date(agora.getTime() - JANELA_DE_CRIACAO_MS).toISOString());
+      await opcoes.aposExcluirConta?.().catch(() => undefined);
+    },
+
+    async reservarEnvioDeMidia(usuarioId) {
+      const lido = await armazenamento.obterUsuarioPorId(usuarioId);
+      if (!lido.ok) return lido.erro === "nao_encontrado" ? "indisponivel" : "indisponivel";
+      if (lido.valor.contaDeTesteEm === null) return "ok";
+      if (opcoes.contasDeTeste?.registrarEnvioDeTeste === undefined) return "indisponivel";
+      try {
+        return await opcoes.contasDeTeste.registrarEnvioDeTeste(usuarioId, 30) ? "ok" : "limite";
+      } catch {
+        return "indisponivel";
+      }
     },
 
     async cadastrar(dados) {
@@ -529,7 +698,7 @@ export function criarIdentidade(
         referencia.parametros,
       );
 
-      if (!encontrado.ok || !chavesIguais(referencia.hash, candidato)) {
+      if (!encontrado.ok || encontrado.valor.contaDeTesteEm !== null || !chavesIguais(referencia.hash, candidato)) {
         return { ok: false, ...CREDENCIAL_INVALIDA };
       }
 

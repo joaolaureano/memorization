@@ -1,7 +1,9 @@
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,6 +12,7 @@ import type {
   CartaoListado,
   ClienteDoAcervo,
   CompromissoDeEstudo,
+  CreditoDoAcervo,
 } from "../src/acervo-cliente/cliente";
 import {
   INDISPONIVEL,
@@ -242,5 +245,118 @@ describe("PaginaDeInicio", () => {
         .getByRole("link", { name: "Ver todos em Estudo" })
         .getAttribute("href"),
     ).toBe("#/estudo");
+  });
+});
+
+/** Os créditos de prova, no formato de `GET /demonstracao/creditos` (030). */
+const CREDITOS_DE_PROVA: CreditoDoAcervo[] = [
+  {
+    baralho: "Bandeiras",
+    cartao: "Brasil",
+    titulo: "Bandeira do Brasil",
+    autor: "Autor de exemplo",
+    licenca: "CC0 1.0",
+    fonte: "https://example.test/bandeira-do-brasil",
+  },
+  {
+    baralho: "Bandeiras",
+    cartao: "Alemanha",
+    titulo: "Bandeira da Alemanha",
+    autor: "Autor de outro exemplo",
+    licenca: "CC BY 4.0",
+    fonte: "https://example.test/bandeira-da-alemanha",
+  },
+];
+
+function clienteDaContaDeTeste(): ClienteDoAcervo {
+  return {
+    ...clienteDeProva(),
+    obterCreditos: async () => CREDITOS_DE_PROVA,
+  } as unknown as ClienteDoAcervo;
+}
+
+describe("PaginaDeInicio — Conta de teste (030, FR-490, FR-494)", () => {
+  it("sem Conta de teste, não mostra o aviso nem o link de créditos", async () => {
+    render(
+      <PaginaDeInicio cliente={clienteDaContaDeTeste()} nomeDeUsuario="joao" />,
+    );
+
+    await screen.findByRole("heading", { name: "Agenda de hoje" });
+
+    expect(
+      screen.queryByText("Esta é uma Conta de teste. Tudo será apagado ao sair."),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Créditos do acervo de demonstração" }),
+    ).toBeNull();
+  });
+
+  it("com Conta de teste, mostra o aviso e o link de créditos", async () => {
+    render(
+      <PaginaDeInicio
+        cliente={clienteDaContaDeTeste()}
+        nomeDeUsuario="joao"
+        contaDeTeste
+      />,
+    );
+
+    expect(
+      screen.getByText("Esta é uma Conta de teste. Tudo será apagado ao sair."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Créditos do acervo de demonstração" }),
+    ).toBeInTheDocument();
+  });
+
+  it("o diálogo lista título, autor, licença e fonte de cada mídia (FR-494)", async () => {
+    render(
+      <PaginaDeInicio
+        cliente={clienteDaContaDeTeste()}
+        nomeDeUsuario="joao"
+        contaDeTeste
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("link", { name: "Créditos do acervo de demonstração" }),
+    );
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Créditos do acervo de demonstração",
+    });
+
+    for (const credito of CREDITOS_DE_PROVA) {
+      const linha = within(dialogo).getByText(credito.titulo).closest("tr") as HTMLElement;
+      expect(within(linha).getByText(credito.autor)).toBeInTheDocument();
+      expect(within(linha).getByText(credito.licenca)).toBeInTheDocument();
+      expect(within(linha).getByRole("link", { name: credito.fonte })).toHaveAttribute(
+        "href",
+        credito.fonte,
+      );
+    }
+  });
+
+  it("fecha com Esc e devolve o foco ao link que o abriu", async () => {
+    render(
+      <PaginaDeInicio
+        cliente={clienteDaContaDeTeste()}
+        nomeDeUsuario="joao"
+        contaDeTeste
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: "Créditos do acervo de demonstração",
+    });
+    fireEvent.click(link);
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Créditos do acervo de demonstração",
+    });
+
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+
+    await waitFor(() => expect(dialogo).not.toHaveAttribute("open"));
+    expect(link).toHaveFocus();
   });
 });

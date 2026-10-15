@@ -46,6 +46,10 @@ describe("recusas", () => {
     "exportacao_vazia",
     "exportacao_grande_demais",
     "exportacao_indisponivel",
+    "conta_de_teste",
+    "contas_de_teste_esgotadas_na_origem",
+    "contas_de_teste_indisponiveis",
+    "limite_de_midia_da_conta_de_teste",
   ];
 
   it("has all expected codes", () => {
@@ -120,6 +124,19 @@ describe("recusas", () => {
     expect(MENSAGENS_TECNICAS.exportacao_vazia).toBe("Nothing to export.");
     expect(MENSAGENS_TECNICAS.exportacao_grande_demais).toBe("Export exceeds the size limit.");
     expect(MENSAGENS_TECNICAS.exportacao_indisponivel).toBe("Export is unavailable.");
+  });
+
+  it("test account refusals have the exact English messages", () => {
+    expect(MENSAGENS_TECNICAS.conta_de_teste).toBe("Test accounts cannot be changed.");
+    expect(MENSAGENS_TECNICAS.contas_de_teste_esgotadas_na_origem).toBe(
+      "Too many test accounts from this address. Try again later.",
+    );
+    expect(MENSAGENS_TECNICAS.contas_de_teste_indisponiveis).toBe(
+      "Test accounts are temporarily unavailable.",
+    );
+    expect(MENSAGENS_TECNICAS.limite_de_midia_da_conta_de_teste).toBe(
+      "Test account media limit reached.",
+    );
   });
 
   it("recusaDeAudioInvalido builds size refusal with limit", () => {

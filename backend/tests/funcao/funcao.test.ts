@@ -371,6 +371,13 @@ function semCookie(resposta: RespostaMedida): void {
 }
 
 describe("as guardas da função, por eventos sintéticos (T1005)", () => {
+  it("trata o evento agendado de limpeza fora do adaptador HTTP", async () => {
+    const resposta = await funcao.handler({ acao: "limpar-contas-de-teste" }, {});
+
+    expect(resposta.statusCode).toBe(200);
+    expect(resposta.body).toBe("");
+  }, 60_000);
+
   it("recusa com 403 a requisição sem o segredo de origem, sem revelar o motivo", async () => {
     const resposta = await pedir(funcao, "GET", "/health");
 

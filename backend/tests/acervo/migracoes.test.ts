@@ -137,7 +137,7 @@ describe("migrações 13 e 14 — transição gradual de Pertencimento", () => {
 
       aplicarEsquema(banco);
 
-      expect(versaoAtual(banco)).toBe(21);
+      expect(versaoAtual(banco)).toBe(22);
       expect(existeTabela(banco, "vinculo")).toBe(false);
       expect(contarLinhas(banco, "pertencimento")).toBe(4);
     } finally {
@@ -581,7 +581,7 @@ describe("migração 7 — repetição espaçada", () => {
       aplicarEsquema(banco);
 
       expect(versaoAtual(banco)).toBe(20);
-      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(21);
+      expect(ULTIMA_VERSAO_DO_ESQUEMA).toBe(22);
 
       expect(existeTabela(banco, "agendamento")).toBe(true);
       expect(existeTabela(banco, "preferencias")).toBe(true);

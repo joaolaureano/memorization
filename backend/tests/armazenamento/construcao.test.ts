@@ -74,6 +74,31 @@ const DIRETORIO_DA_FUNCAO = join(DIRETORIO_DE_SAIDA, "lambda");
 const PACOTE_DA_FUNCAO = join(DIRETORIO_DA_FUNCAO, "lambda.mjs");
 const ZIP_DA_FUNCAO = join(RAIZ_DO_BACKEND, "dist-lambda.zip");
 
+/**
+ * A pasta de dados da demonstração (R3, R13): `creditos.json` e a mídia das
+ * Bandeiras e dos Pássaros. Todo bundle executável a leva ao lado de si.
+ */
+const DIRETORIO_DA_DEMONSTRACAO = join(RAIZ_DO_BACKEND, "demonstracao");
+
+/** Os caminhos relativos, com `/`, de todos os arquivos de `raiz`, em ordem. */
+function listarArquivos(raiz: string, relativa = ""): string[] {
+  const caminhos: string[] = [];
+
+  for (const entrada of readdirSync(join(raiz, relativa), {
+    withFileTypes: true,
+  })) {
+    const caminho = relativa === "" ? entrada.name : `${relativa}/${entrada.name}`;
+
+    if (entrada.isDirectory()) {
+      caminhos.push(...listarArquivos(raiz, caminho));
+    } else {
+      caminhos.push(caminho);
+    }
+  }
+
+  return caminhos.sort();
+}
+
 /** A forma da mensagem de recusa, com os valores aceitos derivados da tabela. */
 const CONSTRUCAO_RECUSADA =
   "Construção recusada. Informe --banco=<valor>, com um dos valores aceitos: " +
@@ -336,9 +361,20 @@ describe("pacote do armazenamento local", () => {
     expect(resultado.status).toBe(0);
     expect(saidaDe(resultado)).toContain("sqlite");
     expect(readdirSync(DIRETORIO_DE_SAIDA)).toEqual(["sqlite"]);
-    expect(readdirSync(join(DIRETORIO_DE_SAIDA, "sqlite"))).toEqual([
+    expect(readdirSync(join(DIRETORIO_DE_SAIDA, "sqlite")).sort()).toEqual([
+      "demonstracao",
       "servidor.mjs",
     ]);
+  });
+
+  it("leva a pasta demonstracao, com creditos.json e os 20 arquivos de mídia, ao lado do pacote (R3, R13)", () => {
+    const origem = listarArquivos(DIRETORIO_DA_DEMONSTRACAO);
+
+    expect(origem).toHaveLength(21);
+    expect(origem).toContain("creditos.json");
+    expect(
+      listarArquivos(join(DIRETORIO_DE_SAIDA, "sqlite", "demonstracao")),
+    ).toEqual(origem);
   });
 
   it("carrega a entrada local do armazenamento escolhido (FR-101)", () => {
@@ -589,9 +625,13 @@ describe("pacotes e inícios de cada armazenamento", () => {
     expect(saidaDe(resultadoDaNuvem)).toContain("migrar.mjs");
 
     expect(readdirSync(join(DIRETORIO_DE_SAIDA, "postgresql")).sort()).toEqual([
+      "demonstracao",
       "migrar.mjs",
       "servidor.mjs",
     ]);
+    expect(
+      listarArquivos(join(DIRETORIO_DE_SAIDA, "postgresql", "demonstracao")),
+    ).toEqual(listarArquivos(DIRETORIO_DA_DEMONSTRACAO));
   });
 
   it("o pacote local não contém pg nem o Adapter do armazenamento da nuvem", () => {
@@ -679,6 +719,7 @@ describe("pacotes e inícios de cada armazenamento", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "criacao_de_conta_de_teste",
       "inicio_de_compromisso",
       "item_de_registro",
       "midia_a_remover",
@@ -859,7 +900,10 @@ describe("pacote da função", () => {
     expect(saida).toContain("dist/lambda/lambda.mjs");
     expect(saida).toContain("dist-lambda.zip");
 
-    expect(readdirSync(DIRETORIO_DA_FUNCAO)).toEqual(["lambda.mjs"]);
+    expect(readdirSync(DIRETORIO_DA_FUNCAO).sort()).toEqual([
+      "demonstracao",
+      "lambda.mjs",
+    ]);
     expect(existsSync(ZIP_DA_FUNCAO)).toBe(true);
   });
 
@@ -873,9 +917,30 @@ describe("pacote da função", () => {
     const nomes = listagem.stdout
       .split("\n")
       .map((linha) => linha.trim())
-      .filter((linha) => linha !== "");
+      .filter((linha) => linha !== "" && !linha.endsWith("/"));
 
-    expect(nomes).toEqual(["lambda.mjs"]);
+    expect(nomes).toContain("lambda.mjs");
+    expect(nomes.filter((nome) => !nome.startsWith("demonstracao/"))).toEqual([
+      "lambda.mjs",
+    ]);
+  });
+
+  it("o zip leva demonstracao/creditos.json e os 20 arquivos de mídia (R3, R13)", () => {
+    const listagem = spawnSync("unzip", ["-Z1", ZIP_DA_FUNCAO], {
+      encoding: "utf8",
+    });
+
+    expect(listagem.status).toBe(0);
+
+    const dentroDaDemonstracao = listagem.stdout
+      .split("\n")
+      .map((linha) => linha.trim())
+      .filter((linha) => linha.startsWith("demonstracao/") && !linha.endsWith("/"))
+      .map((linha) => linha.slice("demonstracao/".length))
+      .sort();
+
+    expect(dentroDaDemonstracao).toHaveLength(21);
+    expect(dentroDaDemonstracao).toEqual(listarArquivos(DIRETORIO_DA_DEMONSTRACAO));
   });
 
   it("não contém o Adapter do armazenamento local nem node:sqlite (FR-130)", () => {

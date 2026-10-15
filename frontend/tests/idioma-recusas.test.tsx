@@ -85,6 +85,8 @@ describe("recusa do servidor apresentada no idioma vigente", () => {
       "descricao_muito_longa", "credencial_invalida", "acesso_expirado",
       "anki_grande_demais", "anki_ilegivel", "anki_corrompido",
       "anki_incompativel",
+      "conta_de_teste", "contas_de_teste_esgotadas_na_origem",
+      "contas_de_teste_indisponiveis", "limite_de_midia_da_conta_de_teste",
     ];
 
     for (const erro of codigos) {

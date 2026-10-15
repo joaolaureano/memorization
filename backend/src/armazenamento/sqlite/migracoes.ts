@@ -766,4 +766,27 @@ export const MIGRACOES: readonly Migracao[] = [
     sql: `${ESQUEMA_FINALIZAR_TRANSICAO}\n${ESQUEMA_NOME_DA_REVISAO}`,
     precondicao: PODE_REMOVER_VINCULO,
   },
+  /**
+   * A 22 introduz a Conta de teste (030, data-model "Migração 22"): colunas em
+   * `usuario` (nula ou zero para as contas reais), o índice parcial de
+   * `conta_de_teste_em` e a tabela de criações, com o limite por origem (R5).
+   * Não toca nas linhas existentes. Tem a precondição da 18, 19 e 21: sem ela,
+   * a versão pularia as migrações adiadas, que não voltariam a rodar.
+   */
+  {
+    versao: 22,
+    precondicao: PODE_REMOVER_VINCULO,
+    sql: `
+ALTER TABLE usuario ADD COLUMN conta_de_teste_em TEXT NULL;
+ALTER TABLE usuario ADD COLUMN envios_de_teste INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX indice_usuario_conta_de_teste
+  ON usuario (conta_de_teste_em) WHERE conta_de_teste_em IS NOT NULL;
+CREATE TABLE criacao_de_conta_de_teste (
+  origem_hmac TEXT NOT NULL,
+  criado_em   TEXT NOT NULL
+);
+CREATE INDEX indice_criacao_de_conta_de_teste_por_origem
+  ON criacao_de_conta_de_teste (origem_hmac, criado_em);
+`,
+  },
 ];

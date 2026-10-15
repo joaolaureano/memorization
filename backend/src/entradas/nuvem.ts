@@ -206,6 +206,8 @@ if (
       processarFilaDeMidia(aberto.armazenamento, imagens);
     const identidade = criarIdentidade(aberto.usuarios, segredo, {
       aposExcluirConta: limparImagens,
+      midia: imagens,
+      contasDeTeste: aberto.armazenamento,
     });
 
     console.log(LINHA_DE_INICIO);
@@ -214,10 +216,12 @@ if (
     await iniciarServidor(
       process.env,
       identidade,
-      (usuarioId) => criarAcervo(aberto.armazenamento, usuarioId, { imagens }),
+      (usuarioId, contaDeTeste) => criarAcervo(aberto.armazenamento, usuarioId, { imagens, contaDeTeste }),
       aberto.acessos,
       lerPacoteAnki,
       imagens,
+      undefined,
+      segredo,
     );
   }
 }

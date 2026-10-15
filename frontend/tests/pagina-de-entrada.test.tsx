@@ -16,6 +16,7 @@ import {
   SENHA_DE_PROVA,
   clienteDeProva,
   outraCredencialDeProva,
+  renderizarComIdioma,
 } from "./apoio-de-prova";
 
 /**
@@ -167,6 +168,107 @@ describe("PaginaDeEntrada — campos, acesso e Credencial", () => {
       CREDENCIAL_DE_PROVA.nomeDeUsuario,
     );
     expect(screen.getByLabelText("Senha")).toHaveValue("");
+  });
+});
+
+describe("PaginaDeEntrada — Entrar como Teste (030, FR-487, FR-503)", () => {
+  const FUSO = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  it("mostra o botão e a frase abaixo do formulário, separados por «ou»", () => {
+    renderizarEntrada();
+
+    const botao = screen.getByRole("button", { name: "Entrar como Teste" });
+    const formulario = document.querySelector("form") as HTMLFormElement;
+
+    expect(botao).toBeEnabled();
+    expect(screen.getByText("ou")).toBeInTheDocument();
+    expect(
+      screen.getByText("Experimente com Baralhos de exemplo. Tudo é apagado ao sair."),
+    ).toBeInTheDocument();
+    expect(
+      formulario.compareDocumentPosition(botao) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("ao criar, anuncia o preparo em região de status com o botão desabilitado, e envia fuso e idioma", async () => {
+    const cliente = clienteDeProva();
+    let concluir: () => void = () => {};
+    const pendente = new Promise<void>((resolver) => {
+      concluir = resolver;
+    });
+    const entrarComoTeste = vi
+      .spyOn(cliente, "entrarComoTeste")
+      .mockImplementation(async () => {
+        await pendente;
+
+        return { ok: true, nomeDeUsuario: "teste-exemplo" };
+      });
+    const aoEntrar = vi.fn();
+
+    render(<PaginaDeEntrada cliente={cliente} aoEntrar={aoEntrar} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Entrar como Teste" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Preparando sua Conta de teste…");
+    expect(screen.getByRole("button", { name: "Entrar como Teste" })).toBeDisabled();
+    expect(entrarComoTeste).toHaveBeenCalledWith({ fuso: FUSO, idioma: "pt" });
+
+    concluir();
+
+    // O sucesso leva ao Início como o Acesso de «Continuar conectado»: sem
+    // Credencial mantida na página e com o Acesso do navegador (018).
+    await waitFor(() => expect(aoEntrar).toHaveBeenCalledTimes(1));
+    expect(aoEntrar.mock.calls[0]?.[0]).toMatchObject({ nomeDeUsuario: "teste-exemplo" });
+    expect(aoEntrar.mock.calls[0]?.[1]).toMatchObject({
+      continuarConectado: true,
+      usuario: { nomeDeUsuario: "teste-exemplo" },
+    });
+  });
+
+  it.each([
+    ["contas_de_teste_esgotadas_na_origem", "Você criou muitas Contas de teste na última hora. Tente de novo mais tarde."],
+    ["contas_de_teste_indisponiveis", "As Contas de teste estão cheias agora. Tente de novo em alguns minutos."],
+  ])("a recusa %s mostra a mensagem e leva o foco a ela (FR-503)", async (erro, mensagem) => {
+    const cliente = clienteDeProva();
+    vi.spyOn(cliente, "entrarComoTeste").mockResolvedValue({
+      ok: false,
+      recusa: { erro, mensagem: "technical" },
+    });
+    const aoEntrar = vi.fn();
+
+    render(<PaginaDeEntrada cliente={cliente} aoEntrar={aoEntrar} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Entrar como Teste" }));
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent(mensagem);
+    await waitFor(() => expect(alerta).toHaveFocus());
+    expect(
+      screen.getByRole("button", { name: "Entrar como Teste" }),
+    ).toBeEnabled();
+    expect(aoEntrar).not.toHaveBeenCalled();
+  });
+
+  it("em espanhol, o botão e a recusa saem do catálogo es", async () => {
+    const cliente = clienteDeProva();
+    vi.spyOn(cliente, "entrarComoTeste").mockResolvedValue({
+      ok: false,
+      recusa: { erro: "contas_de_teste_indisponiveis", mensagem: "technical" },
+    });
+
+    render(
+      renderizarComIdioma(
+        <PaginaDeEntrada cliente={cliente} aoEntrar={() => {}} />,
+        "es",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Entrar como Prueba" }));
+
+    const alerta = await screen.findByRole("alert");
+    expect(alerta).toHaveTextContent(/Cuentas de prueba/);
+    await waitFor(() => expect(alerta).toHaveFocus());
   });
 });
 
@@ -425,11 +527,13 @@ describe("PaginaDeEntrada por teclado", () => {
       "Continuar conectado neste navegador",
     );
     const botaoDeEntrada = screen.getByRole("button", { name: "Entrar" });
+    const botaoDeTeste = screen.getByRole("button", { name: "Entrar como Teste" });
     const acessoAoCadastro = screen.getByRole("link", { name: "Criar conta" });
 
     // A ordem de tabulação é a ordem visual da coluna única: os dois campos, o
     // botão que revela a Senha, a opção de continuidade (FR-292, FR-302), a
-    // submissão e o acesso a "Criar conta".
+    // submissão, o «Entrar como Teste» depois do «ou» (030, FR-487) e o acesso
+    // a "Criar conta".
     const controles = controlesInterativos();
 
     expect(controles).toEqual([
@@ -438,6 +542,7 @@ describe("PaginaDeEntrada por teclado", () => {
       botaoDeVisibilidade,
       caixaDeContinuidade,
       botaoDeEntrada,
+      botaoDeTeste,
       acessoAoCadastro,
     ]);
 

@@ -2351,3 +2351,113 @@ label.campo--opcao {
     font-size: 18px;
   }
 }
+
+/* 030: Conta de teste. Alvos de 44 px, sem rolagem horizontal em 360 px. */
+.ca-etiqueta-conta {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ca-separador {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+  color: var(--muted);
+}
+.ca-separador::before,
+.ca-separador::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+.ca-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-block: 12px;
+}
+.ca-acoes > .botao {
+  min-height: 44px;
+  max-width: 100%;
+}
+.ca-status {
+  min-height: 1.5em;
+  margin: 8px 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.ca-aviso-conta {
+  margin-bottom: 24px;
+}
+.ca-aviso-conta p {
+  margin: 0;
+}
+.ca-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.ca-tabela-creditos {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  overflow-wrap: anywhere;
+}
+.ca-tabela-creditos th,
+.ca-tabela-creditos td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.ca-tabela-creditos a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .ca-tabela-creditos thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .ca-tabela-creditos,
+  .ca-tabela-creditos tbody,
+  .ca-tabela-creditos tr,
+  .ca-tabela-creditos td {
+    display: block;
+    width: 100%;
+  }
+  .ca-tabela-creditos tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .ca-tabela-creditos td {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 4px 12px;
+    padding: 4px 0;
+    border-bottom: 0;
+  }
+  .ca-tabela-creditos td::before {
+    content: attr(data-rotulo);
+    color: var(--muted);
+  }
+}

@@ -1,6 +1,80 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /**
+     * A subchave da origem de Conta de teste (030, R5), derivada do
+     * SEGREDO_DAS_SENHAS na construção do servidor. `null` quando o servidor foi
+     * montado sem o segredo: a criação de Conta de teste então responde
+     * `indisponivel`, e nunca cria conta sem poder contar a origem.
+     */
+    subchaveDeOrigemDeContaDeTeste: Buffer | null;
+  }
+}
+
+/**
+ * `subchave = HMAC-SHA256(SEGREDO_DAS_SENHAS, "origem-de-conta-de-teste")`
+ * (030, R5). Assim a chave das Senhas não é reaproveitada diretamente para
+ * outro fim, e não há segredo novo para cuidar.
+ */
+export function derivarSubchaveDeOrigem(segredoDasSenhas: string): Buffer {
+  return createHmac("sha256", segredoDasSenhas)
+    .update("origem-de-conta-de-teste")
+    .digest();
+}
+
+/**
+ * A origem guardada de um visitante: `HMAC-SHA256(subchave, ip)`, em hexadecimal.
+ * O IP nunca sai daqui em claro — nem em log, nem em tabela (030, R5).
+ */
+export function origemDeContaDeTeste(subchave: Buffer, ip: string): string {
+  return createHmac("sha256", subchave).update(ip).digest("hex");
+}
+
+/** Tira a porta de `IP:porta` e os colchetes de `[IPv6]:porta`. */
+function semPorta(endereco: string): string {
+  if (endereco.startsWith("[")) {
+    const fim = endereco.indexOf("]");
+
+    return fim > 0 ? endereco.slice(1, fim) : endereco;
+  }
+
+  const partes = endereco.split(":");
+
+  return partes.length === 2 ? (partes[0] ?? endereco) : endereco;
+}
+
+/**
+ * O IP do visitante (030, R5): `CloudFront-Viewer-Address` quando presente; senão
+ * o último elemento de `X-Forwarded-For`, que o CloudFront completa com o IP de
+ * quem chamou; senão o endereço do socket. Não é Credencial nem identidade: é
+ * só a origem, para o limite de criação.
+ */
+export function ipDoVisitante(requisicao: FastifyRequest): string {
+  const visto = requisicao.headers["cloudfront-viewer-address"];
+
+  if (typeof visto === "string" && visto.trim() !== "") {
+    return semPorta(visto.trim());
+  }
+
+  const encaminhado = requisicao.headers["x-forwarded-for"];
+
+  if (typeof encaminhado === "string") {
+    const ultimo = encaminhado
+      .split(",")
+      .map((trecho) => trecho.trim())
+      .filter((trecho) => trecho !== "")
+      .at(-1);
+
+    if (ultimo !== undefined) {
+      return semPorta(ultimo);
+    }
+  }
+
+  return requisicao.socket.remoteAddress ?? "";
+}
 
 /**
  * A guarda do segredo de origem — a porta fechada da Função da nuvem (FR-125).

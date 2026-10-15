@@ -161,7 +161,7 @@ afterEach(() => {
 });
 
 describe("tabela usuario — forma do esquema", () => {
-  it("tem exatamente id, nome_de_usuario, sal, hash e parametros", () => {
+  it("tem exatamente id, nome_de_usuario, sal, hash, parametros, conta_de_teste_em e envios_de_teste", () => {
     const colunas = banco.prepare("PRAGMA table_info(usuario)").all();
 
     expect(colunas.map((coluna) => coluna.name)).toEqual([
@@ -170,6 +170,8 @@ describe("tabela usuario — forma do esquema", () => {
       "sal",
       "hash",
       "parametros",
+      "conta_de_teste_em",
+      "envios_de_teste",
     ]);
     expect(colunas[0]).toMatchObject({ name: "id", type: "TEXT", pk: 1 });
     expect(colunas[1]).toMatchObject({

@@ -12,10 +12,11 @@ import type { ArmazenamentoDeAcessos } from "../armazenamento/porta.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 import type { ArmazemDeMidia } from "../midia/armazem.ts";
 import { exigirCredencial } from "./credencial.ts";
-import { exigirSegredoDeOrigem } from "./origem.ts";
+import { derivarSubchaveDeOrigem, exigirSegredoDeOrigem } from "./origem.ts";
 import {
   CORPO_INVALIDO,
   registrarRotaDeEntrada,
+  registrarRotasDeContaDeTeste,
   registrarRotasDeAcesso,
   registrarRotasDeBaralhos,
   registrarRotasDeExportacao,
@@ -127,6 +128,13 @@ export const CAMINHO_DA_RENOVACAO_DO_ACESSO = "/acesso/renovar";
 export const CAMINHO_DE_SAIR = "/sair";
 
 /**
+ * Entrar como Teste (030): `POST /contas-de-teste`, sem Credencial, e os
+ * créditos públicos da demonstração, com o mesmo CORS.
+ */
+export const CAMINHO_DOS_CONTAS_DE_TESTE = "/contas-de-teste";
+export const CAMINHO_DOS_CREDITOS = "/demonstracao/creditos";
+
+/**
  * A origem do frontend no ambiente local (018, §4): com `credentials: include` o
  * navegador **recusa** `Access-Control-Allow-Origin: *`, e por isso a política
  * de outra origem passa a nomear a origem exata. O padrão é a do `npm run dev`;
@@ -223,6 +231,12 @@ export interface OpcoesDoServidor {
    */
   segredoDeOrigem?: string;
   /**
+   * O SEGREDO_DAS_SENHAS. Dele sai a subchave que cifra a origem das Contas de
+   * teste (030, R5). Ausente, a criação de Conta de teste responde
+   * `indisponivel`; as demais rotas não dependem dele.
+   */
+  segredoDasSenhas?: string;
+  /**
    * A política permissiva de outra origem — pré-voo e
    * `access-control-allow-origin` —, **ligada** por padrão. A execução local a
    * mantém, porque escuta exclusivamente no loopback; a Função da nuvem a
@@ -265,6 +279,14 @@ export function criarServidor(
 ): FastifyInstance {
   const servidor = Fastify({ bodyLimit: LIMITE_APKG });
   servidor.addContentTypeParser("application/octet-stream", { parseAs: "buffer" }, (_requisicao, corpo, concluir) => concluir(null, corpo));
+  // A subchave da origem de Conta de teste (030, R5) sai do SEGREDO_DAS_SENHAS
+  // informado; sem ele, a rota de criação responde `indisponivel`.
+  servidor.decorate(
+    "subchaveDeOrigemDeContaDeTeste",
+    opcoes.segredoDasSenhas === undefined
+      ? null
+      : derivarSubchaveDeOrigem(opcoes.segredoDasSenhas),
+  );
 
   /**
    * A guarda do segredo de origem é o **primeiro** hook: a requisição que não
@@ -376,6 +398,8 @@ export function criarServidor(
       CAMINHO_DE_SAIR,
       CAMINHO_DOS_ENVIOS_DE_IMAGEM,
       CAMINHO_DOS_ENVIOS_DE_AUDIO,
+      CAMINHO_DOS_CONTAS_DE_TESTE,
+      CAMINHO_DOS_CREDITOS,
     ]) {
       permitirPreVoo(servidor, caminho, origemDa);
     }
@@ -407,6 +431,8 @@ export function criarServidor(
         caminho === CAMINHO_DE_SAIR ||
         caminho === CAMINHO_DOS_ENVIOS_DE_IMAGEM ||
         caminho === CAMINHO_DOS_ENVIOS_DE_AUDIO ||
+        caminho === CAMINHO_DOS_CONTAS_DE_TESTE ||
+        caminho === CAMINHO_DOS_CREDITOS ||
         caminho.startsWith("/midia-local/")
       ) {
         resposta
@@ -476,8 +502,8 @@ export function registrarRotasDaAplicacao(
   imagens?: ArmazemDeMidia,
 ): void {
   registrarRotasDeCartoes(servidor, acervoDe);
-  registrarRotasDeImagens(servidor, imagens);
-  registrarRotasDeAudios(servidor, imagens);
+  registrarRotasDeImagens(servidor, imagens, identidade);
+  registrarRotasDeAudios(servidor, imagens, identidade);
   registrarRotasDeBaralhos(servidor, acervoDe, lerAnki);
   registrarRotasDeExportacao(servidor, acervoDe);
   registrarRotasDeTransicao(servidor, acervoDe);
@@ -486,6 +512,7 @@ export function registrarRotasDaAplicacao(
   registrarRotasDePreferencias(servidor, acervoDe);
   registrarRotasDeAgenda(servidor, acervoDe);
   registrarRotasDeUsuarios(servidor, identidade);
+  registrarRotasDeContaDeTeste(servidor, identidade, acessos);
   registrarRotasDeConta(servidor, identidade, acessos);
   registrarRotaDeEntrada(servidor, identidade, acessos);
   registrarRotasDeAcesso(servidor, identidade, acessos);
@@ -507,6 +534,7 @@ export async function iniciarServidor(
   lerAnki?: (bytes: Buffer) => Promise<unknown>,
   imagens?: ArmazemDeMidia,
   registrarRotasLocais?: (servidor: FastifyInstance) => void,
+  segredoDasSenhas?: string,
 ): Promise<FastifyInstance> {
   const opcoes = opcoesDeEscuta(env);
   const acessos = criarAcessos(armazenamentoDeAcessos, {
@@ -514,6 +542,7 @@ export async function iniciarServidor(
   });
   const servidor = criarServidor(identidade, {
     acessos,
+    segredoDasSenhas,
     origemDoFrontend: env.ORIGEM_DO_FRONTEND ?? ORIGEM_PADRAO_DO_FRONTEND,
     qualquerOrigemLocal: env.ORIGENS_LOCAIS_DE_TESTE === "sim",
   });

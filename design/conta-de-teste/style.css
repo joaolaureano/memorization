@@ -1,0 +1,25 @@
+/* Protótipo da 030: Conta de teste. */
+[hidden]{display:none!important}
+.ca-bloco{box-sizing:border-box;width:100%;max-width:760px;margin:0 auto 32px;padding:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.ca-bloco h1,.ca-bloco h2{margin-block:4px 16px}
+.ca-idiomas{display:flex;gap:4px;flex-wrap:wrap}
+.ca-idioma{min-width:44px;min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.ca-idioma[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.ca-bloco input[type=text],.ca-bloco input[type=password]{box-sizing:border-box;width:100%;min-height:48px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit}
+.ca-acoes{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap;margin-block:12px}
+.ca-mensagem{min-height:1.5em;margin:8px 0;color:var(--danger)}
+.ca-separador{display:flex;align-items:center;gap:12px;margin:16px 0 8px;color:var(--muted)}
+.ca-separador::before,.ca-separador::after{content:"";flex:1 1 auto;height:1px;background:var(--border)}
+.ca-etiqueta-conta{display:inline-block;padding:3px 10px;border:1px solid var(--accent);border-radius:999px;color:var(--accent);font-size:.875rem;font-weight:600;white-space:nowrap}
+.ca-aviso-conta{margin-bottom:24px}
+.ca-aviso-conta p{margin:0}
+.ca-link{display:inline-flex;align-items:center;min-height:44px;color:var(--accent);font:inherit;text-decoration:underline;overflow-wrap:anywhere}
+.ca-lista{list-style:none;padding:0;margin:0}
+.ca-cartao{padding:12px 0;border-bottom:1px solid var(--border)}
+.ca-cartao p{margin:0}
+.ca-credito{padding:12px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+.ca-credito h3{margin:0 0 8px}
+.ca-credito dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0}
+.ca-credito dt{color:var(--muted)}
+.ca-credito dd{margin:0}
+@media(max-width:600px){.ca-bloco{padding:16px}}

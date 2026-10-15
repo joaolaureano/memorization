@@ -9,6 +9,7 @@ import type {
 import { useIdioma } from "../idioma";
 import { DialogoDeExclusaoDeConta } from "./DialogoDeExclusaoDeConta";
 import { FormularioDeTrocaDeSenha } from "./FormularioDeTrocaDeSenha";
+import { CreditosDaDemonstracao } from "./CreditosDaDemonstracao";
 
 /**
  * Seção «Minha conta» (017; FR-257, FR-258), renderizada dentro do Perfil —
@@ -51,9 +52,11 @@ export function SecaoMinhaConta({
   const [numeroDaTentativa, setNumeroDaTentativa] = useState(0);
   const [acao, setAcao] = useState<Acao | null>(null);
   const [confirmacao, setConfirmacao] = useState<string | null>(null);
+  const [creditosAbertos, setCreditosAbertos] = useState(false);
 
   const botaoDaSenha = useRef<HTMLButtonElement>(null);
   const botaoDeExcluir = useRef<HTMLButtonElement>(null);
+  const linkDosCreditos = useRef<HTMLButtonElement>(null);
   const aberturaAnterior = useRef<Acao | null>(null);
 
   // A leitura é refeita quando o cliente muda — a Credencial foi substituída —,
@@ -131,13 +134,22 @@ export function SecaoMinhaConta({
             {textos.conta.nomeDeUsuario} <strong>{dados.nomeDeUsuario}</strong>
           </p>
 
+          {dados.contaDeTeste && (
+            <div className="aviso" role="note">
+              <p>{textos.contaDeTeste.perfil}</p>
+              <button ref={linkDosCreditos} className="botao botao--secundario" type="button" onClick={() => setCreditosAbertos(true)}>
+                {textos.contaDeTeste.linkCreditos}
+              </button>
+            </div>
+          )}
+
           {confirmacao !== null && (
             <p className="aviso aviso--sucesso" role="status">
               {confirmacao}
             </p>
           )}
 
-          {acao === null && (
+          {acao === null && !dados.contaDeTeste && (
             <div className="acoes">
               <button
                 ref={botaoDaSenha}
@@ -186,6 +198,14 @@ export function SecaoMinhaConta({
               aoExcluir={aoExcluirConta}
               aoCancelar={fechar}
               aoIrParaEntrar={aoIrParaEntrar}
+            />
+          )}
+          {dados.contaDeTeste && (
+            <CreditosDaDemonstracao
+              aberto={creditosAbertos}
+              cliente={cliente}
+              aoFechar={() => setCreditosAbertos(false)}
+              retornoDeFoco={linkDosCreditos}
             />
           )}
         </>

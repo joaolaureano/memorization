@@ -197,7 +197,7 @@ test.describe("troca de idioma", () => {
           await page.goto(`${ambiente.enderecoDoFrontend}/#/entrar`);
           await page.getByLabel("Username", { exact: true }).fill(credencial.nomeDeUsuario);
           await page.getByLabel("Password", { exact: true }).fill(credencial.senha);
-          await page.getByRole("button", { name: "Sign in" }).click();
+          await page.getByRole("button", { name: "Sign in", exact: true }).click();
           await page.getByRole("navigation", { name: "Main" }).waitFor();
         } else {
           await escolherIdioma(page, atual, opcao);
@@ -342,7 +342,7 @@ test.describe("recusas no idioma da interface", () => {
 
       const [resposta] = await Promise.all([
         page.waitForResponse((candidata) => candidata.url().endsWith("/entrar")),
-        page.getByRole("button", { name: "Sign in" }).click(),
+        page.getByRole("button", { name: "Sign in", exact: true }).click(),
       ]);
       const corpo = (await resposta.json()) as { mensagem?: string };
 

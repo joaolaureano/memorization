@@ -49,7 +49,11 @@ export type CodigoDeRecusa =
   | "audio_invalido"
   | "exportacao_vazia"
   | "exportacao_grande_demais"
-  | "exportacao_indisponivel";
+  | "exportacao_indisponivel"
+  | "conta_de_teste"
+  | "contas_de_teste_esgotadas_na_origem"
+  | "contas_de_teste_indisponiveis"
+  | "limite_de_midia_da_conta_de_teste";
 
 export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   indisponivel: "Storage is unavailable. Try again.",
@@ -90,6 +94,11 @@ export const MENSAGENS_TECNICAS: Record<CodigoDeRecusa, string> = {
   exportacao_vazia: "Nothing to export.",
   exportacao_grande_demais: "Export exceeds the size limit.",
   exportacao_indisponivel: "Export is unavailable.",
+  conta_de_teste: "Test accounts cannot be changed.",
+  contas_de_teste_esgotadas_na_origem:
+    "Too many test accounts from this address. Try again later.",
+  contas_de_teste_indisponiveis: "Test accounts are temporarily unavailable.",
+  limite_de_midia_da_conta_de_teste: "Test account media limit reached.",
 };
 
 export interface RecusaBody<C extends CodigoDeRecusa = CodigoDeRecusa> {

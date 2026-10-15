@@ -20,6 +20,7 @@ import { decidirRenovacao } from "../acesso/atividade";
 import { ContextoDeIdioma, ProvedorDeIdioma, SeletorDeIdioma, TextoDoProduto, useIdioma } from "../idioma";
 import { MENSAGENS_PT } from "../idioma/mensagens";
 import { comGuardaDeCredencial } from "./guarda-de-credencial";
+import { DialogoDeConfirmacao } from "./DialogoDeConfirmacao";
 import { Moldura } from "./Moldura";
 import { ROTA_DE_ENTRADA, irParaRota } from "./navegacao";
 import type { Rota } from "./navegacao";
@@ -115,6 +116,20 @@ interface Sessao {
   credencial: Credencial | null;
 }
 
+const MARCADOR_DE_CONTA_DE_TESTE = "memorization.conta-de-teste";
+
+function contaDeTesteAnterior(): boolean {
+  try { return window.localStorage.getItem(MARCADOR_DE_CONTA_DE_TESTE) === "true"; }
+  catch { return false; }
+}
+
+function atualizarMarcadorDeContaDeTeste(ativa: boolean): void {
+  try {
+    if (ativa) window.localStorage.setItem(MARCADOR_DE_CONTA_DE_TESTE, "true");
+    else window.localStorage.removeItem(MARCADOR_DE_CONTA_DE_TESTE);
+  } catch { /* armazenamento do navegador indisponível não impede o uso */ }
+}
+
 export function Aplicacao({ criarCliente }: PropriedadesDaAplicacao) {
   const contextoDeIdioma = useContext(ContextoDeIdioma);
 
@@ -197,7 +212,9 @@ function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
       } else if (resultado.erro === "indisponivel") {
         setVerificacao("falhou");
       } else {
-        if (resultado.erro === "acesso_expirado") {
+        if (contaDeTesteAnterior()) {
+          setAvisoDaEntrada({ tipo: "conta-teste-terminou", texto: "" });
+        } else if (resultado.erro === "acesso_expirado") {
           setAvisoDaEntrada({ tipo: "falha", texto: resultado.mensagem });
         }
 
@@ -222,6 +239,7 @@ function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
     (credencialInformada: Credencial, escolha: EscolhaDeEntrada) => {
       recusaJaTratada.current = false;
       setAvisoDaEntrada(null);
+      if (escolha.usuario.id !== "") atualizarMarcadorDeContaDeTeste(false);
       setSessao({
         nomeDeUsuario: escolha.usuario.nomeDeUsuario,
         // FR-089 revisado: com a continuidade, o Acesso autoriza e a Senha sai
@@ -244,7 +262,9 @@ function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
     // ela não pode trocar a confirmação de saída por uma falha genérica.
     recusaJaTratada.current = true;
     setSessao(null);
-    setAvisoDaEntrada({ tipo: "saida", texto: MENSAGEM_DE_SAIDA });
+    setAvisoDaEntrada(contaDeTesteAnterior()
+      ? { tipo: "conta-teste-terminou", texto: "" }
+      : { tipo: "saida", texto: MENSAGEM_DE_SAIDA });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
 
@@ -261,7 +281,9 @@ function AplicacaoInterna({ criarCliente }: PropriedadesDaAplicacao) {
 
     recusaJaTratada.current = true;
     setSessao(null);
-    setAvisoDaEntrada({ tipo: "falha", texto: mensagem });
+    setAvisoDaEntrada(contaDeTesteAnterior()
+      ? { tipo: "conta-teste-terminou", texto: "" }
+      : { tipo: "falha", texto: mensagem });
     irParaRota(ROTA_DE_ENTRADA);
   }, []);
 
@@ -414,6 +436,30 @@ function CascaDaAplicacao({
   const protegerAcao = useAcaoProtegida();
   const descartarProtecao = useDescartarProtecao();
 
+  // 030, FR-490: a conta corrente diz se é uma Conta de teste; o aviso do
+  // Início e a etiqueta da Moldura dependem disso.
+  const [contaDeTeste, setContaDeTeste] = useState(false);
+
+  useEffect(() => {
+    if (!temCredencial) {
+      setContaDeTeste(false);
+      return;
+    }
+
+    let ativo = true;
+
+    void clienteDaCredencial.obterConta().then((resultado) => {
+      if (ativo && resultado.ok) {
+        setContaDeTeste(resultado.dados.contaDeTeste);
+        atualizarMarcadorDeContaDeTeste(resultado.dados.contaDeTeste);
+      }
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, [temCredencial, clienteDaCredencial]);
+
   const principal = useRef<HTMLElement>(null);
   const rotaAnterior = useRef(rota);
   const transicaoAnterior = useRef<string>("carregando");
@@ -537,6 +583,7 @@ function CascaDaAplicacao({
    * Credencial cair.
    */
   const [falhaDeSaida, setFalhaDeSaida] = useState<string | null>(null);
+  const [confirmacaoDeSaidaDeTeste, setConfirmacaoDeSaidaDeTeste] = useState(false);
 
   /**
    * FR-293 e FR-295: Sair encerra o Acesso **no servidor** antes de descartar a
@@ -544,7 +591,8 @@ function CascaDaAplicacao({
    * tela não apresenta o Sair como concluído (FR-044): a pessoa segue onde está,
    * com a falha anunciada, e pode tentar de novo.
    */
-  const sair = useCallback(() => {
+  const confirmarSaida = useCallback(() => {
+    setConfirmacaoDeSaidaDeTeste(false);
     protegerAcao(() => {
       setFalhaDeSaida(null);
 
@@ -557,6 +605,14 @@ function CascaDaAplicacao({
       });
     });
   }, [protegerAcao, clienteDaCredencial, aoSair]);
+
+  const sair = useCallback(() => {
+    if (contaDeTeste) {
+      setConfirmacaoDeSaidaDeTeste(true);
+      return;
+    }
+    confirmarSaida();
+  }, [contaDeTeste, confirmarSaida]);
 
   /**
    * FR-291, SC-124: com o Acesso temporário, a pessoa ativa não pode perder o
@@ -629,7 +685,7 @@ function CascaDaAplicacao({
       {temCredencial && transicao === "concluida" ? (
         // FR-139: com Credencial, a moldura traz a marca, a navegação principal
         // e "Sair" em toda tela alcançável.
-        <Moldura rota={rota} aoSair={sair} />
+        <Moldura rota={rota} aoSair={sair} contaDeTeste={contaDeTeste} />
       ) : (
         // FR-098: sem Credencial não há navegação nem "Sair" — só a marca.
         <header className="moldura">
@@ -642,6 +698,16 @@ function CascaDaAplicacao({
       )}
 
       <main className="aplicacao" ref={principal}>
+        <DialogoDeConfirmacao
+          aberto={confirmacaoDeSaidaDeTeste}
+          titulo={textos.moldura.sair}
+          rotuloDeConfirmacao={textos.contaDeTeste.sairEApagar}
+          rotuloDeCancelamento={textos.contaDeTeste.cancelar}
+          aoConfirmar={confirmarSaida}
+          aoCancelar={() => setConfirmacaoDeSaidaDeTeste(false)}
+        >
+          {textos.contaDeTeste.sairConfirmacao}
+        </DialogoDeConfirmacao>
         {falhaDeSaida !== null && (
           // FR-044, FR-295: o Sair que não se concluiu é anunciado, e não
           // apresentado como feito.
@@ -681,6 +747,7 @@ function CascaDaAplicacao({
           cliente={cliente}
           clienteSemGuarda={clienteDaCredencial}
           nomeDeUsuario={nomeDeUsuarioDaCredencial}
+          contaDeTeste={contaDeTeste}
           avisoDaEntrada={avisoDaEntrada}
           aoEntrar={aoEntrar}
           aoSubstituirCredencial={aoSubstituirCredencial}
@@ -710,6 +777,7 @@ function TelaDaRota({
   cliente,
   clienteSemGuarda,
   nomeDeUsuario,
+  contaDeTeste,
   avisoDaEntrada,
   aoEntrar,
   aoSubstituirCredencial,
@@ -727,6 +795,7 @@ function TelaDaRota({
   cliente: ClienteDoAcervo;
   clienteSemGuarda: ClienteDoAcervo;
   nomeDeUsuario: string;
+  contaDeTeste: boolean;
   avisoDaEntrada: AvisoDaEntrada | null;
   aoEntrar: (credencial: Credencial, escolha: EscolhaDeEntrada) => void;
   aoSubstituirCredencial: (nova: Credencial) => void;
@@ -749,6 +818,7 @@ function TelaDaRota({
           cliente={cliente}
           nomeDeUsuario={nomeDeUsuario}
           aoIniciarEstudo={aoIniciarEstudoDaAgenda}
+          contaDeTeste={contaDeTeste}
         />
       );
 

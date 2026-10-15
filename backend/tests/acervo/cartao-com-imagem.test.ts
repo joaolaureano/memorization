@@ -326,6 +326,24 @@ describe("editar e excluir Cartão do tipo Imagem (FR-420, FR-421, FR-422)", () 
     expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
   });
 
+  it("nunca remove Mídia de demonstração que esteja na fila, e a tira da fila (FR-500)", async () => {
+    const envioId = await enviar();
+    const confirmada = await imagens.confirmar(dono, envioId, "imagem");
+    if (!confirmada.ok) throw new Error("recusada");
+    const demo = "demonstracao/bandeiras/x.png";
+    await imagens.gravarArquivoFixo(demo, pngComMetadados(), "image/png");
+    await aberto.armazenamento.enfileirarMidiaARemover([demo, confirmada.chave]);
+
+    await processarFilaDeMidia(aberto.armazenamento, imagens);
+
+    expect(await imagens.ler(confirmada.chave)).toBeNull();
+    expect(await imagens.ler(demo)).not.toBeNull();
+    const endereco = await imagens.enderecoDeLeitura(demo);
+    const token = new URL(endereco.url, "http://local").searchParams.get("t")!;
+    expect(await imagens.lerParaEntrega(token)).not.toBeNull();
+    expect(await aberto.armazenamento.listarMidiaARemover(10)).toEqual([]);
+  });
+
   it("guarda na fila o que o armazém não conseguiu remover e tenta de novo", async () => {
     const cartao = await criarImagem();
     const armazemQueFalha: ArmazemEmDisco = {

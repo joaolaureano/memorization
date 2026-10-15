@@ -569,6 +569,12 @@ export interface Catalogo {
     baixarDeNovo: string; semMidia: (n: number) => string; falha: string;
     antesDeExcluir: string;
   };
+  contaDeTeste: {
+    entrar: string; ou: string; apresentacao: string; preparando: string; terminou: string;
+    etiqueta: string; aviso: string; linkCreditos: string;
+    creditos: { titulo: string; colunaTitulo: string; colunaAutor: string; colunaLicenca: string; colunaFonte: string };
+    perfil: string; sairConfirmacao: string; sairEApagar: string; cancelar: string;
+  };
 }
 
 export const pt: Catalogo = {
@@ -1179,5 +1185,26 @@ export const pt: Catalogo = {
     semMidia: (n) => `${n} cartões foram exportados sem a mídia.`,
     falha: "Não foi possível gerar o arquivo.",
     antesDeExcluir: "Exportar meu acervo antes",
+  },
+  contaDeTeste: {
+    entrar: "Entrar como Teste",
+    ou: "ou",
+    apresentacao: "Experimente com Baralhos de exemplo. Tudo é apagado ao sair.",
+    preparando: "Preparando sua Conta de teste…",
+    terminou: "Sua Conta de teste terminou. Entre como Teste para começar de novo.",
+    etiqueta: "Conta de teste",
+    aviso: "Esta é uma Conta de teste. Tudo será apagado ao sair.",
+    linkCreditos: "Créditos do acervo de demonstração",
+    creditos: {
+      titulo: "Créditos do acervo de demonstração",
+      colunaTitulo: "Título",
+      colunaAutor: "Autor",
+      colunaLicenca: "Licença",
+      colunaFonte: "Fonte",
+    },
+    perfil: "A Conta de teste não pode ser alterada nem excluída.",
+    sairConfirmacao: "Sair apaga a Conta de teste e tudo o que você fez nela.",
+    sairEApagar: "Sair e apagar",
+    cancelar: "Cancelar",
   },
 };

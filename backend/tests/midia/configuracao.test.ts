@@ -19,6 +19,7 @@ describe("armazemDaNuvem", () => {
       "confirmar",
       "copiar",
       "enderecoDeLeitura",
+      "gravarArquivoFixo",
       "guardarExportacao",
       "ler",
       "medir",

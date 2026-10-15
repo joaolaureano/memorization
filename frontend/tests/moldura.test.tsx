@@ -112,6 +112,30 @@ describe("Moldura — destino corrente", () => {
   });
 });
 
+describe("Moldura — Conta de teste (030, FR-490)", () => {
+  it("mostra a etiqueta «Conta de teste» no cabeçalho só quando a conta é de teste", () => {
+    const { unmount } = render(
+      renderizarComIdioma(
+        <Moldura rota={{ nome: "inicio" }} aoSair={() => {}} contaDeTeste />,
+      ),
+    );
+
+    const etiqueta = screen.getByText("Conta de teste");
+    expect(etiqueta.closest("header")).not.toBeNull();
+    expect(etiqueta.closest("nav")).toBeNull();
+
+    unmount();
+
+    render(
+      renderizarComIdioma(
+        <Moldura rota={{ nome: "inicio" }} aoSair={() => {}} />,
+      ),
+    );
+
+    expect(screen.queryByText("Conta de teste")).toBeNull();
+  });
+});
+
 describe("Moldura — Sair", () => {
   it("aciona aoSair e fica fora da navegação", () => {
     const aoSair = vi.fn();

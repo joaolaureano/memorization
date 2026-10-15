@@ -49,6 +49,20 @@ aws iam put-user-policy --profile root --user-name robot \
   --policy-document file://iam/robot-s3-imagens.json
 ```
 
+## Limpeza das Contas de teste (030)
+
+A regra do EventBridge que roda a limpeza a cada 15 minutos
+([`agendamento.tf`](agendamento.tf)) precisa de permissões que o `robot` não
+tem. Um perfil admin aplica a policy
+[`iam/robot-agendamento.json`](iam/robot-agendamento.json) **antes** do
+`tofu apply`:
+
+```bash
+aws iam put-user-policy --profile root --user-name robot \
+  --policy-name robot-agendamento \
+  --policy-document file://iam/robot-agendamento.json
+```
+
 ## Subir
 
 A ordem completa, com o porquê de cada passo, está no manual de operação

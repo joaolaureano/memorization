@@ -6,6 +6,7 @@ import type {
 } from "../acervo-cliente/cliente";
 import { useIdioma } from "../idioma";
 import { AgendaDeEstudo } from "./AgendaDeEstudo";
+import { CreditosDaDemonstracao } from "./CreditosDaDemonstracao";
 
 /**
  * A tela de Início da feature 020: o dia de hoje, e só ele (FR-330).
@@ -28,12 +29,18 @@ export function PaginaDeInicio({
   cliente,
   nomeDeUsuario,
   aoIniciarEstudo,
+  contaDeTeste = false,
 }: {
   cliente: ClienteDoAcervo;
   nomeDeUsuario: string;
   /** Abre a Sessão de um Compromisso da Agenda (016, FR-231). */
   aoIniciarEstudo?: (inicio: InicioDeCompromisso) => void;
+  /** Verdadeiro na Conta de teste: o aviso e os créditos do acervo (030, FR-490). */
+  contaDeTeste?: boolean;
 }) {
+  const [creditosAbertos, setCreditosAbertos] = useState(false);
+  const linkDosCreditos = useRef<HTMLAnchorElement>(null);
+
   // `true` só depois de uma leitura do acervo que deu certo e não achou Cartão
   // nenhum: nem a falha nem a leitura em curso convidam a criar o primeiro
   // Cartão (FR-330).
@@ -92,6 +99,35 @@ export function PaginaDeInicio({
 
   return (
     <div className="pagina">
+      {contaDeTeste ? (
+        // 030, FR-490: o aviso fixo da Conta de teste e o link dos créditos.
+        <div className="aviso ca-aviso-conta">
+          <p>
+            <span>{textos.contaDeTeste.aviso}</span>{" "}
+            <a
+              ref={linkDosCreditos}
+              className="ca-link"
+              href="#creditos"
+              onClick={(evento) => {
+                evento.preventDefault();
+                setCreditosAbertos(true);
+              }}
+            >
+              {textos.contaDeTeste.linkCreditos}
+            </a>
+          </p>
+        </div>
+      ) : null}
+
+      {contaDeTeste ? (
+        <CreditosDaDemonstracao
+          aberto={creditosAbertos}
+          cliente={cliente}
+          aoFechar={() => setCreditosAbertos(false)}
+          retornoDeFoco={linkDosCreditos}
+        />
+      ) : null}
+
       {/* O cabeçalho é o cumprimento e, quando o acervo está vazio, o convite
           a criar o primeiro Cartão — nada além disso (FR-330). */}
       <div className="inicio__cabecalho">

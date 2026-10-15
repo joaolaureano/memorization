@@ -8,7 +8,9 @@ import {
   PREFIXO_DA_MIDIA,
   chaveAtiva,
   chavePendente,
+  ehChaveDeGravacaoFixa,
   ehIdentificadorDeEnvio,
+  ehMidiaDeDemonstracao,
   midiaDaChave,
   type ArmazemDeMidia,
   type FormatoDeImagem,
@@ -72,6 +74,13 @@ function formatoDaMidiaAtiva(
   if (chave.startsWith(`${PREFIXO_DA_MIDIA.imagem}/`)) {
     return detectarFormato(bytes);
   }
+  if (ehMidiaDeDemonstracao(chave)) {
+    return detectarFormato(bytes) ?? formatoDeAudio(bytes);
+  }
+  return formatoDeAudio(bytes);
+}
+
+function formatoDeAudio(bytes: Uint8Array): FormatoDeAudio | null {
   const reconhecido = reconhecerAudio(bytes);
   return reconhecido.ok ? reconhecido.formato : null;
 }
@@ -166,6 +175,10 @@ export function criarArmazemEmDisco(
     }
   }
 
+  /** Chave que o armazém atende: Mídia ativa ou Mídia fixa de demonstração. */
+  const ehChaveAtendida = (chave: string): boolean =>
+    midiaDaChave(chave) !== null || ehMidiaDeDemonstracao(chave);
+
   async function gravar(chave: string, bytes: Uint8Array): Promise<void> {
     await mkdir(dirname(caminhoDa(chave)), { recursive: true });
     await writeFile(caminhoDa(chave), bytes);
@@ -223,7 +236,7 @@ export function criarArmazemEmDisco(
     },
 
     async ler(chave) {
-      if (midiaDaChave(chave) === null) return null;
+      if (!ehChaveAtendida(chave)) return null;
       try { return await readFile(caminhoDa(chave)); } catch (erro) {
         if ((erro as NodeJS.ErrnoException).code === "ENOENT") return null;
         throw erro;
@@ -298,8 +311,16 @@ export function criarArmazemEmDisco(
       };
     },
 
+    async gravarArquivoFixo(chave, bytes) {
+      if (!ehChaveDeGravacaoFixa(chave)) {
+        throw new Error("gravarArquivoFixo: a chave não é de demonstração");
+      }
+      await gravar(chave, bytes);
+    },
+
     async copiar(chave, usuarioId) {
-      const midia = midiaDaChave(chave);
+      const midia = midiaDaChave(chave) ??
+        (ehMidiaDeDemonstracao(chave) ? chave.endsWith(".png") ? "imagem" : "audio" : null);
 
       if (midia === null) {
         throw new Error("copiar: a chave não é de uma Mídia ativa");
@@ -330,7 +351,7 @@ export function criarArmazemEmDisco(
       const exportacao = lerToken(token, "exportacao");
       if (dados === null && exportacao === null) return null;
       const autorizado = dados ?? exportacao!;
-      if (dados !== null && midiaDaChave(dados.chave) === null) {
+      if (dados !== null && !ehChaveAtendida(dados.chave)) {
         return null;
       }
 

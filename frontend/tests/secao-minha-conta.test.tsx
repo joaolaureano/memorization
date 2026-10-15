@@ -63,6 +63,19 @@ async function abrir(acao: string): Promise<void> {
 }
 
 describe("SecaoMinhaConta (FR-257, FR-258)", () => {
+  it("oculta ações da Conta de teste e oferece aviso e créditos", async () => {
+    const anonimo = new ClienteEmMemoria(null, [ANA]);
+    await anonimo.entrarComoTeste();
+    renderizar(anonimo);
+
+    expect(await screen.findByText("teste-exemplo")).toBeInTheDocument();
+    expect(screen.getByText("A Conta de teste não pode ser alterada nem excluída.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Trocar Senha" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Excluir conta" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Créditos do acervo de demonstração" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
   it("mostra o Nome de usuário somente leitura e as ações restantes (FR-336)", async () => {
     renderizar();
 

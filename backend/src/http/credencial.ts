@@ -41,6 +41,10 @@ import { recusa } from "./recusas.ts";
  */
 const ROTAS_ISENTAS: ReadonlySet<string> = new Set([
   "POST /usuarios",
+  // Entrar como Teste (030): quem chama ainda não tem conta nem Credencial, e
+  // os créditos são públicos, como a demonstração que descrevem.
+  "POST /contas-de-teste",
+  "GET /demonstracao/creditos",
   "GET /health",
   // As rotas do Acesso temporário (018) tratam elas mesmas do cookie: cada uma
   // responde `sem_acesso` ou `acesso_expirado` com o seu código, e limpa o

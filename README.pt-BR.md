@@ -23,6 +23,7 @@ uma especificação em [`specs/`](specs/).
 | Conta | Criar conta com nome e Senha, Entrar e Sair. Cada Usuário vê só o próprio acervo | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
 | Continuar conectado | Um Acesso temporário mantém a pessoa conectada enquanto usa o app e expira após um período sem atividade | [018](specs/018-acesso-temporario/) |
 | Perfil | Consultar Nome de usuário, configurar o estudo, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
+| Experimentar | Entrar como Teste com três Baralhos de demonstração, consultar os créditos e apagar a conta ao sair | [030](specs/030-usuario-de-teste/) |
 | Cartões | Criar, consultar, editar e excluir Cartões Frente-Verso e com Imagem dentro do Baralho; Imagem na Frente, com Texto da frente e descrição alternativa opcionais | [025](specs/025-criar-cartoes-baralho/), [026](specs/026-cartao-com-imagem/) |
 | Exportar | Exportar um ou todos os Baralhos em `.apkg` para Anki (até 10.000 Cartões e 100 MiB de mídia). No Anki, marque «Importar progresso de estudo» para restaurar as datas de revisão | [029](specs/029-exportar-baralhos/) |
 | Baralhos | Criar, renomear e excluir Baralhos; cada Cartão pertence a exatamente um Baralho | [002](specs/002-criar-baralho/), [025](specs/025-criar-cartoes-baralho/) |
@@ -112,7 +113,13 @@ flowchart LR
 O passo a passo da entrega está em
 [`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
 e em [`backend/terraform/README.md`](backend/terraform/README.md).
-Depois de entregar esta feature, rode `tofu apply` com `-var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler` para instalar a regra de ciclo de vida de um dia para `exportacoes/`.
+Para publicar a Conta de teste, conceda ao usuário de deploy a política
+[`backend/terraform/iam/robot-agendamento.json`](backend/terraform/iam/robot-agendamento.json),
+aplique a regra periódica com `tofu -chdir=backend/terraform apply
+-var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler` e
+execute `migrate:cloud` para aplicar a migração 22 antes do deploy. “Entrar como
+Teste” carrega os Baralhos Inglês, Bandeiras e Cantos de pássaros; os créditos
+da mídia ficam no Perfil, e “Sair e apagar” remove a conta descartável.
 
 ## Constituição
 

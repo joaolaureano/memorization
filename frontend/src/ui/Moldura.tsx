@@ -29,9 +29,12 @@ import type { Rota } from "./navegacao";
 export function Moldura({
   rota,
   aoSair,
+  contaDeTeste = false,
 }: {
   rota: Rota;
   aoSair: () => void;
+  /** Verdadeiro na Conta de teste (030, FR-490): a etiqueta aparece no cabeçalho. */
+  contaDeTeste?: boolean;
 }) {
   const destino = destinoAtivo(rota);
   const { textos } = useIdioma();
@@ -73,6 +76,9 @@ export function Moldura({
         </a>
       </nav>
 
+      {contaDeTeste ? (
+        <span className="ca-etiqueta-conta">{textos.contaDeTeste.etiqueta}</span>
+      ) : null}
 
       <button type="button" className="botao-de-saida" onClick={aoSair}>
         {textos.moldura.sair}

@@ -1,0 +1,212 @@
+[
+  {
+    "chave": "demonstracao/bandeiras/brasil.png",
+    "baralho": "Bandeiras",
+    "cartao": "Brasil",
+    "titulo": "Flag of Brazil.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Brazil.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/japao.png",
+    "baralho": "Bandeiras",
+    "cartao": "Japão",
+    "titulo": "Flag of Japan.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Japan.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/canada.png",
+    "baralho": "Bandeiras",
+    "cartao": "Canadá",
+    "titulo": "Flag of Canada (Pantone).svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Canada_(Pantone).svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/alemanha.png",
+    "baralho": "Bandeiras",
+    "cartao": "Alemanha",
+    "titulo": "Flag of Germany.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Germany.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/italia.png",
+    "baralho": "Bandeiras",
+    "cartao": "Itália",
+    "titulo": "Flag of Italy.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Italy.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/argentina.png",
+    "baralho": "Bandeiras",
+    "cartao": "Argentina",
+    "titulo": "Flag of Argentina.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Argentina.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/india.png",
+    "baralho": "Bandeiras",
+    "cartao": "Índia",
+    "titulo": "Flag of India.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_India.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/quenia.png",
+    "baralho": "Bandeiras",
+    "cartao": "Quênia",
+    "titulo": "Flag of Kenya.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Kenya.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/suecia.png",
+    "baralho": "Bandeiras",
+    "cartao": "Suécia",
+    "titulo": "Flag of Sweden.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Sweden.svg"
+  },
+  {
+    "chave": "demonstracao/bandeiras/mexico.png",
+    "baralho": "Bandeiras",
+    "cartao": "México",
+    "titulo": "Flag of Mexico.svg",
+    "autor": "Wikimedia Commons",
+    "licenca": "LicenseRef-Public-Domain",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Flag_of_Mexico.svg"
+  },
+  {
+    "chave": "demonstracao/passaros/sabia-laranjeira.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Sabiá-laranjeira",
+    "cientifico": "Turdus rufiventris",
+    "titulo": "Turdus rufiventris - Rufous-bellied Thrush - XC112745.ogg",
+    "autor": "Niels Krabbe",
+    "licenca": "CC-BY-SA-3.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Turdus_rufiventris_-_Rufous-bellied_Thrush_-_XC112745.ogg",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/bem-te-vi.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Bem-te-vi",
+    "cientifico": "Pitangus sulphuratus",
+    "titulo": "Pitangus sulphuratus - Great Kiskadee XC248744.mp3",
+    "autor": "Niels Krabbe",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Pitangus_sulphuratus_-_Great_Kiskadee_XC248744.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/joao-de-barro.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "João-de-barro",
+    "cientifico": "Furnarius rufus",
+    "titulo": "Furnarius rufus - Rufous Hornero XC298518.mp3",
+    "autor": "Gabriele Magurno",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Furnarius_rufus_-_Rufous_Hornero_XC298518.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/tico-tico.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Tico-tico",
+    "cientifico": "Zonotrichia capensis",
+    "titulo": "Zonotrichia capensis - Rufous-collared Sparrow XC243295.mp3",
+    "autor": "Niels Krabbe",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Zonotrichia_capensis_-_Rufous-collared_Sparrow_XC243295.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/corruira.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Corruíra",
+    "cientifico": "Troglodytes musculus",
+    "titulo": "Troglodytes musculus - Southern House Wren, São Paulo, Brazil XC436932.mp3",
+    "autor": "maria belotti",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Troglodytes_musculus_-_Southern_House_Wren,_S%C3%A3o_Paulo,_Brazil_XC436932.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/pomba-asa-branca.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Pomba-asa-branca",
+    "cientifico": "Patagioenas picazuro",
+    "titulo": "Patagioenas picazuro - Picazuro Pigeon XC202065.mp3",
+    "autor": "Gabriele Magurno",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Patagioenas_picazuro_-_Picazuro_Pigeon_XC202065.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/seriema.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Seriema",
+    "cientifico": "Cariama cristata",
+    "titulo": "Cariama cristata call.flac",
+    "autor": "Zyoute",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Cariama_cristata_call.flac",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/cambacica.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Cambacica",
+    "cientifico": "Coereba flaveola",
+    "titulo": "Coereba flaveola - Bananaquit XC242441.mp3",
+    "autor": "Niels Krabbe",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Coereba_flaveola_-_Bananaquit_XC242441.mp3",
+    "duracaoMs": 15073,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/tiziu.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Tiziu",
+    "cientifico": "Volatinia jacarina",
+    "titulo": "Volatinia jacarina - Blue-black Grassquit XC243285.mp3",
+    "autor": "Niels Krabbe",
+    "licenca": "CC-BY-SA-4.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Volatinia_jacarina_-_Blue-black_Grassquit_XC243285.mp3",
+    "duracaoMs": 13897,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  },
+  {
+    "chave": "demonstracao/passaros/anu-branco.mp3",
+    "baralho": "Cantos de pássaros",
+    "cartao": "Anu-branco",
+    "cientifico": "Guira guira",
+    "titulo": "Guira guira 340477.wav",
+    "autor": "Tiago Lubiana",
+    "licenca": "CC0-1.0",
+    "fonte": "https://commons.wikimedia.org/wiki/File:Guira_guira_340477.wav",
+    "duracaoMs": 6191,
+    "observacao": "Trecho de até 15 s, mono, convertido para MP3."
+  }
+]

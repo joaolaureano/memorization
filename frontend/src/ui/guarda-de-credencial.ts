@@ -137,6 +137,11 @@ export function comGuardaDeCredencial(
 
     obterConta: async () => vigiar(await cliente.obterConta()),
 
+    entrarComoTeste: (dados: { fuso: string; idioma: "pt" | "en" | "es" }) =>
+      cliente.entrarComoTeste(dados),
+
+    obterCreditos: () => cliente.obterCreditos(),
+
     trocarSenha: async (dados: DadosDeTrocaDeSenha) =>
       vigiar(await cliente.trocarSenha(dados)),
 

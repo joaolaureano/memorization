@@ -121,7 +121,7 @@ describe("migrações 20 e 21 — Tipo áudio", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(21);
+    expect(versao(banco)).toBe(22);
     expect(
       banco
         .prepare("SELECT id, frente, verso, tipo, imagem_chave FROM cartao ORDER BY id")
@@ -306,7 +306,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(21);
+    expect(versao(banco)).toBe(22);
     expect(existeTabela(banco, "vinculo")).toBe(false);
     expect(
       banco.prepare("SELECT nome_do_baralho FROM registro_de_sessao WHERE id = 'r1'").get()?.nome_do_baralho,

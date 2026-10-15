@@ -60,6 +60,8 @@ import type {
   ResultadoDeAcaoDeConta,
   ResultadoDeObterAcesso,
   ResultadoDeObterConta,
+  ResultadoDeEntrarComoTeste,
+  CreditoDoAcervo,
   ResultadoDeRenovarAcesso,
   ResultadoDeSair,
   ResultadoDeCriacaoDeBaralho,
@@ -1629,8 +1631,57 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       dados: {
         nomeDeUsuario: dono.nomeDeUsuario,
         contagens: this.contagensDoDono(dono.id),
+        contaDeTeste: dono.contaDeTeste === true,
       },
     };
+  }
+
+  /**
+   * Cria a Conta de teste do stand-in (030): um Usuário marcado, com Senha que
+   * o Entrar não aceita (FR-501), e o Acesso do navegador emitido para ele.
+   */
+  async entrarComoTeste(): Promise<ResultadoDeEntrarComoTeste> {
+    if (this.indisponivel) {
+      return {
+        ok: false,
+        recusa: { erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS },
+      };
+    }
+
+    const usuario: UsuarioDaBase = {
+      id: `u${++this.base.sequenciaDeUsuarios}`,
+      nomeDeUsuario: NOME_DA_CONTA_DE_TESTE_EM_MEMORIA,
+      senha: "",
+      contaDeTeste: true,
+    };
+
+    this.base.usuarios.push(usuario);
+    this.revogarAcessoDoNavegador();
+    this.emitirAcessoNoNavegador(usuario.id);
+
+    return { ok: true, nomeDeUsuario: usuario.nomeDeUsuario };
+  }
+
+  /** Dois créditos de exemplo, no formato de `GET /demonstracao/creditos` (030). */
+  async obterCreditos(): Promise<CreditoDoAcervo[]> {
+    return [
+      {
+        baralho: "Bandeiras",
+        cartao: "Brasil",
+        titulo: "Bandeira do Brasil",
+        autor: "Autor de exemplo",
+        licenca: "CC0 1.0",
+        fonte: "https://example.test/bandeira-do-brasil",
+      },
+      {
+        baralho: "Bandeiras",
+        cartao: "Alemanha",
+        titulo: "Bandeira da Alemanha",
+        autor: "Autor de exemplo",
+        licenca: "CC0 1.0",
+        fonte: "https://example.test/bandeira-da-alemanha",
+      },
+    ];
   }
 
   /** Troca a Senha com as regras da API (FR-266..FR-271). */
@@ -2253,7 +2304,12 @@ export class ClienteEmMemoria implements ClienteDoAcervo {
       (candidato) => candidato.nomeDeUsuario.toLowerCase() === chave,
     );
 
-    if (usuario === undefined || usuario.senha !== credencial.senha) {
+    // A Conta de teste nunca entra por Nome de usuário e Senha (030, FR-501).
+    if (
+      usuario === undefined ||
+      usuario.contaDeTeste === true ||
+      usuario.senha !== credencial.senha
+    ) {
       return null;
     }
 
@@ -2512,7 +2568,12 @@ interface UsuarioDaBase {
   id: string;
   nomeDeUsuario: string;
   senha: string;
+  /** Verdadeiro para a Conta de teste (030); ausente nas contas reais. */
+  contaDeTeste?: boolean;
 }
+
+/** Nome fixo das Contas de teste do stand-in (030); o servidor real o gera. */
+const NOME_DA_CONTA_DE_TESTE_EM_MEMORIA = "teste-exemplo";
 
 /**
  * Cartão com o dono e seu Baralho único (025): o `usuarioId` é o escopo de

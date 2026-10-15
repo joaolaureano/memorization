@@ -1,6 +1,6 @@
 import { TextoDoProduto } from "../idioma";
 import { MENSAGENS_PT } from "../idioma/mensagens";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import type {
@@ -47,7 +47,7 @@ import { CampoDeSenha } from "./CampoDeSenha";
  * de uma operação (FR-091) ou a conclusão de Sair (FR-096).
  */
 export interface AvisoDaEntrada {
-  tipo: "falha" | "saida" | "conta-excluida";
+  tipo: "falha" | "saida" | "conta-excluida" | "conta-teste-terminou";
   texto: string;
 }
 
@@ -92,8 +92,20 @@ export function PaginaDeEntrada({
   const [submetendo, setSubmetendo] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
 
+  // Entrar como Teste (030, FR-487): a criação em curso e a recusa, que leva o
+  // foco à sua mensagem (FR-503).
+  const [criandoContaDeTeste, setCriandoContaDeTeste] = useState(false);
+  const [falhaDaContaDeTeste, setFalhaDaContaDeTeste] = useState<string | null>(null);
+
   const campoDeNomeDeUsuario = useRef<HTMLInputElement>(null);
   const campoDaSenha = useRef<HTMLInputElement>(null);
+  const alertaDaContaDeTeste = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (falhaDaContaDeTeste !== null) {
+      alertaDaContaDeTeste.current?.focus();
+    }
+  }, [falhaDaContaDeTeste]);
 
   async function entrar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -135,7 +147,36 @@ export function PaginaDeEntrada({
     campoDaSenha.current?.focus();
   }
 
-  const { textos } = useIdioma();
+  async function entrarComoTeste() {
+    setFalhaDaContaDeTeste(null);
+    setCriandoContaDeTeste(true);
+
+    const resultado = await cliente.entrarComoTeste({
+      fuso: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      idioma,
+    });
+
+    setCriandoContaDeTeste(false);
+
+    if (resultado.ok) {
+      // Sucesso leva ao Início como o Acesso de «Continuar conectado»: a Conta
+      // de teste não tem Senha, e o Acesso do navegador já foi emitido (030).
+      try { window.localStorage.setItem("memorization.conta-de-teste", "true"); }
+      catch { /* o aviso entre abas é um aprimoramento, não bloqueia a entrada */ }
+      aoEntrar(
+        { nomeDeUsuario: resultado.nomeDeUsuario, senha: "" },
+        {
+          continuarConectado: true,
+          usuario: { id: "", nomeDeUsuario: resultado.nomeDeUsuario },
+        },
+      );
+      return;
+    }
+
+    setFalhaDaContaDeTeste(textos.recusa(resultado.recusa, "conta"));
+  }
+
+  const { textos, idioma } = useIdioma();
 
   return (
     <section className="acesso">
@@ -154,10 +195,14 @@ export function PaginaDeEntrada({
               aria-live="polite"
               aria-atomic="true"
               aria-label={
-                aviso.tipo === "saida" ? textos.acesso.aria_saida_concluida : textos.acesso.aria_conta_excluida
+                aviso.tipo === "conta-teste-terminou"
+                  ? textos.contaDeTeste.terminou
+                  : aviso.tipo === "saida"
+                    ? textos.acesso.aria_saida_concluida
+                    : textos.acesso.aria_conta_excluida
               }
             >
-              <TextoDoProduto texto={aviso.texto} />
+              {aviso.tipo === "conta-teste-terminou" ? textos.contaDeTeste.terminou : <TextoDoProduto texto={aviso.texto} />}
             </p>
           ) : (
             // FR-091 e FR-096: a recusa que descartou a Credencial chega como
@@ -237,6 +282,36 @@ export function PaginaDeEntrada({
             {submetendo ? textos.acesso.entrando : textos.acesso.botaoEntrar}
           </button>
         </form>
+
+        {/* 030, FR-487: Entrar como Teste vem depois de um separador «ou». */}
+        <p className="ca-separador">{textos.contaDeTeste.ou}</p>
+
+        <div className="ca-acoes">
+          <button
+            className="botao botao--secundario"
+            type="button"
+            disabled={criandoContaDeTeste}
+            onClick={entrarComoTeste}
+          >
+            {textos.contaDeTeste.entrar}
+          </button>
+        </div>
+        <p className="ajuda">{textos.contaDeTeste.apresentacao}</p>
+
+        {/* A região de status anuncia o preparo; a recusa é um alerta com foco. */}
+        <p className="ca-status" role="status" aria-live="polite">
+          {criandoContaDeTeste ? textos.contaDeTeste.preparando : ""}
+        </p>
+        {falhaDaContaDeTeste !== null && (
+          <p
+            ref={alertaDaContaDeTeste}
+            className="aviso aviso--erro"
+            role="alert"
+            tabIndex={-1}
+          >
+            {falhaDaContaDeTeste}
+          </p>
+        )}
 
         <p className="ajuda">
           {textos.acesso.ainda_nao_tem_conta} <a href="#/criar-conta">{textos.acesso.link_criar_conta}</a>

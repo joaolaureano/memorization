@@ -60,6 +60,8 @@ import type {
   ClienteDoAcervo,
   ResultadoDeExportacao,
   ResultadoDePreviaDaExportacao,
+  ResultadoDeEntrarComoTeste,
+  CreditoDoAcervo,
   Credencial,
   DadosDeBaralho,
   DadosDeSelecaoParaBaralho,
@@ -1353,6 +1355,47 @@ export class ClienteHttp implements ClienteDoAcervo {
     }
   }
 
+  /**
+   * Cria uma Conta de teste (030, R9): `201` com o Nome de usuário e o cookie do
+   * Acesso, que a `pedir` deixa o navegador guardar. As recusas do contrato
+   * vêm como `recusa`; qualquer outra resposta é `indisponivel`.
+   */
+  async entrarComoTeste(dados: { fuso: string; idioma: "pt" | "en" | "es" }): Promise<ResultadoDeEntrarComoTeste> {
+    const indisponivel: ResultadoDeEntrarComoTeste = { ok: false, recusa: { erro: INDISPONIVEL, mensagem: MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS } };
+
+    try {
+      const resposta = await this.pedir(`${this.endereco}/contas-de-teste`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fuso: dados.fuso, idioma: dados.idioma }),
+      });
+      const corpo = await resposta.json();
+      if (resposta.status === 201 && typeof corpo.nomeDeUsuario === "string") return { ok: true, nomeDeUsuario: corpo.nomeDeUsuario };
+      if (typeof corpo.erro === "string") return { ok: false, recusa: { erro: corpo.erro, mensagem: typeof corpo.mensagem === "string" ? corpo.mensagem : MENSAGEM_DE_INDISPONIBILIDADE_DE_USUARIOS, ...(typeof corpo.motivo === "string" ? { motivo: corpo.motivo } : {}), ...(typeof corpo.limite === "number" ? { limite: corpo.limite } : {}) } };
+      return indisponivel;
+    } catch {
+      return indisponivel;
+    }
+  }
+
+  /**
+   * Os créditos do acervo de demonstração (030, FR-496). A assinatura não tem
+   * canal de erro: qualquer falha devolve a lista vazia.
+   */
+  async obterCreditos(): Promise<CreditoDoAcervo[]> {
+    try {
+      const resposta = await this.pedir(`${this.endereco}/demonstracao/creditos`);
+
+      if (resposta.status !== 200) {
+        return [];
+      }
+
+      return lerCreditos(await resposta.json());
+    } catch {
+      return [];
+    }
+  }
+
   /** Troca a Senha (FR-266..FR-271): `204`, ou `400`/`403` do contrato. */
   async trocarSenha(
     dados: DadosDeTrocaDeSenha,
@@ -1949,7 +1992,29 @@ function lerDadosDaConta(corpo: unknown): DadosDaConta | null {
     return null;
   }
 
-  return { nomeDeUsuario: campos.nomeDeUsuario, contagens };
+  return {
+    nomeDeUsuario: campos.nomeDeUsuario,
+    contagens,
+    contaDeTeste: campos.contaDeTeste === true,
+  };
+}
+
+function lerCreditos(corpo: unknown): CreditoDoAcervo[] {
+  if (!Array.isArray(corpo)) {
+    return [];
+  }
+
+  return corpo.filter((item: unknown): item is CreditoDoAcervo => {
+    if (typeof item !== "object" || item === null) {
+      return false;
+    }
+
+    const campos = item as Record<string, unknown>;
+
+    return ["baralho", "cartao", "titulo", "autor", "licenca", "fonte"].every(
+      (chave) => typeof campos[chave] === "string",
+    );
+  });
 }
 
 function lerCartao(corpo: unknown): Cartao | null {

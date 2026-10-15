@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conta de teste · Memorization</title>
+  <link rel="stylesheet" href="../../frontend/src/estilos.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="moldura">
+    <span class="marca">memorization</span>
+    <nav class="navegacao-principal" aria-label="Principal" id="navegacao" hidden>
+      <a href="#inicio" data-vista="inicio" data-i18n="navInicio">Início</a><a href="#perfil" data-vista="perfil" data-i18n="navPerfil">Perfil</a>
+    </nav>
+    <span class="ca-etiqueta-conta" id="etiqueta-conta" hidden data-i18n="etiquetaConta">Conta de teste</span>
+    <div class="ca-idiomas" role="group" aria-label="Idioma" data-i18n-aria="idioma">
+      <button class="ca-idioma" type="button" data-idioma="pt-BR" aria-pressed="true">PT</button>
+      <button class="ca-idioma" type="button" data-idioma="en-US" aria-pressed="false">EN</button>
+      <button class="ca-idioma" type="button" data-idioma="es-419" aria-pressed="false">ES</button>
+    </div>
+    <button class="botao-de-saida" id="sair" type="button" data-i18n="sair" hidden>Sair</button>
+  </header>
+  <main class="aplicacao" id="principal">
+    <section class="ca-bloco" aria-labelledby="titulo-estados">
+      <h2 id="titulo-estados" data-i18n="tituloEstados">Estados do protótipo</h2>
+      <div class="ca-acoes" role="group" aria-label="Estados do protótipo" data-i18n-aria="estadosPrototipo">
+        <button class="botao botao--secundario" type="button" data-estado="entrar" data-i18n="estadoEntrar">Entrar</button>
+        <button class="botao botao--secundario" type="button" data-estado="preparando" data-i18n="estadoPreparando">Preparando</button>
+        <button class="botao botao--secundario" type="button" data-estado="limite" data-i18n="estadoLimite">Limite</button>
+        <button class="botao botao--secundario" type="button" data-estado="expirada" data-i18n="estadoExpirada">Expirada</button>
+        <button class="botao botao--secundario" type="button" data-estado="inicio" data-i18n="estadoInicio">Início</button>
+        <button class="botao botao--secundario" type="button" data-estado="perfil" data-i18n="estadoPerfil">Perfil</button>
+        <button class="botao botao--secundario" type="button" data-estado="saida" data-i18n="estadoSaida">Confirmar saída</button>
+      </div>
+    </section>
+
+    <section class="ca-bloco" id="tela-entrar" aria-labelledby="titulo-entrar">
+      <h1 id="titulo-entrar" data-i18n="entrar">Entrar</h1>
+      <p class="aviso" id="aviso-expirada" hidden data-i18n="avisoExpirada">Sua Conta de teste terminou. Entre como Teste para começar de novo.</p>
+      <form id="formulario-entrar">
+        <div class="campo">
+          <label class="rotulo" for="usuario" data-i18n="usuario">Usuário</label>
+          <input id="usuario" type="text" autocomplete="username">
+        </div>
+        <div class="campo">
+          <label class="rotulo" for="senha" data-i18n="senha">Senha</label>
+          <input id="senha" type="password" autocomplete="current-password">
+        </div>
+        <div class="ca-acoes">
+          <button class="botao botao--primario" type="submit" data-i18n="entrarBotao">Entrar</button>
+        </div>
+      </form>
+      <p class="ca-separador" data-i18n="ou">ou</p>
+      <div class="ca-acoes">
+        <button class="botao botao--secundario" id="entrar-teste" type="button" data-i18n="entrarComoTeste">Entrar como Teste</button>
+      </div>
+      <p class="ajuda" data-i18n="fraseTeste">Experimente com Baralhos de exemplo. Tudo é apagado ao sair.</p>
+      <p class="ca-mensagem" id="estado-criacao" role="status" aria-live="polite"></p>
+      <div class="aviso aviso--erro" id="alerta-limite" role="alert" tabindex="-1" hidden data-i18n="limite">Muitas tentativas agora. Tente de novo em alguns minutos.</div>
+      <p class="ca-mensagem" id="aviso-login" role="status" aria-live="polite"></p>
+    </section>
+
+    <div id="tela-app" hidden>
+      <div class="aviso ca-aviso-conta" id="aviso-conta">
+        <p>
+          <span data-i18n="avisoConta">Esta é uma Conta de teste. Tudo será apagado ao sair.</span>
+          <a class="ca-link" href="#creditos" id="abrir-creditos" data-i18n="linkCreditos">Créditos do acervo de demonstração</a>
+        </p>
+      </div>
+
+      <section class="ca-bloco" id="vista-inicio" aria-labelledby="titulo-inicio">
+        <h1 id="titulo-inicio" data-i18n="inicio">Início</h1>
+        <p class="ajuda" data-i18n="inicioTexto">Baralhos de exemplo prontos para estudar.</p>
+        <ul class="ca-lista">
+          <li class="ca-cartao"><p>Botânica</p></li>
+          <li class="ca-cartao"><p>Música</p></li>
+        </ul>
+      </section>
+
+      <section class="ca-bloco" id="vista-perfil" aria-labelledby="titulo-perfil" hidden>
+        <h1 id="titulo-perfil" data-i18n="perfil">Perfil</h1>
+        <p data-i18n="perfilConta">A Conta de teste não pode ser alterada nem excluída.</p>
+        <h2 data-i18n="preferencias">Preferências</h2>
+        <p class="ajuda" data-i18n="preferenciasTexto">As preferências continuam disponíveis nesta seção.</p>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="creditos" aria-labelledby="titulo-creditos">
+    <h2 class="titulo-do-dialogo" id="titulo-creditos" data-i18n="creditosTitulo">Créditos do acervo de demonstração</h2>
+    <ul class="ca-lista" id="lista-creditos">
+      <li class="ca-credito">
+        <h3>Exemplo de áudio</h3>
+        <dl>
+          <dt data-i18n="creditoAutor">Autor</dt><dd>Autor de exemplo</dd>
+          <dt data-i18n="creditoLicenca">Licença</dt><dd>CC BY 4.0</dd>
+          <dt data-i18n="creditoFonte">Fonte</dt><dd><a href="https://example.com/fonte-1">example.com/fonte-1</a></dd>
+        </dl>
+      </li>
+      <li class="ca-credito">
+        <h3>Exemplo de imagem</h3>
+        <dl>
+          <dt data-i18n="creditoAutor">Autor</dt><dd>Autor de exemplo</dd>
+          <dt data-i18n="creditoLicenca">Licença</dt><dd>CC0</dd>
+          <dt data-i18n="creditoFonte">Fonte</dt><dd><a href="https://example.com/fonte-2">example.com/fonte-2</a></dd>
+        </dl>
+      </li>
+      <li class="ca-credito">
+        <h3>Exemplo de texto</h3>
+        <dl>
+          <dt data-i18n="creditoAutor">Autor</dt><dd>Autor de exemplo</dd>
+          <dt data-i18n="creditoLicenca">Licença</dt><dd>CC BY-SA 4.0</dd>
+          <dt data-i18n="creditoFonte">Fonte</dt><dd><a href="https://example.com/fonte-3">example.com/fonte-3</a></dd>
+        </dl>
+      </li>
+    </ul>
+    <div class="acoes-do-dialogo ca-acoes">
+      <button class="botao botao--secundario" id="fechar-creditos" type="button" data-i18n="fechar">Fechar</button>
+    </div>
+  </dialog>
+
+  <dialog id="confirmar-saida" aria-labelledby="titulo-saida">
+    <h2 class="titulo-do-dialogo" id="titulo-saida" data-i18n="sairTitulo">Sair</h2>
+    <p data-i18n="confirmaSair">Sair apaga a Conta de teste e tudo o que você fez nela.</p>
+    <div class="acoes-do-dialogo ca-acoes">
+      <button class="botao botao--secundario" id="cancelar-saida" type="button" data-i18n="cancelar">Cancelar</button>
+      <button class="botao botao--perigo" id="sair-e-apagar" type="button" data-i18n="sairEApagar">Sair e apagar</button>
+    </div>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

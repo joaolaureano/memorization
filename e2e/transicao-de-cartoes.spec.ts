@@ -72,6 +72,13 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
       vincular.run(compartilhado.id, viagem.id);
       // O esquema v17 ainda tinha a fila com o nome antigo (028, migração 20).
       arquivo.exec("ALTER TABLE midia_a_remover RENAME TO imagem_a_remover;");
+      // A base de partida deve refletir v17; o teste começa de um banco recém-
+      // criado na versão corrente, então remove o estado acrescentado pela 22.
+      arquivo.exec("DROP INDEX indice_usuario_conta_de_teste;");
+      arquivo.exec("DROP INDEX indice_criacao_de_conta_de_teste_por_origem;");
+      arquivo.exec("DROP TABLE criacao_de_conta_de_teste;");
+      arquivo.exec("ALTER TABLE usuario DROP COLUMN conta_de_teste_em;");
+      arquivo.exec("ALTER TABLE usuario DROP COLUMN envios_de_teste;");
       arquivo.prepare("UPDATE versao_do_esquema SET versao = 17").run();
       arquivo.exec("COMMIT;");
     } finally {
@@ -95,7 +102,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     await page.goto(`${enderecoDoFrontend}/#/baralhos`);
     await page.getByLabel("Nome de usuário", { exact: true }).fill(ana.nomeDeUsuario);
     await page.getByLabel("Senha", { exact: true }).fill(ana.senha);
-    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("button", { name: "Entrar", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Organizar Cartões existentes" })).toBeVisible();
     await expect(page.getByLabel("To travel")).toBeVisible();
     await expect(page.getByLabel("To read")).toBeVisible();
@@ -142,7 +149,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     api = null;
     api = iniciarApi(banco, portaDaApi);
     await aguardarApiPronta(api, enderecoDaApi);
-    expect(lerVersaoDoEsquema(banco)).toBe(21);
+    expect(lerVersaoDoEsquema(banco)).toBe(22);
     const final = new DatabaseSync(banco);
     try {
       expect(final.prepare("SELECT name FROM sqlite_master WHERE name = 'vinculo'").get()).toBeUndefined();

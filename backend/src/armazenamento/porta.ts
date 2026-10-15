@@ -512,9 +512,15 @@ export type DesfechoDeInsercaoDeUsuario =
   | { ok: true; valor: Usuario }
   | { ok: false; erro: CodigoDeFalhaDeInsercaoDeUsuario };
 
+/**
+ * Usuário como a leitura o devolve: a marca de Conta de teste é `null` nas
+ * contas reais e o instante da criação nas Contas de teste.
+ */
+export type UsuarioLido = Usuario & { contaDeTesteEm: string | null };
+
 /** Desfecho da leitura de Usuário: o Usuário guardado, ou a falha tipada. */
 export type DesfechoDeLeituraDeUsuario =
-  | { ok: true; valor: Usuario }
+  | { ok: true; valor: UsuarioLido }
   | { ok: false; erro: CodigoDeFalhaDeLeituraDeUsuario };
 
 /**
@@ -1049,4 +1055,59 @@ export interface ArmazenamentoDoAcervo {
     compromisso: CompromissoPersistido,
     calcular: CalculoDeAgendamentos,
   ): Promise<Desfecho<{ registro: RegistroDeSessao; novo: boolean }>>;
+
+  /**
+   * Numa **única transação**, cria a Conta de teste inteira: o Usuário marcado,
+   * os Baralhos com seus Cartões e Pertencimentos, os Registros e Itens, os
+   * Agendamentos, a Rotina e as Preferências. Qualquer falha desfaz tudo e
+   * chega como `indisponivel`: nenhuma conta parcial fica guardada.
+   */
+  criarContaDeTeste(conta: ContaDeTesteArmazenavel): Promise<Desfecho<void>>;
+
+  /**
+   * Ids das Contas de teste encerradas, das mais antigas às mais novas, até
+   * `limite`. Encerrada é a criada há mais de `FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS`
+   * antes de `agora` e sem Acesso com `expiraEm > agora`. Usuário real nunca
+   * aparece aqui.
+   */
+  listarContasDeTesteEncerradas(agora: string, limite: number): Promise<string[]>;
+
+  /** Registra uma criação de Conta de teste feita pela origem (hash) em `agora`. */
+  registrarCriacaoDeContaDeTeste(origemHmac: string, agora: string): Promise<void>;
+
+  /** Quantas criações a origem fez desde `desde` (inclusive). */
+  contarCriacoes(origemHmac: string, desde: string): Promise<number>;
+
+  /** Contas de teste ainda não encerradas, isto é, com Acesso válido em `agora`. */
+  contarContasDeTesteAtivas(agora: string): Promise<number>;
+
+  /** Remove os registros de criação anteriores a `antesDe` (limpeza, R4). */
+  esquecerCriacoesAntigas(antesDe: string): Promise<void>;
+
+  /**
+   * Incrementa `envios_de_teste` do Usuário de teste só se o valor atual for
+   * menor que `limite`, numa instrução atômica. Devolve `true` se incrementou;
+   * `false` se atingiu o limite ou se o Usuário não é Conta de teste.
+   */
+  registrarEnvioDeTeste(usuarioId: string, limite: number): Promise<boolean>;
+}
+
+/**
+ * Folga entre a criação de uma Conta de teste e a sua elegibilidade para
+ * encerramento: evita que a limpeza dispute a criação em andamento (R4).
+ */
+export const FOLGA_DA_CRIACAO_DE_CONTA_DE_TESTE_MS = 2 * 60 * 1000;
+
+/**
+ * Conta de teste como a Porta a grava: um Usuário com a marca de criação e
+ * todo o conteúdo inicial, em tipos que já existem. O Module que a monta é o
+ * dono da regra; a Porta só a guarda numa transação.
+ */
+export interface ContaDeTesteArmazenavel {
+  usuario: Usuario & { contaDeTesteEm: string };
+  baralhos: readonly { baralho: Baralho; cartoes: readonly Cartao[] }[];
+  registros: readonly RegistroDeSessao[];
+  agendamentos: readonly Agendamento[];
+  rotina: RotinaArmazenada;
+  preferencias: Preferencias;
 }

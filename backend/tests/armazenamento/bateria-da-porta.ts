@@ -9,6 +9,7 @@ import type {
   Baralho,
   Cartao,
   CompromissoPersistido,
+  ContaDeTesteArmazenavel,
   ContagemPorBaralho,
   Desfecho,
   InicioAutorizado,
@@ -2959,6 +2960,241 @@ export function bateriaDaPorta(
           ok: false,
           erro: "nao_encontrado",
         });
+      });
+    });
+
+    describe("Conta de teste", () => {
+      const AGORA = "2026-06-01T12:00:00.000Z";
+      const HA_QUARENTA_MINUTOS = "2026-06-01T11:40:00.000Z";
+      const HA_DEZ_MINUTOS = "2026-06-01T11:50:00.000Z";
+      const HA_TRES_MINUTOS = "2026-06-01T11:57:00.000Z";
+      const HA_UM_MINUTO = "2026-06-01T11:59:00.000Z";
+      const EXPIRA_DEPOIS = "2026-06-01T13:00:00.000Z";
+      const EXPIROU_ANTES = "2026-06-01T11:00:00.000Z";
+
+      /**
+       * Conta de teste completa, com um Baralho, Cartões, um Registro com
+       * Agendamentos, a Rotina e as Preferências. `contaDeTesteEm` é o instante
+       * da criação, controlado pelo cenário, porque o encerramento depende dele.
+       */
+      function contaDeTesteDe(
+        id: string,
+        contaDeTesteEm: string,
+        cartoes: Cartao[] = [
+          cartaoDe(`${id}-c1`, "To walk", "Caminhar"),
+          cartaoDe(`${id}-c2`, "To swim", "Nadar"),
+        ],
+      ): ContaDeTesteArmazenavel {
+        const baralhoId = `${id}-b1`;
+
+        return {
+          usuario: {
+            id,
+            nomeDeUsuario: `teste-${id}`,
+            sal: new Uint8Array(16),
+            hash: new Uint8Array(64),
+            parametros: JSON.stringify({ algoritmo: "scrypt" }),
+            contaDeTesteEm,
+          },
+          baralhos: [{ baralho: baralhoDe(baralhoId), cartoes }],
+          registros: [
+            {
+              ...registroDe(`${id}-r1`, "2026-05-30T00:00:00.000Z"),
+              baralhoId,
+              nomeDoBaralho: "Inglês",
+            },
+          ],
+          agendamentos: cartoes.map((cartao) => agendamentoDe(cartao.id)),
+          rotina: {
+            id: `${id}-rotina`,
+            criadaEm: "2026-05-30T00:00:00.000Z",
+            versao: 1,
+            estado: "ativa",
+            baralhoId,
+            versoes: [
+              {
+                ordem: 1,
+                iniciaEm: "2026-05-30",
+                baralhoId,
+                nomeDoBaralho: "Inglês",
+                dias: [1, 2, 3, 4, 5, 6, 7],
+                quantidade: null,
+                estado: "ativa",
+              },
+            ],
+          },
+          preferencias: { algoritmo: "sm2" },
+        };
+      }
+
+      it("criarContaDeTeste grava Usuário, Baralhos, Cartões, Registros, Agendamentos, Rotina e Preferências", async () => {
+        const conta = contaDeTesteDe("conta-um", HA_TRES_MINUTOS);
+
+        expect(await armazenamento().criarContaDeTeste(conta)).toEqual({
+          ok: true,
+          valor: undefined,
+        });
+
+        expect(await aberto.usuarios.obterUsuarioPorId("conta-um")).toMatchObject({
+          ok: true,
+          valor: { nomeDeUsuario: "teste-conta-um", contaDeTesteEm: HA_TRES_MINUTOS },
+        });
+        expect(await armazenamento().listarBaralhos("conta-um")).toHaveLength(1);
+        expect(await armazenamento().listarCartoes("conta-um")).toHaveLength(2);
+        expect(
+          await armazenamento().obterRegistroDeSessao("conta-um", "conta-um-r1"),
+        ).toMatchObject({ ok: true, valor: { id: "conta-um-r1" } });
+        expect(await armazenamento().listarAgendamentos("conta-um")).toHaveLength(2);
+        expect(await armazenamento().listarRotinas("conta-um")).toHaveLength(1);
+        expect(await armazenamento().obterPreferencias("conta-um")).toEqual({
+          algoritmo: "sm2",
+        });
+      });
+
+      it("uma falha no meio da criação desfaz tudo: sem Usuário e sem Baralhos, e o Nome de usuário fica livre", async () => {
+        /** O Baralho da conta já existe, de outro dono: a última escrita falha. */
+        await armazenamento().inserirBaralho(DONO_UM, baralhoDe("conta-dois-b1"));
+        const conta = contaDeTesteDe("conta-dois", HA_TRES_MINUTOS);
+
+        const falhou = await armazenamento().criarContaDeTeste(conta);
+
+        expect(falhou.ok).toBe(false);
+        expect(await aberto.usuarios.obterUsuarioPorId("conta-dois")).toEqual({
+          ok: false,
+          erro: "nao_encontrado",
+        });
+        expect(await armazenamento().listarCartoes("conta-dois")).toEqual([]);
+
+        /** Liberado o Baralho, a mesma conta, com o mesmo Nome de usuário, cabe. */
+        await armazenamento().excluirBaralho(DONO_UM, "conta-dois-b1");
+        expect((await armazenamento().criarContaDeTeste(conta)).ok).toBe(true);
+      });
+
+      it("o Usuário real lê contaDeTesteEm nulo", async () => {
+        expect(await aberto.usuarios.obterUsuarioPorId(DONO_UM)).toMatchObject({
+          ok: true,
+          valor: { contaDeTesteEm: null },
+        });
+        expect(
+          await aberto.usuarios.obterUsuarioPorNomeDeUsuario("ana.silva"),
+        ).toMatchObject({ ok: true, valor: { contaDeTesteEm: null } });
+      });
+
+      it("lista as Contas de teste encerradas, das mais antigas às mais novas, sem usuários reais nem Contas com Acesso válido", async () => {
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-b", HA_TRES_MINUTOS));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-a", HA_DEZ_MINUTOS));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-recente", HA_UM_MINUTO));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-viva", HA_TRES_MINUTOS));
+        await aberto.acessos.criar("digest-viva", "conta-viva", EXPIRA_DEPOIS);
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-expirada", HA_QUARENTA_MINUTOS));
+        await aberto.acessos.criar("digest-expirada", "conta-expirada", EXPIROU_ANTES);
+
+        expect(await armazenamento().listarContasDeTesteEncerradas(AGORA, 10)).toEqual([
+          "conta-expirada",
+          "conta-a",
+          "conta-b",
+        ]);
+        expect(await armazenamento().listarContasDeTesteEncerradas(AGORA, 2)).toEqual([
+          "conta-expirada",
+          "conta-a",
+        ]);
+      });
+
+      it("contarContasDeTesteAtivas conta só as Contas de teste com Acesso válido", async () => {
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-ativa-um", HA_TRES_MINUTOS));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-ativa-dois", HA_TRES_MINUTOS));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-sem-acesso", HA_TRES_MINUTOS));
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-vencida", HA_TRES_MINUTOS));
+        await aberto.acessos.criar("digest-ativa-um", "conta-ativa-um", EXPIRA_DEPOIS);
+        await aberto.acessos.criar("digest-ativa-dois", "conta-ativa-dois", EXPIRA_DEPOIS);
+        await aberto.acessos.criar("digest-vencida", "conta-vencida", EXPIROU_ANTES);
+
+        expect(await armazenamento().contarContasDeTesteAtivas(AGORA)).toBe(2);
+      });
+
+      it("conta as criações por origem e por janela, com o instante de fronteira incluído", async () => {
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-a", "2026-06-01T11:00:00.000Z");
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-a", "2026-06-01T11:30:00.000Z");
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-b", "2026-06-01T11:30:00.000Z");
+
+        expect(await armazenamento().contarCriacoes("origem-a", "2026-06-01T11:30:00.000Z")).toBe(1);
+        expect(await armazenamento().contarCriacoes("origem-a", "2026-06-01T10:00:00.000Z")).toBe(2);
+        expect(await armazenamento().contarCriacoes("origem-b", "2026-06-01T10:00:00.000Z")).toBe(1);
+        expect(await armazenamento().contarCriacoes("origem-c", "2026-06-01T10:00:00.000Z")).toBe(0);
+      });
+
+      it("esquecerCriacoesAntigas apaga só as criações anteriores ao instante informado", async () => {
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-a", "2026-06-01T11:00:00.000Z");
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-a", "2026-06-01T11:30:00.000Z");
+        await armazenamento().registrarCriacaoDeContaDeTeste("origem-b", "2026-06-01T11:00:00.000Z");
+
+        await armazenamento().esquecerCriacoesAntigas("2026-06-01T11:15:00.000Z");
+
+        expect(await armazenamento().contarCriacoes("origem-a", "2026-06-01T10:00:00.000Z")).toBe(1);
+        expect(await armazenamento().contarCriacoes("origem-b", "2026-06-01T10:00:00.000Z")).toBe(0);
+      });
+
+      it("registrarEnvioDeTeste aceita 30 envios, recusa o 31º sem incrementar e não conta Usuário real", async () => {
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-envios", HA_TRES_MINUTOS));
+
+        for (let envio = 0; envio < 30; envio++) {
+          expect(await armazenamento().registrarEnvioDeTeste("conta-envios", 30)).toBe(true);
+        }
+        expect(await armazenamento().registrarEnvioDeTeste("conta-envios", 30)).toBe(false);
+
+        /**
+         * Sem incremento na recusa, o contador ainda vale 30: com limite 31 o
+         * próximo envio passa uma vez, e o seguinte é recusado.
+         */
+        expect(await armazenamento().registrarEnvioDeTeste("conta-envios", 31)).toBe(true);
+        expect(await armazenamento().registrarEnvioDeTeste("conta-envios", 31)).toBe(false);
+
+        expect(await armazenamento().registrarEnvioDeTeste(DONO_UM, 30)).toBe(false);
+      });
+
+      it("dois envios simultâneos com 29 já usados: exatamente um é aceito", async () => {
+        await armazenamento().criarContaDeTeste(contaDeTesteDe("conta-corrida", HA_TRES_MINUTOS));
+
+        for (let envio = 0; envio < 29; envio++) {
+          expect(await armazenamento().registrarEnvioDeTeste("conta-corrida", 30)).toBe(true);
+        }
+
+        const resultados = await Promise.all([
+          armazenamento().registrarEnvioDeTeste("conta-corrida", 30),
+          armazenamento().registrarEnvioDeTeste("conta-corrida", 30),
+        ]);
+
+        expect(resultados.filter((aceito) => aceito)).toHaveLength(1);
+        expect(await armazenamento().registrarEnvioDeTeste("conta-corrida", 30)).toBe(false);
+      });
+
+      it("excluir Conta de teste não enfileira a mídia de demonstração, mas enfileira a própria mídia e a exportação", async () => {
+        await armazenamento().criarContaDeTeste(
+          contaDeTesteDe("conta-midia", HA_TRES_MINUTOS, [
+            {
+              id: "cd1",
+              frente: "Brasil",
+              tipo: "imagem",
+              verso: "Brasil",
+              imagemChave: "demonstracao/bandeiras/brasil.png",
+              textoAlternativo: "Bandeira de Brasil",
+            },
+            {
+              id: "cp1",
+              frente: "Minha foto",
+              verso: "Foto própria",
+              tipo: "imagem",
+              imagemChave: "imagens/propria.png",
+              textoAlternativo: "Foto própria",
+            },
+          ]),
+        );
+
+        expect((await aberto.usuarios.excluirUsuario("conta-midia")).ok).toBe(true);
+        expect((await armazenamento().listarMidiaARemover(10)).sort()).toEqual([
+          "exportacoes/conta-midia",
+          "imagens/propria.png",
+        ]);
       });
     });
   });

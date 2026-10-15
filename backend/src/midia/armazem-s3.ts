@@ -17,7 +17,9 @@ import {
   VALIDADE_DO_ENVIO_EM_SEGUNDOS,
   chaveAtiva,
   chavePendente,
+  ehChaveDeGravacaoFixa,
   ehIdentificadorDeEnvio,
+  ehMidiaDeDemonstracao,
   midiaDaChave,
   type ArmazemDeMidia,
 } from "./armazem.ts";
@@ -162,8 +164,19 @@ export function criarArmazemS3(opcoes: OpcoesDoArmazemS3): ArmazemDeMidia {
       };
     },
 
+    async gravarArquivoFixo(chave, bytes, tipoDeConteudo) {
+      if (!ehChaveDeGravacaoFixa(chave)) {
+        throw new Error("gravarArquivoFixo: a chave não é de demonstração");
+      }
+
+      await s3.send(new PutObjectCommand({
+        Bucket, Key: chave, Body: bytes, ContentType: tipoDeConteudo, ContentDisposition: "inline",
+      }));
+    },
+
     async copiar(chave, usuarioId) {
-      const midia = midiaDaChave(chave);
+      const midia = midiaDaChave(chave) ??
+        (ehMidiaDeDemonstracao(chave) ? chave.endsWith(".png") ? "imagem" : "audio" : null);
 
       if (midia === null) {
         throw new Error("copiar: a chave não é de uma Mídia ativa");

@@ -71,6 +71,7 @@ describe("ClienteHttp — obterConta", () => {
           registrosDeSessao: 3,
           agenda: null,
         },
+        contaDeTeste: false,
       },
     });
     expect(chamadas[0]?.url).toBe("http://127.0.0.1:3001/conta");
@@ -192,6 +193,7 @@ describe("ClienteEmMemoria — conta", () => {
       dados: {
         nomeDeUsuario: "ana.silva",
         contagens: { cartoes: 1, baralhos: 1, registrosDeSessao: 0, agenda: 0 },
+        contaDeTeste: false,
       },
     });
   });
@@ -321,6 +323,158 @@ describe("ClienteEmMemoria — conta", () => {
     ana.restaurarDisponibilidade();
 
     expect(await ana.obterConta()).toMatchObject({ ok: true });
+  });
+});
+
+describe("ClienteHttp — contas de teste e créditos (030)", () => {
+  const DADOS_DE_TESTE = { fuso: "America/Sao_Paulo", idioma: "pt" as const };
+
+  it("entrarComoTeste: POST sem Credencial, com credentials include, e 201 devolve o nome", async () => {
+    const { cliente, chamadas } = clienteHttpQueResponde(201, {
+      nomeDeUsuario: "teste-abc",
+      contaDeTeste: true,
+    });
+
+    expect(await cliente.entrarComoTeste(DADOS_DE_TESTE)).toEqual({
+      ok: true,
+      nomeDeUsuario: "teste-abc",
+    });
+    expect(chamadas[0]?.url).toBe("http://127.0.0.1:3001/contas-de-teste");
+    expect(chamadas[0]?.init?.method).toBe("POST");
+    expect(chamadas[0]?.init?.credentials).toBe("include");
+    expect(
+      (chamadas[0]?.init?.headers as Record<string, string>).authorization,
+    ).toBeUndefined();
+    expect(JSON.parse(String(chamadas[0]?.init?.body))).toEqual(DADOS_DE_TESTE);
+  });
+
+  it("entrarComoTeste: 429 e 503 devolvem a recusa com código e limite", async () => {
+    const { cliente } = clienteHttpQueResponde(429, {
+      erro: "contas_de_teste_esgotadas_na_origem",
+      mensagem: "Too many test accounts from this origin.",
+      limite: 10,
+    });
+
+    expect(await cliente.entrarComoTeste(DADOS_DE_TESTE)).toMatchObject({
+      ok: false,
+      recusa: { erro: "contas_de_teste_esgotadas_na_origem", limite: 10 },
+    });
+
+    const { cliente: outro } = clienteHttpQueResponde(503, {
+      erro: "contas_de_teste_indisponiveis",
+      mensagem: "Too many active test accounts.",
+    });
+
+    expect(await outro.entrarComoTeste(DADOS_DE_TESTE)).toMatchObject({
+      ok: false,
+      recusa: { erro: "contas_de_teste_indisponiveis" },
+    });
+  });
+
+  it("entrarComoTeste: corpo fora do contrato e falha de rede são indisponivel", async () => {
+    const { cliente } = clienteHttpQueResponde(201, { outra: "forma" });
+
+    expect(await cliente.entrarComoTeste(DADOS_DE_TESTE)).toMatchObject({
+      ok: false,
+      recusa: { erro: INDISPONIVEL },
+    });
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("network");
+    }));
+
+    expect(
+      await new ClienteHttp("http://127.0.0.1:3001").entrarComoTeste(DADOS_DE_TESTE),
+    ).toMatchObject({ ok: false, recusa: { erro: INDISPONIVEL } });
+  });
+
+  it("obterCreditos: 200 devolve a lista e descarta itens fora do contrato", async () => {
+    const credito = {
+      baralho: "Bandeiras",
+      cartao: "Brasil",
+      titulo: "Bandeira do Brasil",
+      autor: "Autor",
+      licenca: "CC0 1.0",
+      fonte: "https://example.test/brasil",
+    };
+    const { cliente, chamadas } = clienteHttpQueResponde(200, [
+      credito,
+      { baralho: "Quebrado" },
+    ]);
+
+    expect(await cliente.obterCreditos()).toEqual([credito]);
+    expect(chamadas[0]?.url).toBe("http://127.0.0.1:3001/demonstracao/creditos");
+  });
+
+  it("obterCreditos: status diferente de 200 e falha de rede devolvem lista vazia", async () => {
+    const { cliente } = clienteHttpQueResponde(503, {});
+
+    expect(await cliente.obterCreditos()).toEqual([]);
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new TypeError("network");
+    }));
+
+    expect(await new ClienteHttp("http://127.0.0.1:3001").obterCreditos()).toEqual([]);
+  });
+
+  it("obterConta lê contaDeTeste do servidor e trata a ausência como falso", async () => {
+    const contagens = { cartoes: 0, baralhos: 0, registrosDeSessao: 0, agenda: null };
+    const { cliente } = clienteHttpQueResponde(200, {
+      nomeDeUsuario: "teste-abc",
+      contagens,
+      contaDeTeste: true,
+    });
+
+    expect(await cliente.obterConta()).toMatchObject({
+      ok: true,
+      dados: { contaDeTeste: true },
+    });
+
+    const { cliente: semCampo } = clienteHttpQueResponde(200, {
+      nomeDeUsuario: "ana.silva",
+      contagens,
+    });
+
+    expect(await semCampo.obterConta()).toMatchObject({
+      ok: true,
+      dados: { contaDeTeste: false },
+    });
+  });
+});
+
+describe("ClienteEmMemoria — contas de teste (030)", () => {
+  it("entrarComoTeste emite o Acesso, marca a conta e não a deixa entrar por Senha", async () => {
+    const cliente = new ClienteEmMemoria();
+
+    const resultado = await cliente.entrarComoTeste();
+
+    expect(resultado).toEqual({ ok: true, nomeDeUsuario: "teste-exemplo" });
+    expect(await cliente.obterAcesso()).toEqual({
+      ok: true,
+      nomeDeUsuario: "teste-exemplo",
+    });
+    expect(await cliente.obterConta()).toMatchObject({
+      ok: true,
+      dados: { nomeDeUsuario: "teste-exemplo", contaDeTeste: true },
+    });
+    expect(
+      await new ClienteEmMemoria().entrar({
+        nomeDeUsuario: "teste-exemplo",
+        senha: "",
+      }),
+    ).toMatchObject({ ok: false, erro: NAO_AUTENTICADO });
+  });
+
+  it("obterCreditos devolve os dois créditos de exemplo, com os seis campos", async () => {
+    const creditos = await new ClienteEmMemoria().obterCreditos();
+
+    expect(creditos).toHaveLength(2);
+    for (const credito of creditos) {
+      expect(Object.keys(credito).sort()).toEqual(
+        ["autor", "baralho", "cartao", "fonte", "licenca", "titulo"],
+      );
+    }
   });
 });
 

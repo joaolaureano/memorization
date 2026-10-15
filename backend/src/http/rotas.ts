@@ -18,6 +18,8 @@ import type { AcaoDeRotina } from "../agenda/tipos.ts";
 import { CREDENCIAL_INVALIDA } from "../identidade/identidade.ts";
 import type { Identidade } from "../identidade/identidade.ts";
 import { credencialDoCabecalho } from "./credencial.ts";
+import { ipDoVisitante, origemDeContaDeTeste } from "./origem.ts";
+import { CREDITOS } from "../demonstracao/creditos.ts";
 import { recusa, recusaDeAudioInvalido } from "./recusas.ts";
 import { AnkiError } from "../importacao/anki.ts";
 
@@ -28,7 +30,7 @@ import { AnkiError } from "../importacao/anki.ts";
  * (FR-090, FR-092). A Interface do `Acervo` não muda: o que muda é o dono com
  * que ele é criado.
  */
-export type AcervoDeUsuario = (usuarioId: string) => Acervo;
+export type AcervoDeUsuario = (usuarioId: string, contaDeTeste?: boolean) => Acervo;
 
 /**
  * Adapter HTTP do Module `Acervo` (T007, T207, T403, T503 e T805).
@@ -94,6 +96,10 @@ function responderRecusaDeCartao(
     return resposta
       .status(422)
       .send(recusaDeAudioInvalido(resultado.motivo as Parameters<typeof recusaDeAudioInvalido>[0]));
+  }
+
+  if (resultado.erro === "limite_de_midia_da_conta_de_teste") {
+    return resposta.status(413).send(recusa("limite_de_midia_da_conta_de_teste", { limite: resultado.limite }));
   }
 
   const body: Record<string, unknown> = { erro: resultado.erro, mensagem: resultado.mensagem };
@@ -360,10 +366,17 @@ export const CAMINHO_DOS_ENVIOS_DE_IMAGEM = "/imagens/envios";
 export function registrarRotasDeImagens(
   servidor: FastifyInstance,
   imagens: ArmazemDeMidia | undefined,
+  identidade?: Identidade,
 ): void {
   servidor.post(CAMINHO_DOS_ENVIOS_DE_IMAGEM, async (requisicao, resposta) => {
     if (imagens === undefined) {
       return responderIndisponivel(resposta, recusa("indisponivel"));
+    }
+
+    if (identidade !== undefined) {
+      const reserva = await identidade.reservarEnvioDeMidia(requisicao.usuarioQueEntrou.id);
+      if (reserva === "limite") return resposta.status(413).send(recusa("limite_de_midia_da_conta_de_teste", { limite: 30 }));
+      if (reserva === "indisponivel") return responderIndisponivel(resposta, recusa("indisponivel"));
     }
 
     try {
@@ -404,10 +417,17 @@ const FORMATOS_DE_AUDIO_ACEITOS: readonly FormatoDeAudio[] = [
 export function registrarRotasDeAudios(
   servidor: FastifyInstance,
   audios: ArmazemDeMidia | undefined,
+  identidade?: Identidade,
 ): void {
   servidor.post(CAMINHO_DOS_ENVIOS_DE_AUDIO, async (requisicao, resposta) => {
     if (audios === undefined) {
       return responderIndisponivel(resposta, recusa("indisponivel"));
+    }
+
+    if (identidade !== undefined) {
+      const reserva = await identidade.reservarEnvioDeMidia(requisicao.usuarioQueEntrou.id);
+      if (reserva === "limite") return resposta.status(413).send(recusa("limite_de_midia_da_conta_de_teste", { limite: 30 }));
+      if (reserva === "indisponivel") return responderIndisponivel(resposta, recusa("indisponivel"));
     }
 
     try {
@@ -445,7 +465,7 @@ export function registrarRotasDeCartoes(
       return resposta.status(400).send(CORPO_INVALIDO);
     }
 
-    const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+    const acervo = acervoDe(requisicao.usuarioQueEntrou.id, requisicao.usuarioQueEntrou.contaDeTeste === true);
     const resultado = await acervo.editarCartao(id, corpo.data);
 
     if (!resultado.ok) {
@@ -717,7 +737,7 @@ export function registrarRotasDeBaralhos(
         return resposta.status(400).send(CORPO_INVALIDO);
       }
 
-      const acervo = acervoDe(requisicao.usuarioQueEntrou.id);
+      const acervo = acervoDe(requisicao.usuarioQueEntrou.id, requisicao.usuarioQueEntrou.contaDeTeste === true);
       const resultado = await acervo.criarCartao(baralhoId, corpo.data);
 
       if (!resultado.ok) {
@@ -1218,6 +1238,102 @@ export function registrarRotasDeUsuarios(
 }
 
 /**
+ * Forma do corpo de `POST /contas-de-teste` (030): o fuso IANA e o idioma do
+ * visitante. A validade do fuso é julgada pelo `Identidade`; o idioma é
+ * conferido aqui, na borda, contra a lista fechada.
+ */
+const corpoDeContaDeTeste = z.object({
+  fuso: z.string(),
+  idioma: z.enum(["pt", "en", "es"]),
+});
+
+/**
+ * Registra as rotas de Entrar como Teste (030): `POST /contas-de-teste`, sem
+ * Credencial, e `GET /demonstracao/creditos`, público.
+ *
+ * A criação cria a Conta de teste pelo `Identidade`, revoga o Acesso deste
+ * navegador (como `POST /entrar`) e emite um novo com o cookie. A origem vai ao
+ * `Identidade` só como HMAC (R5); o IP nunca é lido para log.
+ */
+export function registrarRotasDeContaDeTeste(
+  servidor: FastifyInstance,
+  identidade: Identidade,
+  acessos: Acessos,
+): void {
+  servidor.post("/contas-de-teste", async (requisicao, resposta) => {
+    const corpo = corpoDeContaDeTeste.safeParse(requisicao.body);
+
+    if (!corpo.success) {
+      return resposta.status(400).send(CORPO_INVALIDO);
+    }
+
+    const subchave = servidor.subchaveDeOrigemDeContaDeTeste;
+
+    // Sem o segredo, a origem não pode ser contada: nenhuma conta é criada.
+    if (subchave === null) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    const criada = await identidade.criarContaDeTeste({
+      fuso: corpo.data.fuso,
+      idioma: corpo.data.idioma,
+      origem: origemDeContaDeTeste(subchave, ipDoVisitante(requisicao)),
+    });
+
+    if (!criada.ok) {
+      if (criada.erro === "dados_invalidos") {
+        return resposta.status(400).send(CORPO_INVALIDO);
+      }
+
+      if (criada.erro === "esgotadas_na_origem") {
+        return resposta.status(429).send(recusa("contas_de_teste_esgotadas_na_origem", { limite: 10 }));
+      }
+      if (criada.erro === "contas_esgotadas") {
+        return resposta.status(503).send(recusa("contas_de_teste_indisponiveis"));
+      }
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    // O novo Acesso substitui o deste navegador, como em `POST /entrar` (D4, A2).
+    const valorAtual = acessos.valorDoCookie(requisicao.headers.cookie);
+    const revogado = await acessos.encerrar(valorAtual);
+
+    if (!revogado.ok) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    const emitido = await acessos.emitir(criada.usuario.id);
+
+    if (!emitido.ok) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
+    return resposta
+      .header("set-cookie", acessos.cookieDeAcesso(emitido.valor))
+      .status(201)
+      .send({
+        nomeDeUsuario: criada.usuario.nomeDeUsuario,
+        contaDeTeste: true,
+      });
+  });
+
+  servidor.get("/demonstracao/creditos", async (_requisicao, resposta) =>
+    resposta.status(200).send(
+      CREDITOS.map(
+        ({ baralho, cartao, titulo, autor, licenca, fonte }) => ({
+          baralho,
+          cartao,
+          titulo,
+          autor,
+          licenca,
+          fonte,
+        }),
+      ),
+    ),
+  );
+}
+
+/**
  * Forma dos corpos das rotas de conta (017): textos, e nada mais é exigido na
  * borda. O intervalo e a Senha atual são julgados exclusivamente pelo
  * `Identidade`; forma inválida usa o mesmo código `dados_invalidos` da recusa
@@ -1253,6 +1369,8 @@ function responderRecusaDeConta(
   const status =
     recusaBody.erro === "senha_atual_incorreta"
       ? 403
+      : recusaBody.erro === "conta_de_teste"
+        ? 403
       : recusaBody.erro === "indisponivel"
         ? INDISPONIVEL
         : 400;
@@ -1328,9 +1446,19 @@ export function registrarRotasDeConta(
       return responderIndisponivel(resposta, resultado);
     }
 
+    /** A marca de Conta de teste (030) vem do Usuário, lido pela Interface. */
+    const usuario = await identidade.obterUsuario(
+      requisicao.usuarioQueEntrou.id,
+    );
+
+    if (!usuario.ok) {
+      return responderIndisponivel(resposta, INDISPONIVEL_DO_ARMAZENAMENTO);
+    }
+
     return resposta.status(200).send({
       nomeDeUsuario: resultado.conta.nomeDeUsuario,
       contagens: resultado.conta.contagens,
+      contaDeTeste: usuario.usuario.contaDeTeste,
     });
   });
 
@@ -1552,6 +1680,24 @@ export function registrarRotasDeAcesso(
   });
 
   servidor.post("/sair", async (requisicao, resposta) => {
+    const autorizado = await autorizarCookie(requisicao);
+    if (autorizado.ok && autorizado.usuario.contaDeTeste) {
+      // Revoga-se o Acesso e limpa-se o cookie mesmo que a exclusão falhe;
+      // a varredura agendada recolhe a Conta de teste órfã depois da folga.
+      try {
+        await acessos.encerrar(acessos.valorDoCookie(requisicao.headers.cookie));
+      } catch {
+        // O cookie local ainda precisa ser removido; a expiração do Acesso
+        // no armazenamento é recuperada pela limpeza da Conta de teste.
+      }
+      try {
+        await identidade.encerrarContaDeTeste(autorizado.usuario.id);
+      } catch {
+        // A Conta permanece marcada como descartável e será recolhida pelo
+        // job de limpeza após expirar o Acesso.
+      }
+      return resposta.header("set-cookie", acessos.cookieDeLimpeza()).status(204).send();
+    }
     const encerrado = await acessos.encerrar(
       acessos.valorDoCookie(requisicao.headers.cookie),
     );

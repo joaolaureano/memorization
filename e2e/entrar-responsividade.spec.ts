@@ -58,7 +58,7 @@ test('a tela Entrar permanece utilizável e sem rolagem horizontal em telefone (
 
   const campoDoNome = page.getByLabel('Nome de usuário', { exact: true });
   const campoDaSenha = page.getByLabel('Senha', { exact: true });
-  const botaoDeEntrada = page.getByRole('button', { name: 'Entrar' });
+  const botaoDeEntrada = page.getByRole('button', { name: 'Entrar', exact: true });
   const acessoAoCadastro = page.getByRole('link', { name: 'Criar conta' });
 
   await expect(campoDoNome).toBeVisible();

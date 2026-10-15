@@ -111,7 +111,8 @@ describe("SQLite — leitura direta do arquivo", () => {
       const colunas = banco.prepare("PRAGMA table_info(usuario)").all();
       const linhas = banco
         .prepare(
-          `SELECT id, nome_de_usuario, sal, hash, parametros
+          `SELECT id, nome_de_usuario, sal, hash, parametros,
+                  conta_de_teste_em, envios_de_teste
              FROM usuario
             ORDER BY nome_de_usuario`,
         )
@@ -126,6 +127,8 @@ describe("SQLite — leitura direta do arquivo", () => {
         "sal",
         "hash",
         "parametros",
+        "conta_de_teste_em",
+        "envios_de_teste",
       ]);
 
       const guardados = linhas.map(conferirLinha);
@@ -203,6 +206,8 @@ describe("PostgreSQL — leitura direta da tabela", () => {
     );
 
     expect(colunas.map((coluna) => coluna.nome)).toEqual([
+      "conta_de_teste_em",
+      "envios_de_teste",
       "hash",
       "id",
       "nome_de_usuario",
@@ -212,7 +217,8 @@ describe("PostgreSQL — leitura direta da tabela", () => {
 
     const linhas = await servidor.consultar<Record<string, unknown>>(
       nomeDaBase,
-      `SELECT id, nome_de_usuario, sal, hash, parametros
+      `SELECT id, nome_de_usuario, sal, hash, parametros,
+              conta_de_teste_em, envios_de_teste
          FROM usuario
         ORDER BY nome_de_usuario;`,
     );

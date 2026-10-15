@@ -115,6 +115,16 @@ export interface ArmazemDeMidia {
     midia: Midia,
   ): Promise<ResultadoDaConfirmacao>;
 
+  /**
+   * Grava uma Mídia fixa do Acervo de demonstração (R13): só para chaves de
+   * demonstração; recusa qualquer outra chave.
+   */
+  gravarArquivoFixo(
+    chave: string,
+    bytes: Uint8Array,
+    tipoDeConteudo: string,
+  ): Promise<void>;
+
   /** Copia uma Imagem ativa para uma chave nova do mesmo Usuário (FR-422). */
   copiar(chave: string, usuarioId: string): Promise<string>;
 
@@ -151,6 +161,26 @@ export function midiaDaChave(chave: string): Midia | null {
       chave.startsWith(`${PREFIXO_DA_MIDIA[midia]}/`),
     ) ?? null
   );
+}
+
+/**
+ * Prefixo das Mídias fixas do Acervo de demonstração (FR-500, research R3).
+ * Essas chaves são compartilhadas por todas as Contas de teste: nunca são
+ * removidas pela fila de remoção.
+ */
+export const PREFIXO_DE_DEMONSTRACAO = "demonstracao/";
+
+/** Diz se a chave é de uma Mídia fixa do Acervo de demonstração. */
+export function ehMidiaDeDemonstracao(chave: string): boolean {
+  return chave.startsWith(PREFIXO_DE_DEMONSTRACAO);
+}
+
+/**
+ * Diz se a chave pode ser gravada como Mídia fixa: está sob o prefixo de
+ * demonstração e não sai dele por salto de pasta (`..`).
+ */
+export function ehChaveDeGravacaoFixa(chave: string): boolean {
+  return ehMidiaDeDemonstracao(chave) && !chave.split("/").includes("..");
 }
 
 /** Chave da Mídia ativa, com o dono e o prefixo da Mídia. */

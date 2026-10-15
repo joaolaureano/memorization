@@ -259,6 +259,29 @@ export function bateriaDoArmazem(
       expect((await cenario.ler(daCopia.url))?.tipo).toBe("image/png");
     });
 
+    it("grava arquivo fixo de demonstração que ler e o endereço de leitura entregam (R13)", async () => {
+      const cenario = await criar();
+      const bytes = pngComMetadados();
+      await cenario.armazem.gravarArquivoFixo("demonstracao/x.png", bytes, "image/png");
+
+      expect(Buffer.from((await cenario.armazem.ler("demonstracao/x.png")) ?? [])).toEqual(Buffer.from(bytes));
+      const endereco = await cenario.armazem.enderecoDeLeitura("demonstracao/x.png");
+      const lida = await cenario.ler(endereco.url);
+      expect(lida?.tipo).toBe("image/png");
+      expect(Buffer.from(lida!.bytes)).toEqual(Buffer.from(bytes));
+    });
+
+    it("recusa gravar fixo fora de demonstracao/, inclusive com salto de pasta (R13)", async () => {
+      const cenario = await criar();
+      const bytes = new Uint8Array([1, 2, 3]);
+
+      await expect(cenario.armazem.gravarArquivoFixo("imagens/u/x", bytes, "image/png")).rejects.toThrow();
+      await expect(
+        cenario.armazem.gravarArquivoFixo("demonstracao/../imagens/u/x", bytes, "image/png"),
+      ).rejects.toThrow();
+      expect(await cenario.armazem.ler("imagens/u/x")).toBeNull();
+    });
+
     describe("Mídia Áudio (028, FR-436, FR-437)", () => {
       it("confere o WAV pelo conteúdo, o guarda sob audios/ e o serve como audio/wav", async () => {
         const cenario = await criar();

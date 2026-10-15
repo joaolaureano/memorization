@@ -25,6 +25,7 @@ every feature started from a specification in [`specs/`](specs/).
 | Account | Sign up with a name and Password, sign in and sign out. Each User sees only their own collection | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
 | Stay signed in | A temporary Access keeps the person signed in while they use the app and expires after a period of inactivity | [018](specs/018-acesso-temporario/) |
 | Profile | View the username, configure study preferences, change the Password and permanently delete the account with all its data | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
+| Try it | Sign in as Test with three demo Decks, view media credits and erase the disposable account on sign out | [030](specs/030-usuario-de-teste/) |
 | Cards | Create, view, edit and delete Front-Back, Image and Audio Cards inside their Deck. Image Cards have a front image with optional front text and alternative description. Audio Cards have an uploaded audio file (MP3, M4A, OGG, WebM or WAV, up to 10 MB and 5 minutes) with an optional message and a required back; the app plays it only on request, one audio at a time | [025](specs/025-criar-cartoes-baralho/), [026](specs/026-cartao-com-imagem/), [028](specs/028-cartao-com-audio/) |
 | Export | Export one or all Decks as an Anki `.apkg` file (up to 10,000 Cards and 100 MiB of media). In Anki, enable “Import learning progress” to restore review dates | [029](specs/029-exportar-baralhos/) |
 | Decks | Create, rename and delete Decks; each Card belongs to exactly one Deck | [002](specs/002-criar-baralho/), [025](specs/025-criar-cartoes-baralho/) |
@@ -109,8 +110,7 @@ flowchart LR
 - **SSM** holds the three secrets: the database URL, the origin secret and the
   Password secret.
 - **Neon** hosts PostgreSQL. Migrations run through a separate command, before
-  the deployment. Since 028 the API requires schema version 21 (20 while the
-  Pertencimento transition is still pending), so run `migrate:cloud` before
+  the deployment. The API schema is version 22; run `migrate:cloud` before
   deploying the Lambda.
 - **Media** (Images and Audios) live in a private S3 bucket under `imagens/`
   and `audios/`; the browser uploads and plays them through short-lived signed
@@ -120,7 +120,13 @@ flowchart LR
 The step-by-step deployment guide is in
 [`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
 and in [`backend/terraform/README.md`](backend/terraform/README.md).
-After deploying this feature, run `tofu apply` with `-var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler` to install the one-day lifecycle rule for `exportacoes/`.
+To deploy Test accounts, grant the deploy user the policy in
+[`backend/terraform/iam/robot-agendamento.json`](backend/terraform/iam/robot-agendamento.json),
+apply the schedule with `tofu -chdir=backend/terraform apply -var
+lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler`, then
+run `migrate:cloud` to apply migration 22 before deployment. “Sign in as Test”
+loads the English, Flags and Birdsongs demo Decks. Media credits are in the
+Profile, and “Sign out and erase” removes the disposable account.
 
 ## Constitution
 

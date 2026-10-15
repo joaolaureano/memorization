@@ -705,6 +705,7 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       "baralho",
       "cartao",
       "compromisso_de_estudo",
+      "criacao_de_conta_de_teste",
       "inicio_de_compromisso",
       "item_de_registro",
       "midia_a_remover",

@@ -68,6 +68,7 @@ describe("GET /conta (§3.1)", () => {
     expect(resposta.statusCode).toBe(200);
     expect(resposta.json()).toEqual({
       nomeDeUsuario: "ana.silva",
+      contaDeTeste: false,
       contagens: { cartoes: 1, baralhos: 1, registrosDeSessao: 0, agenda: 0 },
     });
     expect(resposta.body).not.toContain(contrato.credencial.senha);
@@ -274,6 +275,7 @@ describe("DELETE /conta (§3.4)", () => {
     expect(depois.statusCode).toBe(401);
     expect(intacto.json()).toEqual({
       nomeDeUsuario: "bruno.souza",
+      contaDeTeste: false,
       contagens: { cartoes: 1, baralhos: 1, registrosDeSessao: 0, agenda: 0 },
     });
   });

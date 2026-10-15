@@ -741,7 +741,7 @@ export async function entrarPelaUi(
         candidata.url().endsWith("/entrar") &&
         candidata.request().method() === "POST",
     ),
-    page.getByRole("button", { name: "Entrar" }).click(),
+    page.getByRole("button", { name: "Entrar", exact: true }).click(),
   ]);
 
   // Uma Entrada que não deu certo não pode virar uma espera de minutos pela

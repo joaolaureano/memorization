@@ -158,4 +158,36 @@ describe("Sair com Acesso temporário", () => {
       await screen.findByRole("heading", { level: 1, name: "Entrar" }),
     ).toBeInTheDocument();
   });
+
+  it("confirma o apagamento ao sair da Conta de teste e permite cancelar", async () => {
+    const fabrica = (await import("./apoio-de-prova")).fabricaDeClienteDeProva();
+    render(<Aplicacao criarCliente={(credencial) => fabrica(credencial)} />);
+    await screen.findByRole("heading", { level: 1, name: "Entrar" });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar como Teste" }));
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Sair apaga a Conta de teste");
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.getByRole("navigation", { name: "Principal" })).toBeInTheDocument();
+  });
+
+  it("confirma Sair e anuncia que a conta terminou numa segunda aba", async () => {
+    window.localStorage.clear();
+    const fabrica = (await import("./apoio-de-prova")).fabricaDeClienteDeProva();
+    render(<Aplicacao criarCliente={(credencial) => fabrica(credencial)} />);
+    await screen.findByRole("heading", { name: "Entrar" });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar como Teste" }));
+    await screen.findByRole("navigation", { name: "Principal" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sair e apagar" }));
+    await screen.findByRole("heading", { name: "Entrar" });
+    expect(screen.getByRole("status", { name: /Sua Conta de teste terminou/ })).toBeInTheDocument();
+
+    cleanup();
+    render(<Aplicacao criarCliente={(credencial) => fabrica(credencial)} />);
+    await screen.findByRole("heading", { name: "Entrar" });
+    expect(screen.getByRole("status", { name: /Sua Conta de teste terminou/ })).toBeInTheDocument();
+  });
 });

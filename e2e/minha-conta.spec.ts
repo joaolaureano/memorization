@@ -87,12 +87,13 @@ async function abrirPreferencias(
   browser: Browser,
   ambiente: Ambiente,
   credencial: CredencialDeProva,
+  opcoesDeEntrada: { continuarConectado?: boolean } = {},
 ): Promise<Page> {
   const contexto = await browser.newContext();
   const pagina = await contexto.newPage();
 
   await pagina.goto(ambiente.enderecoDoFrontend);
-  await entrarPelaUi(pagina, credencial);
+  await entrarPelaUi(pagina, credencial, opcoesDeEntrada);
   await pagina
     .getByRole("navigation", { name: "Principal" })
     .getByRole("link", { name: "Perfil" })
@@ -279,7 +280,7 @@ test("percorre «Minha conta» só por teclado, com foco visível e sem rolagem 
   try {
     const ana = await criarUsuarioDeProva(ambiente.enderecoDaApi, "ana.silva");
 
-    const pagina = await abrirPreferencias(browser, ambiente, ana);
+    const pagina = await abrirPreferencias(browser, ambiente, ana, { continuarConectado: false });
 
     // Teclado: do botão «Trocar Senha» ao envio, sem mouse.
     const trocar = pagina.getByRole("button", { name: "Trocar Senha" });
@@ -322,7 +323,8 @@ test("percorre «Minha conta» só por teclado, com foco visível e sem rolagem 
         largura: document.documentElement.clientWidth,
         alvos: Array.from(
           document.querySelectorAll<HTMLElement>("main button"),
-        ).map((botao) => botao.getBoundingClientRect().height),
+        ).filter((botao) => botao.getClientRects().length > 0)
+          .map((botao) => botao.getBoundingClientRect().height),
       }));
 
       expect(medidas.rolagem, `rolagem em ${largura}px`).toBeLessThanOrEqual(

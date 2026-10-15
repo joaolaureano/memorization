@@ -145,7 +145,7 @@ describe("migrações 20 e 21 — Tipo áudio (PostgreSQL)", () => {
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(21);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
       expect((await piscina.query(consultaDeCartoes)).rows).toEqual(cartoesAntes);
       expect(
         (await piscina.query<{ chave: string }>("SELECT chave FROM midia_a_remover")).rows.map(
@@ -299,7 +299,7 @@ describe("migrações 20 e 21 — Tipo áudio (PostgreSQL)", () => {
   it("aceita a versão 20 e a 21 no início (FR-397, research R6)", async () => {
     expect(versaoAceitaNoInicio(20)).toBe(true);
     expect(versaoAceitaNoInicio(21)).toBe(true);
-    expect(versaoCorrenteConhecida()).toBe(21);
+    expect(versaoCorrenteConhecida()).toBe(22);
   });
 });
 
@@ -345,7 +345,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento (PostgreSQL
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(21);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
       expect(await existeTabela(piscina, "vinculo")).toBe(false);
       expect(
         (await piscina.query("SELECT nome_do_baralho FROM registro_de_sessao WHERE id = 'r1'")).rows,

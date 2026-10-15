@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,9 +40,22 @@ import { build } from "esbuild";
  * das entradas de um armazenamento aparece no pacote do outro (FR-117, FR-120,
  * FR-130).
  */
+/**
+ * Pasta de dados da demonstração (R3, R13): `creditos.json` e a mídia das
+ * Bandeiras e dos Pássaros. Copiada para `demonstracao/` ao lado de cada pacote
+ * executável, de modo que o runtime a encontre **relativa ao próprio bundle**:
+ * o pacote é ESM e o código resolve `new URL("./demonstracao/", import.meta.url)`.
+ * Assim a localização não depende do diretório de trabalho — no Lambda o
+ * `lambda.mjs` fica na raiz do zip (`/var/task/`), e no local o pacote fica em
+ * `dist/<armazenamento>/`. Quem roda o código-fonte (`src/`, via `tsx`) resolve
+ * a pasta a partir de `src/`, e não a partir do pacote.
+ */
+const NOME_DA_DEMONSTRACAO = "demonstracao";
+
 const ENTRADAS = {
   sqlite: {
     pacotes: [{ entrada: "src/entradas/local.ts", arquivo: "servidor.mjs" }],
+    demonstracao: true,
   },
   postgresql: {
     pacotes: [
@@ -54,9 +67,11 @@ const ENTRADAS = {
      * empacotamento não tenta resolvê-la, e ela não entra no pacote.
      */
     externos: ["pg-native"],
+    demonstracao: true,
   },
   lambda: {
     pacotes: [{ entrada: "src/entradas/lambda.ts", arquivo: "lambda.mjs" }],
+    demonstracao: true,
     /**
      * O SDK da AWS v3 vem **no runtime** `nodejs24.x` e é externo: empacotá-lo
      * engordaria o zip e duplicaria o que o runtime já traz (FR-130).
@@ -122,6 +137,7 @@ async function empacotarPacote(banco, pacote) {
   const arquivo = join(destino, pacote.arquivo);
 
   try {
+    mkdirSync(destino, { recursive: true });
     await build({
       entryPoints: [join(RAIZ_DO_BACKEND, pacote.entrada)],
       outfile: arquivo,
@@ -158,9 +174,10 @@ async function empacotarPacote(banco, pacote) {
  * nenhum artefato parcial fica de pé.
  */
 function zipar(diretorioDoAlvo, nomesDosArquivos, caminhoDoZip) {
+  /** `-r` leva a pasta `demonstracao/` inteira, com os seus subdiretórios. */
   const resultado = spawnSync(
     "zip",
-    ["-q", "-X", caminhoDoZip, ...nomesDosArquivos],
+    ["-q", "-X", "-r", caminhoDoZip, ...nomesDosArquivos],
     { cwd: diretorioDoAlvo },
   );
 
@@ -177,12 +194,36 @@ function zipar(diretorioDoAlvo, nomesDosArquivos, caminhoDoZip) {
 }
 
 /**
+ * Copia `backend/demonstracao/` para ao lado dos pacotes do armazenamento. Uma
+ * falha remove o diretório dele, como qualquer outra falha de empacotamento.
+ */
+function copiarDemonstracao(banco) {
+  const destino = join(DIRETORIO_DE_SAIDA, banco, NOME_DA_DEMONSTRACAO);
+
+  try {
+    cpSync(join(RAIZ_DO_BACKEND, NOME_DA_DEMONSTRACAO), destino, {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+  } catch {
+    rmSync(join(DIRETORIO_DE_SAIDA, banco), { recursive: true, force: true });
+    console.error(FALHA_AO_EMPACOTAR);
+    process.exitCode = 1;
+
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Empacota **todos** os pacotes do armazenamento escolhido — e, quando o alvo
  * também vira zip, zipa o resultado. Uma falha em qualquer passo remove o
  * diretório do armazenamento e o zip: nenhum artefato parcial fica de pé.
  */
 async function empacotar(banco) {
-  const { pacotes, zip } = ENTRADAS[banco];
+  const { pacotes, zip, demonstracao } = ENTRADAS[banco];
   const arquivos = [];
 
   /**
@@ -203,8 +244,23 @@ async function empacotar(banco) {
     );
   }
 
+  const nomesDosArquivos = pacotes.map((pacote) => pacote.arquivo);
+
+  if (demonstracao === true) {
+    if (!copiarDemonstracao(banco)) {
+      return;
+    }
+
+    nomesDosArquivos.push(NOME_DA_DEMONSTRACAO);
+    arquivos.push(
+      relative(
+        RAIZ_DO_BACKEND,
+        join(DIRETORIO_DE_SAIDA, banco, NOME_DA_DEMONSTRACAO),
+      ),
+    );
+  }
+
   if (zip !== undefined) {
-    const nomesDosArquivos = pacotes.map((pacote) => pacote.arquivo);
     const zipado = zipar(
       join(DIRETORIO_DE_SAIDA, banco),
       nomesDosArquivos,
