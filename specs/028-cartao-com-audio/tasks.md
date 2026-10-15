@@ -455,7 +455,8 @@ All new product text goes to the three typed catalogs `frontend/src/idioma/{pt,e
   - `npm run verificar:ci` verde: gitleaks sem vazamentos; backend 1179 e PostgreSQL 284; frontend 1055 e build; e2e 110/110.
   - O Adapter S3 passou na bateria contra o SeaweedFS local (17/17).
   - Os e2e de layout passaram no Linux (colima, imagem do Playwright e `fonts-dejavu-core`): 27/27.
-- **Pendente (T061)**: validação manual com arquivos reais de celular (quickstart, cenário 14), que precisa do Product Owner, e o cenário 15 depois do deploy.
+- **Pendente (T061)**: validação manual com arquivos reais de celular (quickstart, cenário 14), que precisa do Product Owner.
+- **Cenário 15 (SC-180), 2026-10-15, produção (commit `5d07eaa`)**: medido com Playwright e Chromium, conexão emulada de 50 Mbps e 20 ms e cache desligado. Uma conta descartável recebeu um Cartão com um WAV de 1 MB e foi excluída no fim. Em 20 toques, cada um após recarregar a Sessão, os tempos do clique até `playing` foram 1201, 207, 216, 211, 199, 198, 237, 207, 196, 213, 218, 207, 203, 202, 206, 222, 196, 192, 197 e 216 ms. Os 20 ficaram em até 2 s (o critério exige ≥ 19), com mediana de 207 ms.
 - **Achados fora do escopo, de features anteriores** (não corrigidos):
   - o aviso "Cartão criado: …" fica no idioma em que foi gerado ao trocar o idioma (`aviso-de-cartao.ts` guarda o texto pronto; 025/027, FR-015);
   - a prova `idioma-sem-texto-solto` ignora palavras isoladas com inicial maiúscula (`tipoIsolado`), e por isso não pegou o "Todos".
