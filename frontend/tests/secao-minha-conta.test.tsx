@@ -279,6 +279,37 @@ describe("Excluir conta (FR-272..FR-279)", () => {
     expect(await cliente.obterConta()).toMatchObject({ ok: false });
   });
 
+  it("oferece Exportar meu acervo antes apontando para a exportação de todos os Baralhos (FR-479)", async () => {
+    renderizar();
+    const dialogo = await abrirDialogo();
+
+    expect(
+      within(dialogo).getByRole("link", { name: "Exportar meu acervo antes" }),
+    ).toHaveAttribute("href", "#/baralhos/exportar?todos=1");
+  });
+
+  it("exclui sem exportar: o link é opcional e Excluir conta segue funcionando (FR-479)", async () => {
+    renderizar();
+    const dialogo = await abrirDialogo();
+    const confirmar = within(dialogo).getByRole("button", { name: "Excluir conta" });
+
+    expect(
+      within(dialogo).getByRole("link", { name: "Exportar meu acervo antes" }),
+    ).toBeInTheDocument();
+    expect(confirmar).toBeDisabled();
+
+    fireEvent.change(within(dialogo).getByLabelText("Senha atual", { selector: "input" }), {
+      target: { value: ANA.senha },
+    });
+
+    expect(confirmar).toBeEnabled();
+
+    fireEvent.click(confirmar);
+
+    await waitFor(() => expect(aoExcluirConta).toHaveBeenCalledTimes(1));
+    expect(await cliente.obterConta()).toMatchObject({ ok: false });
+  });
+
   it("Cancelar não exclui nada e devolve o foco ao botão", async () => {
     renderizar();
     const dialogo = await abrirDialogo();

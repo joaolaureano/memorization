@@ -565,7 +565,7 @@ export interface Catalogo {
     titulo: string; todos: string; formato: string; opcaoFormato: string; ajuda: string;
     resumoBaralhos: (n: number) => string; resumoCartoes: (n: number) => string;
     resumoMidias: (imagens: number, audios: number) => string; tamanho: (bytes: string) => string;
-    marcarUm: string; exportar: string; gerando: string; pronto: (nome: string) => string;
+    carregando: string; marcarUm: string; semCartoes: string; exportar: string; gerando: string; pronto: (nome: string) => string;
     baixarDeNovo: string; semMidia: (n: number) => string; falha: string;
     antesDeExcluir: string;
   };
@@ -1165,11 +1165,13 @@ export const pt: Catalogo = {
     formato: "Formato",
     opcaoFormato: "Pacote Anki (.apkg)",
     ajuda: "Abre no Anki, no AnkiDroid e no AnkiMobile. Ao importar no Anki, marque «Importar progresso de estudo».",
-    resumoBaralhos: (n) => `${n} Baralhos`,
-    resumoCartoes: (n) => `${n} Cartões`,
+    resumoBaralhos: (n) => `${n} ${new Intl.PluralRules("pt-BR").select(n) === "one" ? "Baralho" : "Baralhos"}`,
+    resumoCartoes: (n) => `${n} ${new Intl.PluralRules("pt-BR").select(n) === "one" ? "Cartão" : "Cartões"}`,
     resumoMidias: (imagens, audios) => `${imagens} com Imagem, ${audios} com Áudio`,
     tamanho: (bytes) => `Tamanho aproximado: ${bytes}`,
-    marcarUm: "Marque ao menos um Baralho com Cartões.",
+    carregando: "Carregando…",
+    marcarUm: "Marque ao menos um Baralho",
+    semCartoes: "Não há Cartões para exportar",
     exportar: "Exportar arquivo",
     gerando: "Gerando arquivo…",
     pronto: (nome) => `Arquivo pronto: ${nome}`,

@@ -8,9 +8,15 @@ interface PropriedadesDaPaginaDeExportacao {
   cliente: ClienteDoAcervo;
   baralhoId?: string;
   todos?: boolean;
+  navegar?: (url: string) => void;
 }
 
-export function PaginaDeExportacao({ cliente, baralhoId, todos = false }: PropriedadesDaPaginaDeExportacao) {
+export function PaginaDeExportacao({
+  cliente,
+  baralhoId,
+  todos = false,
+  navegar = (url: string) => window.location.assign(url),
+}: PropriedadesDaPaginaDeExportacao) {
   const { textos, idioma, formatarNumero } = useIdioma();
   const [baralhos, setBaralhos] = useState<BaralhoListado[]>([]);
   const [selecionados, setSelecionados] = useState<string[]>(baralhoId ? [baralhoId] : []);
@@ -22,6 +28,7 @@ export function PaginaDeExportacao({ cliente, baralhoId, todos = false }: Propri
   const ultimaPrevia = useRef(0);
   const [tentativaDeListagem, setTentativaDeListagem] = useState(0);
   const focoDaFalha = useRef<HTMLParagraphElement>(null);
+  const geracaoEmCurso = useRef(false);
 
   useEffect(() => {
     let ativa = true;
@@ -69,22 +76,24 @@ export function PaginaDeExportacao({ cliente, baralhoId, todos = false }: Propri
       setTentativaDeListagem((atual) => atual + 1);
       return;
     }
-    if (gerando || selecionados.length === 0 || quantidade === 0) return;
+    if (geracaoEmCurso.current || gerando || selecionados.length === 0 || quantidade === 0) return;
+    geracaoEmCurso.current = true;
     setGerando(true); setFalha(null); setConcluida(null);
     const resultado = await cliente.exportar({
       formato: "apkg", baralhos: selecionados,
       fuso: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", idioma,
     }).catch(() => null);
+    geracaoEmCurso.current = false;
     setGerando(false);
     if (resultado === null) { setFalha(textos.exportacao.falha); return; }
     if (!resultado.ok) { setFalha(resultado.mensagem); return; }
     setConcluida({ url: resultado.url, nome: resultado.nomeDoArquivo, semMidia: resultado.cartoesSemMidia });
-    window.location.assign(resultado.url);
+    navegar(resultado.url);
   }
 
   return <main className="pagina pagina--exportacao">
     <header className="cabecalho-da-pagina"><h1>{textos.exportacao.titulo}</h1></header>
-    {carregando ? <EstadoDaCarga estado="carregando" mensagem={textos.comum.tentarNovamente} /> : null}
+    {carregando ? <EstadoDaCarga estado="carregando" mensagem={textos.exportacao.carregando} /> : null}
     {!carregando && baralhoId && baralhos.length === 0 ? <p role="alert">{textos.recusa({ erro: "nao_encontrado" }, "exportacao")}</p> : null}
     {!carregando && !baralhoId ? <fieldset className="lista-exportacao">
       <legend>{textos.exportacao.todos}</legend>
@@ -103,7 +112,9 @@ export function PaginaDeExportacao({ cliente, baralhoId, todos = false }: Propri
       {previa ? <><p>{textos.exportacao.resumoBaralhos(previa.baralhos)} · {textos.exportacao.resumoCartoes(previa.cartoes)}</p>
         <p>{textos.exportacao.resumoMidias(previa.cartoesComImagem, previa.cartoesComAudio)}</p>
         {previa.cartoesComImagem + previa.cartoesComAudio > 0 ? <p>{textos.exportacao.tamanho(formatarNumero(previa.bytesEstimados, { style: "unit", unit: "byte", maximumFractionDigits: 1 }))}</p> : null}</> : null}
-      {selecionados.length === 0 || quantidade === 0 ? <p>{textos.exportacao.marcarUm}</p> : null}
+      {selecionados.length === 0 ? <p>{textos.exportacao.marcarUm}</p> : null}
+      {selecionados.length > 0 && quantidade === 0 ? <p>{textos.exportacao.semCartoes}</p> : null}
+      {gerando ? <p role="status">{textos.exportacao.gerando}</p> : null}
       {falha ? <p ref={focoDaFalha} role="alert" tabIndex={-1}>{falha}</p> : null}
       {concluida ? <div role="status"><p>{textos.exportacao.pronto(concluida.nome)}</p><a className="botao botao--secundario" href={concluida.url}>{textos.exportacao.baixarDeNovo}</a>{concluida.semMidia > 0 ? <p>{textos.exportacao.semMidia(concluida.semMidia)}</p> : null}</div> : null}
     </section>
