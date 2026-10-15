@@ -2386,6 +2386,7 @@ label.campo--opcao {
   margin-block: 12px;
 }
 .ca-acoes > .botao {
+  width: 100%;
   min-height: 44px;
   max-width: 100%;
 }
