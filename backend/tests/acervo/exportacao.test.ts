@@ -324,6 +324,14 @@ describe("tamanho aproximado da prévia (FR-472, research R6)", () => {
 
     await conferirEstimativaContraArquivo();
   });
+
+  it("bytesEstimados fica a até 20% do arquivo real numa coleção só de texto, com 1.000 cartões", async () => {
+    for (let i = 0; i < 1000; i += 1) {
+      await acervo.criarCartao(baralhoId, { frente: textoDeTamanho(i, 20 + ((i * 17) % 61)), verso: textoDeTamanho(i + 3, 20 + ((i * 23) % 61)) });
+    }
+
+    await conferirEstimativaContraArquivo();
+  });
 });
 
 /** Um texto de `tamanho` caracteres, com palavras comuns e sem espaço no fim. */

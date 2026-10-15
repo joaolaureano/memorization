@@ -24,7 +24,9 @@ export type { MotivoDeRecusaDoAudio };
 
 export const LIMITE_DE_CARTOES_DA_EXPORTACAO = 10_000;
 export const LIMITE_DE_BYTES_DE_MIDIA_DA_EXPORTACAO = 104_857_600;
-const BYTES_ESTIMADOS_POR_CARTAO = 500;
+/** Sobrecarga fixa do pacote exportado, ajustada às medições do FR-472 (research R6). */
+const BYTES_FIXOS_DO_PACOTE = 27_000;
+const BYTES_ESTIMADOS_POR_CARTAO = 330;
 export type IdiomaDaExportacao = "pt" | "en" | "es";
 export interface PedidoDeExportacao {
   readonly formato: string;
@@ -1409,7 +1411,7 @@ export function criarAcervo(
         formato: registro.id, extensao: registro.extensao, baralhos: snapshot.baralhos.length, cartoes: cartoes.length,
         cartoesComImagem: cartoes.filter((c) => c.tipo === "imagem").length,
         cartoesComAudio: cartoes.filter((c) => c.tipo === "audio").length,
-        bytesEstimados: bytesMidia + cartoes.length * BYTES_ESTIMADOS_POR_CARTAO,
+        bytesEstimados: bytesMidia + BYTES_FIXOS_DO_PACOTE + cartoes.length * BYTES_ESTIMADOS_POR_CARTAO,
       } };
     } catch {
       return { ok: false, erro: "exportacao_indisponivel" };
