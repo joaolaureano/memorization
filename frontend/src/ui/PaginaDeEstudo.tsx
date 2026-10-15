@@ -1207,7 +1207,7 @@ export function PaginaDeEstudo({
             <h2 ref={versoRef} tabIndex={-1} className="lado-do-cartao">
               {textos.importacao.verso}
             </h2>
-            <p className="conteudo-do-cartao" tabIndex={0}>{estado.itemAtual.verso}</p>
+            <p className="conteudo-do-cartao conteudo-do-cartao--verso" tabIndex={0}>{estado.itemAtual.verso}</p>
             <div className="botoes-de-resultado">
               {opcoes.map(({ chave, rotulo: rotuloDoServidor }, indice) => {
                 const rotulo = rotuloDoNivel(chave, rotuloDoServidor, textos);

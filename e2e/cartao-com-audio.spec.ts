@@ -174,6 +174,82 @@ async function alvoDeAoMenos44(page: Page, seletor: string, rotulo: string): Pro
   expect.soft(caixa!.height, rotulo).toBeGreaterThanOrEqual(44);
 }
 
+/**
+ * Verso revelado de um Cartão cuja Frente só tem o tocador: o Verso fica abaixo
+ * do rótulo "Verso" e do tocador, na coluna da Face (não ao lado dela), e os
+ * botões de Avaliação têm alvo de 44 px e largura de 60 px.
+ */
+async function aferirVersoRevelado(page: Page, rotulo: string, textoDoVerso: string): Promise<void> {
+  const cartao = page.locator(".cartao-de-estudo");
+  const verso = cartao.getByText(textoDoVerso, { exact: true });
+  const tituloDoVerso = cartao.getByRole("heading", { level: 2, name: "Verso", exact: true });
+  const face = cartao.locator(".conteudo-do-cartao--audio");
+  const tocador = face.locator(".tocador").first();
+
+  await expect(verso, rotulo).toBeVisible();
+  const caixaDoVerso = await verso.boundingBox();
+  const caixaDoTitulo = await tituloDoVerso.boundingBox();
+  const caixaDaFace = await face.boundingBox();
+  const caixaDoTocador = await tocador.boundingBox();
+  expect(caixaDoVerso, rotulo).not.toBeNull();
+  expect(caixaDoTitulo, rotulo).not.toBeNull();
+  expect(caixaDaFace, rotulo).not.toBeNull();
+  expect(caixaDoTocador, rotulo).not.toBeNull();
+  const v = caixaDoVerso!;
+  const t = caixaDoTitulo!;
+  const f = caixaDaFace!;
+  const m = caixaDoTocador!;
+
+  expect.soft(v.y, `${rotulo}: Verso abaixo do rótulo Verso`).toBeGreaterThanOrEqual(t.y + t.height);
+  expect.soft(v.y, `${rotulo}: Verso abaixo do tocador`).toBeGreaterThanOrEqual(m.y + m.height);
+  expect.soft(Math.abs(v.x - f.x), `${rotulo}: Verso na coluna da Face`).toBeLessThanOrEqual(1);
+  expect.soft(
+    v.x < m.x + m.width && m.x < v.x + v.width,
+    `${rotulo}: Verso e tocador com faixas horizontais sobrepostas`,
+  ).toBe(true);
+
+  const botoes = cartao.locator(".botoes-de-resultado .botao");
+  await expect(botoes, rotulo).toHaveCount(4);
+  for (let indice = 0; indice < 4; indice++) {
+    const caixa = await botoes.nth(indice).boundingBox();
+    expect(caixa, `${rotulo}: botão ${indice + 1}`).not.toBeNull();
+    expect.soft(caixa!.height, `${rotulo}: altura do botão ${indice + 1}`).toBeGreaterThanOrEqual(44);
+    expect.soft(caixa!.width, `${rotulo}: largura do botão ${indice + 1}`).toBeGreaterThanOrEqual(60);
+    const estourado = await botoes.nth(indice).evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect.soft(estourado, `${rotulo}: texto do botão ${indice + 1} cabe`).toBe(false);
+  }
+}
+
+test("028 (layout): Verso revelado de Áudio sem Mensagem fica abaixo da Face em 390 e 1280 px", async ({ page }) => {
+  const ambiente = await subirAmbiente("cartao-com-audio-028-verso-");
+
+  try {
+    const credencial = await criarUsuarioDeProva(ambiente.enderecoDaApi);
+    const baralho = await criarBaralhoPelaApi(ambiente.enderecoDaApi, { nome: "Verso de áudio" });
+
+    await page.goto(ambiente.enderecoDoFrontend);
+    await entrarSeNecessario(page, credencial);
+    await criarAudioNaUi(page, ambiente.enderecoDoFrontend, baralho.id, "Verso de áudio", {
+      arquivo: { name: "sem-mensagem.wav", buffer: wav(3) },
+      verso: "Verso sem mensagem",
+    });
+
+    await page.goto(`${ambiente.enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
+    await page.getByRole("button", { name: "Todos os cartões", exact: true }).click();
+    await page.getByRole("button", { name: "Revelar verso" }).click();
+    await expect(page.locator(".cartao-de-estudo").getByText("Verso sem mensagem", { exact: true })).toBeVisible();
+
+    for (const largura of [390, 1280]) {
+      const rotulo = `${largura}px`;
+      await page.setViewportSize({ width: largura, height: 844 });
+      await aferirVersoRevelado(page, rotulo, "Verso sem mensagem");
+      await semRolagemHorizontal(page, rotulo);
+    }
+  } finally {
+    await ambiente.encerrar();
+  }
+});
+
 test("T041: criar Cartão com Áudio só por teclado, ouvir, salvar e recarregar", async ({ page }) => {
   const ambiente = await subirAmbiente("cartao-com-audio-028-criar-");
 

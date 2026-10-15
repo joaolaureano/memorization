@@ -687,21 +687,27 @@ textarea[aria-invalid="true"] {
 .cartao-de-estudo > .lado-do-cartao {
   margin: 0;
   grid-row: 1;
+  grid-column: 1;
 }
 
 .cartao-de-estudo > .lado-do-cartao:nth-of-type(2) {
   grid-row: 3;
 }
 
+/* A Face e o Verso são posicionados por classe, não por nth-of-type: a Face de
+ * Áudio e de Imagem é uma <div>, e o Verso seria o primeiro <p>. Coluna 1
+ * fixa impede que um item crie uma segunda coluna. */
 .cartao-de-estudo > .conteudo-do-cartao {
   grid-row: 2;
+  grid-column: 1;
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
-.cartao-de-estudo > .conteudo-do-cartao:nth-of-type(2) {
+.cartao-de-estudo > .conteudo-do-cartao--verso {
   grid-row: 4;
+  grid-column: 1;
 }
 
 .cartao-de-estudo > hr {
@@ -712,6 +718,7 @@ textarea[aria-invalid="true"] {
  * ocupa a mesma linha inteira, de modo que nada se move na Revelação. */
 .cartao-de-estudo > :is(.acoes, .botoes-de-resultado) {
   grid-row: 5;
+  grid-column: 1;
   margin: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2213,11 +2220,29 @@ label.campo--opcao {
   margin-top: 8px;
 }
 
+/* Na coluna, a Imagem não pode ser esticada na largura: a altura é limitada
+ * pelo máximo e a largura segue a proporção natural. */
+.previa-da-imagem > .imagem-do-cartao--previa {
+  align-self: center;
+  width: auto;
+  max-width: 100%;
+}
+
+/* A Face de Imagem: a Imagem ocupa a linha da Face inteira, com a proporção
+ * natural, e a Frente (se houver) fica numa linha própria abaixo dela. */
 .conteudo-do-cartao--imagem {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
   align-items: center;
   gap: 8px;
+  min-height: 0;
+}
+
+.conteudo-do-cartao--imagem > .imagem-do-cartao--face {
+  min-height: 0;
+  max-height: 100%;
+  max-width: 100%;
 }
 
 /* A linha do Cartão de Áudio na lista (028, FR-441): o tocador ocupa a

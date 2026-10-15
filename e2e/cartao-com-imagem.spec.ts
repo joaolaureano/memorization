@@ -57,6 +57,126 @@ function png(tamanho = 2048): Buffer {
   return Buffer.concat([base, chunk("prVt", Buffer.alloc(preenchimento)), fim]);
 }
 
+/**
+ * PNG RGB de `largura` × `altura` com três faixas horizontais (como uma bandeira),
+ * sem compressão: a proporção não é quadrada, para pegar corte ou distorção.
+ */
+function pngDeFaixas(largura: number, altura: number): Buffer {
+  const crc = (bytes: Buffer): number => {
+    let c = 0xffffffff;
+    for (const byte of bytes) {
+      c ^= byte;
+      for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (tipo: string, dados: Buffer): Buffer => {
+    const corpo = Buffer.concat([Buffer.from(tipo, "ascii"), dados]);
+    const tamanho = Buffer.alloc(4);
+    tamanho.writeUInt32BE(dados.length);
+    const soma = Buffer.alloc(4);
+    soma.writeUInt32BE(crc(corpo));
+    return Buffer.concat([tamanho, corpo, soma]);
+  };
+
+  const cores = [
+    [0, 0, 0],
+    [221, 0, 0],
+    [255, 206, 0],
+  ];
+  const linhaBytes = 1 + largura * 3;
+  const pixels = Buffer.alloc(altura * linhaBytes);
+  for (let y = 0; y < altura; y++) {
+    const inicio = y * linhaBytes;
+    const cor = cores[Math.floor((y * cores.length) / altura)];
+    for (let x = 0; x < largura; x++) pixels.set(cor, inicio + 1 + x * 3);
+  }
+
+  // zlib com blocos "stored" (sem compressão), o único formato que se monta à mão.
+  const blocos: Buffer[] = [Buffer.from([0x78, 0x01])];
+  for (let i = 0; i < pixels.length; i += 65535) {
+    const pedaco = pixels.subarray(i, Math.min(i + 65535, pixels.length));
+    const cabecalho = Buffer.alloc(5);
+    cabecalho[0] = i + 65535 >= pixels.length ? 1 : 0;
+    cabecalho.writeUInt16LE(pedaco.length, 1);
+    cabecalho.writeUInt16LE(~pedaco.length & 0xffff, 3);
+    blocos.push(cabecalho, pedaco);
+  }
+  let somaA = 1;
+  let somaB = 0;
+  for (const byte of pixels) {
+    somaA = (somaA + byte) % 65521;
+    somaB = (somaB + somaA) % 65521;
+  }
+  const adler = Buffer.alloc(4);
+  adler.writeUInt32BE(((somaB << 16) | somaA) >>> 0);
+  blocos.push(adler);
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(largura, 0);
+  ihdr.writeUInt32BE(altura, 4);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", Buffer.concat(blocos)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/**
+ * A Imagem renderizada é inteira e não distorcida: a proporção da caixa é a
+ * natural (2%), a caixa cabe dentro de todo ancestral com corte (overflow) e
+ * dentro da janela. `seletor` aponta a Imagem; `contenedor`, se houver, a área
+ * que a contém (o Cartão de estudo).
+ */
+async function aferirImagem(page: Page, seletor: string, rotulo: string, contenedor?: string): Promise<void> {
+  const imagem = page.locator(seletor).first();
+  await expect(imagem, rotulo).toBeVisible();
+  await expect
+    .poll(() => imagem.evaluate((el) => (el as HTMLImageElement).naturalWidth), { message: rotulo })
+    .toBeGreaterThan(0);
+
+  const natural = await imagem.evaluate(
+    (el) => (el as HTMLImageElement).naturalWidth / (el as HTMLImageElement).naturalHeight,
+  );
+  const caixa = await imagem.boundingBox();
+  expect(caixa, rotulo).not.toBeNull();
+  const proporcao = caixa!.width / caixa!.height;
+  expect.soft(Math.abs(proporcao / natural - 1), `${rotulo}: proporção da caixa`).toBeLessThanOrEqual(0.02);
+
+  const cortes = await imagem.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const cortados: string[] = [];
+    for (let ancestral = el.parentElement; ancestral && ancestral !== document.body; ancestral = ancestral.parentElement) {
+      const estilo = getComputedStyle(ancestral);
+      if (estilo.overflowX === "visible" && estilo.overflowY === "visible") continue;
+      const q = ancestral.getBoundingClientRect();
+      if (r.left < q.left - 1 || r.right > q.right + 1 || r.top < q.top - 1 || r.bottom > q.bottom + 1) {
+        cortados.push(ancestral.className || ancestral.tagName);
+      }
+    }
+    return cortados;
+  });
+  expect.soft(cortes, `${rotulo}: ancestral corta a Imagem`).toEqual([]);
+
+  const janela = await page.evaluate(() => document.documentElement.clientWidth);
+  expect.soft(caixa!.x >= 0 && caixa!.x + caixa!.width <= janela, `${rotulo}: Imagem dentro da janela`).toBe(true);
+
+  if (contenedor !== undefined) {
+    const caixaDoContenedor = await page.locator(contenedor).first().boundingBox();
+    expect(caixaDoContenedor, rotulo).not.toBeNull();
+    const c = caixaDoContenedor!;
+    expect.soft(
+      caixa!.x >= c.x - 1 &&
+        caixa!.x + caixa!.width <= c.x + c.width + 1 &&
+        caixa!.y >= c.y - 1 &&
+        caixa!.y + caixa!.height <= c.y + c.height + 1,
+      `${rotulo}: Imagem dentro do Cartão`,
+    ).toBe(true);
+  }
+}
+
 /** Sai da Sessão em andamento pelo caminho da interface, com a confirmação. */
 async function interromperSessao(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Interromper" }).first().click();
@@ -70,6 +190,124 @@ async function semRolagemHorizontal(page: Page): Promise<number> {
       document.documentElement.clientWidth,
   );
 }
+
+/**
+ * Verso revelado de um Cartão com Imagem e Frente sem texto: o Verso fica abaixo
+ * do rótulo "Verso" e da Imagem, na coluna da Face (não ao lado dela), e os
+ * botões de Avaliação têm alvo de 44 px e largura de 60 px.
+ */
+async function aferirVersoRevelado(page: Page, rotulo: string, textoDoVerso: string): Promise<void> {
+  const cartao = page.locator(".cartao-de-estudo");
+  const verso = cartao.getByText(textoDoVerso, { exact: true });
+  const tituloDoVerso = cartao.getByRole("heading", { level: 2, name: "Verso", exact: true });
+  const face = cartao.locator(".conteudo-do-cartao--imagem");
+  const imagem = face.locator("img").first();
+
+  await expect(verso, rotulo).toBeVisible();
+  const caixaDoVerso = await verso.boundingBox();
+  const caixaDoTitulo = await tituloDoVerso.boundingBox();
+  const caixaDaFace = await face.boundingBox();
+  const caixaDaImagem = await imagem.boundingBox();
+  expect(caixaDoVerso, rotulo).not.toBeNull();
+  expect(caixaDoTitulo, rotulo).not.toBeNull();
+  expect(caixaDaFace, rotulo).not.toBeNull();
+  expect(caixaDaImagem, rotulo).not.toBeNull();
+  const v = caixaDoVerso!;
+  const t = caixaDoTitulo!;
+  const f = caixaDaFace!;
+  const m = caixaDaImagem!;
+
+  expect.soft(v.y, `${rotulo}: Verso abaixo do rótulo Verso`).toBeGreaterThanOrEqual(t.y + t.height);
+  expect.soft(v.y, `${rotulo}: Verso abaixo da Imagem`).toBeGreaterThanOrEqual(m.y + m.height);
+  expect.soft(Math.abs(v.x - f.x), `${rotulo}: Verso na coluna da Face`).toBeLessThanOrEqual(1);
+  expect.soft(
+    v.x < m.x + m.width && m.x < v.x + v.width,
+    `${rotulo}: Verso e Imagem com faixas horizontais sobrepostas`,
+  ).toBe(true);
+
+  const botoes = cartao.locator(".botoes-de-resultado .botao");
+  await expect(botoes, rotulo).toHaveCount(4);
+  for (let indice = 0; indice < 4; indice++) {
+    const caixa = await botoes.nth(indice).boundingBox();
+    expect(caixa, `${rotulo}: botão ${indice + 1}`).not.toBeNull();
+    expect.soft(caixa!.height, `${rotulo}: altura do botão ${indice + 1}`).toBeGreaterThanOrEqual(44);
+    expect.soft(caixa!.width, `${rotulo}: largura do botão ${indice + 1}`).toBeGreaterThanOrEqual(60);
+    const estourado = await botoes.nth(indice).evaluate((el) => el.scrollWidth > el.clientWidth);
+    expect.soft(estourado, `${rotulo}: texto do botão ${indice + 1} cabe`).toBe(false);
+  }
+}
+
+test("028 (layout): Verso revelado de Imagem sem texto na Frente fica abaixo da Face em 390 e 1280 px", async ({ page }) => {
+  const pasta = await criarPastaTemporaria("cartao-com-imagem-026-verso-");
+  let api: ProcessoIniciado | null = null;
+  let frontend: ProcessoIniciado | null = null;
+
+  try {
+    const portaDaApi = await portaLivre();
+    api = iniciarApi(join(pasta, "acervo.sqlite"), portaDaApi);
+    const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
+    await aguardarApiPronta(api, enderecoDaApi);
+    const portaDoFrontend = await portaLivre();
+    const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
+    frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+    await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
+
+    const credencial = await criarUsuarioDeProva(enderecoDaApi);
+    const baralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Verso de imagem" });
+
+    await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page, credencial);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/cartoes/novo`);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/cartoes/novo`);
+    await page.getByLabel("Tipo de cartão").selectOption("imagem");
+    await page.getByLabel("Imagem", { exact: true }).setInputFiles({
+      name: "bandeira.png",
+      mimeType: "image/png",
+      buffer: pngDeFaixas(300, 180),
+    });
+    await expect(page.getByRole("button", { name: "Remover imagem" })).toBeVisible();
+    await aferirImagem(page, ".previa-da-imagem img", "formulário 390px");
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await aferirImagem(page, ".previa-da-imagem img", "formulário 1280px");
+    await page.getByLabel("Descrição da imagem (opcional)").fill("Imagem sem texto na frente");
+    await page.getByLabel("Verso").fill("Verso sem texto");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Verso de imagem" })).toBeVisible();
+
+    for (const largura of [390, 1280]) {
+      await page.setViewportSize({ width: largura, height: 844 });
+      await aferirImagem(page, ".linha-da-lista__texto--imagem img", `lista ${largura}px`);
+    }
+
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
+    await page.getByRole("button", { name: "Todos os cartões" }).click();
+    for (const largura of [390, 1280]) {
+      await page.setViewportSize({ width: largura, height: 844 });
+      await aferirImagem(page, ".cartao-de-estudo .conteudo-do-cartao--imagem img", `face antes ${largura}px`, ".cartao-de-estudo");
+    }
+
+    await page.getByRole("button", { name: "Revelar verso" }).click();
+    await expect(page.locator(".cartao-de-estudo").getByText("Verso sem texto", { exact: true })).toBeVisible();
+
+    for (const largura of [390, 1280]) {
+      const rotulo = `${largura}px`;
+      await page.setViewportSize({ width: largura, height: 844 });
+      await aferirImagem(page, ".cartao-de-estudo .conteudo-do-cartao--imagem img", `face depois ${rotulo}`, ".cartao-de-estudo");
+      await aferirVersoRevelado(page, rotulo, "Verso sem texto");
+      const rolagem = await page.evaluate(
+        () =>
+          Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) -
+          document.documentElement.clientWidth,
+      );
+      expect.soft(rolagem, `${rotulo}: sem rolagem horizontal`).toBeLessThanOrEqual(0);
+    }
+  } finally {
+    if (frontend !== null) await encerrarProcesso(frontend);
+    if (api !== null) await encerrarProcesso(api);
+    await removerPastaTemporaria(pasta);
+  }
+});
 
 test("Cartão com Imagem: criar por teclado, estudar, trocar e excluir", async ({ page }) => {
   const pasta = await criarPastaTemporaria("cartao-com-imagem-026-");
