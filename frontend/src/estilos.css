@@ -2120,22 +2120,26 @@ label.campo--opcao {
     flex-wrap: wrap;
   }
 
-  /* Em telefone, as três ações ocupam a mesma faixa de 44 px que Criar baralho ocupava sozinho; rótulos longos quebram em duas linhas dentro dos 44 px, sem rolagem horizontal (FR-360, SC-079). */
+  /* Em telefone, as ações de criação quebram para novas linhas, e o texto de cada uma quebra só entre palavras: nunca no meio delas (FR-360, SC-079). Os espaços do cabeçalho encurtam para que as duas linhas de ações caibam com a primeira tela de Baralhos (SC-079). */
+  .cabecalho-da-pagina {
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
   .cabecalho-da-pagina .acoes--criacao {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 8px;
     width: 100%;
   }
 
   .cabecalho-da-pagina .acoes--criacao .botao {
     flex: 1 1 auto;
-    min-width: 0;
     min-height: 44px;
-    height: 44px;
     padding-inline: 8px;
     padding-block: 4px;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
     line-height: 1.15;
     font-size: 14px;
   }

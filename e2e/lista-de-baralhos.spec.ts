@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   aguardarProntidao,
+  aplicarZoomDeProva,
   criarBaralhoPelaApi,
   criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
@@ -361,6 +362,122 @@ for (const largura of LARGURAS) {
     } finally {
       // Encerrar sempre, mesmo quando a prova falha no meio, e remover o
       // arquivo e a pasta temporários.
+      await encerrarProcesso(frontend);
+      await encerrarProcesso(api);
+      await removerPastaTemporaria(pasta);
+    }
+  });
+}
+
+/**
+ * Barra de ações do cabeçalho ("Importar", "Exportar", "Criar baralho" e
+ * "Criar baralho temporário") com 200% de zoom: nenhuma palavra pode quebrar
+ * no meio das letras, cada controle tem ao menos 44px e a página não rola na
+ * horizontal. 1280 px com zoom equivale a um desktop de 640 px de CSS.
+ */
+const LARGURAS_DA_BARRA_COM_ZOOM = [360, 390, 768, 1280, 1440] as const;
+
+for (const largura of LARGURAS_DA_BARRA_COM_ZOOM) {
+  test(`Barra de ações da lista de Baralhos em ${largura} px com 200% de zoom não quebra palavras, mantém alvos de 44px e não rola na horizontal (FR-360, SC-079)`, async ({ page, browserName }) => {
+    expect(browserName).toBe("chromium");
+
+    await page.setViewportSize({ width: largura, height: ALTURA_DA_VIEWPORT });
+
+    const pasta = await criarPastaTemporaria("barra-de-acoes-");
+    const caminhoDoBanco = join(pasta, "barra-de-acoes.sqlite");
+
+    let api: ProcessoIniciado | null = null;
+    let frontend: ProcessoIniciado | null = null;
+
+    try {
+      const portaDaApi = await portaLivre();
+
+      api = iniciarApi(caminhoDoBanco, portaDaApi);
+
+      const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
+
+      await aguardarApiPronta(api, enderecoDaApi);
+
+      const portaDoFrontend = await portaLivre();
+      const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
+
+      frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+
+      await aguardarProntidao(
+        frontend,
+        enderecoDoFrontend,
+        (resposta) => resposta.ok,
+      );
+
+      await criarUsuarioDeProva(enderecoDaApi);
+      await semearBaralhos(enderecoDaApi);
+
+      // O zoom é aplicado antes de Entrar: aplicarZoomDeProva recarrega a
+      // página, e a Credencial mantida só na memória se perderia (FR-089).
+      await page.goto(enderecoDoFrontend);
+      await aplicarZoomDeProva(page, 2);
+      await entrarSeNecessario(page);
+
+      await page.evaluate(() => {
+        window.location.hash = "#/baralhos";
+      });
+
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Baralhos", exact: true }),
+      ).toBeVisible();
+
+      const controles = page.locator(".cabecalho-da-pagina .acoes--criacao > a");
+      await expect(controles).toHaveCount(4);
+
+      // Cada palavra de cada rótulo tem de caber em uma única caixa de linha:
+      // um Range sobre a palavra com mais de um retângulo significa quebra
+      // no meio dela.
+      const palavras = await controles.evaluateAll((botoes) =>
+        botoes.map((botao) => {
+          const medidas: { palavra: string; retangulos: number }[] = [];
+          const caminhador = document.createTreeWalker(botao, NodeFilter.SHOW_TEXT);
+          let no = caminhador.nextNode();
+          while (no !== null) {
+            const texto = no.textContent ?? "";
+            for (const encontrada of texto.matchAll(/\S+/g)) {
+              const intervalo = document.createRange();
+              intervalo.setStart(no, encontrada.index ?? 0);
+              intervalo.setEnd(no, (encontrada.index ?? 0) + encontrada[0].length);
+              medidas.push({
+                palavra: encontrada[0],
+                retangulos: intervalo.getClientRects().length,
+              });
+            }
+            no = caminhador.nextNode();
+          }
+          return { rotulo: botao.textContent?.trim() ?? "", medidas };
+        }),
+      );
+
+      expect(palavras).toHaveLength(4);
+
+      for (const { rotulo, medidas } of palavras) {
+        expect(medidas.length, `rótulo ${rotulo}`).toBeGreaterThan(0);
+        for (const { palavra, retangulos } of medidas) {
+          expect.soft(retangulos, `palavra "${palavra}" em "${rotulo}" em ${largura} px`).toBe(1);
+        }
+      }
+
+      for (let indice = 0; indice < 4; indice += 1) {
+        const controle = controles.nth(indice);
+        const caixa = await controle.boundingBox();
+        const rotulo = `controle ${indice + 1} em ${largura} px com zoom`;
+        expect(caixa, rotulo).not.toBeNull();
+        expect.soft(caixa!.height, rotulo).toBeGreaterThanOrEqual(44);
+        expect.soft(caixa!.width, rotulo).toBeGreaterThanOrEqual(44);
+      }
+
+      const medidasDaPagina = await page.evaluate(() => ({
+        rolagem: document.scrollingElement?.scrollWidth ?? 0,
+        largura: document.scrollingElement?.clientWidth ?? 0,
+      }));
+      expect.soft(medidasDaPagina.rolagem, `rolagem horizontal em ${largura} px com zoom`).toBeLessThanOrEqual(medidasDaPagina.largura);
+    } finally {
       await encerrarProcesso(frontend);
       await encerrarProcesso(api);
       await removerPastaTemporaria(pasta);
