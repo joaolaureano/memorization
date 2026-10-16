@@ -2,92 +2,55 @@
 
 **[Read this in English / Leia em inglês](README.md)**
 
-O Memorization é uma aplicação web de estudo com cartões de memorização. A
-pessoa cria **Cartões** (Frente e Verso), agrupa-os em **Baralhos**, estuda em
-**Sessões de estudo** e revisa com **repetição espaçada**, para que cada Cartão
-volte pouco antes de ser esquecido. Cada **Usuário** tem o próprio acervo,
-privado.
+Aplicação web de estudo com cartões de memorização e repetição espaçada. A
+pessoa cria **Cartões**, agrupa-os em **Baralhos** e estuda em **Sessões de
+estudo**, para que cada Cartão volte pouco antes de ser esquecido.
 
-Foi construído para a disciplina **AGL11091 - Tendências em Engenharia de
-Software**, com Spec-Driven Development pelo
+Construído para a disciplina **AGL11091 - Tendências em Engenharia de
+Software** com Spec-Driven Development pelo
 [GitHub Spec Kit](https://github.com/github/spec-kit): toda feature nasceu de
 uma especificação em [`specs/`](specs/).
 
-- **Aplicação**: <https://d2mp2j3zeufjr0.cloudfront.net>
+- **Aplicação**: <https://d2mp2j3zeufjr0.cloudfront.net> (use «Entrar como Teste» para experimentar sem conta)
 - **Apresentação**: <https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>
 
-## O que dá para fazer
+## Funcionalidades
 
-| Área | O que o produto oferece | Spec |
-|---|---|---|
-| Conta | Criar conta com nome e Senha, Entrar e Sair. Cada Usuário vê só o próprio acervo | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
-| Continuar conectado | Um Acesso temporário mantém a pessoa conectada enquanto usa o app e expira após um período sem atividade | [018](specs/018-acesso-temporario/) |
-| Perfil | Consultar Nome de usuário, configurar o estudo, trocar a Senha e excluir definitivamente a conta com todos os dados | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
-| Experimentar | Entrar como Teste com três Baralhos de demonstração, consultar os créditos e apagar a conta ao sair | [030](specs/030-usuario-de-teste/) |
-| Cartões | Criar, consultar, editar e excluir Cartões Frente-Verso e com Imagem dentro do Baralho; Imagem na Frente, com Texto da frente e descrição alternativa opcionais | [025](specs/025-criar-cartoes-baralho/), [026](specs/026-cartao-com-imagem/) |
-| Exportar | Exportar um ou todos os Baralhos em `.apkg` para Anki (até 10.000 Cartões e 100 MiB de mídia). No Anki, marque «Importar progresso de estudo» para restaurar as datas de revisão | [029](specs/029-exportar-baralhos/) |
-| Baralhos | Criar, renomear e excluir Baralhos; cada Cartão pertence a exatamente um Baralho | [002](specs/002-criar-baralho/), [025](specs/025-criar-cartoes-baralho/) |
-| Busca e filtros | Busca de Baralhos pelo nome e de Cartões pela Frente ou pelo Verso; filtro de Cartões por Baralho; filtro e etiqueta de situação nos Baralhos: Pendente ou Revisado | [022](specs/022-busca-e-filtros-no-acervo/), [024](specs/024-revisar-baralhos/) |
-| Baralho temporário | Em Baralhos, «Criar baralho temporário» abre uma montagem (`#/baralhos/temporario`) em que se adicionam Baralhos inteiros e Cartões individuais, com busca e filtros, até 1.000 Cartões; «Revisar» inicia uma Sessão embaralhada (`#/baralhos/temporario/estudo`); a Sessão aparece no Histórico; «Salvar como baralho» cria cópias dos Cartões selecionados em um Baralho permanente e preserva os Baralhos de origem | [023](specs/023-baralho-temporario/), [025](specs/025-criar-cartoes-baralho/) |
-| Revisar um Baralho | Pendentes oferecem Só pendentes ou Todos os cartões; revisados iniciam todos diretamente, sem quantidade. Cartões embaralhados, Revelação, Avaliação e Resumo | [004](specs/004-sessao-de-estudo/), [024](specs/024-revisar-baralhos/) |
-| Repetição espaçada | SM-2 com Avaliação em quatro níveis, aplicado a cada Sessão de estudo por Baralho; o algoritmo fica na Configuração do Perfil | [015](specs/015-repeticao-espacada/) |
-| Agenda de estudo | Rotinas semanais por Baralho (por exemplo, «Inglês toda segunda»), os Compromissos de hoje e um calendário da semana com o que foi feito | [016](specs/016-agendamento-de-estudo/) |
-| Início e Estudo | O Início mostra saudação e Agenda de hoje; a área Estudo reúne a semana, as Estatísticas e as últimas Sessões | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
-| Estatísticas e histórico | Itens estudados, Sessões concluídas e Taxa de acerto nos últimos 7 dias, gráfico por dia e o Registro de cada Sessão, com acertos e erros | [013](specs/013-estatisticas-e-historico/) |
-| Interface | Interface navegável no celular e no desktop (360 a 1440 px, zoom de 200%), utilizável por teclado e leitor de tela | [012](specs/012-interface-visual-navegavel/) |
-| Idioma | Interface em Português, English e Español pelo seletor no cabeçalho; a escolha fica salva neste navegador. Mensagens técnicas da API são em inglês | [027](specs/027-idioma-da-interface/) |
+- **Baralhos e Cartões**: Cartões de texto, Imagem e Áudio, com busca e filtros.
+- **Repetição espaçada**: SM-2 com avaliação em quatro níveis.
+- **Baralho temporário**: junta Cartões de vários Baralhos numa Sessão embaralhada.
+- **Agendamento**: Rotinas semanais por Baralho e calendário da semana.
+- **Estatísticas e histórico**: taxa de acerto, gráfico diário e o registro de cada Sessão.
+- **Exportação para Anki**: um ou todos os Baralhos em `.apkg`, com mídia e progresso.
+- **Conta de teste**: conta descartável com três Baralhos de demonstração, apagada ao sair.
+- **Conta**: criar conta, sessão deslizante, troca de Senha e exclusão da conta.
+- **Interface**: português, inglês e espanhol; de 360 a 1440 px, zoom de 200%, teclado e leitor de tela.
 
-As demais specs cobrem a plataforma: Porta de persistência com SQLite e
-PostgreSQL ([009](specs/009-porta-de-persistencia/),
-[010](specs/010-postgresql-na-nuvem/)), hospedagem na AWS
-([011](specs/011-hospedagem-aws/)) e integração e entrega contínuas
-([014](specs/014-ci-cd/)).
-
-## Como executar localmente
+## Rodar localmente
 
 ```bash
-export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # mantenha o mesmo para o mesmo banco
-cd backend && npm install && npm run dev               # API em 127.0.0.1:3001 com SQLite
-cd frontend && npm install && npm run dev              # abra o endereço impresso pelo Vite
+npm run demo   # na raiz: instala, sobe a API (SQLite) e o frontend e mostra http://127.0.0.1:5173
 ```
 
-### Apresentação local (um comando)
+Ou cada parte separada:
 
-Na raiz do repositório, `npm run demo` instala o que faltar, cria o segredo do
-servidor, empacota e inicia a API (SQLite) e o frontend, espera os dois
-responderem e imprime o endereço a abrir: **<http://127.0.0.1:5173>**. Os dados
-ficam em `backend/memorizacao.sqlite`, então o acervo de uma apresentação passa
-para a seguinte, e `Ctrl+C` encerra a API e o frontend juntos.
-
-### Variáveis de ambiente opcionais
-
-| Variável | Padrão | Finalidade |
-| --- | --- | --- |
-| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | A origem exata à qual a API concede CORS (com credenciais), para o cookie do Acesso temporário. |
-| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Validade deslizante do Acesso temporário, em segundos (inteiro positivo). É configuração do ambiente, nunca escolha do Usuário. |
-| `ORIGENS_LOCAIS_DE_TESTE` | não definida | `sim` libera no CORS qualquer porta de loopback. **Só para os testes ponta a ponta**, em que o frontend sobe depois da API. |
+```bash
+export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # use o mesmo para o mesmo banco
+cd backend && npm install && npm run dev               # API em 127.0.0.1:3001
+cd frontend && npm install && npm run dev
+```
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
-| Linguagem | TypeScript de ponta a ponta, em Node.js 24+ |
-| Backend | Fastify, com validação de entrada por Zod |
-| Frontend | React com Vite (SPA com navegação por hash) |
-| Persistência | Porta de armazenamento com dois Adapters: SQLite (`node:sqlite`) ao executar localmente e PostgreSQL (`pg`) na nuvem |
-| Segurança | Senha com sal por Usuário, HMAC-SHA256 com segredo do servidor e scrypt; Acesso temporário em cookie `HttpOnly` e `SameSite=Strict` com validade deslizante |
-| Testes | Vitest e Testing Library; E2E com Playwright em navegador real, contra a API e o banco reais |
-| Infraestrutura | AWS provisionada com OpenTofu; banco PostgreSQL no Neon |
-| Desenvolvimento | [Claude Code](https://claude.com/claude-code) como Arquiteto, conduzindo o Spec Kit e revisando cada mudança; código da aplicação escrito por workers DeepSeek flash |
-
-Principais scripts do backend:
-
-| Script | Uso |
-|---|---|
-| `npm run dev` | Desenvolvimento local com SQLite |
-| `npm run build:local` / `start:local` | Pacote e execução locais com SQLite |
-| `npm run build:cloud` / `migrate:cloud` / `start:cloud` | Pacote, migração e execução com PostgreSQL (`DB_URL`) |
-| `npm run build:lambda` | Pacote da função AWS Lambda (`dist-lambda.zip`) |
+| Linguagem | TypeScript no Node.js 24+ |
+| Backend | Fastify e Zod |
+| Frontend | React com Vite |
+| Persistência | Uma Porta de armazenamento, dois Adapters: SQLite local, PostgreSQL (Neon) na nuvem |
+| Testes | Vitest, Testing Library e Playwright (navegador real, API e banco reais) |
+| Infraestrutura | AWS com OpenTofu; CI e deploy no GitHub Actions |
+| Desenvolvimento | [Claude Code](https://claude.com/claude-code) como Arquiteto; código escrito por workers de IA |
 
 ## Arquitetura
 
@@ -95,57 +58,31 @@ Principais scripts do backend:
 flowchart LR
     U[Navegador] -->|HTTPS| CF[Amazon CloudFront]
     CF -->|/ e assets| S3[(Amazon S3<br/>SPA React)]
-    CF -->|/api/* e /health<br/>+ segredo de origem| L[AWS Lambda<br/>API Fastify]
-    L -->|lê segredos no cold start| SSM[AWS SSM<br/>Parameter Store]
+    CF -->|/api/*<br/>+ segredo de origem| L[AWS Lambda<br/>API Fastify]
+    L -->|segredos no cold start| SSM[AWS SSM<br/>Parameter Store]
     L -->|TLS verificado| DB[(Neon<br/>PostgreSQL)]
-    L -.->|logs| CW[Amazon CloudWatch]
+    L -->|URLs assinadas| M[(Amazon S3<br/>mídia e exportações)]
+    EB[EventBridge] -->|limpeza da demo| L
 ```
 
-- **CloudFront** é a única entrada. Serve a SPA a partir do S3 e encaminha
-  `/api/*` para a Lambda, retirando o prefixo `/api` na borda. Também injeta um
-  segredo de origem, sem o qual a Lambda responde 403.
-- **Lambda** executa a mesma API do modo local, sem escutar porta nenhuma.
-- **SSM** guarda os três segredos: a URL do banco, o segredo de origem e o
-  segredo das Senhas.
-- **Neon** hospeda o PostgreSQL. As migrações rodam por um comando separado,
-  antes da entrega.
+- **CloudFront** é a única entrada: a SPA vem do S3 e `/api/*` vai para a
+  Lambda com um segredo de origem, sem o qual a Lambda responde 403.
+- **Lambda** roda a mesma API do modo local.
+- **Mídia** é enviada e tocada pelo navegador com URLs assinadas de curta
+  duração; no modo local, vem do disco.
+- **EventBridge** remove Contas de teste abandonadas a cada 15 minutos.
+- **Migrações** rodam no workflow de deploy (`migrate:cloud`) antes do código.
 
-O passo a passo da entrega está em
-[`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
-e em [`backend/terraform/README.md`](backend/terraform/README.md).
-Para publicar a Conta de teste, conceda ao usuário de deploy a política
-[`backend/terraform/iam/robot-agendamento.json`](backend/terraform/iam/robot-agendamento.json),
-aplique a regra periódica com `tofu -chdir=backend/terraform apply
--var lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler` e
-execute `migrate:cloud` para aplicar a migração 22 antes do deploy. “Entrar como
-Teste” carrega os Baralhos Inglês, Bandeiras e Cantos de pássaros; os créditos
-da mídia ficam no Perfil, e “Sair e apagar” remove a conta descartável.
+Guia de implantação: [`backend/terraform/README.md`](backend/terraform/README.md).
 
 ## Constituição
 
-A [constituição](.specify/memory/constitution.md) reúne os princípios que valem
-para todas as features.
-
-| Princípio | Em resumo |
-|---|---|
-| I. Spec-Driven Development (inegociável) | Nada é implementado antes de spec, clarify, plan, tasks e analyze aprovados. Onde código e spec divergem, vale a spec |
-| II. Auditabilidade append-only | As decisões ficam no `research.md` de cada feature, nos artefatos do Spec Kit e nas mensagens de commit, sem reescrever a história e sem segredos |
-| III. Domínio antes da tecnologia | A seção «Key Entities» de cada spec define os termos do domínio e governa a linguagem. O código usa os mesmos termos |
-| IV. Módulos profundos | Interfaces pequenas escondendo muita implementação. Um Seam só existe quando há ao menos dois Adapters reais |
-| V. A Interface é a superfície de teste | Os testes passam pela mesma Interface de quem a usa e verificam resultados observáveis, nunca estado interno |
-| VI. Verificação acima de afirmação | Nenhuma afirmação de worker é aceita sem o Arquiteto inspecionar o diff e rodar os testes |
-| VII. Escopo mínimo e honesto | Só se implementa o que a spec pede. Premissas não validadas ficam explícitas |
-| VIII. Segredos fora do repositório (inegociável) | Nenhum segredo entra em arquivo versionado, sob nenhuma justificativa |
-| IX. Rastreabilidade requisito–teste | Todo requisito tem um teste que o exercita, e todo teste tem um requisito que o justifica |
-| X. Portões de qualidade | Uma inconsistência crítica no `analyze` ou um checklist reprovado bloqueia o `implement` |
-| XI. Delegação obrigatória de código (inegociável) | Todo código de aplicação é escrito por workers DeepSeek. O Arquiteto especifica, revisa e integra |
+A [constituição](.specify/memory/constitution.md) reúne as regras de toda
+feature: spec antes do código, verificação em vez de afirmação, escopo mínimo,
+nenhum segredo no repositório e um teste para cada requisito.
 
 ## Verificação
 
 ```bash
-cd backend  && npm test && npm run typecheck && npm run build:local && npm run lint
-cd frontend && npm test && npm run build && npm run lint
-npm run test:e2e                                   # na raiz, em navegador real
-npm run verificar:ci                               # na raiz: o portão completo antes de todo push
-tofu -chdir=backend/terraform validate
+npm run verificar:ci   # na raiz: gitleaks, backend (SQLite e PostgreSQL), frontend e e2e
 ```

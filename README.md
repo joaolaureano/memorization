@@ -2,94 +2,57 @@
 
 **[Leia em português / Read this in Portuguese](README.pt-BR.md)**
 
-Memorization is a flashcard study web application. A person creates **Cards**
-(Front and Back), groups them into **Decks**, studies them in **Study sessions**
-and reviews them with **spaced repetition**, so that each Card comes back right
-before it would be forgotten. Each **User** has their own private collection.
+A spaced-repetition flashcard web app. A person creates **Cards**, groups them
+into **Decks** and studies them in **Study sessions**, so that each Card comes
+back right before it would be forgotten.
 
-It was built for the course **AGL11091 - Trends in Software Engineering**, using
-Spec-Driven Development with [GitHub Spec Kit](https://github.com/github/spec-kit):
+Built for the course **AGL11091 - Trends in Software Engineering** with
+Spec-Driven Development through [GitHub Spec Kit](https://github.com/github/spec-kit):
 every feature started from a specification in [`specs/`](specs/).
 
-- **Application**: <https://d2mp2j3zeufjr0.cloudfront.net>
+- **Application**: <https://d2mp2j3zeufjr0.cloudfront.net> (use “Sign in as Test” to try it without an account)
 - **Presentation**: <https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>
 
-> The specs, the domain glossary and the code use Portuguese terms (`Cartão`,
-> `Baralho`, `Sessão de estudo`, `Usuário`, `Senha`, `Credencial`). This README
-> translates them as Card, Deck, Study session, User, Password and Credential.
+> The specs and the code use Portuguese domain terms (`Cartão`, `Baralho`,
+> `Sessão de estudo`, `Usuário`). This README translates them.
 
-## What you can do
+## Features
 
-| Area | What the product offers | Spec |
-|---|---|---|
-| Account | Sign up with a name and Password, sign in and sign out. Each User sees only their own collection | [007](specs/007-criar-usuario/), [008](specs/008-entrar/) |
-| Stay signed in | A temporary Access keeps the person signed in while they use the app and expires after a period of inactivity | [018](specs/018-acesso-temporario/) |
-| Profile | View the username, configure study preferences, change the Password and permanently delete the account with all its data | [017](specs/017-gerenciar-conta-usuario/), [020](specs/020-refinamento-ui/) |
-| Try it | Sign in as Test with three demo Decks, view media credits and erase the disposable account on sign out | [030](specs/030-usuario-de-teste/) |
-| Cards | Create, view, edit and delete Front-Back, Image and Audio Cards inside their Deck. Image Cards have a front image with optional front text and alternative description. Audio Cards have an uploaded audio file (MP3, M4A, OGG, WebM or WAV, up to 10 MB and 5 minutes) with an optional message and a required back; the app plays it only on request, one audio at a time | [025](specs/025-criar-cartoes-baralho/), [026](specs/026-cartao-com-imagem/), [028](specs/028-cartao-com-audio/) |
-| Export | Export one or all Decks as an Anki `.apkg` file (up to 10,000 Cards and 100 MiB of media). In Anki, enable “Import learning progress” to restore review dates | [029](specs/029-exportar-baralhos/) |
-| Decks | Create, rename and delete Decks; each Card belongs to exactly one Deck | [002](specs/002-criar-baralho/), [025](specs/025-criar-cartoes-baralho/) |
-| Search and filters | Search Decks by name and Cards by Front or Back; filter Cards by Deck; filter Decks by Pending or Reviewed status | [022](specs/022-busca-e-filtros-no-acervo/), [024](specs/024-revisar-baralhos/) |
-| Temporary deck | In Decks, «Create temporary deck» opens a build (`#/baralhos/temporario`) where whole Decks and individual Cards are added, with search and filters, up to 1,000 Cards; «Review» starts a shuffled Session (`#/baralhos/temporario/estudo`); the Session appears in History; «Save as deck» creates copies of the selected Cards in a permanent Deck and preserves the source Decks | [023](specs/023-baralho-temporario/), [025](specs/025-criar-cartoes-baralho/) |
-| Review a Deck | Pending Decks offer due Cards or all Cards; reviewed Decks start all Cards directly, without a quantity step. Shuffled Cards, reveal, rating and Summary | [004](specs/004-sessao-de-estudo/), [024](specs/024-revisar-baralhos/) |
-| Spaced repetition | SM-2 with a four-level rating, applied to every Deck study Session; the algorithm lives in the Profile settings | [015](specs/015-repeticao-espacada/) |
-| Study schedule | Weekly Routines per Deck (for example, "English every Monday"), today's commitments and a week calendar showing what was done | [016](specs/016-agendamento-de-estudo/) |
-| Home and Study | Home shows a greeting and today's schedule; the Study area holds the week, statistics and recent Sessions | [019](specs/019-inicio-e-estudo/), [020](specs/020-refinamento-ui/) |
-| Statistics and history | Items studied, Sessions completed and hit rate over the last 7 days, a daily chart and the record of each Session, with what was right and wrong | [013](specs/013-estatisticas-e-historico/) |
-| Interface | Navigable interface for phone and desktop (360 to 1440 px, 200% zoom), usable by keyboard and screen reader | [012](specs/012-interface-visual-navegavel/) |
-| Language | Switch between Português, English and Español from the header. The choice is stored in this browser; technical API messages are in English | [027](specs/027-idioma-da-interface/) |
-
-The remaining specs cover the platform: persistence Port with SQLite and
-PostgreSQL ([009](specs/009-porta-de-persistencia/),
-[010](specs/010-postgresql-na-nuvem/)), AWS hosting
-([011](specs/011-hospedagem-aws/)) and continuous integration and delivery
-([014](specs/014-ci-cd/)).
+- **Decks and Cards**: text, Image and Audio Cards, with search and filters.
+- **Spaced repetition**: SM-2 with a four-level rating.
+- **Temporary deck**: mix Cards from several Decks into one shuffled Session.
+- **Study schedule**: weekly Routines per Deck and a week calendar.
+- **Statistics and history**: hit rate, daily chart and every Session's record.
+- **Anki export**: one or all Decks as `.apkg`, with media and review progress.
+- **Test account**: a disposable account with three demo Decks, erased on sign-out.
+- **Account**: sign up, sliding session, Password change and account deletion.
+- **Interface**: Portuguese, English and Spanish; 360 to 1440 px, 200% zoom, keyboard and screen reader.
 
 ## Running locally
 
 ```bash
-export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # keep the same one for the same database
-cd backend && npm install && npm run dev               # API on 127.0.0.1:3001 with SQLite
-cd frontend && npm install && npm run dev              # open the address printed by Vite
+npm run demo   # at the root: installs, starts API (SQLite) and frontend, prints http://127.0.0.1:5173
 ```
 
-### Local demo (one command)
+Or each part on its own:
 
-At the repository root, `npm run demo` installs any missing dependencies, creates
-the server secret, bundles and starts the API (SQLite) and the frontend, waits
-for both to respond and prints the address to open: **<http://127.0.0.1:5173>**.
-The data lives in `backend/memorizacao.sqlite`, so the collection from one demo
-carries over to the next, and `Ctrl+C` stops the API and the frontend together.
-
-### Optional environment variables
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `ORIGEM_DO_FRONTEND` | `http://127.0.0.1:5173` | The exact origin the API grants CORS (with credentials) to, for the temporary Access cookie. |
-| `ACESSO_VALIDADE_SEGUNDOS` | `300` | Sliding validity of the temporary Access, in seconds (a positive integer). It is an environment setting, never a user choice. |
-| `ORIGENS_LOCAIS_DE_TESTE` | unset | `sim` lets any loopback port through CORS. **Only for the end-to-end tests**, where the frontend starts after the API. |
+```bash
+export SEGREDO_DAS_SENHAS="$(openssl rand -hex 32)"   # keep the same one for the same database
+cd backend && npm install && npm run dev               # API on 127.0.0.1:3001
+cd frontend && npm install && npm run dev
+```
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| Language | TypeScript end to end, on Node.js 24+ |
-| Backend | Fastify, with input validation by Zod |
-| Frontend | React with Vite (SPA with hash navigation) |
-| Persistence | Storage Port with two Adapters: SQLite (`node:sqlite`) when running locally and PostgreSQL (`pg`) in the cloud |
-| Security | Password with a per-User salt, HMAC-SHA256 with a server secret and scrypt; temporary Access in an `HttpOnly`, `SameSite=Strict` cookie with sliding expiry |
-| Tests | Vitest and Testing Library; E2E with Playwright in a real browser, against the real API and database |
-| Infrastructure | AWS provisioned with OpenTofu; PostgreSQL database on Neon |
-| Development | [Claude Code](https://claude.com/claude-code) as Architect, driving Spec Kit and reviewing every change; application code written by DeepSeek flash workers |
-
-Main backend scripts:
-
-| Script | Use |
-|---|---|
-| `npm run dev` | Local development with SQLite |
-| `npm run build:local` / `start:local` | Local bundle and run with SQLite |
-| `npm run build:cloud` / `migrate:cloud` / `start:cloud` | Bundle, migration and run with PostgreSQL (`DB_URL`) |
-| `npm run build:lambda` | AWS Lambda function package (`dist-lambda.zip`) |
+| Language | TypeScript on Node.js 24+ |
+| Backend | Fastify and Zod |
+| Frontend | React with Vite |
+| Persistence | One storage Port, two Adapters: SQLite locally, PostgreSQL (Neon) in the cloud |
+| Tests | Vitest, Testing Library and Playwright (real browser, real API and database) |
+| Infrastructure | AWS with OpenTofu; CI and deploy on GitHub Actions |
+| Development | [Claude Code](https://claude.com/claude-code) as Architect; code written by AI workers |
 
 ## Architecture
 
@@ -97,62 +60,31 @@ Main backend scripts:
 flowchart LR
     U[Browser] -->|HTTPS| CF[Amazon CloudFront]
     CF -->|/ and assets| S3[(Amazon S3<br/>React SPA)]
-    CF -->|/api/* and /health<br/>+ origin secret| L[AWS Lambda<br/>Fastify API]
-    L -->|reads secrets on cold start| SSM[AWS SSM<br/>Parameter Store]
+    CF -->|/api/*<br/>+ origin secret| L[AWS Lambda<br/>Fastify API]
+    L -->|secrets on cold start| SSM[AWS SSM<br/>Parameter Store]
     L -->|verified TLS| DB[(Neon<br/>PostgreSQL)]
-    L -.->|logs| CW[Amazon CloudWatch]
+    L -->|signed URLs| M[(Amazon S3<br/>media and exports)]
+    EB[EventBridge] -->|demo cleanup| L
 ```
 
-- **CloudFront** is the single entry point. It serves the SPA from S3 and
-  forwards `/api/*` to the Lambda, stripping the `/api` prefix at the edge. It
-  also injects an origin secret, without which the Lambda answers 403.
-- **Lambda** runs the same API as the local mode, without listening on any port.
-- **SSM** holds the three secrets: the database URL, the origin secret and the
-  Password secret.
-- **Neon** hosts PostgreSQL. Migrations run through a separate command, before
-  the deployment. The API schema is version 22; run `migrate:cloud` before
-  deploying the Lambda.
-- **Media** (Images and Audios) live in a private S3 bucket under `imagens/`
-  and `audios/`; the browser uploads and plays them through short-lived signed
-  URLs. In local mode they are served from the disk by the `/midia-local/*`
-  routes.
+- **CloudFront** is the single entry point: the SPA from S3, `/api/*` to the
+  Lambda with an origin secret, without which the Lambda answers 403.
+- **Lambda** runs the same API as the local mode.
+- **Media** are uploaded and played by the browser through short-lived signed
+  URLs; in local mode they are served from disk.
+- **EventBridge** removes abandoned Test accounts every 15 minutes.
+- **Migrations** run in the deploy workflow (`migrate:cloud`) before the code ships.
 
-The step-by-step deployment guide is in
-[`specs/011-hospedagem-aws/quickstart.md`](specs/011-hospedagem-aws/quickstart.md)
-and in [`backend/terraform/README.md`](backend/terraform/README.md).
-To deploy Test accounts, grant the deploy user the policy in
-[`backend/terraform/iam/robot-agendamento.json`](backend/terraform/iam/robot-agendamento.json),
-apply the schedule with `tofu -chdir=backend/terraform apply -var
-lambda_package=../dist-lambda.zip -var lambda_handler=lambda.handler`, then
-run `migrate:cloud` to apply migration 22 before deployment. “Sign in as Test”
-loads the English, Flags and Birdsongs demo Decks. Media credits are in the
-Profile, and “Sign out and erase” removes the disposable account.
+Deployment guide: [`backend/terraform/README.md`](backend/terraform/README.md).
 
 ## Constitution
 
-The [constitution](.specify/memory/constitution.md) gathers the principles that
-apply to every feature.
-
-| Principle | In short |
-|---|---|
-| I. Spec-Driven Development (non-negotiable) | Nothing is implemented before spec, clarify, plan, tasks and analyze are approved. Where code and spec diverge, the spec wins |
-| II. Append-Only Auditability | Decisions are recorded in each feature's `research.md`, in the Spec Kit artifacts and in the commit messages, without rewriting history and without secrets |
-| III. Domain Before Technology | Each spec's «Key Entities» section defines the domain terms and governs the language. The code uses the same terms |
-| IV. Deep Modules | Small Interfaces hiding a lot of implementation. A Seam only exists when there are at least two real Adapters |
-| V. The Interface Is the Test Surface | Tests go through the same Interface as its callers and check observable results, never internal state |
-| VI. Verification Over Assertion | No worker claim is accepted without the Architect inspecting the diff and running the tests |
-| VII. Honest Minimal Scope | Only what the spec asks for is implemented. Unvalidated assumptions are made explicit |
-| VIII. Secrets Out of the Repository (non-negotiable) | No secret goes into a versioned file, under any justification |
-| IX. Requirement–Test Traceability | Every requirement has a test that exercises it, and every test has a requirement that justifies it |
-| X. Quality Gates | A critical inconsistency in `analyze` or a failed checklist blocks `implement` |
-| XI. Mandatory Code Delegation (non-negotiable) | All application code is written by DeepSeek workers. The Architect specifies, reviews and integrates |
+The [constitution](.specify/memory/constitution.md) holds the rules every
+feature follows: spec before code, verification over assertion, minimal
+scope, no secrets in the repository and a test for every requirement.
 
 ## Verification
 
 ```bash
-cd backend  && npm test && npm run typecheck && npm run build:local && npm run lint
-cd frontend && npm test && npm run build && npm run lint
-npm run test:e2e                                   # at the root, in a real browser
-npm run verificar:ci                               # at the root: the full gate run before every push
-tofu -chdir=backend/terraform validate
+npm run verificar:ci   # at the root: gitleaks, backend (SQLite and PostgreSQL), frontend and e2e
 ```
