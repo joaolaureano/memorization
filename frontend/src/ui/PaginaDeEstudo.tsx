@@ -1178,7 +1178,7 @@ export function PaginaDeEstudo({
 
       <article
         className="cartao-de-estudo"
-        aria-label={`Item ${estado.posicao} de ${estado.total}`}
+        aria-label={textos.cartao.itemDeTotal(estado.posicao, estado.total)}
       >
         <h2 ref={frenteRef} tabIndex={-1} className="lado-do-cartao">
           {textos.importacao.frente}

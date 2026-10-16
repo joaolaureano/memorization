@@ -588,7 +588,7 @@ function EstudosDoDia({
     <section aria-labelledby="titulo-dos-estudos-do-dia" className="agenda__dia-detalhe">
       <h3 id="titulo-dos-estudos-do-dia">
         {dataPorExtenso(selecionado, locale)}
-        {selecionado === dados.hoje ? " (hoje)" : ""}
+        {selecionado === dados.hoje ? textos.agenda.marcadorDeHoje : ""}
       </h3>
       {falhaDeInicio !== null ? (
         <p className="erro" role="alert">
@@ -660,7 +660,7 @@ function AcaoDoCompromisso({
       <a
         className="botao botao--secundario"
         href={`#/sessoes/${encodeURIComponent(compromisso.registroId)}`}
-        aria-label={`${textos.agenda.verSessao} de ${compromisso.nomeDoBaralho}`}
+        aria-label={textos.agenda.rotuloDoBaralho(textos.agenda.verSessao, compromisso.nomeDoBaralho)}
       >
         {textos.agenda.verSessao}
       </a>
@@ -676,7 +676,7 @@ function AcaoDoCompromisso({
       <a
         className="botao botao--secundario"
         href={`#/agenda/${encodeURIComponent(compromisso.rotinaId)}/editar`}
-        aria-label={`${textos.agenda.ajustarRotina} de ${compromisso.nomeDoBaralho}`}
+        aria-label={textos.agenda.rotuloDoBaralho(textos.agenda.ajustarRotina, compromisso.nomeDoBaralho)}
       >
         {textos.agenda.ajustarRotina}
       </a>

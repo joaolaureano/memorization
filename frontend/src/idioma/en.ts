@@ -255,6 +255,7 @@ export const en: Catalogo = {
     falhaNaEdicao: "Failed to edit the card",
     falhaNaCriacao: "Failed to create the card",
     tags: "Tags",
+    itemDeTotal: (posicao: number, total: number) => `Item ${posicao} of ${total}`,
   },
   tocador: {
     tocar: "Play audio",
@@ -273,6 +274,7 @@ export const en: Catalogo = {
     cartaoDoTipoImagem: "Image card type",
     semTexto: "no text",
     cartaoNoun: (n: number) => n === 1 ? "Card" : "Cards",
+    acertosDe: (acertos: number, total: number) => `${acertos} of ${total}`,
     deAcertos: "correct",
     placarDaSessao: "Session score",
     contagemPorOpcao: "Count by rating option",
@@ -383,8 +385,14 @@ export const en: Catalogo = {
     nomeDoNovoBaralho: "Deck name",
     criarBaralho: "Create deck",
     selecioneUmBaralho: "Select a deck",
+    adicionar: "Add",
+    adicionado: "Added",
+    adicionarNome: (nome) => `Add ${nome}`,
+    adicionadoNome: (nome) => `Added ${nome}`,
+    nomeDoBaralhoTemporario: "Temporary deck name (optional)",
   },
   agenda: {
+    marcadorDeHoje: " (today)",
     contagem: (resumo) => {
       if (resumo.total === 0) return "No studies scheduled";
       const plural = new Intl.PluralRules("en-US");
@@ -419,6 +427,7 @@ export const en: Catalogo = {
     baralhoIndisponivel: "Deck unavailable",
     verSessao: "View session",
     ajustarRotina: "Adjust routine",
+    rotuloDoBaralho: (rotulo: string, nome: string) => `${rotulo}: ${nome}`,
     iniciando: "Starting…",
     estudar: "Study",
     rotinasDeEstudo: "Study routines",

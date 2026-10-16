@@ -229,6 +229,7 @@ export interface Catalogo {
     falhaNaEdicao: string;
     falhaNaCriacao: string;
     tags: string;
+    itemDeTotal: (posicao: number, total: number) => string;
   };
   tocador: {
     tocar: string;
@@ -247,6 +248,7 @@ export interface Catalogo {
     cartaoDoTipoImagem: string;
     semTexto: string;
     cartaoNoun: (n: number) => string;
+    acertosDe: (acertos: number, total: number) => string;
     deAcertos: string;
     placarDaSessao: string;
     contagemPorOpcao: string;
@@ -358,8 +360,14 @@ export interface Catalogo {
     nomeDoNovoBaralho: string;
     criarBaralho: string;
     selecioneUmBaralho: string;
+    adicionar: string;
+    adicionado: string;
+    adicionarNome: (nome: string) => string;
+    adicionadoNome: (nome: string) => string;
+    nomeDoBaralhoTemporario: string;
   };
   agenda: {
+    marcadorDeHoje: string;
     contagem: (resumo: { total: number; concluidos: number; naoRealizados: number; estado: string }) => string;
     estadoDoDia: Record<string, string>;
     quantidadeCartoes: (quantidade: number | null) => string;
@@ -382,6 +390,7 @@ export interface Catalogo {
     baralhoIndisponivel: string;
     verSessao: string;
     ajustarRotina: string;
+    rotuloDoBaralho: (rotulo: string, nome: string) => string;
     iniciando: string;
     estudar: string;
     rotinasDeEstudo: string;
@@ -825,6 +834,7 @@ export const pt: Catalogo = {
     falhaNaEdicao: "Falha na edição do Cartão",
     falhaNaCriacao: "Falha na criação do Cartão",
     tags: "Tags",
+    itemDeTotal: (posicao: number, total: number) => `Item ${posicao} de ${total}`,
   },
   tocador: {
     tocar: "Tocar áudio",
@@ -843,6 +853,7 @@ export const pt: Catalogo = {
     cartaoDoTipoImagem: "Cartão do tipo Imagem",
     semTexto: "sem texto",
     cartaoNoun: (n: number) => n === 1 ? "Cartão" : "Cartões",
+    acertosDe: (acertos: number, total: number) => `${acertos} de ${total}`,
     deAcertos: "de acertos",
     placarDaSessao: "Placar da Sessão",
     contagemPorOpcao: "Contagem por opção de Avaliação",
@@ -953,8 +964,14 @@ export const pt: Catalogo = {
     nomeDoNovoBaralho: "Nome do Baralho",
     criarBaralho: "Criar Baralho",
     selecioneUmBaralho: "Selecione um Baralho",
+    adicionar: "Adicionar",
+    adicionado: "Adicionado",
+    adicionarNome: (nome) => `Adicionar ${nome}`,
+    adicionadoNome: (nome) => `Adicionado ${nome}`,
+    nomeDoBaralhoTemporario: "Nome do baralho temporário (opcional)",
   },
   agenda: {
+    marcadorDeHoje: " (hoje)",
     contagem: (resumo) => {
       if (resumo.total === 0) return "Nenhum estudo agendado";
       const plural = new Intl.PluralRules("pt-BR");
@@ -989,6 +1006,7 @@ export const pt: Catalogo = {
     baralhoIndisponivel: "Baralho indisponível",
     verSessao: "Ver Sessão",
     ajustarRotina: "Ajustar rotina",
+    rotuloDoBaralho: (rotulo: string, nome: string) => `${rotulo} de ${nome}`,
     iniciando: "Iniciando…",
     estudar: "Estudar",
     rotinasDeEstudo: "Rotinas de estudo",

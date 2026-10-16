@@ -217,7 +217,7 @@ export function PaginaDaSelecaoTemporaria({
 
           <div className="campo-de-texto">
             <label htmlFor="nome-do-baralho-temporario">
-              Nome do baralho temporário (opcional)
+              {textos.selecao.nomeDoBaralhoTemporario}
             </label>
             <input
               id="nome-do-baralho-temporario"

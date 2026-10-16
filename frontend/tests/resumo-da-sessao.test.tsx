@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { ProvedorDeIdioma } from "../src/idioma";
 import { ResumoDaSessao } from "../src/ui/ResumoDaSessao";
 import type { ItemDoResumo } from "../src/ui/ResumoDaSessao";
 
@@ -109,6 +110,25 @@ function acionarPorTeclado(botao: HTMLElement): void {
 }
 
 describe("ResumoDaSessao", () => {
+  it("mostra a contagem de acertos em inglês (10 of 10 Cards)", () => {
+    const dezAcertos = Array.from(
+      { length: 10 },
+      (_, indice): ItemDoResumo => ({
+        frente: `Frente ${indice + 1}`,
+        verso: `Verso ${indice + 1}`,
+        resultado: "acertou",
+      }),
+    );
+
+    render(
+      <ProvedorDeIdioma idiomaInicial="en">
+        <ResumoDaSessao itens={dezAcertos} />
+      </ProvedorDeIdioma>,
+    );
+
+    expect(screen.getByText("10 of 10 Cards")).toBeInTheDocument();
+  });
+
   it("mostra o percentual de acertos e a contagem de Itens (FR-174)", () => {
     renderizar(ITENS_DE_PROVA);
 

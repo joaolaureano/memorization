@@ -255,6 +255,7 @@ export const es: Catalogo = {
     falhaNaEdicao: "Error al editar la tarjeta",
     falhaNaCriacao: "Error al crear la tarjeta",
     tags: "Etiquetas",
+    itemDeTotal: (posicao: number, total: number) => `Elemento ${posicao} de ${total}`,
   },
   tocador: {
     tocar: "Reproducir audio",
@@ -273,6 +274,7 @@ export const es: Catalogo = {
     cartaoDoTipoImagem: "Tarjeta tipo imagen",
     semTexto: "sin texto",
     cartaoNoun: (n: number) => n === 1 ? "Tarjeta" : "Tarjetas",
+    acertosDe: (acertos: number, total: number) => `${acertos} de ${total}`,
     deAcertos: "correctas",
     placarDaSessao: "Marcador de la sesión",
     contagemPorOpcao: "Conteo por opción de calificación",
@@ -383,8 +385,14 @@ export const es: Catalogo = {
     nomeDoNovoBaralho: "Nombre del mazo",
     criarBaralho: "Crear mazo",
     selecioneUmBaralho: "Selecciona un mazo",
+    adicionar: "Añadir",
+    adicionado: "Añadido",
+    adicionarNome: (nome) => `Añadir ${nome}`,
+    adicionadoNome: (nome) => `Añadido ${nome}`,
+    nomeDoBaralhoTemporario: "Nombre del mazo temporal (opcional)",
   },
   agenda: {
+    marcadorDeHoje: " (hoy)",
     contagem: (resumo) => {
       if (resumo.total === 0) return "No hay estudios programados";
       const plural = new Intl.PluralRules("es-419");
@@ -419,6 +427,7 @@ export const es: Catalogo = {
     baralhoIndisponivel: "Mazo no disponible",
     verSessao: "Ver sesión",
     ajustarRotina: "Ajustar rutina",
+    rotuloDoBaralho: (rotulo: string, nome: string) => `${rotulo} de ${nome}`,
     iniciando: "Iniciando…",
     estudar: "Estudiar",
     rotinasDeEstudo: "Rutinas de estudio",

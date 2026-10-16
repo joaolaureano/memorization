@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Cartao } from "../src/acervo-cliente/cliente";
+import { ProvedorDeIdioma } from "../src/idioma";
 import { PaginaDaSelecaoTemporaria } from "../src/ui/PaginaDaSelecaoTemporaria";
 import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 
@@ -604,4 +605,29 @@ describe("PaginaDaSelecaoTemporaria (spec 023)", () => {
       // mas podemos verificar que o estado está correto ao sair.
     },
   );
+
+  it("em inglês, botões, campo de nome e contagem de resultados seguem o idioma (a contagem de Baralhos é «3 results»)", async () => {
+    const cliente = clienteDeProva();
+    await semear(cliente);
+    render(
+      <ProvedorDeIdioma idiomaInicial="en">
+        {comProtecaoDeSaida(
+          <PaginaDaSelecaoTemporaria cliente={cliente} aoEstudar={vi.fn()} />,
+          true,
+        )}
+      </ProvedorDeIdioma>,
+    );
+    await screen.findByRole("button", { name: "Add Inglês" });
+
+    expect(
+      screen.getByLabelText("Temporary deck name (optional)"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Inglês" }));
+    expect(
+      await screen.findByRole("button", { name: "Added Inglês" }),
+    ).toBeInTheDocument();
+
+    expect(await screen.findByText("3 results")).toBeInTheDocument();
+  });
 });

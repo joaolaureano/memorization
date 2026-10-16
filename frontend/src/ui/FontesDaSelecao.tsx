@@ -189,8 +189,11 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
             const podeAdicionar =
               ids.length > 0 &&
               cartoesAusentes(selecao, ids).length > 0;
-            const rotulo =
-              ids.length > 0 && !podeAdicionar ? "Adicionado" : "Adicionar";
+            const adicionado = ids.length > 0 && !podeAdicionar;
+            const rotulo = adicionado ? textos.selecao.adicionado : textos.selecao.adicionar;
+            const nomeDoRotulo = adicionado
+              ? textos.selecao.adicionadoNome(baralho.nome)
+              : textos.selecao.adicionarNome(baralho.nome);
 
             return (
               <li
@@ -212,7 +215,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                         : "botao botao--secundario"
                     }
                     disabled={!podeAdicionar}
-                    aria-label={`${rotulo} ${baralho.nome}`}
+                    aria-label={nomeDoRotulo}
                     onClick={() => aoAdicionar(ids)}
                   >
                     {rotulo}
@@ -230,7 +233,10 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
         {cartoesFiltrados.map((cartao) => {
           const jaEstaNaSelecao =
             cartoesAusentes(selecao, [cartao.id]).length === 0;
-          const rotulo = jaEstaNaSelecao ? "Adicionado" : "Adicionar";
+          const rotulo = jaEstaNaSelecao ? textos.selecao.adicionado : textos.selecao.adicionar;
+          const nomeDoRotulo = jaEstaNaSelecao
+            ? textos.selecao.adicionadoNome(cartao.frente)
+            : textos.selecao.adicionarNome(cartao.frente);
 
           return (
             <li className="linha-da-lista" key={cartao.id}>
@@ -247,7 +253,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
                       : "botao botao--primario"
                   }
                   disabled={jaEstaNaSelecao}
-                  aria-label={`${rotulo} ${cartao.frente}`}
+                  aria-label={nomeDoRotulo}
                   onClick={() => aoAdicionar([cartao.id])}
                 >
                   {rotulo}
@@ -383,7 +389,7 @@ export function FontesDaSelecao(props: PropriedadesDasFontes) {
 
 /** Texto da contagem de resultados anunciada na região viva. */
 function contagemDeResultados(quantidade: number, textos: ReturnType<typeof useIdioma>["textos"]): string {
-  return `${textos.selecao.contagem(quantidade)}`;
+  return textos.baralhos.contagem(quantidade);
 }
 
 /**

@@ -195,7 +195,7 @@ export function ResumoDaSessao({
           {percentual}%<span className="visualmente-oculto"> {textos.sessao.deAcertos}</span>
         </p>
         <p className="placar__total">
-          {acertos.length} de {estudados} {textos.sessao.cartaoNoun(estudados)}
+          {textos.sessao.acertosDe(acertos.length, estudados)} {textos.sessao.cartaoNoun(estudados)}
         </p>
 
         <div className="placar__barra" aria-hidden="true">

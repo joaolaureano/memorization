@@ -20,6 +20,7 @@ import { clienteDeProva, comProtecaoDeSaida } from "./apoio-de-prova";
 import { AleatoriedadeDeterministica } from "../src/sessao-de-estudo/aleatoriedade";
 import { LIMITE_DA_SELECAO } from "../src/sessao-de-estudo/selecao-temporaria";
 import { MENSAGEM_DE_BARALHO_INELEGIVEL } from "../src/sessao-de-estudo/sessao-de-estudo";
+import { ProvedorDeIdioma } from "../src/idioma";
 import { PaginaDeEstudo } from "../src/ui/PaginaDeEstudo";
 import { PaginaDoBaralho } from "../src/ui/PaginaDoBaralho";
 
@@ -208,6 +209,31 @@ async function agendarParaOFuturo(
     throw new Error("a Sessão de Agendamento deveria ser registrada");
   }
 }
+
+describe("PaginaDeEstudo em inglês", () => {
+  it("anuncia a posição do Item em inglês (Item 1 of 3)", async () => {
+    const { cliente, idDoBaralho } = await criarAcervoElegivel(3);
+    render(
+      <ProvedorDeIdioma idiomaInicial="en">
+        {comProtecaoDeSaida(
+          <PaginaDeEstudo
+            cliente={cliente}
+            id={idDoBaralho}
+            aleatoriedade={
+              new AleatoriedadeDeterministica(VALORES_DETERMINISTICOS)
+            }
+          />,
+        )}
+      </ProvedorDeIdioma>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "All cards" }));
+
+    expect(
+      await screen.findByRole("article", { name: "Item 1 of 3" }),
+    ).toBeInTheDocument();
+  });
+});
 
 describe("PaginaDeEstudo", () => {
   it("recusa Baralho inelegível e oferece o caminho de volta (FR-025)", async () => {

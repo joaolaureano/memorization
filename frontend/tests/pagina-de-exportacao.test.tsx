@@ -219,7 +219,20 @@ describe("Página de exportação", () => {
     render(<ProvedorDeIdioma idiomaInicial="pt"><PaginaDeExportacao cliente={cliente} baralhoId={criado.baralho.id} /></ProvedorDeIdioma>);
 
     expect(await screen.findByText("2 com Imagem, 1 com Áudio")).toBeInTheDocument();
-    const tamanho = new Intl.NumberFormat("pt-BR", { style: "unit", unit: "byte", maximumFractionDigits: 1 }).format(1536);
+    const tamanho = new Intl.NumberFormat("pt-BR", { style: "unit", unit: "kilobyte", unitDisplay: "short", maximumFractionDigits: 0 }).format(1.536);
     expect(screen.getByText(`Tamanho aproximado: ${tamanho}`)).toBeInTheDocument();
+  });
+
+  it("formata o tamanho em MB com unidade curta no idioma inglês", async () => {
+    const cliente = clienteDeProva();
+    const criado = await cliente.criarBaralho({ nome: "Inglês" });
+    if (!criado.ok) throw new Error("baralho recusado");
+    await cliente.criarCartao(criado.baralho.id, { frente: "hello", verso: "olá" });
+    vi.spyOn(cliente, "previaDaExportacao").mockResolvedValue({ ok: true, previa: { formato: "apkg", extensao: "apkg", baralhos: 1, cartoes: 3, cartoesComImagem: 2, cartoesComAudio: 0, bytesEstimados: 1381234 } });
+
+    render(<ProvedorDeIdioma idiomaInicial="en"><PaginaDeExportacao cliente={cliente} baralhoId={criado.baralho.id} /></ProvedorDeIdioma>);
+
+    expect(await screen.findByText("Approximate size: 1.4 MB")).toBeInTheDocument();
+    expect(screen.queryByText(/ byte/)).toBeNull();
   });
 });

@@ -11,6 +11,17 @@ interface PropriedadesDaPaginaDeExportacao {
   navegar?: (url: string) => void;
 }
 
+/** Tamanho estimado em MB (a partir de 1 MB) ou em kB, com a unidade localizada. */
+function formatarTamanho(
+  bytes: number,
+  formatar: (n: number, opcoes?: Intl.NumberFormatOptions) => string,
+): string {
+  if (bytes >= 1_000_000) {
+    return formatar(bytes / 1_000_000, { style: "unit", unit: "megabyte", unitDisplay: "short", maximumFractionDigits: 1 });
+  }
+  return formatar(Math.max(1, bytes / 1_000), { style: "unit", unit: "kilobyte", unitDisplay: "short", maximumFractionDigits: 0 });
+}
+
 export function PaginaDeExportacao({
   cliente,
   baralhoId,
@@ -111,7 +122,7 @@ export function PaginaDeExportacao({
     <section aria-live="polite" className="resumo-exportacao">
       {previa ? <><p>{textos.exportacao.resumoBaralhos(previa.baralhos)} · {textos.exportacao.resumoCartoes(previa.cartoes)}</p>
         <p>{textos.exportacao.resumoMidias(previa.cartoesComImagem, previa.cartoesComAudio)}</p>
-        {previa.cartoesComImagem + previa.cartoesComAudio > 0 ? <p>{textos.exportacao.tamanho(formatarNumero(previa.bytesEstimados, { style: "unit", unit: "byte", maximumFractionDigits: 1 }))}</p> : null}</> : null}
+        {previa.cartoesComImagem + previa.cartoesComAudio > 0 ? <p>{textos.exportacao.tamanho(formatarTamanho(previa.bytesEstimados, formatarNumero))}</p> : null}</> : null}
       {selecionados.length === 0 ? <p>{textos.exportacao.marcarUm}</p> : null}
       {selecionados.length > 0 && quantidade === 0 ? <p>{textos.exportacao.semCartoes}</p> : null}
       {gerando ? <p role="status">{textos.exportacao.gerando}</p> : null}

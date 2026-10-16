@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useIdioma } from "../idioma";
 
 /**
  * Diálogo de confirmação acessível (T504, T505;
@@ -49,11 +50,12 @@ export function DialogoDeConfirmacao({
   titulo,
   children,
   rotuloDeConfirmacao,
-  rotuloDeCancelamento = "Cancelar",
+  rotuloDeCancelamento,
   confirmacaoDesabilitada = false,
   aoConfirmar,
   aoCancelar,
 }: PropriedadesDoDialogoDeConfirmacao) {
+  const { textos } = useIdioma();
   const id = useId();
   const tituloId = `${id}-titulo`;
   const descricaoId = `${id}-descricao`;
@@ -117,7 +119,7 @@ export function DialogoDeConfirmacao({
           type="button"
           onClick={aoCancelar}
         >
-          {rotuloDeCancelamento}
+          {rotuloDeCancelamento ?? textos.comum.cancelar}
         </button>
         <button
           className="botao-de-confirmacao"

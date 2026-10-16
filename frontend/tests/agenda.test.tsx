@@ -17,6 +17,7 @@ import {
   hojeNoFuso,
   segundaFeiraDe,
 } from "../src/agenda/datas";
+import { ProvedorDeIdioma } from "../src/idioma";
 import { AgendaDeEstudo } from "../src/ui/AgendaDeEstudo";
 import { Aplicacao } from "../src/ui/Aplicacao";
 import {
@@ -1147,5 +1148,19 @@ describe("Agenda de hoje e Agenda semanal (019, FR-311, FR-313, FR-318, FR-319)"
       await screen.findByText("Nenhum estudo agendado para hoje"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Fuso horário/)).toBeNull();
+  });
+
+  it("em inglês, o título do dia de hoje termina com « (today)», não « (hoje)»", async () => {
+    const servidor = clienteDeProva();
+    render(
+      <ProvedorDeIdioma idiomaInicial="en">
+        <AgendaDeEstudo cliente={servidor} modo="semana" />
+      </ProvedorDeIdioma>,
+    );
+
+    expect(
+      await screen.findByRole("heading", { level: 3, name: /\(today\)$/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\(hoje\)/)).toBeNull();
   });
 });
