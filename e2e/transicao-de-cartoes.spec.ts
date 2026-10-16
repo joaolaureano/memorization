@@ -87,8 +87,8 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
 
     api = iniciarApi(banco, portaDaApi);
     await aguardarApiPronta(api, enderecoDaApi);
-    // a 20 não tem precondição; 18, 19 e 21 esperam a transição (028, research R6).
-    expect(lerVersaoDoEsquema(banco)).toBe(20);
+    // a 20 e a 22 não têm precondição; 18, 19, 21 e 23 esperam a transição (028 R6, 030 R21).
+    expect(lerVersaoDoEsquema(banco)).toBe(22);
     frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
     await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
 
@@ -122,7 +122,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     await expect(page.getByLabel("To travel")).toHaveValue(ingles.id);
     await expect(page.getByLabel("To read")).toHaveValue(viagem.id);
     await expect(page.getByRole("button", { name: "Concluir organização" })).toBeFocused();
-    expect(lerVersaoDoEsquema(banco)).toBe(20);
+    expect(lerVersaoDoEsquema(banco)).toBe(22);
     const antes = new DatabaseSync(banco);
     try {
       expect((antes.prepare("SELECT COUNT(*) AS total FROM vinculo").get() as { total: number }).total).toBe(2);
@@ -149,7 +149,7 @@ test("transição por usuário preserva a fonte legada e permite recuperar uma t
     api = null;
     api = iniciarApi(banco, portaDaApi);
     await aguardarApiPronta(api, enderecoDaApi);
-    expect(lerVersaoDoEsquema(banco)).toBe(22);
+    expect(lerVersaoDoEsquema(banco)).toBe(23);
     const final = new DatabaseSync(banco);
     try {
       expect(final.prepare("SELECT name FROM sqlite_master WHERE name = 'vinculo'").get()).toBeUndefined();
