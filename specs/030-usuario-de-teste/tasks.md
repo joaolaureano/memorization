@@ -299,3 +299,13 @@ The architect creates every new file **with a one-line comment** before a worker
   - Sair: `204`; depois disso, `/conta` responde `401`, e nenhuma Conta de teste fica no banco.
 
   Ainda pendente para a T043: aplicar `iam/robot-agendamento.json`, rodar `tofu apply` (a regra agendada não existe na AWS) e medir a criação com a Lambda fria.
+
+## Phase 8: Correções pós-publicação (2026-10-15)
+
+- [X] T044 Remove the precondition from migration 22 and add a migration 23 that repeats the finalization of migration 21 (`DROP TABLE IF EXISTS vinculo` plus the 21 schema step, made idempotent) under the precondition `PODE_REMOVER_VINCULO`, in `backend/src/armazenamento/{sqlite,postgresql}/migracoes.ts`. Tests on SQLite and PostgreSQL:
+  - a v20 database with a pending transition migrates to v22, so the Conta de teste tables exist, and stays below 23;
+  - after the transition completes, it reaches v23 with `vinculo` gone;
+  - a v22 database with the transition done reaches v23 with no data change.
+
+  Update pinned version expectations (22 → 23). Per research R21, FR-488.
+- [X] T045 Fix the Deck list action buttons ("Importar", "Exportar", "Criar baralho", "Criar baralho temporário") so they never break a word mid-letters at 360/390 px (`frontend/src/estilos.css`), with an e2e layout assertion in `e2e/lista-de-baralhos.spec.ts`: each button's text has no break inside a word at 360, 390, 768 and 1440 px and at 200% zoom. Per FR-157 (012).

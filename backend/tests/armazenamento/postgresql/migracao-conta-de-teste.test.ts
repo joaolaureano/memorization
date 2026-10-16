@@ -79,7 +79,7 @@ describe("migração 22 — Conta de teste (PostgreSQL)", () => {
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
       expect(await fotografar(piscina)).toEqual(antes);
       expect(
         (
@@ -168,4 +168,107 @@ describe("migração 22 — Conta de teste (PostgreSQL)", () => {
       await piscina.end();
     }
   });
+
+  it("com a transição de Pertencimento pendente, a 22 roda e a 23 espera; vinculo fica", async () => {
+    const piscina = await baseComTransicaoPendente("pendente");
+
+    try {
+      const antes = await fotografar(piscina);
+
+      await aplicarMigracoes(piscina);
+
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await lerVersaoDoEsquema(piscina)).toBeLessThan(23);
+      expect(await tabelaExiste(piscina, "criacao_de_conta_de_teste")).toBe(true);
+      expect(await tabelaExiste(piscina, "vinculo")).toBe(true);
+      expect(
+        (await piscina.query("SELECT count(*)::int AS total FROM vinculo")).rows,
+      ).toEqual([{ total: 1 }]);
+      expect(await fotografar(piscina)).toEqual(antes);
+    } finally {
+      await piscina.end();
+    }
+  });
+
+  it("concluída a transição, a nova aplicação chega à 23, remove vinculo e preserva os dados", async () => {
+    const piscina = await baseComTransicaoPendente("concluida");
+
+    try {
+      await aplicarMigracoes(piscina);
+      await concluirTransicao(piscina);
+      const antes = await fotografar(piscina);
+
+      expect(await aplicarMigracoes(piscina)).toBe(23);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
+      expect(await tabelaExiste(piscina, "vinculo")).toBe(false);
+      expect(await tabelaExiste(piscina, "pertencimento")).toBe(true);
+      expect(await fotografar(piscina)).toEqual(antes);
+    } finally {
+      await piscina.end();
+    }
+  });
+
+  it("base na 22 com a transição concluída chega à 23 sem alterar nenhuma linha", async () => {
+    const piscina = await baseComTransicaoPendente("v22");
+
+    try {
+      await concluirTransicao(piscina);
+      await aplicarMigracoes(
+        piscina,
+        MIGRACOES.filter((migracao) => migracao.versao <= 22),
+      );
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await tabelaExiste(piscina, "vinculo")).toBe(false);
+      const antes = await fotografar(piscina);
+      const contasAntes = (
+        await piscina.query("SELECT id, conta_de_teste_em, envios_de_teste FROM usuario ORDER BY id")
+      ).rows;
+
+      await aplicarMigracoes(piscina);
+
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
+      expect(await fotografar(piscina)).toEqual(antes);
+      expect(
+        (await piscina.query("SELECT id, conta_de_teste_em, envios_de_teste FROM usuario ORDER BY id")).rows,
+      ).toEqual(contasAntes);
+    } finally {
+      await piscina.end();
+    }
+  });
 });
+
+/**
+ * Base na versão 20 com um Cartão sem Pertencimento: a transição está pendente.
+ * O Cartão e o Vínculo entram antes da 14, senão a finalização da transição
+ * (que não tem Cartões pendentes numa base vazia) já teria removido `vinculo`.
+ */
+async function baseComTransicaoPendente(titulo: string): Promise<Pool> {
+  const piscina = await baseMigradaAte(titulo, 13);
+  await piscina.query("INSERT INTO baralho (id, nome, usuario_id) VALUES ('b1', 'Inglês', 'dono-um')");
+  await piscina.query(
+    `INSERT INTO cartao (id, frente, verso, usuario_id) VALUES ('c1', 'To walk', 'Caminhar', 'dono-um')`,
+  );
+  await piscina.query("INSERT INTO vinculo (cartao_id, baralho_id) VALUES ('c1', 'b1')");
+  await aplicarMigracoes(
+    piscina,
+    MIGRACOES.filter((migracao) => migracao.versao <= 20),
+  );
+  return piscina;
+}
+
+/** Dá Pertencimento a todos os Cartões que ainda não têm, concluindo a transição. */
+async function concluirTransicao(piscina: Pool): Promise<void> {
+  await piscina.query(`
+    INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+    SELECT id, 'b1', id FROM cartao
+     WHERE id NOT IN (SELECT cartao_id FROM pertencimento);
+  `);
+}
+
+async function tabelaExiste(piscina: Pool, nome: string): Promise<boolean> {
+  const { rows } = await piscina.query<{ existe: boolean }>(
+    "SELECT to_regclass($1) IS NOT NULL AS existe",
+    [nome],
+  );
+  return rows[0]?.existe === true;
+}

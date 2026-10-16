@@ -203,14 +203,14 @@ describe("scripts de inicialização do backend", () => {
     );
   });
 
-  it("o comando de migração da nuvem empacota e aplica as migrações 17 a 22", () => {
+  it("o comando de migração da nuvem empacota e aplica as migrações 17 a 23", () => {
     expect(SCRIPTS["build:cloud"]).toBe(
       "node scripts/construir.mjs --banco=postgresql",
     );
     expect(SCRIPTS["migrate:cloud"]).toBe("node dist/postgresql/migrar.mjs");
     expect(
       MIGRACOES.filter(({ versao }) => versao >= 17).map(({ versao }) => versao),
-    ).toEqual([17, 18, 19, 20, 21, 22]);
+    ).toEqual([17, 18, 19, 20, 21, 22, 23]);
     expect(MIGRACOES.find(({ versao }) => versao === 17)?.sql).toContain(
       "CREATE TABLE imagem_a_remover",
     );

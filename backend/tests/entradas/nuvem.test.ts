@@ -635,13 +635,14 @@ describe("recusa por esquema atrasado (T909, FR-121, SC-048)", () => {
       await nuvem.encerrar();
     }
 
-    // Tags avançam para 15; a migração 16 aguarda a transição dos Cartões.
+    // Tags avançam para 15; a 16, a 18 e a 19 aguardam a transição dos Cartões,
+    // mas a 22 (Conta de teste, research R21) não tem precondição e roda.
     const versaoAtual = await servidor.consultar<{ versao: number }>(
       nomeDaBase,
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(20);
+    expect(versaoAtual[0]?.versao).toBe(22);
   }, PRAZO_DA_ENTRADA);
 
   it("recusa iniciar quando a base está na versão 12 (muito atrasada)", async () => {

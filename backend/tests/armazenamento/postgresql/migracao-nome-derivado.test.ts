@@ -228,7 +228,7 @@ describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)",
       );
 
       await aplicarMigracoes(piscina, MIGRACOES);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(20);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
 
       const aberto = await abrirArmazenamentoDaBase(nomeDaBase);
 
@@ -270,7 +270,7 @@ describe("migração 19 — espera a transição de Pertencimento (PostgreSQL)",
 
       await piscina.query("DELETE FROM cartao WHERE id = 'c-pendente'");
       await aplicarMigracoes(piscina, MIGRACOES);
-      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
 
       const limpos = await piscina.query(
         "SELECT id, nome_do_baralho FROM registro_de_sessao ORDER BY id",

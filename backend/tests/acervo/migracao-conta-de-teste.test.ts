@@ -5,7 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import { aplicarMigracoes } from "../../src/armazenamento/sqlite/esquema.ts";
 import { MIGRACOES } from "../../src/armazenamento/sqlite/migracoes.ts";
-import { gravarBaralho, gravarCartao, gravarDono } from "./banco-de-teste.ts";
+import {
+  contarLinhas,
+  gravarBaralho,
+  gravarCartao,
+  gravarDono,
+  gravarVinculo,
+} from "./banco-de-teste.ts";
 
 /**
  * T005 — migração 22 do Adapter local (030, data-model "Migração 22"): colunas
@@ -76,7 +82,7 @@ describe("migração 22 — Conta de teste (SQLite)", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(22);
+    expect(versao(banco)).toBe(23);
     expect(fotografar(banco)).toEqual(antes);
     expect(
       banco
@@ -133,4 +139,113 @@ describe("migração 22 — Conta de teste (SQLite)", () => {
 
     banco.close();
   });
+
+  it("com a transição de Pertencimento pendente, a 22 roda e a 23 espera; vinculo fica", () => {
+    const banco = baseNaVersao20ComTransicaoPendente();
+    const antes = fotografar(banco);
+
+    aplicarMigracoes(banco, MIGRACOES);
+
+    expect(versao(banco)).toBe(22);
+    expect(versao(banco)).toBeLessThan(23);
+    expect(tabelaExiste(banco, "criacao_de_conta_de_teste")).toBe(true);
+    expect(colunasDaTabela(banco, "usuario")).toEqual(
+      expect.arrayContaining(["conta_de_teste_em", "envios_de_teste"]),
+    );
+    expect(tabelaExiste(banco, "vinculo")).toBe(true);
+    expect(contarLinhas(banco, "vinculo")).toBe(1);
+    expect(fotografar(banco)).toEqual(antes);
+
+    banco.close();
+  });
+
+  it("concluída a transição, a nova aplicação chega à 23, remove vinculo e preserva os dados", () => {
+    const banco = baseNaVersao20ComTransicaoPendente();
+    aplicarMigracoes(banco, MIGRACOES);
+    concluirTransicao(banco);
+    const antes = fotografar(banco);
+
+    aplicarMigracoes(banco, MIGRACOES);
+
+    expect(versao(banco)).toBe(23);
+    expect(tabelaExiste(banco, "vinculo")).toBe(false);
+    expect(tabelaExiste(banco, "pertencimento")).toBe(true);
+    expect(fotografar(banco)).toEqual(antes);
+    expect(banco.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+
+    banco.close();
+  });
+
+  it("base na 22 com a transição concluída chega à 23 sem alterar nenhuma linha", () => {
+    const banco = baseNaVersao20ComTransicaoPendente();
+    concluirTransicao(banco);
+    aplicarMigracoes(
+      banco,
+      MIGRACOES.filter((migracao) => migracao.versao <= 22),
+    );
+    expect(versao(banco)).toBe(22);
+    expect(tabelaExiste(banco, "vinculo")).toBe(false);
+    const antes = fotografar(banco);
+    const contasAntes = banco
+      .prepare("SELECT id, conta_de_teste_em, envios_de_teste FROM usuario ORDER BY id")
+      .all();
+
+    aplicarMigracoes(banco, MIGRACOES);
+
+    expect(versao(banco)).toBe(23);
+    expect(fotografar(banco)).toEqual(antes);
+    expect(
+      banco
+        .prepare("SELECT id, conta_de_teste_em, envios_de_teste FROM usuario ORDER BY id")
+        .all(),
+    ).toEqual(contasAntes);
+
+    banco.close();
+  });
 });
+
+/**
+ * Base na versão 20 com um Cartão sem Pertencimento: a transição está pendente.
+ * O Cartão e o Vínculo entram antes da 14, senão a finalização da transição
+ * (que não tem Cartões pendentes numa base vazia) já teria removido `vinculo`.
+ */
+function baseNaVersao20ComTransicaoPendente(): DatabaseSync {
+  const banco = new DatabaseSync(":memory:");
+  banco.exec("PRAGMA foreign_keys = ON;");
+  aplicarMigracoes(
+    banco,
+    MIGRACOES.filter((migracao) => migracao.versao <= 13),
+  );
+  const dono = gravarDono(banco);
+  gravarBaralho(banco, dono, "b1");
+  gravarCartao(banco, dono, "c1");
+  gravarVinculo(banco, "c1", "b1");
+  aplicarMigracoes(
+    banco,
+    MIGRACOES.filter((migracao) => migracao.versao <= 20),
+  );
+  return banco;
+}
+
+/** Dá Pertencimento a todos os Cartões que ainda não têm, concluindo a transição. */
+function concluirTransicao(banco: DatabaseSync): void {
+  banco.exec(`
+    INSERT INTO pertencimento (cartao_id, baralho_id, frente_chave)
+    SELECT id, 'b1', id FROM cartao
+     WHERE id NOT IN (SELECT cartao_id FROM pertencimento);
+  `);
+}
+
+function tabelaExiste(banco: DatabaseSync, nome: string): boolean {
+  return (
+    banco
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(nome) !== undefined
+  );
+}
+
+function colunasDaTabela(banco: DatabaseSync, tabela: string): string[] {
+  return (banco.prepare(`PRAGMA table_info(${tabela})`).all() as { name: string }[]).map(
+    (coluna) => coluna.name,
+  );
+}

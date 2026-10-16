@@ -121,7 +121,7 @@ describe("migrações 20 e 21 — Tipo áudio", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(22);
+    expect(versao(banco)).toBe(23);
     expect(
       banco
         .prepare("SELECT id, frente, verso, tipo, imagem_chave FROM cartao ORDER BY id")
@@ -267,7 +267,7 @@ describe("migrações 20 e 21 — Tipo áudio", () => {
 });
 
 describe("migrações 20 e 21 — base com Cartão sem Pertencimento", () => {
-  it("chega à v20 com o tipo Áudio utilizável e `vinculo` ainda presente", () => {
+  it("chega à v22 com o tipo Áudio utilizável e `vinculo` ainda presente", () => {
     const banco = new DatabaseSync(":memory:");
     banco.exec("PRAGMA foreign_keys = ON;");
     aplicarMigracoes(banco, MIGRACOES.filter((migracao) => migracao.versao <= 12));
@@ -282,7 +282,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(20);
+    expect(versao(banco)).toBe(22);
     expect(existeTabela(banco, "vinculo")).toBe(true);
     expect(() => inserirAudio(banco, "a1", "", "audio", "audios/u/a", 4210)).not.toThrow();
 
@@ -306,7 +306,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento", () => {
 
     aplicarMigracoes(banco, MIGRACOES);
 
-    expect(versao(banco)).toBe(22);
+    expect(versao(banco)).toBe(23);
     expect(existeTabela(banco, "vinculo")).toBe(false);
     expect(
       banco.prepare("SELECT nome_do_baralho FROM registro_de_sessao WHERE id = 'r1'").get()?.nome_do_baralho,

@@ -770,12 +770,12 @@ export const MIGRACOES: readonly Migracao[] = [
    * A 22 introduz a Conta de teste (030, data-model "Migração 22"): colunas em
    * `usuario` (nula ou zero para as contas reais), o índice parcial de
    * `conta_de_teste_em` e a tabela de criações, com o limite por origem (R5).
-   * Não toca nas linhas existentes. Tem a precondição da 18, 19 e 21: sem ela,
-   * a versão pularia as migrações adiadas, que não voltariam a rodar.
+   * Não toca nas linhas existentes. Não tem precondição (research R21): a
+   * Conta de teste não pode depender da transição da 025. Numa base com a
+   * transição pendente, a 21 fica adiada e a 22 roda mesmo assim.
    */
   {
     versao: 22,
-    precondicao: PODE_REMOVER_VINCULO,
     sql: `
 ALTER TABLE usuario ADD COLUMN conta_de_teste_em TEXT NULL;
 ALTER TABLE usuario ADD COLUMN envios_de_teste INTEGER NOT NULL DEFAULT 0;
@@ -788,5 +788,18 @@ CREATE TABLE criacao_de_conta_de_teste (
 CREATE INDEX indice_criacao_de_conta_de_teste_por_origem
   ON criacao_de_conta_de_teste (origem_hmac, criado_em);
 `,
+  },
+  /**
+   * A 23 repete a finalização da 21 (research R21): remove `vinculo` e aplica
+   * o nome vazio da Revisão. Tem a precondição da 21, porque só pode rodar
+   * quando a transição de Pertencimento terminou. Sem ela, as finalizações
+   * adiadas pela 20 e pela 22 se perderiam, já que a versão subiu além delas.
+   * É idempotente: `DROP TABLE IF EXISTS` não faz nada sem `vinculo`, e o
+   * `UPDATE` só regrava o rótulo vazio sobre linhas que já o têm.
+   */
+  {
+    versao: 23,
+    sql: `${ESQUEMA_FINALIZAR_TRANSICAO}\n${ESQUEMA_NOME_DA_REVISAO}`,
+    precondicao: PODE_REMOVER_VINCULO,
   },
 ];

@@ -239,3 +239,13 @@ A migração 22 leva a precondição `PODE_REMOVER_VINCULO`, como a 18, a 19 e a
 R18 supôs o Neon na v21. Na verdade ele estava na v20, porque 3 Cartões sem Pertencimento mantinham a transição da `025` pendente. Com isso, a 22 não rodou e "Entrar como Teste" falhou com tabela inexistente. A transição foi concluída com autorização do PO (tasks.md, Notes), e o Neon chegou à v22.
 
 **Lição**: uma migração com precondição de transição depende dos dados de produção. Antes de publicar uma feature que exige uma migração nova, o deploy deve confirmar a versão do esquema que de fato foi alcançada. Hoje o passo "Migrar o esquema do Neon" apenas informa a versão e não falha quando ela fica abaixo da esperada.
+
+## R21 — A migração 22 não pode depender da transição da 025 (2026-10-15)
+
+**Problema**: R18 condicionou a 22 a `PODE_REMOVER_VINCULO`. Toda base com a transição da `025` pendente fica então na v20 sem as tabelas da Conta de teste, e "Entrar como Teste" falha com tabela inexistente. Aconteceu em produção (R20) e no banco local (31 Cartões pendentes). É defeito de desenho: uma feature nova não pode depender de os Usuários concluírem uma transição antiga.
+
+**Decisão**: o padrão da `028` (R6).
+- A **22 perde a precondição**: o aplicador pula a 21 adiada e aplica a 22.
+- Uma **23 nova repete a finalização da 21** (e, por consequência, da 18 e da 19), com a precondição `PODE_REMOVER_VINCULO`. Ela fica adiada até a transição terminar, de modo que nenhuma finalização se perde.
+- **Bases já na v22** (Neon depois de R20): a 23 roda e não muda nada, porque a transição está concluída e a finalização é idempotente.
+- **Bases na v20 com transição pendente**: passam a v22 (Conta de teste funciona) e recebem a 23 quando a transição terminar.

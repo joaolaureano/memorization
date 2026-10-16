@@ -1293,13 +1293,14 @@ describe("a inicialização é memorizada e descartável (SC-054)", () => {
     expect(resposta.status).toBe(200);
     expect(resposta.bruto).toContain("ok");
 
-    // Tags avançam para 15; a migração 16 aguarda a transição dos Cartões.
+    // Tags avançam para 15; a 16, a 18 e a 19 aguardam a transição dos Cartões,
+    // mas a 22 (Conta de teste, research R21) não tem precondição e roda.
     const versaoAtual = await servidor.consultar<{ versao: number }>(
       baseV13,
       "SELECT versao FROM versao_do_esquema;",
     );
 
-    expect(versaoAtual[0]?.versao).toBe(20);
+    expect(versaoAtual[0]?.versao).toBe(22);
   }, 60_000);
 
   it("recusa uma base na versão 12 (muito atrasada)", async () => {

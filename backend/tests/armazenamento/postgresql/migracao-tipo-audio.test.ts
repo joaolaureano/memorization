@@ -145,7 +145,7 @@ describe("migrações 20 e 21 — Tipo áudio (PostgreSQL)", () => {
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
       expect((await piscina.query(consultaDeCartoes)).rows).toEqual(cartoesAntes);
       expect(
         (await piscina.query<{ chave: string }>("SELECT chave FROM midia_a_remover")).rows.map(
@@ -296,15 +296,16 @@ describe("migrações 20 e 21 — Tipo áudio (PostgreSQL)", () => {
     }
   });
 
-  it("aceita a versão 20 e a 21 no início (FR-397, research R6)", async () => {
-    expect(versaoAceitaNoInicio(20)).toBe(true);
-    expect(versaoAceitaNoInicio(21)).toBe(true);
-    expect(versaoCorrenteConhecida()).toBe(22);
+  it("recusa a versão 20 e a 21 no início, porque a 22 não tem precondição, e aceita a 22 (FR-397, research R21)", async () => {
+    expect(versaoAceitaNoInicio(20)).toBe(false);
+    expect(versaoAceitaNoInicio(21)).toBe(false);
+    expect(versaoAceitaNoInicio(22)).toBe(true);
+    expect(versaoCorrenteConhecida()).toBe(23);
   });
 });
 
 describe("migrações 20 e 21 — base com Cartão sem Pertencimento (PostgreSQL)", () => {
-  it("chega à v20 com o tipo Áudio utilizável e `vinculo` ainda presente, e à v21 depois da transição", async () => {
+  it("chega à v22 com o tipo Áudio utilizável e `vinculo` ainda presente, e à v23 depois da transição", async () => {
     const nomeDaBase = await servidor.criarBase("tipo-audio-transicao");
     const piscina = await abrirPiscinaDaBase(nomeDaBase);
 
@@ -327,7 +328,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento (PostgreSQL
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(20);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
       expect(await existeTabela(piscina, "vinculo")).toBe(true);
       expect(await inserirAudio(piscina, "a1", "", "audio", "audios/u/a", 4210)).toBe("");
 
@@ -345,7 +346,7 @@ describe("migrações 20 e 21 — base com Cartão sem Pertencimento (PostgreSQL
 
       await aplicarMigracoes(piscina);
 
-      expect(await lerVersaoDoEsquema(piscina)).toBe(22);
+      expect(await lerVersaoDoEsquema(piscina)).toBe(23);
       expect(await existeTabela(piscina, "vinculo")).toBe(false);
       expect(
         (await piscina.query("SELECT nome_do_baralho FROM registro_de_sessao WHERE id = 'r1'")).rows,
