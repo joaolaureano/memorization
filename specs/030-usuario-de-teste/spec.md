@@ -82,7 +82,7 @@ Como visitante, quero que a Conta de teste desapareça quando eu sair, e poder c
 **Acceptance Scenarios**:
 
 1. **Given** uma Conta de teste, **When** a pessoa Sai, **Then** é avisada antes de que tudo será apagado e, ao confirmar, a conta e todo o seu conteúdo são excluídos.
-2. **Given** uma Conta de teste, **When** o Acesso dela expira (`018`), **Then** a conta fica encerrada e não pode mais ser usada: a próxima ação leva à tela de Entrar com o aviso de que a Conta de teste terminou, e o conteúdo é excluído em até 1 hora (FR-498).
+2. **Given** uma Conta de teste, **When** o Acesso dela expira (`018`), **Then** a conta fica encerrada e não pode mais ser usada: a próxima ação leva à tela de Entrar com o aviso de que a Conta de teste terminou, e o conteúdo é excluído em até 24 horas (FR-498).
 3. **Given** uma Conta de teste encerrada, **When** a pessoa escolhe "Entrar como Teste" de novo, **Then** recebe uma conta nova, com o Acervo de demonstração no estado inicial.
 4. **Given** uma Conta de teste, **When** a pessoa recarrega a página ou reabre a aba antes de o Acesso expirar, **Then** continua na mesma Conta de teste, com o que tinha feito.
 
@@ -158,7 +158,7 @@ Como dono do produto, quero que a Conta de teste não possa ser alterada nem exc
 **Encerramento**
 
 - **FR-497**: Ao Sair de uma Conta de teste, a pessoa MUST ser avisada de que tudo será apagado. Ao confirmar, a conta e todo o seu conteúdo MUST ser excluídos, inclusive a mídia enviada e os arquivos de Exportação. Se a exclusão falhar, a pessoa MUST ser desconectada mesmo assim. A conta fica encerrada e é excluída pela limpeza de FR-498.
-- **FR-498**: Quando o Acesso de uma Conta de teste expira, a conta e todo o seu conteúdo MUST ser excluídos. Contas de teste com Acesso expirado MUST ser excluídas em até 1 hora, mesmo que ninguém tente usá-las.
+- **FR-498**: Quando o Acesso de uma Conta de teste expira, a conta e todo o seu conteúdo MUST ser excluídos. Contas de teste com Acesso expirado MUST ser excluídas em até 24 horas, mesmo que ninguém tente usá-las.
 - **FR-499**: Uma Conta de teste MUST NOT poder ser retomada depois de encerrada. "Entrar como Teste" sempre cria uma conta nova.
 - **FR-500**: A mídia do Acervo de demonstração MUST continuar disponível para novas Contas de teste depois que qualquer Conta de teste for excluída. Por exceção à regra da `026`/`028` de que cada Cartão tem a própria mídia, os Cartões do Acervo de demonstração compartilham a mesma mídia entre todas as Contas de teste. A Cópia de um desses Cartões (`025`) recebe mídia própria, como hoje.
 
@@ -187,7 +187,7 @@ Como dono do produto, quero que a Conta de teste não possa ser alterada nem exc
 - **SC-192**: Da tela de Entrar ao Início de uma Conta de teste pronta, com o Acervo de demonstração, leva no máximo 5 segundos e exige 1 interação, inclusive na primeira entrada depois de 15 minutos sem uso do serviço.
 - **SC-193**: Em 100% das Contas de teste novas, o acervo é idêntico ao Acervo de demonstração (mesmos Baralhos, Cartões, textos e mídias).
 - **SC-194**: Em 100% dos testes com duas Contas de teste simultâneas, nenhuma alteração de uma aparece na outra.
-- **SC-195**: Depois de Sair, nenhum dado da Conta de teste permanece: Usuário, acervo, histórico, Agenda, mídia enviada, arquivo de Exportação e Acesso. Depois da expiração do Acesso, nada disso permanece passada 1 hora.
+- **SC-195**: Depois de Sair, nenhum dado da Conta de teste permanece: Usuário, acervo, histórico, Agenda, mídia enviada, arquivo de Exportação e Acesso. Depois da expiração do Acesso, nada disso permanece passadas 24 horas.
 - **SC-196**: Em 100% das tentativas, alterar Nome de usuário, alterar Senha ou excluir uma Conta de teste é recusado.
 - **SC-197**: 100% das mídias do Acervo de demonstração têm licença de uso público registrada, com atribuição acessível na aplicação.
 - **SC-198**: Em 100% das Contas de teste novas, o Início mostra Cartões para revisar hoje e o Compromisso de hoje, e as Estatísticas mostram estudo em ao menos 4 dos últimos 7 dias.

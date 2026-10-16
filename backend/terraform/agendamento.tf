@@ -2,8 +2,8 @@
 
 resource "aws_cloudwatch_event_rule" "limpeza_contas_de_teste" {
   name                = "${var.project_name}-limpeza-contas-de-teste"
-  description         = "Limpa as Contas de teste encerradas a cada 15 minutos (030, R4)."
-  schedule_expression = "rate(15 minutes)"
+  description         = "Limpa as Contas de teste encerradas uma vez por dia (030, R4, R22)."
+  schedule_expression = "rate(1 day)"
 }
 
 resource "aws_cloudwatch_event_target" "limpeza_contas_de_teste" {

@@ -249,3 +249,14 @@ R18 supôs o Neon na v21. Na verdade ele estava na v20, porque 3 Cartões sem Pe
 - Uma **23 nova repete a finalização da 21** (e, por consequência, da 18 e da 19), com a precondição `PODE_REMOVER_VINCULO`. Ela fica adiada até a transição terminar, de modo que nenhuma finalização se perde.
 - **Bases já na v22** (Neon depois de R20): a 23 roda e não muda nada, porque a transição está concluída e a finalização é idempotente.
 - **Bases na v20 com transição pendente**: passam a v22 (Conta de teste funciona) e recebem a 23 quando a transição terminar.
+
+## R22 — Limpeza agendada uma vez por dia (2026-10-16)
+
+**Contexto**: a regra de R4 rodava a cada 15 minutos. Cada execução consulta o Neon e o tira do repouso (ele dorme depois de uns 5 minutos sem uso), então o banco ficava acordado cerca de um terço do tempo, mesmo sem visitantes: ~2.900 execuções por mês.
+
+**Decisão do PO**: a regra passa a `rate(1 day)`, e o prazo do FR-498 e do SC-195 vai de 1 hora para 24 horas.
+
+- Continua igual: Sair exclui na hora (FR-497); uma conta expirada que alguém tenta usar é excluída na hora; cada criação de Conta de teste limpa antes até 20 contas encerradas (`identidade.ts`). O agendamento só pega contas abandonadas quando ninguém mais entra como Teste.
+- Uma conta abandonada fica guardada por até 24 horas, sem uso possível (o Acesso já expirou). Ela tem só o Acervo de demonstração e até 20 MB de mídia do visitante.
+- O limite por origem (R5) conta só a última hora, então as linhas de `criacao_de_conta_de_teste` guardadas por mais tempo não mudam o limite.
+- Substitui o "em até 1 hora" de R4 e de R14 (CHK011).

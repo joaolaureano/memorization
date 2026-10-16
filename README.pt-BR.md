@@ -70,7 +70,7 @@ flowchart LR
 - **Lambda** roda a mesma API do modo local.
 - **Mídia** é enviada e tocada pelo navegador com URLs assinadas de curta
   duração; no modo local, vem do disco.
-- **EventBridge** remove Contas de teste abandonadas a cada 15 minutos.
+- **EventBridge** remove Contas de teste abandonadas uma vez por dia.
 - **Migrações** rodam no workflow de deploy (`migrate:cloud`) antes do código.
 
 Guia de implantação: [`backend/terraform/README.md`](backend/terraform/README.md).
@@ -86,3 +86,7 @@ nenhum segredo no repositório e um teste para cada requisito.
 ```bash
 npm run verificar:ci   # na raiz: gitleaks, backend (SQLite e PostgreSQL), frontend e e2e
 ```
+
+## Licença
+
+[MIT](LICENSE)

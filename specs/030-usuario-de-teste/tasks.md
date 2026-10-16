@@ -306,6 +306,7 @@ The architect creates every new file **with a one-line comment** before a worker
   - Criação com a Lambda fria (primeira chamada depois de um deploy): 2,63 s, dentro dos 5 s (SC-192).
   - O limite por origem recusou a 11ª criação na mesma hora, com a mensagem localizada (FR-502).
   - Depois de T044, o Neon chegou à v23.
+- **Limpeza diária (2026-10-16, research R22)**: o PO trocou o prazo do FR-498/SC-195 de 1 hora para 24 horas; a regra passou a `rate(1 day)`.
 
 ## Phase 8: Correções pós-publicação (2026-10-15)
 

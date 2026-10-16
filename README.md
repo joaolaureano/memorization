@@ -72,7 +72,7 @@ flowchart LR
 - **Lambda** runs the same API as the local mode.
 - **Media** are uploaded and played by the browser through short-lived signed
   URLs; in local mode they are served from disk.
-- **EventBridge** removes abandoned Test accounts every 15 minutes.
+- **EventBridge** removes abandoned Test accounts once a day.
 - **Migrations** run in the deploy workflow (`migrate:cloud`) before the code ships.
 
 Deployment guide: [`backend/terraform/README.md`](backend/terraform/README.md).
@@ -88,3 +88,7 @@ scope, no secrets in the repository and a test for every requirement.
 ```bash
 npm run verificar:ci   # at the root: gitleaks, backend (SQLite and PostgreSQL), frontend and e2e
 ```
+
+## License
+
+[MIT](LICENSE)

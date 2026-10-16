@@ -26,6 +26,6 @@ npm run verificar:ci
 9. **Sair**: confirmar "Sair e apagar". Entrar como Teste de novo traz o acervo no estado inicial, sem o Baralho do passo 5 (SC-195).
 10. **Mídia protegida**: depois do passo 9, a bandeira excluída no passo 5 continua aparecendo numa conta nova (FR-500).
 11. **Expiração**: entrar como Teste e ficar 6 minutos sem interagir. A próxima ação leva a Entrar com "Sua Conta de teste terminou".
-12. **Limpeza**: abandonar uma Conta de teste (fechar a aba). Em até 1 hora (nuvem) ou 10 minutos (local), o Usuário não existe mais (SC-195).
+12. **Limpeza**: abandonar uma Conta de teste (fechar a aba). Em até 24 horas (nuvem) ou 10 minutos (local), o Usuário não existe mais (SC-195).
 13. **Limite**: criar 11 Contas de teste seguidas do mesmo endereço. A 11ª é recusada com a mensagem de limite (FR-502).
 14. **Desempenho na nuvem**: medir o passo 1 com a Lambda fria (primeira chamada depois de 15 minutos parada). Fica em até 5 s (R10, `premissa a validar`).
