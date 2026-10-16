@@ -231,7 +231,7 @@ The architect creates every new file **with a one-line comment** before a worker
   - keyboard only (FR-487 to FR-500, SC-192 to SC-194).
 - [X] T041 [P] Update `README.md` and `README.pt-BR.md`: a "Try it" (Experimentar) row describing "Entrar como Teste", the demo decks, the credits and the deletion on exit; the deploy note covering the IAM policy (`iam/robot-agendamento.json`), `tofu apply` for the schedule, and migration 22.
 - [X] T042 Run `npm run verificar:ci` and the same pipeline in Linux via colima. Then run quickstart 1–13 locally. **Verified:** host `npm run verificar:ci` passed, including gitleaks and 112 E2E. The Linux snapshot passed typecheck, lint, all 1,352 backend general tests, all 303 PostgreSQL tests, all 1,094 frontend tests, build and 112 E2E; gitleaks was run in the host gate because the Linux image does not include that executable. Quickstart behaviors 1–13 are covered by `e2e/conta-de-teste.spec.ts` and the focused HTTP, identity and frontend suites.
-- [ ] T043 After the PO applies `iam/robot-agendamento.json` and the architect runs `tofu apply` and deploys: run quickstart 14 in production. Cold create ≤ 5 s (SC-192); measure the visitor origin header (research R5). Record the results in Notes.
+- [X] T043 After the PO applies `iam/robot-agendamento.json` and the architect runs `tofu apply` and deploys: run quickstart 14 in production. Cold create ≤ 5 s (SC-192); measure the visitor origin header (research R5). Record the results in Notes.
 
 ---
 
@@ -299,6 +299,13 @@ The architect creates every new file **with a one-line comment** before a worker
   - Sair: `204`; depois disso, `/conta` responde `401`, e nenhuma Conta de teste fica no banco.
 
   Ainda pendente para a T043: aplicar `iam/robot-agendamento.json`, rodar `tofu apply` (a regra agendada não existe na AWS) e medir a criação com a Lambda fria.
+- **T043 (2026-10-15)**:
+  - Política IAM do PO confirmada: `events:DescribeRule` responde `ResourceNotFound` (e não `AccessDenied`), e `lambda:GetPolicy` responde.
+  - O `tofu apply` criou só a regra, o target e a permissão; a regra está `ENABLED`, `rate(15 minutes)`, com a entrada `{"acao":"limpar-contas-de-teste"}`.
+  - A conta abandonada às 20:10, sem Sair, foi excluída sozinha até 20:33 (FR-498).
+  - Criação com a Lambda fria (primeira chamada depois de um deploy): 2,63 s, dentro dos 5 s (SC-192).
+  - O limite por origem recusou a 11ª criação na mesma hora, com a mensagem localizada (FR-502).
+  - Depois de T044, o Neon chegou à v23.
 
 ## Phase 8: Correções pós-publicação (2026-10-15)
 
