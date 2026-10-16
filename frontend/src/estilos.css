@@ -535,7 +535,7 @@ label.rotulo,
 
 /* `.visualmente-oculto` fica de fora: com (0,1,1) venceria a sua largura de 1px
  * e um input escondido ocupava 100% da tela (B5, 028). */
-input:not([type="checkbox"]):not(.visualmente-oculto),
+input:not([type="checkbox"]):not([type="radio"]):not(.visualmente-oculto),
 textarea,
 select {
   width: 100%;
@@ -554,14 +554,16 @@ textarea {
 }
 
 /* 020, FR-328: a caixa de marcar comum mede 19 px. */
-input[type="checkbox"] {
+input[type="checkbox"],
+input[type="radio"] {
   width: 19px;
   height: 19px;
   accent-color: var(--accent);
   flex-shrink: 0;
 }
 
-label:has(input[type="checkbox"]) {
+label:has(input[type="checkbox"]),
+label:has(input[type="radio"]) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1724,7 +1726,7 @@ details summary {
 }
 
 .agenda__rotina--pausada {
-  background: var(--amber-bg);
+  background: color-mix(in srgb, var(--amber) 8%, var(--surface));
   border-color: var(--amber-border);
 }
 
