@@ -10,7 +10,7 @@ Built for the course **AGL11091 - Trends in Software Engineering** with
 Spec-Driven Development through [GitHub Spec Kit](https://github.com/github/spec-kit):
 every feature started from a specification in [`specs/`](specs/).
 
-- **Application**: <https://d2mp2j3zeufjr0.cloudfront.net> (use “Sign in as Test” to try it without an account)
+- **Application**: <https://memorization.joaolaureano.dev> (use “Sign in as Test” to try it without an account)
 - **Presentation**: <https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>
 
 > The specs and the code use Portuguese domain terms (`Cartão`, `Baralho`,

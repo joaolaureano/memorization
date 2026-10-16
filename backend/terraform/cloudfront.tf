@@ -44,6 +44,7 @@ resource "aws_cloudfront_distribution" "app" {
   comment             = "${var.project_name} - SPA e API"
   price_class         = "PriceClass_100"
   default_root_object = "index.html"
+  aliases             = [var.domain_name]
 
   origin {
     origin_id                = "s3"
@@ -120,9 +121,11 @@ resource "aws_cloudfront_distribution" "app" {
     }
   }
 
-  # Certificado *.cloudfront.net: HTTPS sem dominio proprio nem ACM.
+  # Certificado do ACM para o dominio proprio; o host *.cloudfront.net segue respondendo.
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.app.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = {

@@ -74,14 +74,14 @@ resource "aws_s3_bucket_lifecycle_configuration" "imagens" {
   }
 }
 
-# O navegador so faz POST (envio) a partir da origem do CloudFront; a leitura
-# por <img> e por <audio> nao precisa de CORS.
+# O navegador so faz POST (envio) a partir do dominio proprio ou da origem do
+# CloudFront; a leitura por <img> e por <audio> nao precisa de CORS.
 resource "aws_s3_bucket_cors_configuration" "imagens" {
   bucket = aws_s3_bucket.imagens.id
 
   cors_rule {
     allowed_methods = ["POST"]
-    allowed_origins = ["https://${aws_cloudfront_distribution.app.domain_name}"]
+    allowed_origins = ["https://${var.domain_name}", "https://${aws_cloudfront_distribution.app.domain_name}"]
     allowed_headers = ["*"]
     max_age_seconds = 3000
   }

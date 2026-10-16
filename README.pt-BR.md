@@ -11,7 +11,7 @@ Software** com Spec-Driven Development pelo
 [GitHub Spec Kit](https://github.com/github/spec-kit): toda feature nasceu de
 uma especificação em [`specs/`](specs/).
 
-- **Aplicação**: <https://d2mp2j3zeufjr0.cloudfront.net> (use «Entrar como Teste» para experimentar sem conta)
+- **Aplicação**: <https://memorization.joaolaureano.dev> (use «Entrar como Teste» para experimentar sem conta)
 - **Apresentação**: <https://claude.ai/artifact/JrKYwYHpCGipXnW7ePwKfN>
 
 ## Funcionalidades

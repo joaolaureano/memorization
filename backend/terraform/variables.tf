@@ -83,3 +83,15 @@ variable "ci_permissions_boundary_name" {
   type        = string
   default     = ""
 }
+
+variable "domain_name" {
+  description = "Dominio proprio da aplicacao, numa zona do Cloudflare"
+  type        = string
+  default     = "memorization.joaolaureano.dev"
+}
+
+variable "cloudflare_zone" {
+  description = "Zona do Cloudflare que guarda o DNS do dominio"
+  type        = string
+  default     = "joaolaureano.dev"
+}

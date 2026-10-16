@@ -18,6 +18,11 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.4"
     }
+
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.0"
+    }
   }
 }
 
@@ -31,5 +36,8 @@ provider "aws" {
     }
   }
 }
+
+# Le CLOUDFLARE_API_TOKEN do ambiente, token com Zone > DNS > Edit so nesta zona.
+provider "cloudflare" {}
 
 data "aws_caller_identity" "current" {}

@@ -1,16 +1,16 @@
 output "app_url" {
-  description = "URL publica da aplicacao, servida pelo CloudFront em HTTPS"
-  value       = "https://${aws_cloudfront_distribution.app.domain_name}"
+  description = "URL publica da aplicacao, no dominio proprio, servida pelo CloudFront em HTTPS"
+  value       = "https://${var.domain_name}"
 }
 
 output "api_url" {
   description = "Base da API atras do CloudFront; o prefixo /api e removido na borda"
-  value       = "https://${aws_cloudfront_distribution.app.domain_name}/api"
+  value       = "https://${var.domain_name}/api"
 }
 
 output "health_url" {
   description = "Health check da API, util para verificar a Lambda de ponta a ponta"
-  value       = "https://${aws_cloudfront_distribution.app.domain_name}/health"
+  value       = "https://${var.domain_name}/health"
 }
 
 output "function_url" {
