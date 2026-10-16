@@ -115,3 +115,90 @@ test("Conta de teste: isolamento, mídias, sair apagando e começar de novo", as
     await removerPastaTemporaria(pasta);
   }
 });
+
+// 030 (FR-494): o diálogo de créditos lê-se sem quebra de palavra, cabe na
+// janela, tem Fechar visível e não cria rolagem horizontal, em telas estreitas,
+// amplas e a 200% de zoom.
+test("Créditos do acervo de demonstração: layout, Fechar e sem rolagem horizontal", async ({ browser }) => {
+  const pasta = await criarPastaTemporaria("creditos-030-");
+  let api: ProcessoIniciado | null = null;
+  let frontend: ProcessoIniciado | null = null;
+  const contextos: BrowserContext[] = [];
+
+  try {
+    const portaDaApi = await portaLivre();
+    api = iniciarApi(join(pasta, "creditos.sqlite"), portaDaApi);
+    const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
+    await aguardarApiPronta(api, enderecoDaApi);
+    const portaDoFrontend = await portaLivre();
+    const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
+    frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+    await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
+
+    for (const [largura, zoom] of [[360, 1], [390, 1], [768, 1], [1280, 1], [1280, 2]] as const) {
+      const rotulo = `${largura}px zoom ${zoom}`;
+      const contexto = await browser.newContext({ locale: "pt-BR", timezoneId: "America/Sao_Paulo", viewport: { width: largura, height: 844 } });
+      contextos.push(contexto);
+      const page = await contexto.newPage();
+
+      await page.goto(`${enderecoDoFrontend}/#/entrar`);
+      await aplicarZoomDeProva(page, zoom);
+      await page.getByRole("button", { name: "Entrar como Teste" }).click();
+      await expect(page.getByRole("navigation", { name: "Principal" })).toBeVisible();
+
+      const link = page.getByRole("link", { name: "Créditos do acervo de demonstração" });
+      await link.click();
+      const dialogo = page.getByRole("dialog", { name: "Créditos do acervo de demonstração" });
+      await expect(dialogo.getByRole("heading", { level: 3, name: "Bandeiras" })).toBeVisible();
+      await expect(dialogo.getByRole("heading", { level: 3, name: "Cantos de pássaros" })).toBeVisible();
+
+      const palavrasQuebradas = await dialogo.evaluate((raiz) => {
+        const quebradas: string[] = [];
+        const caminhante = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT);
+        for (let no = caminhante.nextNode(); no !== null; no = caminhante.nextNode()) {
+          for (const casamento of (no.textContent ?? "").matchAll(/\S+/g)) {
+            const inicio = casamento.index ?? 0;
+            const intervalo = document.createRange();
+            intervalo.setStart(no, inicio);
+            intervalo.setEnd(no, inicio + casamento[0].length);
+            if (intervalo.getClientRects().length !== 1) {
+              quebradas.push(casamento[0]);
+            }
+          }
+        }
+        return quebradas;
+      });
+      expect(palavrasQuebradas, rotulo).toEqual([]);
+
+      const medidas = await dialogo.evaluate((raiz) => {
+        const caixa = raiz.getBoundingClientRect();
+        const lista = raiz.querySelector<HTMLElement>(".ca-creditos-lista");
+        return {
+          larguraDoDialogo: caixa.width,
+          alturaDoDialogo: caixa.height,
+          larguraDaJanela: window.innerWidth,
+          alturaDaJanela: window.innerHeight,
+          rolagemHorizontalDaPagina: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) > document.documentElement.clientWidth,
+          rolagemHorizontalDaLista: lista !== null && lista.scrollWidth > lista.clientWidth,
+        };
+      });
+      expect(medidas.larguraDoDialogo, rotulo).toBeLessThanOrEqual(medidas.larguraDaJanela);
+      expect(medidas.alturaDoDialogo, rotulo).toBeLessThanOrEqual(medidas.alturaDaJanela);
+      expect(medidas.rolagemHorizontalDaPagina, rotulo).toBe(false);
+      expect(medidas.rolagemHorizontalDaLista, rotulo).toBe(false);
+
+      const fechar = dialogo.getByRole("button", { name: "Fechar", exact: true });
+      await expect(fechar).toBeInViewport();
+      await fechar.click();
+      await expect(dialogo).not.toBeVisible();
+      await expect(link).toBeFocused();
+    }
+  } finally {
+    for (const contexto of contextos) {
+      await contexto.close();
+    }
+    await encerrarProcesso(frontend);
+    await encerrarProcesso(api);
+    await removerPastaTemporaria(pasta);
+  }
+});

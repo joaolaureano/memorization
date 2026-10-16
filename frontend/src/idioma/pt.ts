@@ -572,7 +572,10 @@ export interface Catalogo {
   contaDeTeste: {
     entrar: string; ou: string; apresentacao: string; preparando: string; terminou: string;
     etiqueta: string; aviso: string; linkCreditos: string;
-    creditos: { titulo: string; colunaTitulo: string; colunaAutor: string; colunaLicenca: string; colunaFonte: string };
+    creditos: {
+      titulo: string; fechar: string; verFonte: string; verFonteDe: (cartao: string) => string;
+      autorELicenca: (autor: string, licenca: string) => string; licencas: Record<string, string>;
+    };
     perfil: string; sairConfirmacao: string; sairEApagar: string; cancelar: string;
   };
 }
@@ -1197,10 +1200,18 @@ export const pt: Catalogo = {
     linkCreditos: "Créditos do acervo de demonstração",
     creditos: {
       titulo: "Créditos do acervo de demonstração",
-      colunaTitulo: "Título",
-      colunaAutor: "Autor",
-      colunaLicenca: "Licença",
-      colunaFonte: "Fonte",
+      fechar: "Fechar",
+      verFonte: "Ver fonte",
+      verFonteDe: (cartao: string) => `Ver fonte de ${cartao}`,
+      autorELicenca: (autor: string, licenca: string) => `${autor} · ${licenca}`,
+      licencas: {
+        "LicenseRef-Public-Domain": "Domínio público",
+        "CC0-1.0": "CC0 1.0",
+        "CC-BY-3.0": "CC BY 3.0",
+        "CC-BY-4.0": "CC BY 4.0",
+        "CC-BY-SA-3.0": "CC BY-SA 3.0",
+        "CC-BY-SA-4.0": "CC BY-SA 4.0",
+      },
     },
     perfil: "A Conta de teste não pode ser alterada nem excluída.",
     sairConfirmacao: "Sair apaga a Conta de teste e tudo o que você fez nela.",

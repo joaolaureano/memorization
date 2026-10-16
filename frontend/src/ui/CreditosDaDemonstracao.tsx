@@ -16,10 +16,28 @@ import { useIdioma } from "../idioma";
  * Usa o `<dialog>` nativo com `showModal()`, como o `DialogoDeConfirmacao`; onde
  * `showModal` não existe (jsdom), cai para o atributo `open`. Esc fecha pelo
  * `onKeyDown`, e o fechamento — por Esc ou pelo botão — devolve o foco ao link
- * que o abriu (`retornoDeFoco`). A tabela vira blocos empilhados em telas de até
- * 600 px, com o nome de cada coluna em `data-rotulo`, para não haver rolagem
- * horizontal em 360 px.
+ * que o abriu (`retornoDeFoco`). A lista é agrupada por baralho; cada cartão é
+ * um item com o nome, a linha de autor e licença (licença legível) e o link
+ * "Ver fonte". O cabeçalho, com o botão Fechar, fica fixo enquanto só a lista rola.
  */
+
+function nomeDoCartao(credito: CreditoDoAcervo): string {
+  return credito.cientifico
+    ? `${credito.cartao} (${credito.cientifico})`
+    : credito.cartao;
+}
+
+function agruparPorBaralho(
+  creditos: CreditoDoAcervo[],
+): Array<[string, CreditoDoAcervo[]]> {
+  const grupos = new Map<string, CreditoDoAcervo[]>();
+
+  for (const credito of creditos) {
+    grupos.set(credito.baralho, [...(grupos.get(credito.baralho) ?? []), credito]);
+  }
+
+  return [...grupos];
+}
 export function CreditosDaDemonstracao({
   aberto,
   cliente,
@@ -88,7 +106,14 @@ export function CreditosDaDemonstracao({
     }
   }
 
-  const colunas = textos.contaDeTeste.creditos;
+  const textosDosCreditos = textos.contaDeTeste.creditos;
+  const grupos = agruparPorBaralho(creditos);
+
+  function rotuloDaLicenca(licenca: string): string {
+    const rotulo = textosDosCreditos.licencas[licenca] as string | undefined;
+
+    return rotulo ?? licenca;
+  }
 
   return (
     <dialog
@@ -97,40 +122,47 @@ export function CreditosDaDemonstracao({
       aria-labelledby="titulo-dos-creditos"
       onKeyDown={aoTeclar}
     >
-      <h2 id="titulo-dos-creditos" className="titulo-do-dialogo">
-        {colunas.titulo}
-      </h2>
-      <table className="ca-tabela-creditos">
-        <thead>
-          <tr>
-            <th scope="col">{colunas.colunaTitulo}</th>
-            <th scope="col">{colunas.colunaAutor}</th>
-            <th scope="col">{colunas.colunaLicenca}</th>
-            <th scope="col">{colunas.colunaFonte}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {creditos.map((credito) => (
-            <tr key={`${credito.baralho}/${credito.cartao}`}>
-              <td data-rotulo={colunas.colunaTitulo}>{credito.titulo}</td>
-              <td data-rotulo={colunas.colunaAutor}>{credito.autor}</td>
-              <td data-rotulo={colunas.colunaLicenca}>{credito.licenca}</td>
-              <td data-rotulo={colunas.colunaFonte}>
-                <a href={credito.fonte}>{credito.fonte}</a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="acoes-do-dialogo ca-acoes">
+      <div className="ca-dialogo-creditos__cabecalho">
+        <h2 id="titulo-dos-creditos" className="titulo-do-dialogo">
+          {textosDosCreditos.titulo}
+        </h2>
         <button
           ref={botaoFechar}
           type="button"
           className="botao botao--secundario"
           onClick={aoFechar}
         >
-          {textos.comum.voltar}
+          {textosDosCreditos.fechar}
         </button>
+      </div>
+      <div className="ca-creditos-lista">
+        {grupos.map(([baralho, itens]) => (
+          <section key={baralho} className="ca-creditos-grupo">
+            <h3 className="ca-creditos-grupo__titulo">{baralho}</h3>
+            <ul className="ca-creditos-itens">
+              {itens.map((credito) => (
+                <li key={`${credito.baralho}/${credito.cartao}`} className="ca-credito">
+                  <h4 className="ca-credito__titulo">{nomeDoCartao(credito)}</h4>
+                  <p className="ca-credito__autor">
+                    {textosDosCreditos.autorELicenca(
+                      credito.autor,
+                      rotuloDaLicenca(credito.licenca),
+                    )}
+                  </p>
+                  <a
+                    className="ca-credito__fonte"
+                    href={credito.fonte}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={textosDosCreditos.verFonteDe(credito.cartao)}
+                  >
+                    {textosDosCreditos.verFonte}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
     </dialog>
   );

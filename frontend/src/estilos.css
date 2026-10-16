@@ -2459,54 +2459,78 @@ label.campo--opcao {
   text-decoration: underline;
   overflow-wrap: anywhere;
 }
-.ca-tabela-creditos {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: auto;
-  overflow-wrap: anywhere;
+/* Créditos do acervo de demonstração (030, FR-494): diálogo com cabeçalho fixo
+   (título e Fechar) e só a lista rola. Sem quebra de palavra no meio. */
+.ca-dialogo-creditos {
+  box-sizing: border-box;
+  width: min(720px, 100vw - 32px);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 64px);
+  padding: 0;
+  overflow: hidden;
+  overflow-wrap: normal;
+  word-break: normal;
 }
-.ca-tabela-creditos th,
-.ca-tabela-creditos td {
-  padding: 8px;
+/* Só aberto: `display` aqui não pode anular o `dialog:not([open])` do navegador. */
+.ca-dialogo-creditos[open] {
+  display: flex;
+  flex-direction: column;
+}
+.ca-dialogo-creditos__cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px 12px;
   border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
+  background: var(--surface);
 }
-.ca-tabela-creditos a {
+.ca-dialogo-creditos__cabecalho .titulo-do-dialogo {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.25rem;
+}
+.ca-dialogo-creditos__cabecalho .botao {
+  min-height: 44px;
+}
+.ca-creditos-lista {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 24px 20px;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.ca-creditos-grupo + .ca-creditos-grupo {
+  margin-top: 20px;
+}
+.ca-creditos-grupo__titulo {
+  margin: 12px 0 4px;
+  font-size: 1rem;
+}
+.ca-creditos-itens {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ca-credito {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ca-credito__titulo {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+}
+.ca-credito__autor {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.ca-credito__fonte {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
   color: var(--accent);
-  overflow-wrap: anywhere;
-}
-@media (max-width: 600px) {
-  .ca-tabela-creditos thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-  }
-  .ca-tabela-creditos,
-  .ca-tabela-creditos tbody,
-  .ca-tabela-creditos tr,
-  .ca-tabela-creditos td {
-    display: block;
-    width: 100%;
-  }
-  .ca-tabela-creditos tr {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .ca-tabela-creditos td {
-    display: grid;
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    gap: 4px 12px;
-    padding: 4px 0;
-    border-bottom: 0;
-  }
-  .ca-tabela-creditos td::before {
-    content: attr(data-rotulo);
-    color: var(--muted);
-  }
 }

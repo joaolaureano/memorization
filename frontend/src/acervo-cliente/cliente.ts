@@ -976,6 +976,8 @@ export type ResultadoDeEntrarComoTeste =
 export interface CreditoDoAcervo {
   baralho: string;
   cartao: string;
+  /** Nome científico do pássaro, quando o cartão tem um (o API o devolve só nos Cantos de pássaros). */
+  cientifico?: string;
   titulo: string;
   autor: string;
   licenca: string;

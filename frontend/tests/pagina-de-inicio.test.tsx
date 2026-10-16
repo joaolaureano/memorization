@@ -18,6 +18,8 @@ import {
   INDISPONIVEL,
   MENSAGEM_DE_INDISPONIBILIDADE,
 } from "../src/acervo-cliente/cliente";
+import { ProvedorDeIdioma } from "../src/idioma";
+import { CreditosDaDemonstracao } from "../src/ui/CreditosDaDemonstracao";
 import { PaginaDeInicio } from "../src/ui/PaginaDeInicio";
 
 /**
@@ -255,7 +257,7 @@ const CREDITOS_DE_PROVA: CreditoDoAcervo[] = [
     cartao: "Brasil",
     titulo: "Bandeira do Brasil",
     autor: "Autor de exemplo",
-    licenca: "CC0 1.0",
+    licenca: "LicenseRef-Public-Domain",
     fonte: "https://example.test/bandeira-do-brasil",
   },
   {
@@ -263,10 +265,34 @@ const CREDITOS_DE_PROVA: CreditoDoAcervo[] = [
     cartao: "Alemanha",
     titulo: "Bandeira da Alemanha",
     autor: "Autor de outro exemplo",
-    licenca: "CC BY 4.0",
+    licenca: "CC-BY-4.0",
     fonte: "https://example.test/bandeira-da-alemanha",
   },
+  {
+    baralho: "Cantos de pássaros",
+    cartao: "Bem-te-vi",
+    cientifico: "Pitangus sulphuratus",
+    titulo: "Great kiskadee",
+    autor: "Autor de pássaro",
+    licenca: "CC-BY-SA-4.0",
+    fonte: "https://example.test/bem-te-vi",
+  },
 ];
+
+/** Rótulos legíveis das licenças do acervo, em pt (o catálogo de `contaDeTeste`). */
+const LICENCAS_EM_PT: Record<string, string> = {
+  "LicenseRef-Public-Domain": "Domínio público",
+  "CC-BY-4.0": "CC BY 4.0",
+  "CC-BY-SA-4.0": "CC BY-SA 4.0",
+};
+
+const TITULO_DOS_CREDITOS = "Créditos do acervo de demonstração";
+
+function nomeDoCartao(credito: CreditoDoAcervo): string {
+  return credito.cientifico
+    ? `${credito.cartao} (${credito.cientifico})`
+    : credito.cartao;
+}
 
 function clienteDaContaDeTeste(): ClienteDoAcervo {
   return {
@@ -308,7 +334,7 @@ describe("PaginaDeInicio — Conta de teste (030, FR-490, FR-494)", () => {
     ).toBeInTheDocument();
   });
 
-  it("o diálogo lista título, autor, licença e fonte de cada mídia (FR-494)", async () => {
+  it("agrupa os créditos por baralho, com o cartão como título de cada item (FR-494)", async () => {
     render(
       <PaginaDeInicio
         cliente={clienteDaContaDeTeste()}
@@ -322,18 +348,115 @@ describe("PaginaDeInicio — Conta de teste (030, FR-490, FR-494)", () => {
     );
 
     const dialogo = await screen.findByRole("dialog", {
-      name: "Créditos do acervo de demonstração",
+      name: TITULO_DOS_CREDITOS,
+    });
+
+    for (const baralho of ["Bandeiras", "Cantos de pássaros"]) {
+      const grupo = within(dialogo)
+        .getByRole("heading", { level: 3, name: baralho })
+        .closest("section") as HTMLElement;
+      const quantidade = CREDITOS_DE_PROVA.filter(
+        (credito) => credito.baralho === baralho,
+      ).length;
+      expect(within(grupo).getAllByRole("listitem")).toHaveLength(quantidade);
+    }
+
+    for (const credito of CREDITOS_DE_PROVA) {
+      expect(
+        within(dialogo).getByRole("heading", {
+          level: 4,
+          name: nomeDoCartao(credito),
+        }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  it("mostra autor, licença legível e o link Ver fonte de cada cartão (FR-494)", async () => {
+    render(
+      <PaginaDeInicio
+        cliente={clienteDaContaDeTeste()}
+        nomeDeUsuario="joao"
+        contaDeTeste
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("link", { name: "Créditos do acervo de demonstração" }),
+    );
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: TITULO_DOS_CREDITOS,
     });
 
     for (const credito of CREDITOS_DE_PROVA) {
-      const linha = within(dialogo).getByText(credito.titulo).closest("tr") as HTMLElement;
-      expect(within(linha).getByText(credito.autor)).toBeInTheDocument();
-      expect(within(linha).getByText(credito.licenca)).toBeInTheDocument();
-      expect(within(linha).getByRole("link", { name: credito.fonte })).toHaveAttribute(
-        "href",
-        credito.fonte,
-      );
+      const item = within(dialogo)
+        .getByRole("heading", { level: 4, name: nomeDoCartao(credito) })
+        .closest("li") as HTMLElement;
+
+      expect(
+        within(item).getByText(
+          `${credito.autor} · ${LICENCAS_EM_PT[credito.licenca]}`,
+        ),
+      ).toBeInTheDocument();
+
+      const link = within(item).getByRole("link", {
+        name: `Ver fonte de ${credito.cartao}`,
+      });
+      expect(link).toHaveTextContent("Ver fonte");
+      expect(link).toHaveAttribute("href", credito.fonte);
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link.getAttribute("rel")).toContain("noopener");
     }
+
+    expect(dialogo.textContent).not.toMatch(/LicenseRef-|CC-BY/);
+  });
+
+  it("traduz a licença e os rótulos para en", async () => {
+    render(
+      <ProvedorDeIdioma idiomaInicial="en">
+        <CreditosDaDemonstracao
+          aberto
+          cliente={clienteDaContaDeTeste()}
+          aoFechar={() => {}}
+          retornoDeFoco={{ current: null }}
+        />
+      </ProvedorDeIdioma>,
+    );
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Credits for the demo collection",
+    });
+
+    expect(
+      within(dialogo).getByText("Autor de exemplo · Public domain"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialogo).getByRole("link", { name: "View source of Brasil" }),
+    ).toHaveAttribute("href", "https://example.test/bandeira-do-brasil");
+  });
+
+  it("o botão Fechar fecha o diálogo e devolve o foco ao link", async () => {
+    render(
+      <PaginaDeInicio
+        cliente={clienteDaContaDeTeste()}
+        nomeDeUsuario="joao"
+        contaDeTeste
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: "Créditos do acervo de demonstração",
+    });
+    fireEvent.click(link);
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: TITULO_DOS_CREDITOS,
+    });
+
+    fireEvent.click(within(dialogo).getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => expect(dialogo).not.toHaveAttribute("open"));
+    expect(link).toHaveFocus();
   });
 
   it("fecha com Esc e devolve o foco ao link que o abriu", async () => {
