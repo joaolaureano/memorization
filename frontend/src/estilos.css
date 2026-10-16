@@ -683,6 +683,25 @@ textarea[aria-invalid="true"] {
   white-space: pre-wrap;
 }
 
+/* Cartão com Imagem: a Face recebe três quartos da altura útil (antes, metade),
+ * e o cartão cresce até 780 px sem passar da janela menos 120 px, para que
+ * as Avaliações e o Verso caibam inteiros ao rolar o cartão para a tela. */
+.cartao-de-estudo:has(> .conteudo-do-cartao--imagem) {
+  grid-template-rows: 24px minmax(0, 3fr) 24px minmax(0, 1fr) 64px;
+  height: min(780px, calc(100dvh - 120px));
+}
+
+/* No computador a Imagem ocupa a altura da linha da Face e a largura segue a
+ * proporção natural (limitada pela largura da Face). Com a largura fixada, o
+ * navegador esticaria a altura, por isso só a altura é fixada aqui. No
+ * telefone, a Imagem segue a largura da Face pela regra geral. */
+@media (min-width: 761px) {
+  .cartao-de-estudo:has(> .conteudo-do-cartao--imagem) > .conteudo-do-cartao--imagem > .imagem-do-cartao--face {
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
 /* Os espaços do Verso e das ações existem antes da Revelação. */
 .cartao-de-estudo > .lado-do-cartao {
   margin: 0;

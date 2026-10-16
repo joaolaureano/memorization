@@ -5,6 +5,7 @@ import {
   aguardarProntidao,
   aplicarZoomDeProva,
   criarBaralhoPelaApi,
+  criarCartaoNoBaralhoPelaApi,
   criarPastaTemporaria,
   criarUsuarioDeProva,
   encerrarProcesso,
@@ -183,6 +184,18 @@ async function interromperSessao(page: Page): Promise<void> {
   await page.getByRole("dialog").getByRole("button", { name: "Interromper" }).click();
 }
 
+/**
+ * Largura mínima da Imagem na Face do Cartão de estudo: a 1280 px, o dobro dos
+ * ~262 px de antes; a 390 px, a largura do conteúdo do telefone (~300 px hoje).
+ */
+const LARGURA_MINIMA_DA_FACE: Record<number, number> = { 390: 280, 1280: 480 };
+
+async function alturaDoCartao(page: Page): Promise<number> {
+  const caixa = await page.locator(".cartao-de-estudo").first().boundingBox();
+  expect(caixa, "cartão de estudo").not.toBeNull();
+  return caixa!.height;
+}
+
 async function semRolagemHorizontal(page: Page): Promise<number> {
   return page.evaluate(
     () =>
@@ -282,9 +295,14 @@ test("028 (layout): Verso revelado de Imagem sem texto na Frente fica abaixo da 
 
     await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
     await page.getByRole("button", { name: "Todos os cartões" }).click();
+    const alturasAntes: Record<number, number> = {};
     for (const largura of [390, 1280]) {
       await page.setViewportSize({ width: largura, height: 844 });
       await aferirImagem(page, ".cartao-de-estudo .conteudo-do-cartao--imagem img", `face antes ${largura}px`, ".cartao-de-estudo");
+      const imagemAntes = page.locator(".cartao-de-estudo .conteudo-do-cartao--imagem img").first();
+      const larguraAntes = (await imagemAntes.boundingBox())!.width;
+      expect(larguraAntes, `face antes ${largura}px: largura`).toBeGreaterThanOrEqual(LARGURA_MINIMA_DA_FACE[largura]);
+      alturasAntes[largura] = await alturaDoCartao(page);
     }
 
     await page.getByRole("button", { name: "Revelar verso" }).click();
@@ -294,6 +312,26 @@ test("028 (layout): Verso revelado de Imagem sem texto na Frente fica abaixo da 
       const rotulo = `${largura}px`;
       await page.setViewportSize({ width: largura, height: 844 });
       await aferirImagem(page, ".cartao-de-estudo .conteudo-do-cartao--imagem img", `face depois ${rotulo}`, ".cartao-de-estudo");
+      const larguraDepois = (await page.locator(".cartao-de-estudo .conteudo-do-cartao--imagem img").first().boundingBox())!.width;
+      expect(larguraDepois, `face depois ${rotulo}: largura`).toBeGreaterThanOrEqual(LARGURA_MINIMA_DA_FACE[largura]);
+      expect(await alturaDoCartao(page), `${rotulo}: altura do cartão não muda na revelação`).toBe(alturasAntes[largura]);
+
+      const cartao = page.locator(".cartao-de-estudo").first();
+      await cartao.scrollIntoViewIfNeeded();
+      const janela = await page.evaluate(() => ({
+        largura: document.documentElement.clientWidth,
+        altura: window.innerHeight,
+      }));
+      const inteiro = (c: { x: number; y: number; width: number; height: number }) =>
+        c.x >= 0 && c.y >= 0 && c.x + c.width <= janela.largura && c.y + c.height <= janela.altura;
+      const versoNaJanela = await cartao.getByText("Verso sem texto", { exact: true }).boundingBox();
+      expect(inteiro(versoNaJanela!), `${rotulo}: texto do Verso inteiro na janela`).toBe(true);
+      const botoesNaJanela = cartao.locator(".botoes-de-resultado .botao");
+      for (let indice = 0; indice < 4; indice++) {
+        const caixa = await botoesNaJanela.nth(indice).boundingBox();
+        expect(inteiro(caixa!), `${rotulo}: botão ${indice + 1} inteiro na janela`).toBe(true);
+      }
+
       await aferirVersoRevelado(page, rotulo, "Verso sem texto");
       const rolagem = await page.evaluate(
         () =>
@@ -302,6 +340,86 @@ test("028 (layout): Verso revelado de Imagem sem texto na Frente fica abaixo da 
       );
       expect.soft(rolagem, `${rotulo}: sem rolagem horizontal`).toBeLessThanOrEqual(0);
     }
+
+    // Cartão Frente-Verso: a altura de 620 px continua a mesma.
+    const baralhoFrenteVerso = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Capitais" });
+    await criarCartaoNoBaralhoPelaApi(enderecoDaApi, baralhoFrenteVerso.id, {
+      frente: "Capital de Pernambuco",
+      verso: "Recife",
+    });
+    await interromperSessao(page);
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralhoFrenteVerso.id}/estudo`);
+    await page.getByRole("button", { name: "Todos os cartões" }).click();
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await expect(page.locator(".cartao-de-estudo")).toHaveCount(1);
+    expect(await alturaDoCartao(page), "Frente-Verso: altura do cartão").toBeCloseTo(620, 0);
+  } finally {
+    if (frontend !== null) await encerrarProcesso(frontend);
+    if (api !== null) await encerrarProcesso(api);
+    await removerPastaTemporaria(pasta);
+  }
+});
+
+test("028 (layout): Imagem panorâmica no Cartão de estudo fica dentro do cartão e mantém a proporção a 1280 px", async ({ page }) => {
+  const pasta = await criarPastaTemporaria("cartao-com-imagem-028-panoramica-");
+  let api: ProcessoIniciado | null = null;
+  let frontend: ProcessoIniciado | null = null;
+
+  try {
+    const portaDaApi = await portaLivre();
+    api = iniciarApi(join(pasta, "acervo.sqlite"), portaDaApi);
+    const enderecoDaApi = `http://127.0.0.1:${portaDaApi}`;
+    await aguardarApiPronta(api, enderecoDaApi);
+    const portaDoFrontend = await portaLivre();
+    const enderecoDoFrontend = `http://127.0.0.1:${portaDoFrontend}`;
+    frontend = iniciarFrontend(portaDoFrontend, enderecoDaApi);
+    await aguardarProntidao(frontend, enderecoDoFrontend, (resposta) => resposta.ok);
+
+    const credencial = await criarUsuarioDeProva(enderecoDaApi);
+    const baralho = await criarBaralhoPelaApi(enderecoDaApi, { nome: "Panorama" });
+
+    await page.goto(enderecoDoFrontend);
+    await entrarSeNecessario(page, credencial);
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/cartoes/novo`);
+    await page.getByLabel("Tipo de cartão").selectOption("imagem");
+    await page.getByLabel("Imagem", { exact: true }).setInputFiles({
+      name: "faixa.png",
+      mimeType: "image/png",
+      buffer: pngDeFaixas(900, 150),
+    });
+    await expect(page.getByRole("button", { name: "Remover imagem" })).toBeVisible();
+    await page.getByLabel("Verso").fill("Verso panorâmico");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Panorama" })).toBeVisible();
+
+    await page.goto(`${enderecoDoFrontend}/#/baralhos/${baralho.id}/estudo`);
+    await page.getByRole("button", { name: "Todos os cartões" }).click();
+    const imagem = page.locator(".cartao-de-estudo .conteudo-do-cartao--imagem img").first();
+    await expect(imagem).toBeVisible();
+    await expect.poll(() => imagem.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+
+    const natural = await imagem.evaluate((el) => ({
+      largura: (el as HTMLImageElement).naturalWidth,
+      altura: (el as HTMLImageElement).naturalHeight,
+    }));
+    const caixa = await imagem.boundingBox();
+    const cartao = await page.locator(".cartao-de-estudo").first().boundingBox();
+    expect(caixa, "caixa da Imagem").not.toBeNull();
+    expect(cartao, "cartão de estudo").not.toBeNull();
+    expect(caixa!.x >= cartao!.x - 1 && caixa!.x + caixa!.width <= cartao!.x + cartao!.width + 1, "caixa da Imagem dentro do cartão na horizontal").toBe(true);
+    expect(await imagem.evaluate((el) => getComputedStyle(el).objectFit)).toBe("contain");
+
+    // Conteúdo pintado: a Imagem contida na caixa, com a proporção natural.
+    const escala = Math.min(caixa!.width / natural.largura, caixa!.height / natural.altura);
+    const larguraPintada = natural.largura * escala;
+    const alturaPintada = natural.altura * escala;
+    expect(Math.abs(larguraPintada / alturaPintada - natural.largura / natural.altura)).toBeLessThanOrEqual(0.001);
+    expect(
+      larguraPintada >= 480 || Math.abs(larguraPintada - caixa!.width) <= 1,
+      `conteúdo pintado com ${larguraPintada.toFixed(1)} px`,
+    ).toBe(true);
+    expect(await semRolagemHorizontal(page)).toBeLessThanOrEqual(0);
   } finally {
     if (frontend !== null) await encerrarProcesso(frontend);
     if (api !== null) await encerrarProcesso(api);
